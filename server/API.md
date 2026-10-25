@@ -188,6 +188,18 @@ Each change is audited as `credential_create` / `credential_update` / `credentia
 Devices: `snmp_community` is accepted on create/update but no longer returned; `has_snmp_community`
 says whether one is set. `/health` reports `secrets_encrypted`.
 
+## Traffic (port utilization)
+
+| Method | Path | |
+|---|---|---|
+| GET | `/devices/{id}/traffic?hours=24` | Per port: `avg_in_bps`, `avg_out_bps`, `peak_in_bps`, `peak_out_bps`, `peak_utilization` (percent of port speed, busiest direction), `last_in_bps`, `last_out_bps`. Ports without samples are left out. |
+| GET | `/ports/{id}/traffic?hours=24&points=144` | Chart series: samples averaged into at most `points` buckets, `[{"at", "in_bps", "out_bps"}]`, plus `peak_utilization`. |
+
+Samples are taken every `TRAFFIC_INTERVAL_SECONDS` (300) and kept `TRAFFIC_KEEP_DAYS` (7). With
+`MONITOR_MODE=real` the server reads `ifHCInOctets`/`ifHCOutOctets` over SNMP (GET/GETNEXT only) with the
+device's community; ports are matched by ifIndex, or by ifName when the port has none. The emulator
+generates a working day (Moscow time) and fills the last 24 hours on first start.
+
 ## Notifications
 
 | Method | Path | |

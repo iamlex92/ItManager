@@ -16,10 +16,12 @@ import com.itmanager.app.data.model.NetworkScan
 import com.itmanager.app.data.model.LiveEvent
 import com.itmanager.app.data.model.PortChange
 import com.itmanager.app.data.model.PortChangeResult
+import com.itmanager.app.data.model.PortLoad
 import com.itmanager.app.data.model.Printer
 import com.itmanager.app.data.model.Runbook
 import com.itmanager.app.data.model.RunbookRun
 import com.itmanager.app.data.model.SwitchPort
+import com.itmanager.app.data.model.TrafficSeries
 import com.itmanager.app.data.model.Vlan
 import kotlinx.coroutines.flow.Flow
 
@@ -41,6 +43,12 @@ interface DcimDataSource {
     suspend fun writeMemory(switchId: String): List<String>
     suspend fun backupConfig(switchId: String)
     suspend fun configDiff(switchId: String): ConfigDiff
+
+    // Port utilization from the server's throughput samples. Read-only.
+
+    /** Per-port average, peak and latest throughput over the last [hours]; ports without samples are left out. */
+    suspend fun switchTraffic(switchId: String, hours: Int): List<PortLoad>
+    suspend fun portTraffic(switchId: String, portId: String, hours: Int, points: Int): TrafficSeries
 
     /** Ping or traceroute from the switch to [target] (an IPv4 address). Read-only. */
     suspend fun diagnostic(switchId: String, kind: DiagnosticKind, target: String): DiagnosticResult

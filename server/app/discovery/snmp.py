@@ -129,6 +129,14 @@ class SnmpScanner:
                 break
         return rows
 
+    async def walk(self, ip: str, auth, prefix: str) -> dict[str, Any]:
+        """One read-only GETNEXT walk, for callers outside a scan (traffic sampling)."""
+        if self._engine is None:
+            from pysnmp.hlapi.v3arch import asyncio as h
+
+            self._engine = h.SnmpEngine()
+        return await self._walk(ip, auth, prefix)
+
     async def scan(self, nets: list[ipaddress.IPv4Network], community: str, progress: Progress) -> ScanResult:
         from pysnmp.hlapi.v3arch import asyncio as h
 

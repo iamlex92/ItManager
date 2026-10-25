@@ -54,6 +54,7 @@ def make_settings(**kw) -> Settings:
         emulator_bounce_delay_seconds=0,
         printer_poll_interval_seconds=0,
         heartbeat_interval_seconds=0,
+        traffic_interval_seconds=0,
         trap_listen_port=0,
         runbook_step_delay_seconds=0,
         discovery_step_delay_seconds=0,

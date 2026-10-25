@@ -99,6 +99,8 @@ pytest
 | `HEARTBEAT_INTERVAL_SECONDS` | `15` | real mode only; HOST_DOWN alerts for switches, servers, printers, cameras, APs (not PCs) |
 | `TRAP_LISTEN_PORT` | `0` (off) | UDP port for linkDown/linkUp traps, v1/v2c |
 | `TRAP_COMMUNITY` | `public` | traps with another community are dropped |
+| `TRAFFIC_INTERVAL_SECONDS` | `300` | port load sampling for the charts (SNMP counters in real mode); 0 disables |
+| `TRAFFIC_KEEP_DAYS` | `7` | how long load samples are kept |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | empty | alerts to a Telegram chat; off unless both are set (DEPLOY.md, section 9) |
 | `TELEGRAM_MIN_SEVERITY` | `WARNING` | lowest severity sent |
 | `TELEGRAM_DELAY_SECONDS` | `60` | send only alerts still open after this delay |

@@ -628,3 +628,41 @@ class CredentialOut(BaseModel):
     devices: int
     created_at: datetime
     updated_at: datetime
+
+
+class PortTrafficSummary(BaseModel):
+    port_id: uuid.UUID
+    port_number: int
+    port_name: str
+    is_uplink: bool
+    speed_mbps: int
+    avg_in_bps: int
+    avg_out_bps: int
+    peak_in_bps: int
+    peak_out_bps: int
+    # Busiest direction at its peak, percent of the port speed.
+    peak_utilization: float
+    last_in_bps: int | None
+    last_out_bps: int | None
+
+
+class DeviceTrafficOut(BaseModel):
+    device_id: uuid.UUID
+    hours: int
+    interval_seconds: float
+    ports: list[PortTrafficSummary]
+
+
+class TrafficPoint(BaseModel):
+    at: datetime
+    in_bps: int
+    out_bps: int
+
+
+class PortTrafficOut(BaseModel):
+    port_id: uuid.UUID
+    port_name: str
+    speed_mbps: int
+    hours: int
+    peak_utilization: float
+    points: list[TrafficPoint]

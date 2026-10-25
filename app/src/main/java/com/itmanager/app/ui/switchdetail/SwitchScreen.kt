@@ -101,6 +101,8 @@ fun SwitchScreen(
     val isDemo by viewModel.isDemo.collectAsStateWithLifecycle()
     val diagnostic by viewModel.diagnostic.collectAsStateWithLifecycle()
     val targets by viewModel.targets.collectAsStateWithLifecycle()
+    val load by viewModel.load.collectAsStateWithLifecycle()
+    val portTraffic by viewModel.portTraffic.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     var selectedPortId by rememberSaveable(deviceId) { mutableStateOf<String?>(null) }
     var portView by rememberSaveable { mutableStateOf(PortView.STATUS) }
@@ -109,6 +111,8 @@ fun SwitchScreen(
     LaunchedEffect(viewModel) {
         viewModel.messages.collect { snackbar.showSnackbar(it) }
     }
+    // Loaded on first use of the load view, also when it comes back selected after the app was killed.
+    LaunchedEffect(portView) { if (portView == PortView.LOAD) viewModel.loadTraffic() }
 
     val details = (state as? UiState.Content)?.data
     Scaffold(
@@ -193,18 +197,26 @@ fun SwitchScreen(
                         view = portView,
                         palette = palette,
                         highlightVlan = highlightVlan,
+                        load = (load as? UiState.Content)?.data.orEmpty(),
                     )
                     Spacer(Modifier.height(12.dp))
                     when (portView) {
                         PortView.STATUS -> PortLegend()
                         PortView.VLAN -> VlanLegend(ports, palette, highlightVlan, onHighlight = { highlightVlan = it })
+                        PortView.LOAD -> when (val l = load) {
+                            is UiState.Content -> LoadLegend(ports, l.data, onPortClick = { selectedPortId = it.id })
+                            is UiState.Error -> Text(l.message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            else -> LinearProgressIndicator(Modifier.fillMaxWidth())
+                        }
                     }
                     Spacer(Modifier.height(24.dp))
                 }
 
                 ports.firstOrNull { it.id == selectedPortId }?.let { port ->
+                    LaunchedEffect(port.id) { viewModel.openPortTraffic(port.id) }
                     PortSheet(
                         port = port,
+                        traffic = portTraffic?.takeIf { it.portId == port.id },
                         vlans = vlans,
                         busy = busy,
                         onApply = { change -> viewModel.requestPortChange(port, change) },
@@ -281,6 +293,7 @@ private fun QuickAction(label: String, icon: ImageVector, onClick: () -> Unit) {
 @Composable
 private fun PortSheet(
     port: SwitchPort,
+    traffic: PortTraffic?,
     vlans: List<Vlan>,
     busy: Boolean,
     onApply: (PortChange) -> Unit,
@@ -319,6 +332,9 @@ private fun PortSheet(
             PortField("Подключено", port.connectedDeviceName ?: "—")
             PortField("Скорость", if (port.isOperUp) formatSpeed(port.speedMbps) else "—")
             PortField("PoE", if (port.isPoeActive) "Питает устройство" else if (port.poeEnabled) "Включено" else "Нет")
+
+            Spacer(Modifier.height(20.dp))
+            PortTrafficSection(traffic)
 
             Spacer(Modifier.height(20.dp))
             PortEditor(port, vlans, busy, onApply, onBounce)

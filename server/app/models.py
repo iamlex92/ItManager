@@ -4,6 +4,7 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     DateTime,
     ForeignKey,
@@ -107,6 +108,17 @@ class Port(Base):
     if_index: Mapped[int | None] = mapped_column(Integer)
 
     device: Mapped[Device] = relationship(back_populates="ports")
+
+
+class PortTraffic(Base):
+    """Average port throughput over one sampling interval, bits per second."""
+
+    __tablename__ = "port_traffic"
+
+    port_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("ports.id", ondelete="CASCADE"), primary_key=True)
+    sampled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True, index=True)
+    in_bps: Mapped[int] = mapped_column(BigInteger)
+    out_bps: Mapped[int] = mapped_column(BigInteger)
 
 
 class Connection(Base):
