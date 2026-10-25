@@ -544,11 +544,9 @@ object DemoDataSource : DcimDataSource {
             action = "discovery_import",
             title = "Добавление найденных устройств",
             arguments = listOf("ips" to ips.joinToString(), "links" to if (withLinks) "да" else "нет"),
-            stdout = (report.created.map { "+ $it" } + report.links.map { "+ связь $it" }).joinToString("
-")
+            stdout = (report.created.map { "+ $it" } + report.links.map { "+ связь $it" }).joinToString("\n")
                 .ifEmpty { "Новых устройств и связей нет" },
-            stderr = report.skipped.joinToString("
-"),
+            stderr = report.skipped.joinToString("\n"),
             durationMs = null,
         )
         return report
