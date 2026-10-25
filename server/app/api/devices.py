@@ -245,7 +245,7 @@ async def write_memory(
         raise not_found("device")
     require_managed_switch(device)
     require_confirmation(body.confirm)
-    params = {"device": device.name}
+    params = {"device": device.name, "device_id": str(device.id)}
     async with audit(session, request, settings, "write_memory", params) as rec:
         rec.commands = await driver.save_config(switches.device_target(device))
     return CommandsOut(commands=rec.commands)
@@ -268,7 +268,7 @@ async def ping_from_switch(
     if device is None:
         raise not_found("device")
     require_managed_switch(device)
-    params = {"device": device.name, "target": str(body.target), "count": body.count}
+    params = {"device": device.name, "device_id": str(device.id), "target": str(body.target), "count": body.count}
     async with audit(session, request, settings, "switch_ping", params) as rec:
         res = await driver.ping(switches.device_target(device), str(body.target), body.count)
         rec.commands = [res.command, res.output]
@@ -290,7 +290,7 @@ async def traceroute_from_switch(
     if device is None:
         raise not_found("device")
     require_managed_switch(device)
-    params = {"device": device.name, "target": str(body.target)}
+    params = {"device": device.name, "device_id": str(device.id), "target": str(body.target)}
     async with audit(session, request, settings, "switch_traceroute", params) as rec:
         res = await driver.traceroute(switches.device_target(device), str(body.target))
         rec.commands = [res.command, res.output]

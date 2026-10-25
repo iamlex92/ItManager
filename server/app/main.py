@@ -20,6 +20,7 @@ from .api import (
     devices,
     discovery,
     floors,
+    history,
     misc,
     nfc,
     notifications,
@@ -187,7 +188,7 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
 
     api = APIRouter(prefix="/api/v1", dependencies=[Depends(require_token)])
     routers = (floors, vlans, devices, ports, connections, alerts, misc, printers, nfc, runbooks, audit, discovery)
-    for module in (*routers, credentials, notifications, traffic):
+    for module in (*routers, credentials, notifications, traffic, history):
         api.include_router(module.router)
 
     app.include_router(public)

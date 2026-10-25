@@ -144,7 +144,19 @@ async def apply_port_config(
     _require_change(port_config_commands(device.vendor, port.port_name, _to_hal(change)))
     require_confirmation(body.confirm)
     require_uplink_ack(port.is_uplink, body.confirm_uplink)
-    params = {"device": device.name, "port": port.port_name, "change": change.model_dump(exclude_none=True)}
+    params = {
+        "device": device.name,
+        "device_id": str(device.id),
+        "port": port.port_name,
+        "change": change.model_dump(exclude_none=True),
+        # What the port looked like before, for the change history.
+        "before": {
+            "mode": port.mode,
+            "access_vlan": port.access_vlan,
+            "tagged_vlans": list(port.tagged_vlans or []),
+            "is_admin_up": port.is_admin_up,
+        },
+    }
     async with audit(session, request, settings, "port_config", params) as rec:
         rec.commands = await driver.apply_port_config(
             switches.device_target(device), switches.port_ref(port), _to_hal(change)
@@ -168,7 +180,7 @@ async def bounce_port(
     device, port = await _switch_port(session, port_id)
     require_confirmation(body.confirm)
     require_uplink_ack(port.is_uplink, body.confirm_uplink)
-    params = {"device": device.name, "port": port.port_name}
+    params = {"device": device.name, "device_id": str(device.id), "port": port.port_name}
     async with audit(session, request, settings, "port_bounce", params) as rec:
         rec.commands = await driver.bounce_port(switches.device_target(device), switches.port_ref(port))
     await switches.sync_device(session, driver, hub, device)

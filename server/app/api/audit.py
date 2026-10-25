@@ -10,6 +10,7 @@ from ..schemas import AuditOut
 from .credentials import ACTIONS as SECURITY_ACTIONS
 from .deps import SessionDep
 from .runbooks import AUDIT_PREFIX
+from .vlans import ACTIONS as VLAN_ACTIONS
 
 router = APIRouter(prefix="/audit", tags=["audit"])
 
@@ -19,6 +20,7 @@ SWITCH_ACTIONS = {
     "write_memory": "Сохранение конфигурации",
     "switch_ping": "Ping с коммутатора",
     "switch_traceroute": "Traceroute с коммутатора",
+    **VLAN_ACTIONS,
 }
 NETWORK_ACTIONS = {
     SCAN_ACTION: "Сканирование сети",

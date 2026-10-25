@@ -188,6 +188,16 @@ Each change is audited as `credential_create` / `credential_update` / `credentia
 Devices: `snmp_community` is accepted on create/update but no longer returned; `has_snmp_community`
 says whether one is set. `/health` reports `secrets_encrypted`.
 
+## History
+
+| Method | Path | |
+|---|---|---|
+| GET | `/devices/{id}/history?limit=100` | Port changes (`port_config`, `port_bounce`, `write_memory`) of this switch with `kind` `change`, `blocked` (refused by `ALLOW_DEVICE_WRITES`) or `failed`, plus stored config copies (`config_backup`, with whether the config changed since the previous copy). Each entry has `at`, `title`, a readable `summary` such as `gi1/0/2: VLAN 10 → 20`, `actor` and the `commands` sent. Newest first. |
+
+Port writes record the port's previous mode, VLANs and admin state in the audit parameters (`before`) and
+the device id, so the history survives a rename. VLAN dictionary changes (`POST/PATCH/DELETE /vlans`) are
+audited as `vlan_create`, `vlan_update` (with `changed: {field: [old, new]}`) and `vlan_delete`.
+
 ## Traffic (port utilization)
 
 | Method | Path | |

@@ -8,6 +8,7 @@ import com.itmanager.app.data.model.ConfigDiff
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.DeviceHistoryEntry
 import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.DiagnosticResult
 import com.itmanager.app.data.model.FloorMap
@@ -43,6 +44,9 @@ interface DcimDataSource {
     suspend fun writeMemory(switchId: String): List<String>
     suspend fun backupConfig(switchId: String)
     suspend fun configDiff(switchId: String): ConfigDiff
+
+    /** What changed on the switch: port writes (applied, blocked or failed), config saves and copies. */
+    suspend fun deviceHistory(switchId: String): List<DeviceHistoryEntry>
 
     // Port utilization from the server's throughput samples. Read-only.
 

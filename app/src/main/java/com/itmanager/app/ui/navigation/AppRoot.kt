@@ -66,6 +66,7 @@ import com.itmanager.app.ui.components.LocalAlertsBell
 import com.itmanager.app.ui.configdiff.ConfigDiffScreen
 import com.itmanager.app.ui.credentials.CredentialsScreen
 import com.itmanager.app.ui.devices.DevicesScreen
+import com.itmanager.app.ui.history.HistoryScreen
 import com.itmanager.app.ui.map.MapScreen
 import com.itmanager.app.ui.nfc.BindTagSheet
 import com.itmanager.app.ui.printers.PrintersScreen
@@ -314,7 +315,16 @@ private fun AppNavHost(
                 onBack = { navController.popBackStack() },
                 onOpenSettings = openSettings,
                 onOpenDiff = { name -> navController.navigate(ConfigDiffRoute(deviceId, name)) },
+                onOpenHistory = { name -> navController.navigate(HistoryRoute(deviceId, name)) },
             )
+        }
+        composable<HistoryRoute>(
+            enterTransition = { slideInHorizontally(push) { it } },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { slideOutHorizontally(push) { it } },
+        ) {
+            HistoryScreen(onBack = { navController.popBackStack() }, onOpenSettings = openSettings)
         }
         composable<ConfigDiffRoute>(
             enterTransition = { slideInHorizontally(push) { it } },

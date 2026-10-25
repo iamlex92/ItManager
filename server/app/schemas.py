@@ -666,3 +666,15 @@ class PortTrafficOut(BaseModel):
     hours: int
     peak_utilization: float
     points: list[TrafficPoint]
+
+
+class HistoryEntry(BaseModel):
+    at: datetime
+    # change: applied; blocked: refused by ALLOW_DEVICE_WRITES; failed: error on the device;
+    # config_backup: a stored running-config.
+    kind: Literal["change", "blocked", "failed", "config_backup"]
+    action: str
+    title: str
+    summary: str
+    actor: str
+    commands: list[str] = []

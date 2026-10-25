@@ -150,6 +150,18 @@ class NetAdminApi @Inject constructor(
     suspend fun importScan(s: ServerSettings, id: String, body: ImportBody): ImportDto =
         discovery { post(s, "discovery/scans/${id.encodeURLPathPart()}/import", body) }
 
+    /** Port writes, config saves and stored config copies of one switch, newest first. */
+    suspend fun deviceHistory(s: ServerSettings, deviceId: String): List<HistoryEntryDto> = try {
+        fetch(s, "devices/${deviceId.encodeURLPathPart()}/history?limit=200")
+    } catch (e: ResponseException) {
+        if (e.response.status.value != 404) throw e
+        val code = runCatching { json.decodeFromString(ErrorDto.serializer(), e.response.bodyAsText()).detail?.code }.getOrNull()
+        throw UserFacingException(
+            if (code == null) "Сервер пока не ведёт историю изменений: обновите сервер." else "Устройство не найдено на сервере.",
+            e,
+        )
+    }
+
     suspend fun switchTraffic(s: ServerSettings, deviceId: String, hours: Int): DeviceTrafficDto =
         trafficCall { fetch<DeviceTrafficDto>(s, "devices/${deviceId.encodeURLPathPart()}/traffic?hours=$hours") }
 

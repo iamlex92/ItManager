@@ -72,10 +72,12 @@ def test_samples_feed_the_summary_and_the_chart(client):
     by_name = {p["port_name"]: p for p in summary["ports"]}
     up = by_name["gi1/0/2"]
     assert up["peak_in_bps"] >= up["avg_in_bps"] > 0 and up["last_in_bps"] is not None
-    assert 0 < up["peak_utilization"] <= 100
+    port = next(p for p in ports_of(client, sw["id"]) if p["name"] == "gi1/0/2")
+    # Night-time load rounds to 0.0 %, so compare with the samples instead of a fixed bound.
+    peak = max(up["peak_in_bps"], up["peak_out_bps"])
+    assert up["peak_utilization"] == round(100 * peak / (port["speed_mbps"] * 1_000_000), 1) <= 100
     assert by_name["gi1/0/22"]["peak_in_bps"] == 0  # admin down in the seed
 
-    port = next(p for p in ports_of(client, sw["id"]) if p["name"] == "gi1/0/2")
     chart = client.get(f"/api/v1/ports/{port['id']}/traffic", params={"hours": 2, "points": 10}).json()
     assert 1 <= len(chart["points"]) <= 10
     assert chart["points"] == sorted(chart["points"], key=lambda x: x["at"])
