@@ -76,6 +76,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
 
     implementation(libs.haze)
+    implementation(libs.androidsvg)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

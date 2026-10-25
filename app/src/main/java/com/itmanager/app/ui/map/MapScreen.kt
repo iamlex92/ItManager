@@ -1,5 +1,6 @@
 package com.itmanager.app.ui.map
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VisibilityThreshold
@@ -9,7 +10,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -31,10 +34,13 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.CenterFocusStrong
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -50,6 +56,8 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -57,9 +65,13 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -67,6 +79,8 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -100,6 +114,7 @@ fun MapScreen(
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
     var topPanelHeight by remember { mutableIntStateOf(0) }
+    val scope = rememberCoroutineScope()
 
     val content = (state.content as? UiState.Content)?.data
 
@@ -125,6 +140,7 @@ fun MapScreen(
                     vlanFilter = state.vlanFilter,
                     selectedId = state.selectedId,
                     tracedLinks = state.tracedLinks,
+                    planPicture = state.planPicture,
                     camera = camera,
                     visiblePadding = Rect(sidePx, topPanelHeight + sidePx, sidePx, bottomPx),
                     onSelect = { id ->
@@ -148,6 +164,16 @@ fun MapScreen(
             vlanFilter = state.vlanFilter,
             onVlanFilter = viewModel::setVlanFilter,
             onOpenSettings = onOpenSettings,
+            devices = content?.map?.devices.orEmpty(),
+            onSearchResult = { device ->
+                haptics.performHapticFeedback(HapticFeedbackType.ContextClick)
+                viewModel.select(device.id)
+                // Let the search results collapse first, so the visible area is measured without them.
+                scope.launch {
+                    repeat(2) { withFrameNanos { } }
+                    camera.focusOn(device.x, device.y)
+                }
+            },
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .onSizeChanged { topPanelHeight = it.height },
@@ -209,8 +235,11 @@ private fun MapTopPanel(
     vlanFilter: Int?,
     onVlanFilter: (Int?) -> Unit,
     onOpenSettings: () -> Unit,
+    devices: List<Device>,
+    onSearchResult: (Device) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var searching by rememberSaveable { mutableStateOf(false) }
     // A scroll-edge fade instead of a hard bar: the plan stays visible right up to the status bar.
     Column(
         modifier
@@ -225,15 +254,35 @@ private fun MapTopPanel(
             .windowInsetsPadding(WindowInsets.statusBars)
             .padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 12.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (subtitle != null) {
-                    Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        AnimatedContent(
+            targetState = searching,
+            transitionSpec = { fadeIn(Motion.smooth()) togetherWith fadeOut(Motion.smooth()) },
+            label = "mapHeader",
+        ) { isSearching ->
+            if (isSearching) {
+                MapSearch(
+                    devices = devices,
+                    onPick = {
+                        searching = false
+                        onSearchResult(it)
+                    },
+                    onClose = { searching = false },
+                )
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (subtitle != null) {
+                            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    IconButton(onClick = { searching = true }, enabled = devices.isNotEmpty()) {
+                        Icon(Icons.Outlined.Search, contentDescription = "Поиск на карте")
+                    }
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(Icons.Outlined.Settings, contentDescription = "Настройки")
+                    }
                 }
-            }
-            IconButton(onClick = onOpenSettings) {
-                Icon(Icons.Outlined.Settings, contentDescription = "Настройки")
             }
         }
         Box(Modifier.fillMaxWidth().padding(end = 12.dp).height(2.dp)) {
@@ -276,6 +325,92 @@ private fun MapTopPanel(
                             selectedLabelColor = MaterialTheme.colorScheme.onSurface,
                         ),
                     )
+                }
+            }
+        }
+    }
+}
+
+/** Find a device by name, IP, MAC or socket number and fly the map to it. */
+@Composable
+private fun MapSearch(
+    devices: List<Device>,
+    onPick: (Device) -> Unit,
+    onClose: () -> Unit,
+) {
+    var query by rememberSaveable { mutableStateOf("") }
+    val focus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val results = remember(query, devices) {
+        if (query.isBlank()) emptyList() else devices.filter { it.matches(query) }.take(6)
+    }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+
+    Column(Modifier.padding(end = 12.dp)) {
+        TextField(
+            value = query,
+            onValueChange = { query = it },
+            singleLine = true,
+            placeholder = { Text("Имя, IP, MAC или розетка") },
+            leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+            trailingIcon = {
+                IconButton(onClick = onClose) { Icon(Icons.Outlined.Close, contentDescription = "Закрыть поиск") }
+            },
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = {
+                results.firstOrNull()?.let {
+                    keyboard?.hide()
+                    onPick(it)
+                }
+            }),
+            shape = RoundedCornerShape(14.dp),
+            colors = TextFieldDefaults.colors(
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            ),
+            modifier = Modifier.fillMaxWidth().focusRequester(focus),
+        )
+        if (query.isNotBlank()) {
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                shadowElevation = 8.dp,
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+            ) {
+                Column {
+                    if (results.isEmpty()) {
+                        Text(
+                            "Ничего не найдено",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(16.dp),
+                        )
+                    }
+                    results.forEach { device ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    keyboard?.hide()
+                                    onPick(device)
+                                }
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                        ) {
+                            Icon(device.type.icon, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(device.name, style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    listOfNotNull(device.type.label, device.ip).joinToString(" · "),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
