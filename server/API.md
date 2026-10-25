@@ -11,7 +11,7 @@ Clients should ignore unknown fields.
 
 | Method | Path | Returns |
 |---|---|---|
-| GET | `/api/v1/health` | `{status, version, hal_mode: "emulator"\|"real", device_writes_enabled}` (no auth) |
+| GET | `/api/v1/health` | `{status, version, hal_mode: "emulator"\|"real", device_writes_enabled, monitor_mode: "emulator"\|"real"}` (no auth) |
 | GET | `/api/v1/floors` | `[{id, building_name, floor_number, plan_image_url, scale_pixels_per_meter, width_px, height_px, created_at}]` |
 | GET | `/static/plans/floor-1.svg` | plan image referenced by `plan_image_url` (no auth) |
 | GET | `/api/v1/devices?floor_id=&type=&q=` | `[{id, name, type, vendor, model, ip, mac, floor_id, x, y, is_online, last_seen_at, vlan_id, is_active, nfc_tag_uid, snmp_community, metadata}]` |
@@ -22,13 +22,35 @@ Clients should ignore unknown fields.
 | GET | `/api/v1/ports/{id}/trace` | `{hops: [{device_id, device_name, device_type, port_id, port_name}]}`, e.g. PC → socket → patch panel → switch |
 | GET | `/api/v1/vlans` | `[{vlan_id, name, subnet_cidr, color_hex, description}]` |
 | GET | `/api/v1/connections?device_id=` | `[{id, port_a_id, port_b_id, device_a_id, device_b_id, cable_type, length_meters, label, notes}]` |
-| GET | `/api/v1/printers` | `[{id, name, ip, model, is_online, total_pages, consumables: [{name, color_hex, level_percent}]}]` |
+| GET | `/api/v1/printers` | `[{id, name, ip, model, is_online, total_pages, consumables: [{name, color_hex, kind, level_percent}], low_supply, polled_at}]` |
+| GET | `/api/v1/printers/{id}` | one printer |
 | GET | `/api/v1/alerts?is_resolved=&severity=&device_id=` | `[{id, device_id, port_id, severity, alert_type, message, is_resolved, created_at, resolved_at}]` |
 | GET | `/api/v1/devices/{id}/configs` | stored config snapshots (metadata) |
 | GET | `/api/v1/devices/{id}/configs/diff?base_id=` | `{base_id, base_hash, current_hash, changed, diff}`: stored vs live running-config (reads the switch) |
 
 `type` is one of `SWITCH, WORKSTATION, SERVER, PRINTER, SOCKET, PATCH_PANEL, CAMERA, ACCESS_POINT`.
 `vlan_id` of an end device is the access VLAN of the switch port it is cabled to; for a switch it is the management VLAN.
+
+`kind` is `TONER | WASTE | DRUM | OTHER`. `level_percent` always means "remaining":
+toner left, or free space left in a waste box, so below 10 is always a warning
+(`low_supply`). `POST /api/v1/printers/{id}/refresh` polls now (SNMP GET only) and
+returns the printer; 504 `printer_unreachable` if it does not answer.
+
+Alert types: `LINK_DOWN` (poller or SNMP trap), `HOST_DOWN` (switches, servers,
+printers, cameras, access points; not PCs), `TONER_LOW`. They resolve themselves
+when the condition clears.
+
+## NFC
+
+UIDs are stored as uppercase hex bytes joined by colons (`04:A2:3B:1C:5D:80:01`);
+any case and `:`/`-`/no separators are accepted and normalized.
+
+| Method | Path | |
+|---|---|---|
+| POST | `/api/v1/nfc/resolve` | `{"payload": {app, v, id, type, name}}` and/or `{"uid": "..."}` → device. Payload `id` wins; 422 `foreign_tag` if `app` is not `netadmin`; 404 if nothing matches |
+| GET | `/api/v1/devices/{id}/nfc-payload` | `{"app": "netadmin", "v": 1, id, type, name}` to write to the tag |
+| PUT | `/api/v1/devices/{id}/nfc` | `{"uid": "...", "force": false}` → device; 409 `tag_bound_elsewhere` (with `device_id`, `device_name`) unless `force`, which moves the tag |
+| DELETE | `/api/v1/devices/{id}/nfc` | 204 |
 
 ## Inventory (database only, never touches equipment)
 
@@ -85,7 +107,8 @@ Server sends:
 {"type": "snapshot", "device_id": "...", "is_online": true, "ports": [/* port objects */]}
 {"type": "port_status", "device_id": "...", "port": {/* port object */}}
 {"type": "device_status", "device_id": "...", "is_online": false}
-{"type": "alert", "alert": {/* alert object */}}
+{"type": "alert", "alert": {/* alert object, sent when created and when resolved */}}
+{"type": "printer_status", "device_id": "...", "printer": {/* printer object */}}
 {"type": "error", "message": "..."}
 ```
 

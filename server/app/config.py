@@ -12,6 +12,24 @@ class HalMode(StrEnum):
     REAL = "real"
 
 
+class MonitorMode(StrEnum):
+    # Printers, heartbeat: answered from the emulator and the database.
+    EMULATOR = "emulator"
+    # Real SNMP GETs to printers and ICMP echo to every device. Read-only.
+    REAL = "real"
+
+
+class SnmpAuthProtocol(StrEnum):
+    MD5 = "MD5"
+    SHA = "SHA"
+    SHA256 = "SHA256"
+
+
+class SnmpPrivProtocol(StrEnum):
+    DES = "DES"
+    AES = "AES"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -31,6 +49,28 @@ class Settings(BaseSettings):
     emulator_flap_probability: float = 0.1
     emulator_seed: int | None = None
     emulator_bounce_delay_seconds: float = 2.0
+
+    # --- monitoring (all read-only towards devices) ---
+    monitor_mode: MonitorMode = MonitorMode.EMULATOR
+    # Printer-MIB polling, seconds. 0 disables.
+    printer_poll_interval_seconds: float = 300.0
+    # ICMP heartbeat (real mode only; the emulator derives reachability
+    # from switch ports). 0 disables.
+    heartbeat_interval_seconds: float = 15.0
+    heartbeat_concurrency: int = 32
+    # UDP port for SNMP traps (linkDown/linkUp). 0 disables the listener.
+    # 162 needs root or CAP_NET_BIND_SERVICE; the compose file maps 162 -> 1162.
+    trap_listen_port: int = 0
+    trap_community: str = "public"
+
+    snmp_version: str = Field(default="2c", pattern="^(2c|3)$")
+    snmp_timeout_seconds: float = 2.0
+    snmp_retries: int = 1
+    snmp_v3_user: str = ""
+    snmp_v3_auth_key: str = ""
+    snmp_v3_priv_key: str = ""
+    snmp_v3_auth_protocol: SnmpAuthProtocol = SnmpAuthProtocol.SHA
+    snmp_v3_priv_protocol: SnmpPrivProtocol = SnmpPrivProtocol.AES
 
     @field_validator("api_token")
     @classmethod

@@ -28,6 +28,9 @@ services:
       DATABASE_URL: postgresql+asyncpg://netadmin:${POSTGRES_PASSWORD:-netadmin}@db:5432/netadmin
     ports:
       - "8000:8000"
+      # SNMP traps: point switches at <server>:162. The container listens on
+      # 1162 because it runs unprivileged (set TRAP_LISTEN_PORT=1162).
+      - "162:1162/udp"
 
 volumes:
   pgdata:

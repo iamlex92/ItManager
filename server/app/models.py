@@ -99,6 +99,8 @@ class Port(Base):
     speed_mbps: Mapped[int] = mapped_column(Integer, server_default=text("1000"))
     poe_enabled: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     connected_mac: Mapped[str | None] = mapped_column(MACADDR)
+    # Not in the original spec: IF-MIB ifIndex, to map SNMP traps to ports.
+    if_index: Mapped[int | None] = mapped_column(Integer)
 
     device: Mapped[Device] = relationship(back_populates="ports")
 

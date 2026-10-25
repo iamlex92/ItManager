@@ -3,7 +3,7 @@ import hashlib
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Query, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy import String, cast, or_, select
 from sqlalchemy.exc import IntegrityError
 
@@ -22,6 +22,7 @@ from ..schemas import (
     PingRequest,
     PortOut,
     TracerouteRequest,
+    normalize_nfc_uid,
 )
 from ..services import switches
 from ..services.serialize import device_out, port_out
@@ -104,6 +105,10 @@ async def create_device(body: DeviceCreate, session: SessionDep):
 
 @router.get("/by-nfc/{uid}", response_model=DeviceOut)
 async def get_device_by_nfc(uid: str, session: SessionDep):
+    try:
+        uid = normalize_nfc_uid(uid)
+    except ValueError as e:
+        raise HTTPException(422, detail={"code": "bad_nfc_uid", "message": str(e)}) from None
     device = await session.scalar(select(Device).where(Device.nfc_tag_uid == uid))
     if device is None:
         raise not_found("device with this NFC tag")

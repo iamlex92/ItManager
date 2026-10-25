@@ -4,7 +4,13 @@ from .conftest import find, ports_of
 def test_health_is_public(client):
     r = client.get("/api/v1/health", headers={"Authorization": ""})
     assert r.status_code == 200
-    assert r.json() == {"status": "ok", "version": "0.1.0", "hal_mode": "emulator", "device_writes_enabled": True}
+    assert r.json() == {
+        "status": "ok",
+        "version": "0.1.0",
+        "hal_mode": "emulator",
+        "device_writes_enabled": True,
+        "monitor_mode": "emulator",
+    }
 
 
 def test_token_required(client):
