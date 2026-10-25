@@ -1,7 +1,10 @@
 package com.itmanager.app.core.network
 
 import com.itmanager.app.data.model.Connection
+import com.itmanager.app.data.model.Alert
+import com.itmanager.app.data.model.AlertSeverity
 import com.itmanager.app.data.model.Consumable
+import com.itmanager.app.data.model.ConsumableKind
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.model.FloorPlan
@@ -13,6 +16,10 @@ import com.itmanager.app.data.model.Vlan
 import com.itmanager.app.data.model.parseColorHex
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
 
 // Wire format of the NetAdmin server (server/API.md). Unknown fields are ignored by the Json config.
 
@@ -129,8 +136,14 @@ data class ConsumableDto(
     val name: String,
     @SerialName("color_hex") val colorHex: String? = null,
     @SerialName("level_percent") val levelPercent: Int = 0,
+    val kind: String? = null,
 ) {
-    fun toDomain() = Consumable(name, parseColorHex(colorHex, fallback = 0xFF8E8E93), levelPercent.coerceIn(0, 100))
+    fun toDomain() = Consumable(
+        name = name,
+        colorArgb = parseColorHex(colorHex, fallback = 0xFF8E8E93),
+        levelPercent = levelPercent.coerceIn(0, 100),
+        kind = ConsumableKind.parse(kind),
+    )
 }
 
 @Serializable
@@ -138,10 +151,58 @@ data class PrinterDto(
     val id: String,
     val name: String,
     val ip: String? = null,
+    val model: String? = null,
+    @SerialName("is_online") val isOnline: Boolean = true,
     @SerialName("total_pages") val totalPages: Long = 0,
+    @SerialName("polled_at") val polledAt: String? = null,
     val consumables: List<ConsumableDto> = emptyList(),
 ) {
-    fun toDomain() = Printer(id, name, ip, totalPages, consumables.map { it.toDomain() })
+    fun toDomain() = Printer(
+        id = id,
+        name = name,
+        ip = ip,
+        totalPages = totalPages,
+        consumables = consumables.map { it.toDomain() },
+        model = model,
+        isOnline = isOnline,
+        polledAt = parseInstant(polledAt),
+    )
+}
+
+@Serializable
+data class AlertDto(
+    val id: String,
+    @SerialName("device_id") val deviceId: String,
+    @SerialName("port_id") val portId: String? = null,
+    val severity: String = "INFO",
+    @SerialName("alert_type") val alertType: String = "",
+    val message: String = "",
+    @SerialName("is_resolved") val isResolved: Boolean = false,
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("resolved_at") val resolvedAt: String? = null,
+) {
+    fun toDomain() = Alert(
+        id = id,
+        deviceId = deviceId,
+        portId = portId,
+        severity = AlertSeverity.parse(severity),
+        type = alertType,
+        message = message,
+        isResolved = isResolved,
+        createdAt = parseInstant(createdAt),
+        resolvedAt = parseInstant(resolvedAt),
+    )
+}
+
+@Serializable
+data class NfcBindBody(val uid: String, val force: Boolean = false)
+
+/** Server times are ISO 8601, usually with an offset; a bare local time is taken as UTC. */
+fun parseInstant(raw: String?): Instant? {
+    if (raw.isNullOrBlank()) return null
+    return runCatching { OffsetDateTime.parse(raw).toInstant() }
+        .recoverCatching { LocalDateTime.parse(raw).toInstant(ZoneOffset.UTC) }
+        .getOrNull()
 }
 
 fun FloorDto.toDomain(baseUrl: String, fallbackWidth: Float, fallbackHeight: Float) = FloorPlan(

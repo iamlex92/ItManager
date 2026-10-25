@@ -39,6 +39,7 @@ fun TabTopBar(
                 Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+        AlertsBell()
         IconButton(onClick = onOpenSettings) {
             Icon(Icons.Outlined.Settings, contentDescription = "Настройки")
         }

@@ -59,7 +59,11 @@ data class DiagnosticDto(val command: String = "", val output: String = "", val 
 internal data class ErrorDto(val detail: ErrorDetail? = null)
 
 @Serializable
-internal data class ErrorDetail(val code: String? = null, val message: String? = null)
+internal data class ErrorDetail(
+    val code: String? = null,
+    val message: String? = null,
+    @SerialName("device_name") val deviceName: String? = null,
+)
 
 /** Russian text for the server's guarded-write error codes. */
 internal fun writeErrorMessage(code: String?, status: Int): String = when (code) {

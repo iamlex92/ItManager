@@ -13,15 +13,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Print
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.WarningAmber
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -29,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
@@ -38,12 +45,15 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itmanager.app.data.model.Consumable
+import com.itmanager.app.data.model.ConsumableKind
 import com.itmanager.app.data.model.Printer
 import com.itmanager.app.ui.components.EmptyView
 import com.itmanager.app.ui.components.ErrorView
 import com.itmanager.app.ui.components.LoadingView
+import com.itmanager.app.ui.components.StatusDot
 import com.itmanager.app.ui.components.TabTopBar
 import com.itmanager.app.ui.components.UiState
+import com.itmanager.app.ui.components.formatAgo
 import com.itmanager.app.ui.theme.Ink950
 import com.itmanager.app.ui.theme.MonoStyle
 import com.itmanager.app.ui.theme.Motion
@@ -58,48 +68,95 @@ fun PrintersScreen(
     viewModel: PrintersViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val polling by viewModel.polling.collectAsStateWithLifecycle()
     val printers = (state as? UiState.Content)?.data
     val lowCount = printers?.count { it.hasLowConsumable } ?: 0
+    val silentCount = printers?.count { !it.isOnline } ?: 0
+    val snackbar = remember { SnackbarHostState() }
+    LaunchedEffect(viewModel) {
+        viewModel.messages.collect { snackbar.showSnackbar(it) }
+    }
 
-    Column(Modifier.fillMaxSize()) {
-        TabTopBar(
-            title = "МФУ",
-            subtitle = if (lowCount > 0) "Нужна замена расходников: $lowCount" else printers?.let { "Расходников хватает" },
-            onOpenSettings = onOpenSettings,
-        )
-        when (val s = state) {
-            UiState.Loading -> LoadingView()
-            is UiState.Error -> ErrorView(s.message, viewModel::retry, onOpenSettings, contentPadding = contentPadding)
-            is UiState.Content -> LazyColumn(
-                contentPadding = PaddingValues(
-                    start = 16.dp, end = 16.dp, top = 8.dp,
-                    bottom = contentPadding.calculateBottomPadding() + 16.dp,
-                ),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                if (s.data.isEmpty()) item { EmptyView("МФУ пока не добавлены") }
-                items(s.data, key = { it.id }) { PrinterCard(it) }
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize()) {
+            TabTopBar(
+                title = "МФУ",
+                subtitle = printers?.let {
+                    listOfNotNull(
+                        if (lowCount > 0) "Нужна замена расходников: $lowCount" else "Расходников хватает",
+                        "не отвечают: $silentCount".takeIf { silentCount > 0 },
+                    ).joinToString(" · ")
+                },
+                onOpenSettings = onOpenSettings,
+            )
+            when (val s = state) {
+                UiState.Loading -> LoadingView()
+                is UiState.Error -> ErrorView(s.message, viewModel::retry, onOpenSettings, contentPadding = contentPadding)
+                is UiState.Content -> LazyColumn(
+                    contentPadding = PaddingValues(
+                        start = 16.dp, end = 16.dp, top = 8.dp,
+                        bottom = contentPadding.calculateBottomPadding() + 16.dp,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    if (s.data.isEmpty()) item { EmptyView("МФУ пока не добавлены") }
+                    items(s.data, key = { it.id }) { printer ->
+                        PrinterCard(
+                            printer = printer,
+                            isPolling = printer.id in polling,
+                            onPoll = { viewModel.poll(printer) },
+                            modifier = Modifier.animateItem(),
+                        )
+                    }
+                }
             }
         }
+        SnackbarHost(
+            snackbar,
+            Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = contentPadding.calculateBottomPadding()),
+        )
     }
 }
 
 private val pageFormat: NumberFormat = NumberFormat.getIntegerInstance(Locale.forLanguageTag("ru"))
 
 @Composable
-fun PrinterCard(printer: Printer, modifier: Modifier = Modifier) {
+fun PrinterCard(
+    printer: Printer,
+    isPolling: Boolean,
+    onPoll: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Column(
         modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(20.dp))
-            .padding(16.dp),
+            .padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.Print, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(printer.name, style = MaterialTheme.typography.titleMedium)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    StatusDot(if (printer.isOnline) StatusColors.Online else StatusColors.Offline)
+                    Spacer(Modifier.width(6.dp))
+                    Text(printer.name, style = MaterialTheme.typography.titleMedium)
+                    if (printer.hasLowConsumable) {
+                        Spacer(Modifier.width(6.dp))
+                        Icon(
+                            Icons.Outlined.WarningAmber,
+                            contentDescription = "Заканчивается расходник",
+                            tint = StatusColors.Warning,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+                printer.model?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 Row {
                     printer.ip?.let {
                         Text(it, style = MonoStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -113,14 +170,32 @@ fun PrinterCard(printer: Printer, modifier: Modifier = Modifier) {
                     )
                 }
             }
-            if (printer.hasLowConsumable) {
-                Icon(Icons.Outlined.WarningAmber, contentDescription = "Заканчивается расходник", tint = StatusColors.Warning)
+            IconButton(onClick = onPoll, enabled = !isPolling) {
+                if (isPolling) {
+                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(Icons.Outlined.Refresh, contentDescription = "Опросить сейчас")
+                }
             }
         }
         Spacer(Modifier.height(14.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // A silent printer shows its last known levels, dimmed: they may be out of date.
+        Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(end = 12.dp).alpha(if (printer.isOnline) 1f else 0.5f),
+        ) {
             printer.consumables.forEach { ConsumableBar(it) }
         }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            when {
+                !printer.isOnline -> "Не отвечает по SNMP" + (printer.polledAt?.let { ", данные " + formatAgo(it) } ?: "")
+                printer.polledAt != null -> "Опрошен " + formatAgo(printer.polledAt)
+                else -> "Ещё не опрашивался"
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = if (printer.isOnline) MaterialTheme.colorScheme.onSurfaceVariant else StatusColors.Offline,
+        )
     }
 }
 
@@ -135,10 +210,11 @@ private fun ConsumableBar(item: Consumable) {
 
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
-            item.name,
+            if (item.kind == ConsumableKind.WASTE) "${item.name} (свободно)" else item.name,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(84.dp),
+            maxLines = 2,
+            modifier = Modifier.width(96.dp),
         )
         Box(
             Modifier

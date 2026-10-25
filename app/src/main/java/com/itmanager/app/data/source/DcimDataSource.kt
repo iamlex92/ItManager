@@ -1,5 +1,6 @@
 package com.itmanager.app.data.source
 
+import com.itmanager.app.data.model.Alert
 import com.itmanager.app.data.model.ConfigDiff
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DiagnosticKind
@@ -34,6 +35,16 @@ interface DcimDataSource {
 
     /** Ping or traceroute from the switch to [target] (an IPv4 address). Read-only. */
     suspend fun diagnostic(switchId: String, kind: DiagnosticKind, target: String): DiagnosticResult
+
+    /** The device a scanned tag points to: the id written on the tag wins, else the tag's UID binding. */
+    suspend fun deviceForTag(payloadId: String?, uid: String): Device
+
+    /** Binds an NFC tag UID to a device in the inventory. [force] moves a tag bound to another device. */
+    suspend fun bindNfc(deviceId: String, uid: String, force: Boolean): Device
+
+    suspend fun alerts(): List<Alert>
+    suspend fun resolveAlert(alertId: String): Alert
+    suspend fun refreshPrinter(printerId: String): Printer
 
     /** Raw SVG of a floor plan. */
     suspend fun planSvg(url: String): String

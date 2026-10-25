@@ -2,9 +2,11 @@ package com.itmanager.app.data.source
 
 import com.itmanager.app.core.network.LiveSocket
 import com.itmanager.app.core.network.NetAdminApi
+import com.itmanager.app.core.network.UnknownTagException
 import com.itmanager.app.core.network.UserFacingException
 import com.itmanager.app.core.network.toDomain
 import com.itmanager.app.core.settings.ServerSettings
+import com.itmanager.app.data.model.Alert
 import com.itmanager.app.data.model.ConfigDiff
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DiagnosticKind
@@ -81,6 +83,26 @@ class RemoteDataSource(
             DiagnosticKind.PING -> api.ping(settings, switchId, target, PING_COUNT)
             DiagnosticKind.TRACEROUTE -> api.traceroute(settings, switchId, target)
         }.toDomain()
+
+    override suspend fun deviceForTag(payloadId: String?, uid: String): Device {
+        if (payloadId != null) {
+            try {
+                return api.deviceForTag(settings, payloadId).toDomain()
+            } catch (_: UnknownTagException) {
+                // The device was deleted or re-created; the tag's UID binding may still be valid.
+            }
+        }
+        return api.deviceByNfc(settings, uid).toDomain()
+    }
+
+    override suspend fun bindNfc(deviceId: String, uid: String, force: Boolean): Device =
+        api.bindNfc(settings, deviceId, uid, force).toDomain()
+
+    override suspend fun alerts(): List<Alert> = api.alerts(settings).map { it.toDomain() }
+
+    override suspend fun resolveAlert(alertId: String): Alert = api.resolveAlert(settings, alertId).toDomain()
+
+    override suspend fun refreshPrinter(printerId: String): Printer = api.refreshPrinter(settings, printerId).toDomain()
 
     override suspend fun planSvg(url: String): String = api.text(url)
 

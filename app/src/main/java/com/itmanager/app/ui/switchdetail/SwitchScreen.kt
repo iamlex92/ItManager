@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Difference
 import androidx.compose.material.icons.outlined.NetworkCheck
+import androidx.compose.material.icons.outlined.Nfc
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.Save
@@ -166,6 +167,7 @@ fun SwitchScreen(
                         QuickAction("Traceroute", Icons.Outlined.Timeline) { viewModel.openDiagnostic(DiagnosticKind.TRACEROUTE) }
                         QuickAction("Сравнить конфиг", Icons.Outlined.Difference) { onOpenDiff(device.name) }
                         QuickAction("Сохранить конфиг", Icons.Outlined.Save, viewModel::requestSaveConfig)
+                        QuickAction("NFC-метка", Icons.Outlined.Nfc, viewModel::bindNfc)
                     }
 
                     Spacer(Modifier.height(20.dp))

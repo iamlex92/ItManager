@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import com.itmanager.app.core.network.toUserMessage
+import com.itmanager.app.core.nfc.NfcController
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.DiagnosticResult
@@ -23,8 +24,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -60,6 +61,7 @@ data class DiagnosticRun(
 class SwitchViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: DcimRepository,
+    private val nfc: NfcController,
 ) : ViewModel() {
 
     private val deviceId = savedStateHandle.toRoute<SwitchRoute>().deviceId
@@ -105,6 +107,10 @@ class SwitchViewModel @Inject constructor(
                 _targets.value = all.filter { it.id != deviceId && it.ip != null }.sortedBy { it.name }
             }
         }
+    }
+
+    fun bindNfc() {
+        (_state.value as? UiState.Content)?.data?.device?.let(nfc::startBinding)
     }
 
     fun openDiagnostic(kind: DiagnosticKind) {
@@ -159,6 +165,8 @@ class SwitchViewModel @Inject constructor(
                 d.copy(ports = d.ports.map { if (it.id == event.port.id) event.port else it })
             }
             is LiveEvent.DeviceStatus -> updateDetails { d -> d.copy(device = d.device.copy(isOnline = event.isOnline)) }
+            // Alerts and printers have their own screens.
+            is LiveEvent.AlertRaised, is LiveEvent.PrinterChanged -> Unit
         }
     }
 

@@ -95,7 +95,15 @@ class LiveSocket @Inject constructor(
                 deviceId = deviceId ?: return null,
                 isOnline = obj["is_online"]?.jsonPrimitive?.booleanOrNull ?: return null,
             )
-            else -> null // alerts arrive here too; they get their own screen in a later stage
+            "alert" -> LiveEvent.AlertRaised(
+                runCatching { json.decodeFromJsonElement(AlertDto.serializer(), obj["alert"]!!) }.getOrNull()?.toDomain()
+                    ?: return null,
+            )
+            "printer_status" -> LiveEvent.PrinterChanged(
+                runCatching { json.decodeFromJsonElement(PrinterDto.serializer(), obj["printer"]!!) }.getOrNull()?.toDomain()
+                    ?: return null,
+            )
+            else -> null
         }
     }
 
