@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1200" viewBox="0 0 2400 1200" font-family="sans-serif">
+  <!-- Demo floor plan, 60 x 30 m at 40 px/m. Replace with the real plan. -->
+  <rect x="0" y="0" width="2400" height="1200" fill="#f7f7f5"/>
+  <g fill="none" stroke="#3c3c3c" stroke-width="8">
+    <rect x="40" y="40" width="2320" height="1120"/>
+  </g>
+  <g fill="#ffffff" stroke="#3c3c3c" stroke-width="4">
+    <rect x="40" y="40" width="460" height="500"/>
+    <rect x="500" y="40" width="640" height="500"/>
+    <rect x="1140" y="40" width="560" height="500"/>
+    <rect x="1700" y="40" width="660" height="500"/>
+    <rect x="40" y="700" width="2320" height="460"/>
+  </g>
+  <rect x="40" y="540" width="2320" height="160" fill="#ecebe6"/>
+  <g fill="#6b6b6b" font-size="34">
+    <text x="70" y="95">Серверная</text>
+    <text x="530" y="95">Бухгалтерия</text>
+    <text x="1170" y="95">Отдел кадров</text>
+    <text x="1730" y="95">Переговорная</text>
+    <text x="70" y="755">Цех №1 · участок АСУ ТП</text>
+    <text x="1050" y="635">Коридор</text>
+  </g>
+  <g fill="#cfcfc8">
+    <rect x="1120" y="500" width="60" height="40"/>
+    <rect x="1640" y="500" width="60" height="40"/>
+    <rect x="1180" y="700" width="60" height="40"/>
+  </g>
+</svg>
