@@ -6,6 +6,8 @@ import com.itmanager.app.core.network.NetAdminApi
 import com.itmanager.app.core.network.ImportBody
 import com.itmanager.app.core.network.RunbookRunBody
 import com.itmanager.app.core.network.ScanBody
+import com.itmanager.app.core.network.toBody
+import com.itmanager.app.core.network.toPatch
 import com.itmanager.app.core.network.UnknownTagException
 import com.itmanager.app.core.network.UserFacingException
 import com.itmanager.app.core.network.toDomain
@@ -15,6 +17,8 @@ import com.itmanager.app.data.model.AuditEntry
 import com.itmanager.app.data.model.AuditKind
 import com.itmanager.app.data.model.AuthMethod
 import com.itmanager.app.data.model.ConfigDiff
+import com.itmanager.app.data.model.Credential
+import com.itmanager.app.data.model.CredentialDraft
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.DiagnosticResult
@@ -141,6 +145,17 @@ class RemoteDataSource(
 
     override suspend fun importScan(id: String, ips: List<String>, withLinks: Boolean): ImportReport =
         api.importScan(settings, id, ImportBody(ips, withLinks, operator = Build.MODEL)).toDomain()
+
+    override suspend fun credentials(): List<Credential> = api.credentials(settings).map { it.toDomain() }
+
+    override suspend fun saveCredential(id: String?, draft: CredentialDraft): Credential =
+        if (id == null) {
+            api.createCredential(settings, draft.toBody(Build.MODEL)).toDomain()
+        } else {
+            api.updateCredential(settings, id, draft.toPatch(Build.MODEL)).toDomain()
+        }
+
+    override suspend fun deleteCredential(id: String) = api.deleteCredential(settings, id, Build.MODEL)
 
     override suspend fun planSvg(url: String): String = api.text(url)
 

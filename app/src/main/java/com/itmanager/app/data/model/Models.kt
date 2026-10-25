@@ -181,6 +181,8 @@ data class ServerHealth(
     val version: String?,
     val halMode: String?,
     val deviceWritesEnabled: Boolean?,
+    /** Null on a server from before credential encryption. */
+    val secretsEncrypted: Boolean? = null,
 )
 
 fun parseColorHex(hex: String?, fallback: Long = 0xFF3498DB): Long {

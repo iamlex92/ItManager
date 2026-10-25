@@ -5,6 +5,8 @@ import com.itmanager.app.data.model.AuditEntry
 import com.itmanager.app.data.model.AuditKind
 import com.itmanager.app.data.model.AuthMethod
 import com.itmanager.app.data.model.ConfigDiff
+import com.itmanager.app.data.model.Credential
+import com.itmanager.app.data.model.CredentialDraft
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.DiagnosticResult
@@ -74,6 +76,13 @@ interface DcimDataSource {
 
     /** Adds the devices with [ips] and, with [withLinks], the links found to them to the inventory. */
     suspend fun importScan(id: String, ips: List<String>, withLinks: Boolean): ImportReport
+
+    // Stored logins. Secrets go one way: the app can set or replace one but never read it back.
+
+    suspend fun credentials(): List<Credential>
+    /** Creates a login when [id] is null; otherwise updates it, keeping the stored secret if the draft's is blank. */
+    suspend fun saveCredential(id: String?, draft: CredentialDraft): Credential
+    suspend fun deleteCredential(id: String)
 
     /** Raw SVG of a floor plan. */
     suspend fun planSvg(url: String): String

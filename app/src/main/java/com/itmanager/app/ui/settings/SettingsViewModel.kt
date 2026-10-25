@@ -35,6 +35,7 @@ data class SettingsUiState(
     val urlError: String? = null,
     val check: ConnectionCheck = ConnectionCheck.Idle,
     val saved: ServerSettings? = null,
+    val appLock: Boolean = true,
 ) {
     val hasChanges: Boolean
         get() = saved != null && (saved.baseUrl != baseUrl.trim() || saved.apiToken != apiToken.trim() || saved.demoMode != demoMode)
@@ -60,7 +61,14 @@ class SettingsViewModel @Inject constructor(
                 demoMode = current.demoMode,
                 saved = current,
             )
+            // Applied at once, apart from the server form and its Save button.
+            settings.appLock.collect { on -> _state.update { it.copy(appLock = on) } }
         }
+    }
+
+    /** Turning the lock off is confirmed with biometrics by the screen first. */
+    fun setAppLock(enabled: Boolean) {
+        viewModelScope.launch { settings.setAppLock(enabled) }
     }
 
     fun setBaseUrl(value: String) = _state.update {

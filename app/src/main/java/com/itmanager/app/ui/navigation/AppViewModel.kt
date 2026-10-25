@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.itmanager.app.core.network.toUserMessage
 import com.itmanager.app.core.nfc.NfcController
 import com.itmanager.app.core.nfc.TagScan
+import com.itmanager.app.core.security.AppLock
 import com.itmanager.app.data.alerts.AlertCenter
 import com.itmanager.app.data.model.Alert
 import com.itmanager.app.data.model.Device
@@ -40,7 +41,12 @@ class AppViewModel @Inject constructor(
     private val nfc: NfcController,
     private val alertCenter: AlertCenter,
     private val mapFocus: MapFocus,
+    private val appLock: AppLock,
 ) : ViewModel() {
+
+    val lock = appLock.state
+
+    fun unlock() = appLock.unlock()
 
     val binding = nfc.binding
 

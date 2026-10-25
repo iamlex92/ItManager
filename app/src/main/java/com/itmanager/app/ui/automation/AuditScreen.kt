@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Router
 import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -146,6 +147,7 @@ private fun AuditCard(entry: AuditEntry, expanded: Boolean, onToggle: () -> Unit
                     AuditKind.RUNBOOK -> runbookIcon(entry.action.removePrefix("runbook:"))
                     AuditKind.NETWORK -> Icons.Outlined.TravelExplore
                     AuditKind.SWITCH -> Icons.Outlined.Router
+                    AuditKind.SECURITY -> Icons.Outlined.Key
                 }
                 Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
             }
