@@ -11,6 +11,8 @@ captures/
 *.apk
 *.aab
 *.keystore
+# Shared debug key so CI test builds install over each other; not used for release builds.
+!app/debug.keystore
 *.jks
 
 # OS

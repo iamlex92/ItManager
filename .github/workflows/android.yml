@@ -11,6 +11,9 @@ concurrency:
   group: android-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build debug APK
@@ -39,6 +42,22 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
+
+      # master always has one ready-to-install test build: open the release page on the phone and tap the APK.
+      - name: Publish test build
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk itmanager-debug.apk
+          notes="Тестовая сборка из master, коммит ${GITHUB_SHA::7}, сборка №${GITHUB_RUN_NUMBER}. Ставится поверх предыдущей."
+          if gh release view android-latest >/dev/null 2>&1; then
+            gh release upload android-latest itmanager-debug.apk --clobber
+            gh release edit android-latest --notes "$notes"
+          else
+            gh release create android-latest itmanager-debug.apk --prerelease \
+              --title "ItManager: тестовая сборка" --notes "$notes" --target "$GITHUB_SHA"
+          fi
 
       - name: Upload test reports
         if: failure()
