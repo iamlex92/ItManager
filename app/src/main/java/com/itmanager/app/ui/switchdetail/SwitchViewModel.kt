@@ -11,7 +11,9 @@ import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.DiagnosticResult
 import com.itmanager.app.data.model.LiveEvent
 import com.itmanager.app.data.model.PortChange
+import com.itmanager.app.data.model.PortLoad
 import com.itmanager.app.data.model.SwitchPort
+import com.itmanager.app.data.model.TrafficSeries
 import com.itmanager.app.data.model.Vlan
 import com.itmanager.app.data.model.isIpv4
 import com.itmanager.app.data.source.DcimRepository
@@ -57,6 +59,12 @@ data class DiagnosticRun(
     val error: String? = null,
 )
 
+/** The utilization chart in the port sheet. */
+data class PortTraffic(val portId: String, val series: TrafficSeries? = null, val error: String? = null)
+
+/** Utilization charts and the load view cover the last day. */
+const val TRAFFIC_HOURS = 24
+
 @HiltViewModel
 class SwitchViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
@@ -95,6 +103,38 @@ class SwitchViewModel @Inject constructor(
 
     val isDemo: StateFlow<Boolean> = repository.settings.map { it.demoMode }
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    /** Per-port load for the "Загрузка" view, by port id; null until that view is first opened. */
+    private val _load = MutableStateFlow<UiState<Map<String, PortLoad>>?>(null)
+    val load: StateFlow<UiState<Map<String, PortLoad>>?> = _load.asStateFlow()
+
+    private val _portTraffic = MutableStateFlow<PortTraffic?>(null)
+    val portTraffic: StateFlow<PortTraffic?> = _portTraffic.asStateFlow()
+    private var portTrafficJob: Job? = null
+
+    fun loadTraffic(force: Boolean = false) {
+        if (!force && _load.value is UiState.Content) return
+        viewModelScope.launch {
+            _load.update { if (it is UiState.Content) it.copy(isRefreshing = true) else UiState.Loading }
+            repository.switchTraffic(deviceId, TRAFFIC_HOURS).fold(
+                onSuccess = { list -> _load.value = UiState.Content(list.associateBy { it.portId }) },
+                onFailure = { e -> _load.value = UiState.Error(e.toUserMessage()) },
+            )
+        }
+    }
+
+    /** Loads the chart for the port whose sheet just opened. */
+    fun openPortTraffic(portId: String) {
+        if (_portTraffic.value?.portId == portId && _portTraffic.value?.series != null) return
+        portTrafficJob?.cancel()
+        _portTraffic.value = PortTraffic(portId)
+        portTrafficJob = viewModelScope.launch {
+            repository.portTraffic(deviceId, portId, TRAFFIC_HOURS, points = 96).fold(
+                onSuccess = { series -> _portTraffic.value = PortTraffic(portId, series) },
+                onFailure = { e -> _portTraffic.value = PortTraffic(portId, error = e.toUserMessage()) },
+            )
+        }
+    }
 
     init {
         refresh()
@@ -226,6 +266,7 @@ class SwitchViewModel @Inject constructor(
     }
 
     fun refresh() {
+        if (_load.value != null) loadTraffic(force = true)
         viewModelScope.launch {
             _state.update { if (it is UiState.Content) it.copy(isRefreshing = true) else UiState.Loading }
             val device = async { repository.device(deviceId) }

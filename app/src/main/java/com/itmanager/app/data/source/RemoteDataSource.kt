@@ -28,10 +28,12 @@ import com.itmanager.app.data.model.ImportReport
 import com.itmanager.app.data.model.NetworkScan
 import com.itmanager.app.data.model.LiveEvent
 import com.itmanager.app.data.model.PortChange
+import com.itmanager.app.data.model.PortLoad
 import com.itmanager.app.data.model.Printer
 import com.itmanager.app.data.model.Runbook
 import com.itmanager.app.data.model.RunbookRun
 import com.itmanager.app.data.model.SwitchPort
+import com.itmanager.app.data.model.TrafficSeries
 import com.itmanager.app.data.model.Vlan
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -145,6 +147,12 @@ class RemoteDataSource(
 
     override suspend fun importScan(id: String, ips: List<String>, withLinks: Boolean): ImportReport =
         api.importScan(settings, id, ImportBody(ips, withLinks, operator = Build.MODEL)).toDomain()
+
+    override suspend fun switchTraffic(switchId: String, hours: Int): List<PortLoad> =
+        api.switchTraffic(settings, switchId, hours).ports.map { it.toDomain() }
+
+    override suspend fun portTraffic(switchId: String, portId: String, hours: Int, points: Int): TrafficSeries =
+        api.portTraffic(settings, portId, hours, points).toDomain()
 
     override suspend fun credentials(): List<Credential> = api.credentials(settings).map { it.toDomain() }
 

@@ -26,6 +26,7 @@ from .api import (
     ports,
     printers,
     runbooks,
+    traffic,
     vlans,
     ws,
 )
@@ -41,6 +42,7 @@ from .runbooks.emulator import RunbookEnvironment
 from .schemas import HealthOut
 from .services import heartbeat, telegram, traps
 from .services import printers as printer_service
+from .services import traffic as traffic_service
 from .services.realtime import Hub
 from .services.switches import poller
 
@@ -90,6 +92,9 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
                     printer_service.poller(sm, app.state.printer_driver, hub, settings.printer_poll_interval_seconds)
                 )
             )
+        if settings.traffic_interval_seconds > 0:
+            source = traffic_service.build_source(settings)
+            tasks.append(asyncio.create_task(traffic_service.sampler(sm, settings, source)))
         if settings.monitor_mode is MonitorMode.REAL and settings.heartbeat_interval_seconds > 0:
             if heartbeat.ping_available():
                 tasks.append(
@@ -182,7 +187,7 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
 
     api = APIRouter(prefix="/api/v1", dependencies=[Depends(require_token)])
     routers = (floors, vlans, devices, ports, connections, alerts, misc, printers, nfc, runbooks, audit, discovery)
-    for module in (*routers, credentials, notifications):
+    for module in (*routers, credentials, notifications, traffic):
         api.include_router(module.router)
 
     app.include_router(public)

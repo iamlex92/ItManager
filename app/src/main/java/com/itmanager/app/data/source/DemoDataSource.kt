@@ -30,6 +30,7 @@ import com.itmanager.app.data.model.NetworkScan
 import com.itmanager.app.data.model.ScanRanges
 import com.itmanager.app.data.model.LiveEvent
 import com.itmanager.app.data.model.PortChange
+import com.itmanager.app.data.model.PortLoad
 import com.itmanager.app.data.model.PortChangeResult
 import com.itmanager.app.data.model.PortMode
 import com.itmanager.app.data.model.Printer
@@ -37,6 +38,7 @@ import com.itmanager.app.data.model.Room
 import com.itmanager.app.data.model.Runbook
 import com.itmanager.app.data.model.RunbookRun
 import com.itmanager.app.data.model.SwitchPort
+import com.itmanager.app.data.model.TrafficSeries
 import com.itmanager.app.data.model.Vlan
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
@@ -339,6 +341,16 @@ object DemoDataSource : DcimDataSource {
         }
         demoEvents.emit(LiveEvent.AlertRaised(resolved))
         return resolved
+    }
+
+    override suspend fun switchTraffic(switchId: String, hours: Int): List<PortLoad> {
+        simulateNetwork()
+        return DemoTraffic.summary(currentPorts(switchOrThrow(switchId)), hours)
+    }
+
+    override suspend fun portTraffic(switchId: String, portId: String, hours: Int, points: Int): TrafficSeries {
+        simulateNetwork()
+        return DemoTraffic.series(portOrThrow(switchOrThrow(switchId), portId), hours, points)
     }
 
     override suspend fun credentials(): List<Credential> = DemoCredentials.list()

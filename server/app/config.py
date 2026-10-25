@@ -64,6 +64,10 @@ class Settings(BaseSettings):
     heartbeat_concurrency: int = 32
     # Emulated network scan: pause per 16 addresses, so progress is visible.
     discovery_step_delay_seconds: float = 0.15
+    # Port throughput sampling for the utilization charts, seconds. 0 disables.
+    # Real mode reads IF-MIB ifHCInOctets/ifHCOutOctets with SNMP GET; the emulator makes up a working day.
+    traffic_interval_seconds: float = 300.0
+    traffic_keep_days: int = Field(default=7, ge=1, le=90)
     # UDP port for SNMP traps (linkDown/linkUp). 0 disables the listener.
     # 162 needs root or CAP_NET_BIND_SERVICE; the compose file maps 162 -> 1162.
     trap_listen_port: int = 0

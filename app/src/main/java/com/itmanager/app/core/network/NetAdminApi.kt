@@ -150,6 +150,24 @@ class NetAdminApi @Inject constructor(
     suspend fun importScan(s: ServerSettings, id: String, body: ImportBody): ImportDto =
         discovery { post(s, "discovery/scans/${id.encodeURLPathPart()}/import", body) }
 
+    suspend fun switchTraffic(s: ServerSettings, deviceId: String, hours: Int): DeviceTrafficDto =
+        trafficCall { fetch<DeviceTrafficDto>(s, "devices/${deviceId.encodeURLPathPart()}/traffic?hours=$hours") }
+
+    suspend fun portTraffic(s: ServerSettings, portId: String, hours: Int, points: Int): PortTrafficDto =
+        trafficCall { fetch<PortTrafficDto>(s, "ports/${portId.encodeURLPathPart()}/traffic?hours=$hours&points=$points") }
+
+    /** A server from before traffic sampling answers a plain 404 without our error code. */
+    private suspend inline fun <T> trafficCall(block: () -> T): T = try {
+        block()
+    } catch (e: ResponseException) {
+        if (e.response.status.value != 404) throw e
+        val code = runCatching { json.decodeFromString(ErrorDto.serializer(), e.response.bodyAsText()).detail?.code }.getOrNull()
+        throw UserFacingException(
+            if (code == null) "Сервер пока не собирает загрузку портов: обновите сервер." else "Порт не найден на сервере.",
+            e,
+        )
+    }
+
     /** Stored logins without their secrets. */
     suspend fun credentials(s: ServerSettings): List<CredentialDto> = credentialCall { guarded { fetch<List<CredentialDto>>(s, "credentials") } }
 
