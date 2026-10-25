@@ -18,3 +18,4 @@ captures/
 # OS
 .DS_Store
 Thumbs.db
+backups/
