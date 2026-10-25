@@ -5,6 +5,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,6 +26,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Visibility
@@ -45,12 +47,16 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -58,18 +64,25 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itmanager.app.core.security.BiometricGate
+import com.itmanager.app.core.security.GateResult
+import com.itmanager.app.core.security.findFragmentActivity
 import com.itmanager.app.ui.components.SectionLabel
 import com.itmanager.app.ui.theme.Motion
 import com.itmanager.app.ui.theme.StatusColors
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
+    onOpenCredentials: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val haptics = LocalHapticFeedback.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -117,6 +130,70 @@ fun SettingsScreen(
                         viewModel.setDemoMode(it)
                     },
                 )
+            }
+
+            Spacer(Modifier.height(24.dp))
+            SectionLabel("Безопасность")
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(16.dp))
+                    .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Вход по биометрии", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Отпечаток, Face Unlock или PIN при запуске и после 5 минут в фоне.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Switch(
+                    checked = state.appLock,
+                    onCheckedChange = { on ->
+                        if (on) {
+                            haptics.performHapticFeedback(HapticFeedbackType.ToggleOn)
+                            viewModel.setAppLock(true)
+                            return@Switch
+                        }
+                        // Whoever holds the unlocked phone should not switch the protection off unnoticed.
+                        val activity = context.findFragmentActivity() ?: return@Switch
+                        if (BiometricGate.unavailableReason(context) != null) {
+                            viewModel.setAppLock(false)
+                            return@Switch
+                        }
+                        scope.launch {
+                            val r = BiometricGate.confirm(activity, "Выключить вход по биометрии", "Подтвердите, что это вы")
+                            if (r is GateResult.Confirmed) {
+                                haptics.performHapticFeedback(HapticFeedbackType.ToggleOff)
+                                viewModel.setAppLock(false)
+                            }
+                        }
+                    },
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .clickable(role = Role.Button, onClick = onOpenCredentials)
+                    .padding(start = 16.dp, end = 12.dp, top = 14.dp, bottom = 14.dp),
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Учётные данные", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Логины SSH, SNMPv3 и WinRM. Секреты хранятся на сервере зашифрованными и в приложение не возвращаются.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null)
             }
 
             Spacer(Modifier.height(24.dp))
@@ -214,8 +291,13 @@ private fun ConnectionCheckResult(check: ConnectionCheck) {
                     "real" -> if (h.deviceWritesEnabled == true) "реальное оборудование, изменения разрешены" else "реальное оборудование, только чтение"
                     else -> null
                 }
+                val secrets = when (h.secretsEncrypted) {
+                    true -> "секреты зашифрованы"
+                    false -> "секреты не зашифрованы: на сервере не задан SECRET_KEY"
+                    null -> null
+                }
                 Text(
-                    listOfNotNull(h.version?.let { "Версия $it" }, mode).joinToString(" · "),
+                    listOfNotNull(h.version?.let { "Версия $it" }, mode, secrets).joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

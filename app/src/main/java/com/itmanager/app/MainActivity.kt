@@ -5,12 +5,14 @@ import android.graphics.Color
 import android.nfc.NfcAdapter
 import android.nfc.Tag
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.content.IntentCompat
 import androidx.fragment.app.FragmentActivity
 import com.itmanager.app.core.nfc.NfcController
+import com.itmanager.app.core.security.AppLock
 import com.itmanager.app.ui.navigation.AppRoot
 import com.itmanager.app.ui.theme.ItManagerTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -20,6 +22,7 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MainActivity : FragmentActivity() {
     @Inject lateinit var nfc: NfcController
+    @Inject lateinit var appLock: AppLock
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // The app is dark-only, so system bar icons stay light regardless of the system theme.
@@ -40,6 +43,17 @@ class MainActivity : FragmentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleNfcIntent(intent)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        appLock.onForeground(SystemClock.elapsedRealtime())
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // A rotation is not leaving the app.
+        if (!isChangingConfigurations) appLock.onBackground(SystemClock.elapsedRealtime())
     }
 
     override fun onResume() {

@@ -69,7 +69,7 @@ data class RunbookRun(
 }
 
 enum class AuditKind(val wire: String) {
-    RUNBOOK("runbook"), SWITCH("switch"), NETWORK("network");
+    RUNBOOK("runbook"), SWITCH("switch"), NETWORK("network"), SECURITY("security");
 
     companion object {
         fun parse(raw: String?): AuditKind = entries.firstOrNull { it.wire == raw } ?: SWITCH

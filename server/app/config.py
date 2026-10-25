@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://netadmin:netadmin@localhost:5432/netadmin"
     api_token: str = Field(min_length=16)
 
+    # Fernet key that encrypts SNMP communities and stored credentials in the database.
+    # Generate: openssl rand -base64 32 | tr '+/' '-_'. Empty keeps them plaintext (with a warning).
+    secret_key: str = ""
+
     hal_mode: HalMode = HalMode.EMULATOR
     # Master switch for anything that changes state on REAL equipment
     # (port mode/VLAN, shutdown, bounce, write memory). Off by default.
@@ -85,6 +89,16 @@ class Settings(BaseSettings):
     def _reject_placeholder(cls, v: str) -> str:
         if v.strip().lower() in {"change-me", "changeme", "change-me-please-now"}:
             raise ValueError("API_TOKEN is a placeholder, set a real random token")
+        return v
+
+    @field_validator("secret_key")
+    @classmethod
+    def _valid_secret_key(cls, v: str) -> str:
+        from .crypto import valid_key
+
+        v = v.strip()
+        if v and not valid_key(v):
+            raise ValueError("SECRET_KEY must be 32 url-safe base64 bytes: openssl rand -base64 32 | tr '+/' '-_'")
         return v
 
     @property

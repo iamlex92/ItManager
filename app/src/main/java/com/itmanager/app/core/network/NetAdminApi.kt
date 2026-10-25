@@ -8,7 +8,10 @@ import io.ktor.client.call.body
 import io.ktor.client.plugins.ResponseException
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.bearerAuth
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
+import io.ktor.client.request.parameter
+import io.ktor.client.request.patch
 import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
@@ -147,6 +150,47 @@ class NetAdminApi @Inject constructor(
     suspend fun importScan(s: ServerSettings, id: String, body: ImportBody): ImportDto =
         discovery { post(s, "discovery/scans/${id.encodeURLPathPart()}/import", body) }
 
+    /** Stored logins without their secrets. */
+    suspend fun credentials(s: ServerSettings): List<CredentialDto> = credentialCall { guarded { fetch<List<CredentialDto>>(s, "credentials") } }
+
+    suspend fun createCredential(s: ServerSettings, body: CredentialBody): CredentialDto =
+        credentialCall { post(s, "credentials", body) }
+
+    suspend fun updateCredential(s: ServerSettings, id: String, body: CredentialPatch): CredentialDto = credentialCall {
+        guarded {
+            client.patch("${requireBase(s)}/api/v1/credentials/${id.encodeURLPathPart()}") {
+                auth(s)
+                contentType(ContentType.Application.Json)
+                setBody(body)
+            }.body()
+        }
+    }
+
+    suspend fun deleteCredential(s: ServerSettings, id: String, operator: String) {
+        credentialCall {
+            guarded {
+                client.delete("${requireBase(s)}/api/v1/credentials/${id.encodeURLPathPart()}") {
+                    auth(s)
+                    parameter("operator", operator)
+                }
+            }
+        }
+    }
+
+    /** A server from before credential storage answers 404 or 405 on the list. */
+    private suspend inline fun <T> credentialCall(block: () -> T): T = try {
+        block()
+    } catch (e: UserFacingException) {
+        val response = (e.cause as? ResponseException)?.response ?: throw e
+        val code = runCatching { json.decodeFromString(ErrorDto.serializer(), response.bodyAsText()).detail?.code }.getOrNull()
+        throw when {
+            code == "not_found" -> UserFacingException("Этих учётных данных уже нет на сервере. Обновите список.", e)
+            response.status.value == 404 || response.status.value == 405 ->
+                UserFacingException("Сервер пока не умеет хранить учётные данные: обновите сервер.", e)
+            else -> e
+        }
+    }
+
     /** A server from before discovery answers 404 or 405 on these paths; a restarted one has forgotten its scans. */
     private suspend inline fun <T> discovery(block: () -> T): T = try {
         block()
@@ -190,7 +234,7 @@ class NetAdminApi @Inject constructor(
 
     private companion object {
         /** Refusals whose message the server already writes in Russian for the user. */
-        val PHRASED_CODES = setOf("invalid_subnets", "scan_running")
+        val PHRASED_CODES = setOf("invalid_subnets", "scan_running", "name_taken")
     }
 
     private fun requireBase(s: ServerSettings): String {

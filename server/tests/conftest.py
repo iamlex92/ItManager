@@ -7,6 +7,7 @@ from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
 
+from app import crypto
 from app.config import HalMode, Settings
 from app.db import make_engine, make_sessionmaker
 from app.main import create_app
@@ -35,6 +36,8 @@ def migrated_db() -> None:
 
 
 async def _reseed() -> None:
+    # Seed in plaintext; a test that sets SECRET_KEY gets its rows encrypted at app start.
+    crypto.configure(None)
     engine = make_engine(TEST_DB)
     async with make_sessionmaker(engine)() as s:
         await reset(s)

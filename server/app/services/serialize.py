@@ -20,7 +20,8 @@ def device_out(d: Device, graph: Graph | None = None) -> DeviceOut:
         vlan_id=graph.vlan_for(d) if graph else None,
         is_active=d.is_active,
         nfc_tag_uid=d.nfc_tag_uid,
-        snmp_community=d.snmp_community,
+        has_snmp_community=bool(d.snmp_community),
+        ssh_credential_id=d.ssh_credential_id,
         metadata=d.metadata_ or {},
     )
 

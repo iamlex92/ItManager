@@ -40,6 +40,13 @@ class SettingsRepository @Inject constructor(
 
     suspend fun current(): ServerSettings = settings.first()
 
+    /** Biometric login to the app; on unless the operator turned it off. Kept apart from the server form's Save. */
+    val appLock: Flow<Boolean> = dataStore.data.map { it[KEY_APP_LOCK] ?: true }.distinctUntilChanged()
+
+    suspend fun setAppLock(enabled: Boolean) {
+        dataStore.edit { it[KEY_APP_LOCK] = enabled }
+    }
+
     suspend fun save(settings: ServerSettings) {
         dataStore.edit { prefs ->
             prefs[KEY_BASE_URL] = settings.baseUrl
@@ -52,5 +59,6 @@ class SettingsRepository @Inject constructor(
         val KEY_BASE_URL = stringPreferencesKey("server_base_url")
         val KEY_API_TOKEN = stringPreferencesKey("server_api_token")
         val KEY_DEMO_MODE = booleanPreferencesKey("demo_mode")
+        val KEY_APP_LOCK = booleanPreferencesKey("app_lock")
     }
 }

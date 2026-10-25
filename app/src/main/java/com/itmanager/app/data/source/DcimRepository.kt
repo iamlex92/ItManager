@@ -10,6 +10,8 @@ import com.itmanager.app.data.model.Alert
 import com.itmanager.app.data.model.AuditEntry
 import com.itmanager.app.data.model.AuditKind
 import com.itmanager.app.data.model.AuthMethod
+import com.itmanager.app.data.model.Credential
+import com.itmanager.app.data.model.CredentialDraft
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.FloorMap
@@ -88,6 +90,10 @@ class DcimRepository @Inject constructor(
     suspend fun latestScan(): Result<NetworkScan?> = load { latestScan() }
     suspend fun importScan(id: String, ips: List<String>, withLinks: Boolean): Result<ImportReport> =
         load { importScan(id, ips, withLinks) }.onSuccess { inventoryVersion.value++ }
+
+    suspend fun credentials(): Result<List<Credential>> = load { credentials() }
+    suspend fun saveCredential(id: String?, draft: CredentialDraft): Result<Credential> = load { saveCredential(id, draft) }
+    suspend fun deleteCredential(id: String): Result<Unit> = load { deleteCredential(id) }
 
     suspend fun planSvg(url: String): Result<String> = load { planSvg(url) }
 

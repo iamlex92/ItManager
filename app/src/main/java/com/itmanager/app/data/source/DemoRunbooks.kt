@@ -191,6 +191,17 @@ internal object DemoRunbooks {
         )
     }
 
+    /** Demo credential changes; like the server, the arguments never include the secret. */
+    suspend fun recordSecurity(action: String, title: String, arguments: List<Pair<String, String>>, summary: String) {
+        record(
+            AuditEntry(
+                id = UUID.randomUUID().toString(), action = action, kind = AuditKind.SECURITY, title = title,
+                triggeredBy = "${Build.MODEL} · демо", arguments = arguments, authMethod = null,
+                executedAt = Instant.now(), exitCode = 0, stdout = summary, stderr = "", durationMs = null,
+            ),
+        )
+    }
+
     suspend fun audit(kind: AuditKind?): List<AuditEntry> = lock.withLock {
         audit.filter { kind == null || it.kind == kind }
     }

@@ -10,6 +10,8 @@ import com.itmanager.app.data.model.AuditEntry
 import com.itmanager.app.data.model.AuditKind
 import com.itmanager.app.data.model.AuthMethod
 import com.itmanager.app.data.model.ConfigDiff
+import com.itmanager.app.data.model.Credential
+import com.itmanager.app.data.model.CredentialDraft
 import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Consumable
 import com.itmanager.app.data.model.ConsumableKind
@@ -338,6 +340,12 @@ object DemoDataSource : DcimDataSource {
         demoEvents.emit(LiveEvent.AlertRaised(resolved))
         return resolved
     }
+
+    override suspend fun credentials(): List<Credential> = DemoCredentials.list()
+
+    override suspend fun saveCredential(id: String?, draft: CredentialDraft): Credential = DemoCredentials.save(id, draft)
+
+    override suspend fun deleteCredential(id: String) = DemoCredentials.delete(id)
 
     override suspend fun planSvg(url: String): String = notFound("План")
 

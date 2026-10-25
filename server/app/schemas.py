@@ -155,6 +155,8 @@ class DeviceUpdate(BaseModel):
     mac: str | None = Field(default=None, pattern=_MAC_RE)
     nfc_tag_uid: str | None = Field(default=None, max_length=50)
     snmp_community: str | None = None
+    # A stored SSH credential the (future) real switch driver logs in with.
+    ssh_credential_id: uuid.UUID | None = None
     is_active: bool | None = None
     metadata: dict[str, Any] | None = None
 
@@ -185,7 +187,9 @@ class DeviceOut(BaseModel):
     vlan_id: int | None
     is_active: bool
     nfc_tag_uid: str | None
-    snmp_community: str | None
+    # The community itself is write-only (stored encrypted); this only says whether one is set.
+    has_snmp_community: bool
+    ssh_credential_id: uuid.UUID | None = None
     metadata: dict[str, Any]
 
 
@@ -415,6 +419,8 @@ class HealthOut(BaseModel):
     monitor_mode: str = "emulator"
     # Runbooks only run against the built-in emulated environment for now.
     runbook_mode: str = "emulator"
+    # SNMP communities and stored credentials are encrypted at rest (SECRET_KEY is set).
+    secrets_encrypted: bool = False
 
 
 class ErrorCode(BaseModel):
@@ -585,3 +591,38 @@ class ImportOut(BaseModel):
     created: list[ImportedDeviceOut]
     links: list[str]
     skipped: list[str]
+
+
+# --- credentials -------------------------------------------------------------
+
+CredentialKind = Literal["ssh", "snmp_v3", "winrm", "other"]
+
+
+class CredentialIn(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    kind: CredentialKind
+    username: str | None = Field(default=None, max_length=100)
+    # Write-only: stored encrypted, never returned.
+    secret: str | None = Field(default=None, max_length=4096)
+    notes: str | None = Field(default=None, max_length=2000)
+    operator: str | None = Field(default=None, max_length=60)
+
+
+class CredentialUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    username: str | None = Field(default=None, max_length=100)
+    secret: str | None = Field(default=None, max_length=4096)
+    notes: str | None = Field(default=None, max_length=2000)
+    operator: str | None = Field(default=None, max_length=60)
+
+
+class CredentialOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    kind: str
+    username: str | None
+    has_secret: bool
+    notes: str | None
+    devices: int
+    created_at: datetime
+    updated_at: datetime

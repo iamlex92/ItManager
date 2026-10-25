@@ -64,11 +64,13 @@ import com.itmanager.app.ui.automation.AutomationScreen
 import com.itmanager.app.ui.components.AlertsBellState
 import com.itmanager.app.ui.components.LocalAlertsBell
 import com.itmanager.app.ui.configdiff.ConfigDiffScreen
+import com.itmanager.app.ui.credentials.CredentialsScreen
 import com.itmanager.app.ui.devices.DevicesScreen
 import com.itmanager.app.ui.map.MapScreen
 import com.itmanager.app.ui.nfc.BindTagSheet
 import com.itmanager.app.ui.printers.PrintersScreen
 import com.itmanager.app.ui.scanner.ScannerScreen
+import com.itmanager.app.ui.security.AppLockOverlay
 import com.itmanager.app.ui.settings.SettingsScreen
 import com.itmanager.app.ui.switchdetail.SwitchScreen
 import com.itmanager.app.ui.theme.Motion
@@ -171,6 +173,9 @@ fun AppRoot(appViewModel: AppViewModel = hiltViewModel()) {
             }
         }
     }
+
+    val lock by appViewModel.lock.collectAsStateWithLifecycle()
+    AppLockOverlay(lock, lifecycleOwner, onUnlocked = appViewModel::unlock)
 
     binding?.let { state ->
         BindTagSheet(
@@ -340,7 +345,18 @@ private fun AppNavHost(
             popEnterTransition = { EnterTransition.None },
             popExitTransition = { slideOutHorizontally(push) { it } },
         ) {
-            SettingsScreen(onBack = { navController.popBackStack() })
+            SettingsScreen(
+                onBack = { navController.popBackStack() },
+                onOpenCredentials = { navController.navigate(CredentialsRoute) { launchSingleTop = true } },
+            )
+        }
+        composable<CredentialsRoute>(
+            enterTransition = { slideInHorizontally(push) { it } },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { slideOutHorizontally(push) { it } },
+        ) {
+            CredentialsScreen(onBack = { navController.popBackStack() })
         }
     }
 }

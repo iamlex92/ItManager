@@ -18,6 +18,8 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import ARRAY, CIDR, INET, JSONB, MACADDR, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from .crypto import EncryptedText
+
 
 class Base(DeclarativeBase):
     pass
@@ -65,8 +67,10 @@ class Device(Base):
     ip_address: Mapped[Any | None] = mapped_column(INET)
     mac_address: Mapped[str | None] = mapped_column(MACADDR)
     nfc_tag_uid: Mapped[str | None] = mapped_column(String(50), unique=True)
-    ssh_credential_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
-    snmp_community: Mapped[str | None] = mapped_column(String(50), server_default=text("'public'"))
+    ssh_credential_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("credentials.id", ondelete="SET NULL"))
+    # Encrypted at rest when SECRET_KEY is set. The Python-side default goes through the
+    # encryption; the server default only covers rows inserted outside the app.
+    snmp_community: Mapped[str | None] = mapped_column(EncryptedText, default="public", server_default=text("'public'"))
     is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
     # Not in the original spec: last known reachability, filled by the poller.
     is_online: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
@@ -141,6 +145,24 @@ class DeviceAlert(Base):
     is_resolved: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Credential(Base):
+    """A login for equipment or services (SSH, SNMPv3, WinRM). The secret is encrypted at rest
+    and write-only through the API."""
+
+    __tablename__ = "credentials"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    kind: Mapped[str] = mapped_column(String(20))
+    username: Mapped[str | None] = mapped_column(String(100))
+    secret: Mapped[str | None] = mapped_column(EncryptedText)
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class ScriptAuditLog(Base):
