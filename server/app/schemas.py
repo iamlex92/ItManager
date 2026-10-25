@@ -27,6 +27,18 @@ Severity = Literal["INFO", "WARNING", "CRITICAL"]
 _MAC_RE = r"^[0-9a-fA-F]{2}([:-]?[0-9a-fA-F]{2}){5}$"
 
 
+def normalize_nfc_uid(v: str | None) -> str | None:
+    """Canonical tag UID: uppercase hex bytes joined by colons (04:A2:3B:...)."""
+    if v is None:
+        return None
+    raw = "".join(ch for ch in v if ch not in ":- ").upper()
+    if not raw or len(raw) % 2 or len(raw) > 20 or any(ch not in "0123456789ABCDEF" for ch in raw):
+        raise ValueError("NFC UID must be 4..10 hex bytes, e.g. 04:A2:3B:1C:5D:80:01")
+    if len(raw) < 8:
+        raise ValueError("NFC UID must be at least 4 bytes")
+    return ":".join(raw[i : i + 2] for i in range(0, len(raw), 2))
+
+
 def _norm_mac(v: str | None) -> str | None:
     if v is None:
         return None
@@ -120,6 +132,11 @@ class DeviceBase(BaseModel):
     def _mac(cls, v: str | None) -> str | None:
         return _norm_mac(v)
 
+    @field_validator("nfc_tag_uid")
+    @classmethod
+    def _nfc(cls, v: str | None) -> str | None:
+        return normalize_nfc_uid(v)
+
 
 class DeviceCreate(DeviceBase):
     pass
@@ -144,6 +161,11 @@ class DeviceUpdate(BaseModel):
     @classmethod
     def _mac(cls, v: str | None) -> str | None:
         return _norm_mac(v)
+
+    @field_validator("nfc_tag_uid")
+    @classmethod
+    def _nfc(cls, v: str | None) -> str | None:
+        return normalize_nfc_uid(v)
 
 
 class DeviceOut(BaseModel):
@@ -181,6 +203,7 @@ class PortCreate(BaseModel):
     speed_mbps: int = 1000
     poe_enabled: bool = False
     connected_mac: str | None = Field(default=None, pattern=_MAC_RE)
+    if_index: int | None = Field(default=None, ge=1)
 
     @field_validator("connected_mac")
     @classmethod
@@ -202,6 +225,7 @@ class PortOut(BaseModel):
     speed_mbps: int
     poe_enabled: bool
     connected_mac: str | None
+    if_index: int | None = None
     connected_device_name: str | None = None
 
 
@@ -356,10 +380,15 @@ class ConfigDiffOut(BaseModel):
 # --- printers -------------------------------------------------------------
 
 
+SupplyKind = Literal["TONER", "WASTE", "DRUM", "OTHER"]
+
+
 class Consumable(BaseModel):
     name: str
     color_hex: str
+    # Always "remaining": toner left, or free space left in a waste box.
     level_percent: int
+    kind: SupplyKind = "OTHER"
 
 
 class PrinterOut(BaseModel):
@@ -370,6 +399,8 @@ class PrinterOut(BaseModel):
     is_online: bool
     total_pages: int | None
     consumables: list[Consumable]
+    low_supply: bool = False
+    polled_at: datetime | None = None
 
 
 # --- misc -----------------------------------------------------------------
@@ -380,8 +411,43 @@ class HealthOut(BaseModel):
     version: str
     hal_mode: str
     device_writes_enabled: bool
+    monitor_mode: str = "emulator"
 
 
 class ErrorCode(BaseModel):
     code: str
     message: str
+
+
+# --- NFC ------------------------------------------------------------------
+
+
+class NfcPayload(BaseModel):
+    """NDEF JSON written on the tag (spec 3.4)."""
+
+    app: str
+    v: int
+    id: uuid.UUID
+    type: str | None = None
+    name: str | None = None
+
+
+class NfcResolveRequest(BaseModel):
+    payload: NfcPayload | None = None
+    uid: str | None = None
+
+    @field_validator("uid")
+    @classmethod
+    def _uid(cls, v: str | None) -> str | None:
+        return normalize_nfc_uid(v)
+
+
+class NfcBindRequest(BaseModel):
+    uid: str
+    # Move the tag from whatever device it is bound to now.
+    force: bool = False
+
+    @field_validator("uid")
+    @classmethod
+    def _uid(cls, v: str) -> str:
+        return normalize_nfc_uid(v)

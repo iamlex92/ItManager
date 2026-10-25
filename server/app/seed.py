@@ -38,6 +38,13 @@ def _mac(oui: str) -> str:
     return f"{oui}:{(n >> 16) & 0xFF:02x}:{(n >> 8) & 0xFF:02x}:{n & 0xFF:02x}"
 
 
+def _if_index(vendor: str, port_number: int) -> int:
+    # Illustrative ifIndex values. Real ones differ per model and firmware and
+    # will be read from IF-MIB once the real driver exists; traps are matched
+    # by interface name first anyway.
+    return (10100 if vendor == "CISCO" else 48) + port_number
+
+
 @dataclass
 class SwitchSpec:
     name: str
@@ -123,11 +130,18 @@ class HostSpec:
     metadata: dict | None = None
 
 
+def _kind(name: str) -> str:
+    low = name.lower()
+    return "WASTE" if "waste" in low else "DRUM" if "drum" in low else "TONER"
+
+
 def _printer_meta(pages: int, supplies: list[tuple[str, str, int]]) -> dict:
     return {
         "snmp": {
             "total_pages": pages,
-            "consumables": [{"name": n, "color_hex": c, "level_percent": lvl} for n, c, lvl in supplies],
+            "consumables": [
+                {"name": n, "color_hex": c, "kind": _kind(n), "level_percent": lvl} for n, c, lvl in supplies
+            ],
         }
     }
 
@@ -166,7 +180,9 @@ HOSTS: list[HostSpec] = [
         10,
         30,
         socket="R-1.10",
-        metadata=_printer_meta(48213, [("Black", "#000000", 7), ("Waste toner", "#7f8c8d", 64)]),
+        metadata=_printer_meta(
+            48213, [("Black", "#000000", 7), ("Waste toner", "#7f8c8d", 64), ("Drum unit", "#95a5a6", 72)]
+        ),
     ),
     HostSpec(
         "CAM-01",
@@ -325,6 +341,7 @@ async def seed(session: AsyncSession) -> None:
                 is_oper_up=False,
                 speed_mbps=1000,
                 poe_enabled=False,
+                if_index=_if_index(s.vendor, i),
             )
             for i in range(1, s.access_ports + 1)
         ] + [
@@ -336,6 +353,7 @@ async def seed(session: AsyncSession) -> None:
                 access_vlan=1,
                 tagged_vlans=TRUNK_VLANS,
                 speed_mbps=s.uplink_speed,
+                if_index=_if_index(s.vendor, s.access_ports + j),
             )
             for j, name in enumerate(s.uplink_names, start=1)
         ]

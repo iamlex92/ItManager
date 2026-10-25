@@ -77,6 +77,7 @@ async def create_port(body: PortCreate, session: SessionDep):
         speed_mbps=body.speed_mbps,
         poe_enabled=body.poe_enabled,
         connected_mac=body.connected_mac,
+        if_index=body.if_index,
     )
     session.add(port)
     try:

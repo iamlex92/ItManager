@@ -6,15 +6,16 @@ import logging
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
 from ..hal.base import DeviceTarget, PortRef, PortStatus, SwitchDriver
 from ..hal.commands import SUPPORTED_VENDORS
 from ..models import Device, DeviceAlert, Port
+from . import alerts
 from .realtime import Hub
-from .serialize import alert_out, port_out
+from .serialize import port_out
 from .topology import PASSIVE_TYPES, load_graph
 
 log = logging.getLogger(__name__)
@@ -67,6 +68,29 @@ def _changed(p: Port, s: PortStatus) -> bool:
     )
 
 
+def apply_status(p: Port, s: PortStatus) -> tuple[bool, bool]:
+    """Copy live state onto the row. Returns (went_down, came_up)."""
+    went_down = p.is_oper_up and not s.is_oper_up and s.is_admin_up
+    came_up = not p.is_oper_up and s.is_oper_up
+    p.mode = s.mode
+    p.access_vlan = s.access_vlan
+    p.tagged_vlans = list(s.tagged_vlans)
+    p.is_admin_up = s.is_admin_up
+    p.is_oper_up = s.is_oper_up
+    p.speed_mbps = s.speed_mbps
+    p.poe_enabled = s.poe_enabled
+    return went_down, came_up
+
+
+async def publish_ports(session: AsyncSession, hub: Hub, device: Device, ports: list[Port]) -> None:
+    graph = await load_graph(session)
+    for p in ports:
+        hub.publish(
+            device.id,
+            {"type": "port_status", "device_id": str(device.id), "port": port_out(p, graph).model_dump(mode="json")},
+        )
+
+
 async def sync_device(session: AsyncSession, driver: SwitchDriver, hub: Hub, device: Device) -> list[Port]:
     """Read live port state of one switch and store it. Read-only on the device.
     Returns the ports whose state changed. Commits."""
@@ -74,70 +98,37 @@ async def sync_device(session: AsyncSession, driver: SwitchDriver, hub: Hub, dev
     by_number = {p.port_number: p for p in device.ports}
     now = datetime.now(UTC)
     changed: list[Port] = []
-    new_alerts: list[DeviceAlert] = []
+    touched_alerts: list[DeviceAlert] = []
     for s in statuses:
         p = by_number.get(s.number)
         if p is None or not _changed(p, s):
             continue
-        went_down = p.is_oper_up and not s.is_oper_up and s.is_admin_up
-        came_up = not p.is_oper_up and s.is_oper_up
-        p.mode = s.mode
-        p.access_vlan = s.access_vlan
-        p.tagged_vlans = list(s.tagged_vlans)
-        p.is_admin_up = s.is_admin_up
-        p.is_oper_up = s.is_oper_up
-        p.speed_mbps = s.speed_mbps
-        p.poe_enabled = s.poe_enabled
+        went_down, came_up = apply_status(p, s)
         changed.append(p)
-        if went_down:
-            new_alerts.append(
-                DeviceAlert(
-                    device_id=device.id,
-                    port_id=p.id,
-                    severity="CRITICAL" if p.is_uplink else "WARNING",
-                    alert_type="LINK_DOWN",
-                    message=f"{device.name} {p.port_name}: link down",
-                )
-            )
-        if came_up:
-            await session.execute(
-                update(DeviceAlert)
-                .where(
-                    DeviceAlert.port_id == p.id,
-                    DeviceAlert.alert_type == "LINK_DOWN",
-                    DeviceAlert.is_resolved.is_(False),
-                )
-                .values(is_resolved=True, resolved_at=now)
-            )
+        touched_alerts += await alerts.link_changed(session, device, p, went_down, came_up, now)
+    was_online = device.is_online
     device.is_online = True
     device.last_seen_at = now
-    session.add_all(new_alerts)
+    touched_alerts += await alerts.reachability_changed(session, device, True, now) if not was_online else []
     await session.commit()
 
-    if changed or new_alerts:
-        graph = await load_graph(session)
-        for p in changed:
-            hub.publish(
-                device.id,
-                {
-                    "type": "port_status",
-                    "device_id": str(device.id),
-                    "port": port_out(p, graph).model_dump(mode="json"),
-                },
-            )
-        for a in new_alerts:
-            await session.refresh(a)
-            hub.publish(device.id, {"type": "alert", "alert": alert_out(a).model_dump(mode="json")})
-        if changed:
-            await refresh_end_devices(session, hub)
+    if not was_online:
+        alerts.publish_device_status(hub, device)
+    if changed:
+        await publish_ports(session, hub, device, changed)
+    await alerts.publish(session, hub, touched_alerts)
+    if changed:
+        await refresh_end_devices(session, hub)
     return changed
 
 
 async def refresh_end_devices(session: AsyncSession, hub: Hub) -> None:
     """End devices (PCs, printers, ...) are online when the switch port they
-    are cabled to is up. Stands in for ICMP heartbeat until that exists."""
+    are cabled to is up. Emulator stand-in for the ICMP heartbeat."""
     graph = await load_graph(session)
     now = datetime.now(UTC)
+    flipped: list[Device] = []
+    touched: list[DeviceAlert] = []
     for d in graph.devices.values():
         if d.device_type == "SWITCH" or d.device_type in PASSIVE_TYPES:
             continue
@@ -149,8 +140,12 @@ async def refresh_end_devices(session: AsyncSession, hub: Hub) -> None:
             d.is_online = online
             if online:
                 d.last_seen_at = now
-            hub.publish(d.id, {"type": "device_status", "device_id": str(d.id), "is_online": online})
+            flipped.append(d)
+            touched += await alerts.reachability_changed(session, d, online, now)
     await session.commit()
+    for d in flipped:
+        alerts.publish_device_status(hub, d)
+    await alerts.publish(session, hub, touched)
 
 
 async def poll_once(sm: async_sessionmaker[AsyncSession], driver: SwitchDriver, hub: Hub) -> None:
@@ -181,17 +176,10 @@ async def mark_unreachable(session: AsyncSession, hub: Hub, device: Device) -> N
     if not device.is_online:
         return
     device.is_online = False
-    alert = DeviceAlert(
-        device_id=device.id,
-        severity="CRITICAL",
-        alert_type="HOST_DOWN",
-        message=f"{device.name} is not responding",
-    )
-    session.add(alert)
+    touched = await alerts.reachability_changed(session, device, False, datetime.now(UTC))
     await session.commit()
-    await session.refresh(alert)
-    hub.publish(device.id, {"type": "device_status", "device_id": str(device.id), "is_online": False})
-    hub.publish(device.id, {"type": "alert", "alert": alert_out(alert).model_dump(mode="json")})
+    alerts.publish_device_status(hub, device)
+    await alerts.publish(session, hub, touched)
 
 
 async def poller(sm: async_sessionmaker[AsyncSession], driver: SwitchDriver, hub: Hub, interval: float) -> None:

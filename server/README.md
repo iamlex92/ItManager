@@ -18,8 +18,11 @@ The only switches this will ever see are production ones, so:
   commands from the `/preview` endpoint and ask for biometrics before sending.
 - **Every write attempt is audited** in `script_audit_logs`, including the
   blocked ones.
-- The real SSH/SNMP driver (`app/hal/real.py`) is a stub that returns 501:
-  nothing can reach real equipment yet.
+- The real SSH driver for switches (`app/hal/real.py`) is a stub that
+  returns 501: nothing can change real switches yet.
+- **Monitoring is read-only.** `MONITOR_MODE=real` sends only SNMP GET /
+  GETNEXT to printers and one ICMP echo per device per round; the trap
+  receiver only listens. `MONITOR_MODE=emulator` (default) sends nothing.
 
 The server is meant for the plant network only (reach it over VPN from
 outside); auth is a single shared `API_TOKEN`.
@@ -69,6 +72,21 @@ pytest
 | `POLL_INTERVAL_SECONDS` | `10` | port status polling; `0` disables |
 | `EMULATOR_FLAP_PROBABILITY` | `0.1` | chance per switch per poll that a port drops for a few polls |
 | `EMULATOR_BOUNCE_DELAY_SECONDS` | `2` | |
+| `MONITOR_MODE` | `emulator` | `real`: SNMP printer polling + ICMP heartbeat |
+| `PRINTER_POLL_INTERVAL_SECONDS` | `300` | `0` disables |
+| `HEARTBEAT_INTERVAL_SECONDS` | `15` | real mode only; HOST_DOWN alerts for switches, servers, printers, cameras, APs (not PCs) |
+| `TRAP_LISTEN_PORT` | `0` (off) | UDP port for linkDown/linkUp traps, v1/v2c |
+| `TRAP_COMMUNITY` | `public` | traps with another community are dropped |
+| `SNMP_VERSION` | `2c` | `2c` uses each device's `snmp_community`; `3` uses the `SNMP_V3_*` settings |
+| `SNMP_V3_USER`, `SNMP_V3_AUTH_KEY`, `SNMP_V3_PRIV_KEY` | | |
+| `SNMP_V3_AUTH_PROTOCOL` / `SNMP_V3_PRIV_PROTOCOL` | `SHA` / `AES` | `MD5`, `SHA`, `SHA256` / `DES`, `AES` |
+
+Trap-to-port mapping uses the interface name in the trap (`ifName` /
+`ifDescr`, e.g. `GigabitEthernet1/0/5` or `gi1/0/5`) and falls back to
+`ports.if_index`. The seeded `if_index` values are illustrative. To have
+switches send traps, on Cisco: `snmp-server enable traps snmp linkdown linkup`
+and `snmp-server host <server> version 2c <community>`; on Eltex MES:
+`snmp-server server` plus `snmp-server host <server> traps version 2 <community>`.
 
 ## Demo data
 

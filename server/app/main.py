@@ -10,15 +10,17 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 
 from . import __version__
-from .api import alerts, connections, devices, floors, misc, ports, vlans, ws
+from .api import alerts, connections, devices, floors, misc, nfc, ports, printers, vlans, ws
 from .api.deps import require_token
-from .config import Settings, get_settings
+from .config import MonitorMode, Settings, get_settings
 from .db import make_engine, make_sessionmaker
 from .hal.base import DeviceWritesDisabled, UnsupportedVendor
 from .hal.emulator import EmulatorDriver
-from .hal.factory import build_driver
+from .hal.factory import build_driver, build_printer_driver
 from .models import Device
 from .schemas import HealthOut
+from .services import heartbeat, traps
+from .services import printers as printer_service
 from .services.realtime import Hub
 from .services.switches import poller
 
@@ -49,16 +51,43 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             settings.hal_mode.value,
             "ENABLED" if settings.device_writes_enabled else "disabled",
         )
-        task = None
+        app.state.printer_driver = build_printer_driver(settings)
+        sm, hub = app.state.sessionmaker, app.state.hub
+        tasks: list[asyncio.Task] = []
         if settings.poll_interval_seconds > 0:
-            task = asyncio.create_task(
-                poller(app.state.sessionmaker, app.state.driver, app.state.hub, settings.poll_interval_seconds)
+            tasks.append(asyncio.create_task(poller(sm, app.state.driver, hub, settings.poll_interval_seconds)))
+        if settings.printer_poll_interval_seconds > 0:
+            tasks.append(
+                asyncio.create_task(
+                    printer_service.poller(sm, app.state.printer_driver, hub, settings.printer_poll_interval_seconds)
+                )
             )
+        if settings.monitor_mode is MonitorMode.REAL and settings.heartbeat_interval_seconds > 0:
+            if heartbeat.ping_available():
+                tasks.append(
+                    asyncio.create_task(
+                        heartbeat.heartbeat(
+                            sm, hub, settings.heartbeat_interval_seconds, settings.heartbeat_concurrency
+                        )
+                    )
+                )
+            else:
+                log.error("ICMP heartbeat disabled: no ping binary found")
+        trap_transport = None
+        if settings.trap_listen_port > 0:
+            trap_transport = await traps.start_trap_listener(
+                sm, hub, settings.trap_listen_port, settings.trap_community
+            )
+        app.state.trap_transport = trap_transport
+        log.warning("monitoring mode: %s", settings.monitor_mode.value)
         try:
             yield
         finally:
-            if task:
+            if trap_transport:
+                trap_transport.close()
+            for task in tasks:
                 task.cancel()
+            for task in tasks:
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
             await app.state.driver.close()
@@ -97,10 +126,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             version=__version__,
             hal_mode=settings.hal_mode.value,
             device_writes_enabled=settings.device_writes_enabled,
+            monitor_mode=settings.monitor_mode.value,
         )
 
     api = APIRouter(prefix="/api/v1", dependencies=[Depends(require_token)])
-    for module in (floors, vlans, devices, ports, connections, alerts, misc):
+    for module in (floors, vlans, devices, ports, connections, alerts, misc, printers, nfc):
         api.include_router(module.router)
 
     app.include_router(public)
