@@ -1,4 +1,4 @@
-from .base import DeviceTarget, DeviceWritesDisabled, PortConfig, PortRef, PortStatus, SwitchDriver
+from .base import DeviceTarget, DeviceWritesDisabled, DiagResult, PortConfig, PortRef, PortStatus, SwitchDriver
 
 
 class WriteGuard(SwitchDriver):
@@ -22,6 +22,12 @@ class WriteGuard(SwitchDriver):
 
     async def get_running_config(self, target: DeviceTarget) -> str:
         return await self._inner.get_running_config(target)
+
+    async def ping(self, target: DeviceTarget, dest: str, count: int) -> DiagResult:
+        return await self._inner.ping(target, dest, count)
+
+    async def traceroute(self, target: DeviceTarget, dest: str) -> DiagResult:
+        return await self._inner.traceroute(target, dest)
 
     async def apply_port_config(self, target: DeviceTarget, port: PortRef, change: PortConfig) -> list[str]:
         self._check()

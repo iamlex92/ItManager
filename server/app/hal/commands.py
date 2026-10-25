@@ -76,6 +76,18 @@ def bounce_commands(vendor: str | None, port_name: str) -> list[str]:
     ]
 
 
+def ping_command(vendor: str | None, dest: str, count: int) -> str:
+    # dest must already be a validated IP address: it goes into a CLI line.
+    if _vendor(vendor) == CISCO:
+        return f"ping {dest} repeat {count}"
+    return f"ping {dest} count {count}"
+
+
+def traceroute_command(vendor: str | None, dest: str) -> str:
+    _vendor(vendor)
+    return f"traceroute {dest}"
+
+
 def save_commands(vendor: str | None) -> list[str]:
     v = _vendor(vendor)
     if v == CISCO:

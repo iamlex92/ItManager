@@ -43,6 +43,15 @@ Read-only on the device:
 - `POST /api/v1/devices/{id}/configs/backup` reads running-config and stores it.
 - `POST /api/v1/ports/{id}/config/preview` with `{mode?, access_vlan?, tagged_vlans?, is_admin_up?}` returns `{commands}` without contacting the device.
 
+Diagnostics run from the switch (exec mode, not write-guarded, audited):
+
+- `POST /api/v1/devices/{id}/ping` `{"target": "10.10.10.22", "count": 5}` → `{command, output, success}`
+  (`count` 1..20, default 5)
+- `POST /api/v1/devices/{id}/traceroute` `{"target": "10.10.10.22"}` → `{command, output, success}`
+
+`target` must be an IP address (hostnames are rejected with 422). In emulator
+mode the result follows the target's `is_online` in the database; unknown IPs fail.
+
 State-changing (guarded):
 
 - `POST /api/v1/ports/{id}/config` same body plus `"confirm": true` → `{port, commands}`

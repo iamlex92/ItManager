@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import select
 
 from . import __version__
 from .api import alerts, connections, devices, floors, misc, ports, vlans, ws
@@ -14,7 +15,9 @@ from .api.deps import require_token
 from .config import Settings, get_settings
 from .db import make_engine, make_sessionmaker
 from .hal.base import DeviceWritesDisabled, UnsupportedVendor
+from .hal.emulator import EmulatorDriver
 from .hal.factory import build_driver
+from .models import Device
 from .schemas import HealthOut
 from .services.realtime import Hub
 from .services.switches import poller
@@ -33,6 +36,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.engine = engine
         app.state.sessionmaker = make_sessionmaker(engine)
         app.state.driver = build_driver(settings)
+        if isinstance(app.state.driver, EmulatorDriver):
+
+            async def host_lookup(ip: str) -> bool | None:
+                async with app.state.sessionmaker() as s:
+                    return await s.scalar(select(Device.is_online).where(Device.ip_address == ip).limit(1))
+
+            app.state.driver.host_lookup = host_lookup
         app.state.hub = Hub()
         log.warning(
             "HAL mode: %s, device writes %s",

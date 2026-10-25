@@ -77,6 +77,12 @@ class _Spy(SwitchDriver):
         self.calls.append("config")
         return ""
 
+    async def ping(self, target, dest, count):
+        self.calls.append("ping")
+
+    async def traceroute(self, target, dest):
+        self.calls.append("traceroute")
+
     async def apply_port_config(self, target, port, change):
         self.calls.append("apply")
         return []
@@ -96,6 +102,8 @@ async def test_write_guard_blocks_writes_but_not_reads():
     t = _target()
     await guard.get_port_statuses(t)
     await guard.get_running_config(t)
+    await guard.ping(t, "10.0.0.2", 1)
+    await guard.traceroute(t, "10.0.0.2")
     for call in (
         guard.apply_port_config(t, t.ports[0], PortConfig(is_admin_up=False)),
         guard.bounce_port(t, t.ports[0]),
@@ -103,7 +111,7 @@ async def test_write_guard_blocks_writes_but_not_reads():
     ):
         with pytest.raises(DeviceWritesDisabled):
             await call
-    assert spy.calls == ["read", "config"]
+    assert spy.calls == ["read", "config", "ping", "traceroute"]
 
 
 async def test_write_guard_allows_when_enabled():

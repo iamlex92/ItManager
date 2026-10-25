@@ -49,6 +49,7 @@ def require_managed_switch(device: Device) -> None:
 @dataclass
 class AuditRecord:
     commands: list[str] = field(default_factory=list)
+    exit_code: int = 0
 
 
 @contextlib.asynccontextmanager
@@ -76,7 +77,7 @@ async def audit(
         entry.output_log = f"FAILED: {e!r}\n" + "\n".join(rec.commands)
         await _store(request, entry)
         raise
-    entry.exit_code = 0
+    entry.exit_code = rec.exit_code
     entry.output_log = "\n".join(rec.commands)
     await _store(request, entry)
 
