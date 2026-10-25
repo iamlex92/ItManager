@@ -20,6 +20,7 @@ import com.itmanager.app.data.model.ConfigDiff
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.DeviceHistoryEntry
 import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.DiagnosticResult
 import com.itmanager.app.data.model.FloorMap
@@ -147,6 +148,9 @@ class RemoteDataSource(
 
     override suspend fun importScan(id: String, ips: List<String>, withLinks: Boolean): ImportReport =
         api.importScan(settings, id, ImportBody(ips, withLinks, operator = Build.MODEL)).toDomain()
+
+    override suspend fun deviceHistory(switchId: String): List<DeviceHistoryEntry> =
+        api.deviceHistory(settings, switchId).map { it.toDomain() }
 
     override suspend fun switchTraffic(switchId: String, hours: Int): List<PortLoad> =
         api.switchTraffic(settings, switchId, hours).ports.map { it.toDomain() }

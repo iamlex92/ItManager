@@ -91,6 +91,7 @@ class DcimRepository @Inject constructor(
     suspend fun importScan(id: String, ips: List<String>, withLinks: Boolean): Result<ImportReport> =
         load { importScan(id, ips, withLinks) }.onSuccess { inventoryVersion.value++ }
 
+    suspend fun deviceHistory(switchId: String) = load { deviceHistory(switchId) }
     suspend fun switchTraffic(switchId: String, hours: Int) = load { switchTraffic(switchId, hours) }
     suspend fun portTraffic(switchId: String, portId: String, hours: Int, points: Int) =
         load { portTraffic(switchId, portId, hours, points) }

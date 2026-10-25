@@ -35,5 +35,16 @@
                 <data android:mimeType="application/json" />
             </intent-filter>
         </activity>
+
+        <!-- Hands exported reports to the share sheet; nothing else is exposed. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.exports"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/export_paths" />
+        </provider>
     </application>
 </manifest>

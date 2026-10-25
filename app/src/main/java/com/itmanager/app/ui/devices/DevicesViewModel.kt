@@ -3,13 +3,20 @@ package com.itmanager.app.ui.devices
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itmanager.app.core.network.toUserMessage
+import com.itmanager.app.data.export.ExportFormat
+import com.itmanager.app.data.export.ExportedFile
+import com.itmanager.app.data.export.InventoryExporter
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.source.DcimRepository
 import com.itmanager.app.ui.components.UiState
 import com.itmanager.app.ui.navigation.MapFocus
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -39,7 +46,26 @@ data class DevicesUiState(
 class DevicesViewModel @Inject constructor(
     private val repository: DcimRepository,
     private val mapFocus: MapFocus,
+    private val exporter: InventoryExporter,
 ) : ViewModel() {
+
+    /** The format being exported right now, or null. */
+    private val _exporting = MutableStateFlow<ExportFormat?>(null)
+    val exporting: StateFlow<ExportFormat?> = _exporting.asStateFlow()
+
+    /** A ready file to share, or why it could not be made. */
+    private val _exports = MutableSharedFlow<Result<ExportedFile>>(extraBufferCapacity = 1)
+    val exports: SharedFlow<Result<ExportedFile>> = _exports.asSharedFlow()
+
+    fun export(format: ExportFormat) {
+        if (_exporting.value != null) return
+        _exporting.value = format
+        viewModelScope.launch {
+            val result = exporter.export(format)
+            _exports.emit(result.fold({ Result.success(it) }, { Result.failure(Exception(it.toUserMessage(), it)) }))
+            _exporting.value = null
+        }
+    }
 
     private val all = MutableStateFlow<UiState<List<Device>>>(UiState.Loading)
     private val query = MutableStateFlow("")

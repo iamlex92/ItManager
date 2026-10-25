@@ -1,5 +1,6 @@
 package com.itmanager.app.data.source
 
+import android.os.Build
 import com.itmanager.app.core.network.TagBoundElsewhereException
 import com.itmanager.app.core.network.UnknownTagException
 import com.itmanager.app.core.network.UserFacingException
@@ -16,6 +17,9 @@ import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Consumable
 import com.itmanager.app.data.model.ConsumableKind
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.DeviceHistoryEntry
+import com.itmanager.app.data.model.HistoryKind
+import com.itmanager.app.data.model.describePortChange
 import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.DiagnosticResult
@@ -197,6 +201,13 @@ object DemoDataSource : DcimDataSource {
     private val changedPorts = HashMap<String, SwitchPort>()
     /** Stored config copies per switch, for the diff screen. */
     private val storedConfigs = HashMap<String, List<String>>()
+    private val history = HashMap<String, ArrayDeque<DeviceHistoryEntry>>()
+
+    private fun logHistory(switchId: String, kind: HistoryKind, title: String, summary: String, commands: List<String>) {
+        val log = history.getOrPut(switchId) { ArrayDeque() }
+        log.addFirst(DeviceHistoryEntry(Instant.now(), kind, title, summary, "${Build.MODEL} · демо", commands))
+        while (log.size > 200) log.removeLast()
+    }
     private val demoEvents = MutableSharedFlow<LiveEvent>(extraBufferCapacity = 16)
 
     private fun switchOrThrow(id: String) = byId[id]?.takeIf { it.type == DeviceType.SWITCH } ?: notFound("Коммутатор")
@@ -235,6 +246,7 @@ object DemoDataSource : DcimDataSource {
         changedPorts[portId] = updated
         demoEvents.emit(LiveEvent.PortChanged(switchId, updated))
         DemoRunbooks.recordSwitch("Настройка порта", listOf("device" to switch.name, "port" to port.name), commands)
+        logHistory(switchId, HistoryKind.CHANGE, "Настройка порта", describePortChange(port, change), commands)
         return PortChangeResult(updated, commands)
     }
 
@@ -247,6 +259,7 @@ object DemoDataSource : DcimDataSource {
         demoEvents.emit(LiveEvent.PortChanged(switchId, port.copy(isOperUp = true)))
         return CommandTranslator.bounce(switch.vendor, port).also {
             DemoRunbooks.recordSwitch("Перезапуск порта", listOf("device" to switch.name, "port" to port.name), it)
+            logHistory(switchId, HistoryKind.CHANGE, "Перезапуск порта", "${port.name}: shutdown и no shutdown", it)
         }
     }
 
@@ -255,12 +268,26 @@ object DemoDataSource : DcimDataSource {
         val switch = switchOrThrow(switchId)
         return CommandTranslator.writeMemory(switch.vendor).also {
             DemoRunbooks.recordSwitch("Сохранение конфигурации", listOf("device" to switch.name), it)
+            logHistory(switchId, HistoryKind.CHANGE, "Сохранение конфигурации", "running-config сохранён в startup-config", it)
         }
     }
 
     override suspend fun backupConfig(switchId: String) {
         simulateNetwork()
-        storedConfigs[switchId] = runningConfig(switchOrThrow(switchId))
+        val current = runningConfig(switchOrThrow(switchId))
+        val note = when (storedConfigs[switchId]) {
+            null -> "первая сохранённая копия"
+            current -> "без изменений с прошлой копии"
+            else -> "конфигурация изменилась с прошлой копии"
+        }
+        storedConfigs[switchId] = current
+        logHistory(switchId, HistoryKind.CONFIG_BACKUP, "Копия конфигурации", note, emptyList())
+    }
+
+    override suspend fun deviceHistory(switchId: String): List<DeviceHistoryEntry> {
+        simulateNetwork()
+        switchOrThrow(switchId)
+        return history[switchId]?.toList().orEmpty()
     }
 
     override suspend fun configDiff(switchId: String): ConfigDiff {

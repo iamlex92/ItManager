@@ -1,5 +1,18 @@
 package com.itmanager.app.ui.devices
 
+import android.content.Intent
+import android.widget.Toast
+import androidx.compose.material.icons.outlined.IosShare
+import androidx.compose.material.icons.outlined.PictureAsPdf
+import androidx.compose.material.icons.outlined.TableChart
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import com.itmanager.app.data.export.ExportFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -68,6 +81,23 @@ fun DevicesScreen(
     viewModel: DevicesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val exporting by viewModel.exporting.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    LaunchedEffect(viewModel) {
+        viewModel.exports.collect { result ->
+            result.fold(
+                onSuccess = { file ->
+                    val send = Intent(Intent.ACTION_SEND)
+                        .setType(file.mime)
+                        .putExtra(Intent.EXTRA_STREAM, file.uri)
+                        .putExtra(Intent.EXTRA_SUBJECT, file.name)
+                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    context.startActivity(Intent.createChooser(send, "Отправить отчёт"))
+                },
+                onFailure = { e -> Toast.makeText(context, e.message ?: "Отчёт не получился", Toast.LENGTH_LONG).show() },
+            )
+        }
+    }
     val showOnMap = { id: String ->
         viewModel.showOnMap(id)
         onShowOnMap()
@@ -82,6 +112,7 @@ fun DevicesScreen(
                 IconButton(onClick = onOpenScanner) {
                     Icon(Icons.Outlined.TravelExplore, contentDescription = "Сканер сети")
                 }
+                ExportButton(exporting, onExport = viewModel::export)
             },
         )
         SearchField(state.query, viewModel::setQuery, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
@@ -119,6 +150,35 @@ fun DevicesScreen(
                         modifier = Modifier.animateItem(),
                     )
                 }
+            }
+        }
+    }
+}
+
+/** Inventory export: Excel for working with the list, PDF for printing or sending on. */
+@Composable
+private fun ExportButton(exporting: ExportFormat?, onExport: (ExportFormat) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }, enabled = exporting == null) {
+            if (exporting != null) {
+                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+            } else {
+                Icon(Icons.Outlined.IosShare, contentDescription = "Экспорт учёта")
+            }
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            ExportFormat.entries.forEach { f ->
+                DropdownMenuItem(
+                    text = { Text(if (f == ExportFormat.XLSX) "Таблица Excel (.xlsx)" else "Документ PDF") },
+                    leadingIcon = {
+                        Icon(if (f == ExportFormat.XLSX) Icons.Outlined.TableChart else Icons.Outlined.PictureAsPdf, contentDescription = null)
+                    },
+                    onClick = {
+                        open = false
+                        onExport(f)
+                    },
+                )
             }
         }
     }
