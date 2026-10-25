@@ -30,8 +30,9 @@ data class HealthDto(
     @SerialName("hal_mode") val halMode: String? = null,
     @SerialName("device_writes_enabled") val deviceWritesEnabled: Boolean? = null,
     @SerialName("secrets_encrypted") val secretsEncrypted: Boolean? = null,
+    @SerialName("telegram_alerts") val telegramAlerts: Boolean? = null,
 ) {
-    fun toDomain() = ServerHealth(status, version, halMode, deviceWritesEnabled, secretsEncrypted)
+    fun toDomain() = ServerHealth(status, version, halMode, deviceWritesEnabled, secretsEncrypted, telegramAlerts)
 }
 
 @Serializable

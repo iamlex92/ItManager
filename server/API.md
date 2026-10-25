@@ -188,6 +188,17 @@ Each change is audited as `credential_create` / `credential_update` / `credentia
 Devices: `snmp_community` is accepted on create/update but no longer returned; `has_snmp_community`
 says whether one is set. `/health` reports `secrets_encrypted`.
 
+## Notifications
+
+| Method | Path | |
+|---|---|---|
+| POST | `/notifications/telegram/test` | Sends a test message to `TELEGRAM_CHAT_ID`. 409 `telegram_disabled` when the token or chat id is missing, 502 `telegram_failed` with the reason (bad token, bot not in the chat, no network). |
+
+Alerts (every source: port poller, traps, heartbeat, printers, `POST /alerts`) are sent to the chat
+when they are at least `TELEGRAM_MIN_SEVERITY` and still open after `TELEGRAM_DELAY_SECONDS`; a "resolved"
+message follows for those that were sent. At most `TELEGRAM_MAX_PER_MINUTE` messages, the rest are counted
+in the next one. `/health` reports `telegram_alerts`. The bot token is never logged.
+
 ## WebSocket `/api/v1/ws?token=...`
 
 Client sends:

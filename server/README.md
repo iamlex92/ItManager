@@ -99,6 +99,12 @@ pytest
 | `HEARTBEAT_INTERVAL_SECONDS` | `15` | real mode only; HOST_DOWN alerts for switches, servers, printers, cameras, APs (not PCs) |
 | `TRAP_LISTEN_PORT` | `0` (off) | UDP port for linkDown/linkUp traps, v1/v2c |
 | `TRAP_COMMUNITY` | `public` | traps with another community are dropped |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | empty | alerts to a Telegram chat; off unless both are set (DEPLOY.md, section 9) |
+| `TELEGRAM_MIN_SEVERITY` | `WARNING` | lowest severity sent |
+| `TELEGRAM_DELAY_SECONDS` | `60` | send only alerts still open after this delay |
+| `TELEGRAM_NOTIFY_RESOLVED` | `true` | also send "resolved" for alerts that were sent |
+| `TELEGRAM_MAX_PER_MINUTE` | `20` | rate limit; dropped ones are counted in the next message |
+| `TELEGRAM_PROXY` | empty | HTTP(S) proxy to reach api.telegram.org |
 | `SNMP_VERSION` | `2c` | `2c` uses each device's `snmp_community`; `3` uses the `SNMP_V3_*` settings |
 | `SNMP_V3_USER`, `SNMP_V3_AUTH_KEY`, `SNMP_V3_PRIV_KEY` | | |
 | `SNMP_V3_AUTH_PROTOCOL` / `SNMP_V3_PRIV_PROTOCOL` | `SHA` / `AES` | `MD5`, `SHA`, `SHA256` / `DES`, `AES` |
