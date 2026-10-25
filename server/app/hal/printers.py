@@ -126,6 +126,27 @@ class EmulatedPrinters(PrinterDriver):
         return snap
 
 
+def snmp_auth(s, community: str):
+    """v2c community, or the v3 USM user from the settings when SNMP_VERSION=3."""
+    from pysnmp.hlapi.v3arch import asyncio as h
+
+    if s.snmp_version == "3":
+        auth = {
+            "MD5": h.usmHMACMD5AuthProtocol,
+            "SHA": h.usmHMACSHAAuthProtocol,
+            "SHA256": h.usmHMAC192SHA256AuthProtocol,
+        }[s.snmp_v3_auth_protocol.value]
+        priv = {"DES": h.usmDESPrivProtocol, "AES": h.usmAesCfb128Protocol}[s.snmp_v3_priv_protocol.value]
+        return h.UsmUserData(
+            s.snmp_v3_user,
+            authKey=s.snmp_v3_auth_key or None,
+            privKey=s.snmp_v3_priv_key or None,
+            authProtocol=auth if s.snmp_v3_auth_key else h.usmNoAuthProtocol,
+            privProtocol=priv if s.snmp_v3_priv_key else h.usmNoPrivProtocol,
+        )
+    return h.CommunityData(community, mpModel=1)
+
+
 class SnmpPrinters(PrinterDriver):
     """Real Printer-MIB polling with pysnmp (v2c community or v3 USM)."""
 
@@ -134,24 +155,7 @@ class SnmpPrinters(PrinterDriver):
         self._engine = None
 
     def _auth(self, community: str):
-        from pysnmp.hlapi.v3arch import asyncio as h
-
-        s = self._s
-        if s.snmp_version == "3":
-            auth = {
-                "MD5": h.usmHMACMD5AuthProtocol,
-                "SHA": h.usmHMACSHAAuthProtocol,
-                "SHA256": h.usmHMAC192SHA256AuthProtocol,
-            }[s.snmp_v3_auth_protocol.value]
-            priv = {"DES": h.usmDESPrivProtocol, "AES": h.usmAesCfb128Protocol}[s.snmp_v3_priv_protocol.value]
-            return h.UsmUserData(
-                s.snmp_v3_user,
-                authKey=s.snmp_v3_auth_key or None,
-                privKey=s.snmp_v3_priv_key or None,
-                authProtocol=auth if s.snmp_v3_auth_key else h.usmNoAuthProtocol,
-                privProtocol=priv if s.snmp_v3_priv_key else h.usmNoPrivProtocol,
-            )
-        return h.CommunityData(community, mpModel=1)
+        return snmp_auth(self._s, community)
 
     async def poll(self, target: PrinterTarget) -> PrinterSnapshot:
         from pysnmp.hlapi.v3arch import asyncio as h

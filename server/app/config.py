@@ -58,6 +58,8 @@ class Settings(BaseSettings):
     # from switch ports). 0 disables.
     heartbeat_interval_seconds: float = 15.0
     heartbeat_concurrency: int = 32
+    # Emulated network scan: pause per 16 addresses, so progress is visible.
+    discovery_step_delay_seconds: float = 0.15
     # UDP port for SNMP traps (linkDown/linkUp). 0 disables the listener.
     # 162 needs root or CAP_NET_BIND_SERVICE; the compose file maps 162 -> 1162.
     trap_listen_port: int = 0

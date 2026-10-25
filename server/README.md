@@ -27,6 +27,11 @@ The only switches this will ever see are production ones, so:
 - **Monitoring is read-only.** `MONITOR_MODE=real` sends only SNMP GET /
   GETNEXT to printers and one ICMP echo per device per round; the trap
   receiver only listens. `MONITOR_MODE=emulator` (default) sends nothing.
+- **Network discovery is read-only and manual.** A scan starts only from an
+  explicit request with explicit private ranges (at most a /22 each, 2048
+  addresses in total) and sends ICMP echo plus SNMP GET/GETNEXT. In
+  `MONITOR_MODE=emulator` it is answered from the inventory. Adding found
+  devices to the inventory writes only to the database.
 
 The server is meant for the plant network only (reach it over VPN from
 outside); auth is a single shared `API_TOKEN`.
@@ -78,6 +83,7 @@ pytest
 | `EMULATOR_BOUNCE_DELAY_SECONDS` | `2` | |
 | `MONITOR_MODE` | `emulator` | `real`: SNMP printer polling + ICMP heartbeat |
 | `PRINTER_POLL_INTERVAL_SECONDS` | `300` | `0` disables |
+| `DISCOVERY_STEP_DELAY_SECONDS` | `0.15` | emulated network scan: pause per 16 addresses |
 | `HEARTBEAT_INTERVAL_SECONDS` | `15` | real mode only; HOST_DOWN alerts for switches, servers, printers, cameras, APs (not PCs) |
 | `TRAP_LISTEN_PORT` | `0` (off) | UDP port for linkDown/linkUp traps, v1/v2c |
 | `TRAP_COMMUNITY` | `public` | traps with another community are dropped |
@@ -111,6 +117,8 @@ app/
   api/             routers; guarded.py holds confirmation, uplink and audit checks
   hal/             switch drivers: emulator, write guard, real (stub), CLI command builder
   services/        port sync + alerts, cable tracing, WebSocket hub
+  discovery/       network scan (emulator, ping + SNMP), import into the inventory
+  runbooks/        runbook catalog and emulated environment
   seed.py          demo data
 alembic/           migrations
 ```

@@ -10,10 +10,25 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 
 from . import __version__
-from .api import alerts, audit, connections, devices, floors, misc, nfc, ports, printers, runbooks, vlans, ws
+from .api import (
+    alerts,
+    audit,
+    connections,
+    devices,
+    discovery,
+    floors,
+    misc,
+    nfc,
+    ports,
+    printers,
+    runbooks,
+    vlans,
+    ws,
+)
 from .api.deps import require_token
 from .config import MonitorMode, Settings, get_settings
 from .db import make_engine, make_sessionmaker
+from .discovery.manager import ScanManager
 from .hal.base import DeviceWritesDisabled, UnsupportedVendor
 from .hal.emulator import EmulatorDriver
 from .hal.factory import build_driver, build_printer_driver
@@ -48,6 +63,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.state.driver.host_lookup = host_lookup
         app.state.hub = Hub()
         app.state.runbooks = RunbookEnvironment(step_delay=settings.runbook_step_delay_seconds)
+        app.state.discovery = ScanManager(app.state.sessionmaker, settings)
         log.warning(
             "HAL mode: %s, device writes %s",
             settings.hal_mode.value,
@@ -92,6 +108,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             for task in tasks:
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
+            await app.state.discovery.close()
             await app.state.driver.close()
             await engine.dispose()
 
@@ -133,7 +150,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     api = APIRouter(prefix="/api/v1", dependencies=[Depends(require_token)])
-    for module in (floors, vlans, devices, ports, connections, alerts, misc, printers, nfc, runbooks, audit):
+    for module in (floors, vlans, devices, ports, connections, alerts, misc, printers, nfc, runbooks, audit, discovery):
         api.include_router(module.router)
 
     app.include_router(public)

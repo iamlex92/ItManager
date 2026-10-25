@@ -20,6 +20,7 @@ DeviceType = Literal[
     "PATCH_PANEL",
     "CAMERA",
     "ACCESS_POINT",
+    "UNKNOWN",
 ]
 PortMode = Literal["ACCESS", "TRUNK"]
 Severity = Literal["INFO", "WARNING", "CRITICAL"]
@@ -516,3 +517,71 @@ class AuditOut(BaseModel):
     stdout: str | None
     stderr: str | None
     duration_ms: int | None
+
+
+class ScanIn(BaseModel):
+    subnets: list[str] = Field(min_length=1, max_length=8, examples=[["10.99.0.0/24", "10.10.30.0/24"]])
+    # Read-only community for SNMP v2c. Used for this scan only: never stored or logged.
+    community: str = Field(default="public", min_length=1, max_length=64)
+    operator: str | None = Field(default=None, max_length=60)
+
+
+class FoundDeviceOut(BaseModel):
+    ip: str
+    name: str | None
+    mac: str | None
+    vendor: str | None
+    model: str | None
+    type: str
+    description: str | None
+    snmp: bool
+    # Set when a device with this IP is already in the inventory.
+    inventory_id: uuid.UUID | None
+    inventory_name: str | None
+
+
+class LinkEndOut(BaseModel):
+    name: str
+    port: str
+    ip: str | None
+    inventory_id: uuid.UUID | None
+
+
+class FoundLinkOut(BaseModel):
+    a: LinkEndOut
+    b: LinkEndOut
+    source: Literal["lldp", "cdp", "fdb"]
+    # The inventory already has a cable between these two devices.
+    known: bool
+
+
+class ScanOut(BaseModel):
+    id: uuid.UUID
+    status: Literal["running", "done", "failed"]
+    mode: Literal["emulator", "real"]
+    subnets: list[str]
+    started_at: datetime | None
+    finished_at: datetime | None
+    total: int
+    probed: int
+    devices: list[FoundDeviceOut]
+    links: list[FoundLinkOut]
+    error: str | None
+
+
+class ImportIn(BaseModel):
+    ips: list[str] = Field(min_length=1, max_length=512)
+    links: bool = True
+    operator: str | None = Field(default=None, max_length=60)
+
+
+class ImportedDeviceOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    ip: str
+
+
+class ImportOut(BaseModel):
+    created: list[ImportedDeviceOut]
+    links: list[str]
+    skipped: list[str]
