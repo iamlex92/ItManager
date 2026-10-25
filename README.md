@@ -84,9 +84,13 @@ kotlinx.serialization, DataStore, Navigation Compose. `minSdk 31`, `targetSdk 36
 
 ### Сборка
 
-APK собирается в GitHub Actions на каждый push и pull request: вкладка **Actions** → последний запуск
-**Android** → артефакт `itmanager-debug-apk`. Установка на телефон: скачайте APK и откройте его,
-разрешив установку из этого источника, или `adb install app-debug.apk`.
+Свежая тестовая сборка из master всегда лежит на странице релиза **ItManager: тестовая сборка**
+(Releases → `android-latest`): откройте её на телефоне и нажмите `itmanager-debug.apk`.
+Сборки подписаны общим тестовым ключом (`app/debug.keystore`, не секрет) и нумеруются по запуску CI,
+поэтому новая версия ставится поверх старой.
+
+APK любой ветки и pull request тоже есть в GitHub Actions: вкладка **Actions** → запуск **Android** →
+артефакт `itmanager-debug-apk`.
 
 Локально нужны JDK 17 и Android SDK (проще всего через Android Studio):
 
