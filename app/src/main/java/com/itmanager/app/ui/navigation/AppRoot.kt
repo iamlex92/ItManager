@@ -59,6 +59,7 @@ import androidx.navigation.toRoute
 import com.itmanager.app.data.model.AlertSeverity
 import com.itmanager.app.ui.alerts.AlertNoticeBanner
 import com.itmanager.app.ui.alerts.AlertsScreen
+import com.itmanager.app.ui.automation.AuditScreen
 import com.itmanager.app.ui.automation.AutomationScreen
 import com.itmanager.app.ui.components.AlertsBellState
 import com.itmanager.app.ui.components.LocalAlertsBell
@@ -269,7 +270,19 @@ private fun AppNavHost(
             PrintersScreen(contentPadding = contentPadding, onOpenSettings = openSettings)
         }
         composable<AutomationRoute> {
-            AutomationScreen(contentPadding = contentPadding, onOpenSettings = openSettings)
+            AutomationScreen(
+                contentPadding = contentPadding,
+                onOpenSettings = openSettings,
+                onOpenAudit = { navController.navigate(AuditRoute) { launchSingleTop = true } },
+            )
+        }
+        composable<AuditRoute>(
+            enterTransition = { slideInHorizontally(push) { it } },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { slideOutHorizontally(push) { it } },
+        ) {
+            AuditScreen(onBack = { navController.popBackStack() }, onOpenSettings = openSettings)
         }
         composable<SwitchRoute>(
             enterTransition = { slideInHorizontally(push) { it } },

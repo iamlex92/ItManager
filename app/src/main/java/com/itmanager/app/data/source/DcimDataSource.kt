@@ -1,6 +1,9 @@
 package com.itmanager.app.data.source
 
 import com.itmanager.app.data.model.Alert
+import com.itmanager.app.data.model.AuditEntry
+import com.itmanager.app.data.model.AuditKind
+import com.itmanager.app.data.model.AuthMethod
 import com.itmanager.app.data.model.ConfigDiff
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DiagnosticKind
@@ -10,6 +13,8 @@ import com.itmanager.app.data.model.LiveEvent
 import com.itmanager.app.data.model.PortChange
 import com.itmanager.app.data.model.PortChangeResult
 import com.itmanager.app.data.model.Printer
+import com.itmanager.app.data.model.Runbook
+import com.itmanager.app.data.model.RunbookRun
 import com.itmanager.app.data.model.SwitchPort
 import com.itmanager.app.data.model.Vlan
 import kotlinx.coroutines.flow.Flow
@@ -45,6 +50,17 @@ interface DcimDataSource {
     suspend fun alerts(): List<Alert>
     suspend fun resolveAlert(alertId: String): Alert
     suspend fun refreshPrinter(printerId: String): Printer
+
+    suspend fun runbooks(): List<Runbook>
+
+    /**
+     * Runs a runbook with [arguments]. A critical one is sent only after the operator confirmed it
+     * on the phone ([authMethod]); a failed run comes back with a non-zero exit code, not an exception.
+     */
+    suspend fun runRunbook(runbook: Runbook, arguments: Map<String, String>, authMethod: AuthMethod): RunbookRun
+
+    /** Runbook runs and switch write attempts, newest first; [kind] null means both. */
+    suspend fun audit(kind: AuditKind?): List<AuditEntry>
 
     /** Raw SVG of a floor plan. */
     suspend fun planSvg(url: String): String

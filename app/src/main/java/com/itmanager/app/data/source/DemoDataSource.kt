@@ -6,6 +6,9 @@ import com.itmanager.app.core.network.UserFacingException
 import com.itmanager.app.data.model.ALL_DEVICES
 import com.itmanager.app.data.model.Alert
 import com.itmanager.app.data.model.AlertSeverity
+import com.itmanager.app.data.model.AuditEntry
+import com.itmanager.app.data.model.AuditKind
+import com.itmanager.app.data.model.AuthMethod
 import com.itmanager.app.data.model.ConfigDiff
 import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Consumable
@@ -22,6 +25,8 @@ import com.itmanager.app.data.model.PortChangeResult
 import com.itmanager.app.data.model.PortMode
 import com.itmanager.app.data.model.Printer
 import com.itmanager.app.data.model.Room
+import com.itmanager.app.data.model.Runbook
+import com.itmanager.app.data.model.RunbookRun
 import com.itmanager.app.data.model.SwitchPort
 import com.itmanager.app.data.model.Vlan
 import kotlinx.coroutines.awaitCancellation
@@ -214,6 +219,7 @@ object DemoDataSource : DcimDataSource {
         )
         changedPorts[portId] = updated
         demoEvents.emit(LiveEvent.PortChanged(switchId, updated))
+        DemoRunbooks.recordSwitch("Настройка порта", listOf("device" to switch.name, "port" to port.name), commands)
         return PortChangeResult(updated, commands)
     }
 
@@ -224,12 +230,17 @@ object DemoDataSource : DcimDataSource {
         demoEvents.emit(LiveEvent.PortChanged(switchId, port.copy(isOperUp = false)))
         delay(2_000)
         demoEvents.emit(LiveEvent.PortChanged(switchId, port.copy(isOperUp = true)))
-        return CommandTranslator.bounce(switch.vendor, port)
+        return CommandTranslator.bounce(switch.vendor, port).also {
+            DemoRunbooks.recordSwitch("Перезапуск порта", listOf("device" to switch.name, "port" to port.name), it)
+        }
     }
 
     override suspend fun writeMemory(switchId: String): List<String> {
         simulateNetwork()
-        return CommandTranslator.writeMemory(switchOrThrow(switchId).vendor)
+        val switch = switchOrThrow(switchId)
+        return CommandTranslator.writeMemory(switch.vendor).also {
+            DemoRunbooks.recordSwitch("Сохранение конфигурации", listOf("device" to switch.name), it)
+        }
     }
 
     override suspend fun backupConfig(switchId: String) {
@@ -324,7 +335,7 @@ object DemoDataSource : DcimDataSource {
         val switch = switchOrThrow(switchId)
         delay(if (kind == DiagnosticKind.PING) 1_200 else 2_000)
         val reachable = devices.firstOrNull { it.ip == target }?.isOnline == true
-        return when (kind) {
+        val result = when (kind) {
             DiagnosticKind.PING -> CommandTranslator.ping(switch.vendor, target, PING_COUNT, reachable)
             DiagnosticKind.TRACEROUTE -> {
                 val core = devices.first { it.id == CORE_SWITCH_ID }.ip
@@ -332,6 +343,25 @@ object DemoDataSource : DcimDataSource {
                 CommandTranslator.traceroute(switch.vendor, target, hops, reachable)
             }
         }
+        DemoRunbooks.recordSwitch(
+            if (kind == DiagnosticKind.PING) "Ping с коммутатора" else "Traceroute с коммутатора",
+            listOf("device" to switch.name, "target" to target),
+            listOf(result.command, result.output),
+        )
+        return result
+    }
+
+    override suspend fun runbooks(): List<Runbook> {
+        simulateNetwork()
+        return DemoRunbooks.catalog
+    }
+
+    override suspend fun runRunbook(runbook: Runbook, arguments: Map<String, String>, authMethod: AuthMethod): RunbookRun =
+        DemoRunbooks.run(runbook, arguments, authMethod)
+
+    override suspend fun audit(kind: AuditKind?): List<AuditEntry> {
+        simulateNetwork()
+        return DemoRunbooks.audit(kind)
     }
 
     /**
