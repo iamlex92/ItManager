@@ -103,6 +103,9 @@ fun SwitchScreen(
     val targets by viewModel.targets.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     var selectedPortId by rememberSaveable(deviceId) { mutableStateOf<String?>(null) }
+    var portView by rememberSaveable { mutableStateOf(PortView.STATUS) }
+    var highlightVlan by rememberSaveable(deviceId) { mutableStateOf<Int?>(null) }
+    val palette = remember(vlans) { VlanPalette(vlans) }
     LaunchedEffect(viewModel) {
         viewModel.messages.collect { snackbar.showSnackbar(it) }
     }
@@ -172,9 +175,30 @@ fun SwitchScreen(
 
                     Spacer(Modifier.height(20.dp))
                     SectionLabel("Панель портов")
-                    PortPanel(ports, selectedPortId, onPortClick = { selectedPortId = it.id })
+                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                        PortView.entries.forEachIndexed { i, v ->
+                            SegmentedButton(
+                                selected = portView == v,
+                                onClick = { portView = v },
+                                shape = SegmentedButtonDefaults.itemShape(i, PortView.entries.size),
+                                label = { Text(v.label) },
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    PortPanel(
+                        ports,
+                        selectedPortId,
+                        onPortClick = { selectedPortId = it.id },
+                        view = portView,
+                        palette = palette,
+                        highlightVlan = highlightVlan,
+                    )
                     Spacer(Modifier.height(12.dp))
-                    PortLegend()
+                    when (portView) {
+                        PortView.STATUS -> PortLegend()
+                        PortView.VLAN -> VlanLegend(ports, palette, highlightVlan, onHighlight = { highlightVlan = it })
+                    }
                     Spacer(Modifier.height(24.dp))
                 }
 

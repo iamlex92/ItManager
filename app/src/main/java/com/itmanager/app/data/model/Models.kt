@@ -95,7 +95,16 @@ data class SwitchPort(
 
     /** PoE is only worth a bolt icon when something is actually drawing power. */
     val isPoeActive: Boolean get() = poeEnabled && isOperUp
+
+    /** VLANs the port carries: its access VLAN, or every tagged VLAN on a trunk. */
+    val vlanIds: List<Int> get() = if (mode == PortMode.ACCESS) listOfNotNull(accessVlan) else taggedVlans.sorted()
+
+    fun carries(vlanId: Int): Boolean = vlanId in vlanIds
 }
+
+/** How many ports carry each VLAN, by VLAN id ascending. Drives the legend of the VLAN port view. */
+fun List<SwitchPort>.vlanUsage(): Map<Int, Int> =
+    flatMap { it.vlanIds.distinct() }.groupingBy { it }.eachCount().toSortedMap()
 
 enum class ConsumableKind {
     TONER, WASTE, DRUM, OTHER;
