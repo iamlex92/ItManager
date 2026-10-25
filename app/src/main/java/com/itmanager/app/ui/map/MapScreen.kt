@@ -40,6 +40,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.CenterFocusStrong
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Nfc
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -56,6 +57,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -89,6 +91,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.model.MapLayer
+import com.itmanager.app.ui.components.AlertsBell
 import com.itmanager.app.ui.components.ErrorView
 import com.itmanager.app.ui.components.LoadingView
 import com.itmanager.app.ui.components.StatusDot
@@ -216,6 +219,7 @@ fun MapScreen(
                     vlanName = device.vlanId?.let { id -> content?.map?.vlans?.firstOrNull { it.id == id }?.let { "VLAN ${it.id} · ${it.name}" } },
                     tracePath = if (device.id == state.selectedId) state.tracePath else emptyList(),
                     onOpenSwitch = { onOpenSwitch(device.id) },
+                    onBindNfc = { viewModel.bindNfc(device) },
                     onDismiss = { viewModel.select(null) },
                 )
             }
@@ -279,6 +283,7 @@ private fun MapTopPanel(
                     IconButton(onClick = { searching = true }, enabled = devices.isNotEmpty()) {
                         Icon(Icons.Outlined.Search, contentDescription = "Поиск на карте")
                     }
+                    AlertsBell()
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Outlined.Settings, contentDescription = "Настройки")
                     }
@@ -427,6 +432,7 @@ private fun DeviceCard(
     vlanName: String?,
     tracePath: List<String>,
     onOpenSwitch: () -> Unit,
+    onBindNfc: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -516,6 +522,11 @@ private fun DeviceCard(
                     Spacer(Modifier.width(8.dp))
                     Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
                 }
+            }
+            TextButton(onClick = onBindNfc, modifier = Modifier.padding(top = 4.dp)) {
+                Icon(Icons.Outlined.Nfc, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Привязать NFC-метку")
             }
         }
     }

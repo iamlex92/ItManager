@@ -1,5 +1,7 @@
 package com.itmanager.app.data.model
 
+import java.time.Instant
+
 /** Domain models shared by all screens. Colors are ARGB longs so the data layer stays free of Compose. */
 
 enum class DeviceType(val label: String) {
@@ -95,10 +97,20 @@ data class SwitchPort(
     val isPoeActive: Boolean get() = poeEnabled && isOperUp
 }
 
+enum class ConsumableKind {
+    TONER, WASTE, DRUM, OTHER;
+
+    companion object {
+        fun parse(raw: String?): ConsumableKind = entries.firstOrNull { it.name.equals(raw, ignoreCase = true) } ?: OTHER
+    }
+}
+
+/** One supply as Printer-MIB reports it. [levelPercent] is always what remains: toner left, or free room in the waste box. */
 data class Consumable(
     val name: String,
     val colorArgb: Long,
     val levelPercent: Int,
+    val kind: ConsumableKind = ConsumableKind.TONER,
 ) {
     val isLow: Boolean get() = levelPercent < LOW_LEVEL_PERCENT
 
@@ -113,6 +125,10 @@ data class Printer(
     val ip: String?,
     val totalPages: Long,
     val consumables: List<Consumable>,
+    val model: String? = null,
+    val isOnline: Boolean = true,
+    /** When the server last read the printer over SNMP; null if it never has. */
+    val polledAt: Instant? = null,
 ) {
     val hasLowConsumable: Boolean get() = consumables.any { it.isLow }
 }

@@ -3,8 +3,9 @@ package com.itmanager.app.ui.map
 import android.graphics.Picture
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.itmanager.app.core.network.toUserMessage
 import com.caverock.androidsvg.SVG
+import com.itmanager.app.core.network.toUserMessage
+import com.itmanager.app.core.nfc.NfcController
 import com.itmanager.app.data.model.ALL_DEVICES
 import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Device
@@ -49,6 +50,7 @@ data class MapUiState(
 class MapViewModel @Inject constructor(
     private val repository: DcimRepository,
     private val mapFocus: MapFocus,
+    private val nfc: NfcController,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(MapUiState())
@@ -69,6 +71,9 @@ class MapViewModel @Inject constructor(
             }
         }
     }
+
+    /** Opens the binding sheet; the next tag held to the phone gets bound to [device]. */
+    fun bindNfc(device: Device) = nfc.startBinding(device)
 
     private fun applyDeviceStatus(deviceId: String, isOnline: Boolean) = _state.update { s ->
         val content = (s.content as? UiState.Content)?.data ?: return@update s

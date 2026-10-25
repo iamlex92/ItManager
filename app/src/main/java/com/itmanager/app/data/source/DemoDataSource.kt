@@ -1,9 +1,15 @@
 package com.itmanager.app.data.source
 
+import com.itmanager.app.core.network.TagBoundElsewhereException
+import com.itmanager.app.core.network.UnknownTagException
 import com.itmanager.app.core.network.UserFacingException
+import com.itmanager.app.data.model.ALL_DEVICES
+import com.itmanager.app.data.model.Alert
+import com.itmanager.app.data.model.AlertSeverity
 import com.itmanager.app.data.model.ConfigDiff
 import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Consumable
+import com.itmanager.app.data.model.ConsumableKind
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.model.DiagnosticKind
@@ -26,6 +32,7 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.time.Instant
 import kotlin.random.Random
 
 /**
@@ -106,32 +113,39 @@ object DemoDataSource : DcimDataSource {
 
     private val printers = listOf(
         Printer(
-            "mfp-buh", "MFP-BUH · Kyocera M8130cidn", "10.40.0.21", 48_231,
+            "mfp-buh", "MFP-BUH", "10.40.0.21", 48_231,
             listOf(
                 Consumable("Чёрный", 0xFF1C1C1E, 64),
                 Consumable("Голубой", 0xFF32ADE6, 7),
                 Consumable("Пурпурный", 0xFFFF2D55, 38),
                 Consumable("Жёлтый", 0xFFFFD60A, 81),
-                Consumable("Барабан", 0xFF8E8E93, 55),
+                Consumable("Барабан", 0xFF8E8E93, 55, ConsumableKind.DRUM),
+                Consumable("Отработка", 0xFF8E8E93, 42, ConsumableKind.WASTE),
             ),
+            model = "Kyocera ECOSYS M8130cidn",
         ),
         Printer(
-            "mfp-ceh", "MFP-CEH · HP LaserJet M428", "10.40.0.31", 120_554,
-            listOf(Consumable("Чёрный", 0xFF1C1C1E, 9), Consumable("Барабан", 0xFF8E8E93, 61)),
+            "mfp-ceh", "MFP-CEH", "10.40.0.31", 120_554,
+            listOf(Consumable("Чёрный", 0xFF1C1C1E, 9), Consumable("Барабан", 0xFF8E8E93, 61, ConsumableKind.DRUM)),
+            model = "HP LaserJet Pro M428",
         ),
         Printer(
-            "mfp-adm", "MFP-ADM · Kyocera TASKalfa 2553ci", "10.40.0.11", 211_907,
+            "mfp-adm", "MFP-ADM", "10.40.0.11", 211_907,
             listOf(
                 Consumable("Чёрный", 0xFF1C1C1E, 47),
                 Consumable("Голубой", 0xFF32ADE6, 72),
                 Consumable("Пурпурный", 0xFFFF2D55, 69),
                 Consumable("Жёлтый", 0xFFFFD60A, 58),
-                Consumable("Барабан", 0xFF8E8E93, 34),
+                Consumable("Барабан", 0xFF8E8E93, 34, ConsumableKind.DRUM),
+                Consumable("Отработка", 0xFF8E8E93, 8, ConsumableKind.WASTE),
             ),
+            model = "Kyocera TASKalfa 2553ci",
         ),
         Printer(
-            "prn-sklad", "PRN-SKLAD · HP LaserJet M404", "10.40.0.41", 33_018,
-            listOf(Consumable("Чёрный", 0xFF1C1C1E, 91), Consumable("Барабан", 0xFF8E8E93, 88)),
+            "prn-sklad", "PRN-SKLAD", "10.40.0.41", 33_018,
+            listOf(Consumable("Чёрный", 0xFF1C1C1E, 91), Consumable("Барабан", 0xFF8E8E93, 88, ConsumableKind.DRUM)),
+            model = "HP LaserJet M404",
+            isOnline = false,
         ),
     )
 
@@ -234,9 +248,73 @@ object DemoDataSource : DcimDataSource {
     private fun runningConfig(switch: Device) =
         CommandTranslator.runningConfig(switch.vendor, switch.name, currentPorts(switch))
 
+    /** Last simulated SNMP poll per printer; the first load counts as a poll a few minutes ago. */
+    private val polledAt = HashMap<String, Instant>()
+
+    private fun printerNow(p: Printer) =
+        p.copy(polledAt = polledAt.getOrPut(p.id) { Instant.now().minusSeconds(180) }.takeIf { p.isOnline })
+
     override suspend fun printers(): List<Printer> {
         simulateNetwork()
-        return printers
+        return printers.map(::printerNow)
+    }
+
+    override suspend fun refreshPrinter(printerId: String): Printer {
+        delay(800)
+        val printer = printers.firstOrNull { it.id == printerId } ?: notFound("МФУ")
+        if (printer.isOnline) polledAt[printerId] = Instant.now()
+        return printerNow(printer).also { demoEvents.emit(LiveEvent.PrinterChanged(it)) }
+    }
+
+    // --- NFC tags: bindings live in memory until the app is closed. ---
+
+    private val nfcBindings = HashMap<String, String>()
+
+    override suspend fun deviceForTag(payloadId: String?, uid: String): Device {
+        simulateNetwork()
+        return payloadId?.let { byId[it] } ?: nfcBindings[uid]?.let { byId[it] } ?: throw UnknownTagException()
+    }
+
+    override suspend fun bindNfc(deviceId: String, uid: String, force: Boolean): Device {
+        simulateNetwork()
+        val device = byId[deviceId] ?: notFound("Устройство")
+        val current = nfcBindings[uid]
+        if (current != null && current != deviceId && !force) throw TagBoundElsewhereException(byId[current]?.name)
+        // One tag per device, as in the server's inventory.
+        nfcBindings.entries.removeAll { it.value == deviceId }
+        nfcBindings[uid] = deviceId
+        return device
+    }
+
+    // --- Alerts ---
+
+    private val alerts = mutableListOf(
+        demoAlert("a-1", "cam-03", AlertSeverity.CRITICAL, "HOST_DOWN", "CAM-03 не отвечает на ping 3 минуты", minutesAgo = 12),
+        demoAlert("a-2", "mfp-ceh", AlertSeverity.WARNING, "TONER_LOW", "MFP-CEH: чёрный тонер 9%", minutesAgo = 95),
+        demoAlert("a-3", "sw-acc-03", AlertSeverity.WARNING, "LINK_DOWN", "SW-ACC-03 gi1/0/7: линк упал", minutesAgo = 300)
+            .copy(isResolved = true, resolvedAt = Instant.now().minusSeconds(280L * 60)),
+    )
+    private val alertLock = Mutex()
+    private var liveAlertSent = false
+
+    private fun demoAlert(
+        id: String, deviceId: String, severity: AlertSeverity, type: String, message: String, minutesAgo: Long,
+    ) = Alert(id, deviceId, null, severity, type, message, false, Instant.now().minusSeconds(minutesAgo * 60), null)
+
+    override suspend fun alerts(): List<Alert> {
+        simulateNetwork()
+        return alertLock.withLock { alerts.toList() }
+    }
+
+    override suspend fun resolveAlert(alertId: String): Alert {
+        simulateNetwork()
+        val resolved = alertLock.withLock {
+            val i = alerts.indexOfFirst { it.id == alertId }
+            if (i < 0) notFound("Событие")
+            alerts[i].copy(isResolved = true, resolvedAt = alerts[i].resolvedAt ?: Instant.now()).also { alerts[i] = it }
+        }
+        demoEvents.emit(LiveEvent.AlertRaised(resolved))
+        return resolved
     }
 
     override suspend fun planSvg(url: String): String = notFound("План")
@@ -262,6 +340,21 @@ object DemoDataSource : DcimDataSource {
      */
     override fun live(deviceId: String): Flow<LiveEvent> = channelFlow {
         send(LiveEvent.Connected)
+        if (deviceId == ALL_DEVICES) {
+            launch {
+                demoEvents.collect { if (it is LiveEvent.AlertRaised || it is LiveEvent.PrinterChanged) send(it) }
+            }
+            // One fresh alert a little after start, so the in-app notification can be seen without a server.
+            delay(20_000)
+            val alert = alertLock.withLock {
+                if (liveAlertSent) return@withLock null
+                liveAlertSent = true
+                demoAlert("a-live", "pc-ceh-02", AlertSeverity.WARNING, "LINK_DOWN", "SW-ACC-03 gi1/0/2: линк к PC-CEH-02 упал", 0)
+                    .also { alerts += it }
+            }
+            alert?.let { demoEvents.emit(LiveEvent.AlertRaised(it)) }
+            awaitCancellation()
+        }
         val switch = byId[deviceId]?.takeIf { it.type == DeviceType.SWITCH } ?: run {
             awaitCancellation()
         }

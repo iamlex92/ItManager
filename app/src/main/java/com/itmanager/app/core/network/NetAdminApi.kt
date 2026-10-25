@@ -9,10 +9,12 @@ import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.get
 import io.ktor.client.request.post
+import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
+import io.ktor.http.encodeURLPathPart
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.serialization.json.Json
@@ -72,6 +74,51 @@ class NetAdminApi @Inject constructor(
 
     suspend fun traceroute(s: ServerSettings, deviceId: String, target: String): DiagnosticDto =
         post(s, "devices/$deviceId/traceroute", DiagnosticBody(target))
+
+    suspend fun deviceByNfc(s: ServerSettings, uid: String): DeviceDto = try {
+        fetch(s, "devices/by-nfc/${uid.encodeURLPathPart()}")
+    } catch (e: ResponseException) {
+        if (e.response.status.value == 404) throw UnknownTagException() else throw e
+    }
+
+    /** One device, or [UnknownTagException] when the id from a tag no longer exists. */
+    suspend fun deviceForTag(s: ServerSettings, id: String): DeviceDto = try {
+        device(s, id)
+    } catch (e: ResponseException) {
+        if (e.response.status.value == 404 || e.response.status.value == 422) throw UnknownTagException() else throw e
+    }
+
+    /**
+     * Binds a tag in the server's inventory (database only, the device is not touched).
+     * A tag already bound elsewhere is refused unless [force] moves it.
+     */
+    suspend fun bindNfc(s: ServerSettings, deviceId: String, uid: String, force: Boolean): DeviceDto = try {
+        client.put("${requireBase(s)}/api/v1/devices/$deviceId/nfc") {
+            auth(s)
+            contentType(ContentType.Application.Json)
+            setBody(NfcBindBody(uid, force))
+        }.body()
+    } catch (e: ResponseException) {
+        val status = e.response.status.value
+        if (status == 401) throw e
+        val detail = runCatching { json.decodeFromString(ErrorDto.serializer(), e.response.bodyAsText()).detail }.getOrNull()
+        throw when {
+            detail?.code == "tag_bound_elsewhere" -> TagBoundElsewhereException(detail.deviceName)
+            detail?.code == "not_found" -> UserFacingException("Устройство не найдено на сервере.", e)
+            status == 404 || status == 405 -> UserFacingException("Сервер пока не умеет привязывать метки: обновите сервер.", e)
+            else -> UserFacingException("Сервер не привязал метку (код $status).", e)
+        }
+    }
+
+    suspend fun alerts(s: ServerSettings): List<AlertDto> = fetch(s, "alerts")
+
+    /** Marks an incident handled in the server's journal; nothing on the equipment changes. */
+    suspend fun resolveAlert(s: ServerSettings, alertId: String): AlertDto =
+        client.post("${requireBase(s)}/api/v1/alerts/$alertId/resolve") { auth(s) }.body()
+
+    /** Asks the server to read the printer over SNMP now instead of waiting for the next poll. */
+    suspend fun refreshPrinter(s: ServerSettings, printerId: String): PrinterDto =
+        client.post("${requireBase(s)}/api/v1/printers/$printerId/refresh") { auth(s) }.body()
 
     private suspend inline fun <reified B : Any, reified T> post(s: ServerSettings, path: String, body: B): T = guarded {
         client.post("${requireBase(s)}/api/v1/$path") {

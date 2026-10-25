@@ -5,6 +5,8 @@ import com.itmanager.app.core.network.NetAdminApi
 import com.itmanager.app.core.network.runCatchingCancellable
 import com.itmanager.app.core.settings.ServerSettings
 import com.itmanager.app.core.settings.SettingsRepository
+import com.itmanager.app.data.model.ALL_DEVICES
+import com.itmanager.app.data.model.Alert
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.FloorMap
@@ -13,9 +15,14 @@ import com.itmanager.app.data.model.PortChange
 import com.itmanager.app.data.model.Printer
 import com.itmanager.app.data.model.SwitchPort
 import com.itmanager.app.data.model.Vlan
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.shareIn
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -52,12 +59,29 @@ class DcimRepository @Inject constructor(
     suspend fun diagnostic(switchId: String, kind: DiagnosticKind, target: String) =
         load { diagnostic(switchId, kind, target) }
 
+    suspend fun deviceForTag(payloadId: String?, uid: String) = load { deviceForTag(payloadId, uid) }
+    suspend fun bindNfc(deviceId: String, uid: String, force: Boolean) = load { bindNfc(deviceId, uid, force) }
+    suspend fun alerts(): Result<List<Alert>> = load { alerts() }
+    suspend fun resolveAlert(alertId: String) = load { resolveAlert(alertId) }
+    suspend fun refreshPrinter(printerId: String) = load { refreshPrinter(printerId) }
+
     suspend fun planSvg(url: String): Result<String> = load { planSvg(url) }
 
     /** Restarts the stream whenever settings change, so a new server address takes effect at once. */
     @OptIn(ExperimentalCoroutinesApi::class)
     fun live(deviceId: String): Flow<LiveEvent> =
+        if (deviceId == ALL_DEVICES) allDevices else liveFor(deviceId)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun liveFor(deviceId: String): Flow<LiveEvent> =
         settingsRepository.settings.flatMapLatest { source(it).live(deviceId) }
+
+    /**
+     * The map, the printers and the alert journal all follow every device; they share one socket,
+     * which closes a few seconds after the last of them stops listening.
+     */
+    private val allDevices: Flow<LiveEvent> = liveFor(ALL_DEVICES)
+        .shareIn(CoroutineScope(SupervisorJob() + Dispatchers.Default), SharingStarted.WhileSubscribed(5_000))
 
     private fun source(settings: ServerSettings): DcimDataSource =
         if (settings.demoMode) DemoDataSource else RemoteDataSource(api, liveSocket, settings)

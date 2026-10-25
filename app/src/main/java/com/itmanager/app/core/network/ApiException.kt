@@ -12,7 +12,15 @@ import java.net.UnknownHostException
 import kotlin.coroutines.cancellation.CancellationException
 
 /** An error already phrased for the user. */
-class UserFacingException(message: String, cause: Throwable? = null) : Exception(message, cause)
+open class UserFacingException(message: String, cause: Throwable? = null) : Exception(message, cause)
+
+/** The NFC tag is already bound to another device; the user may choose to move it. */
+class TagBoundElsewhereException(val deviceName: String?) : UserFacingException(
+    "Метка уже привязана к " + (deviceName ?: "другому устройству") + ".",
+)
+
+/** A tag nobody has bound yet. */
+class UnknownTagException : UserFacingException("Эта метка не привязана ни к одному устройству.")
 
 /** Maps transport failures to messages that tell the user what to check. */
 fun Throwable.toUserMessage(): String = when (this) {

@@ -17,6 +17,7 @@ import kotlinx.serialization.Serializable
 @Serializable data object PrintersRoute
 @Serializable data object AutomationRoute
 @Serializable data object SettingsRoute
+@Serializable data object AlertsRoute
 @Serializable data class SwitchRoute(val deviceId: String)
 @Serializable data class ConfigDiffRoute(val deviceId: String, val switchName: String? = null)
 

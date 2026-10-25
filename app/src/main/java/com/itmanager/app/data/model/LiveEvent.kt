@@ -14,6 +14,12 @@ sealed interface LiveEvent {
     data class PortChanged(val deviceId: String, val port: SwitchPort) : LiveEvent
 
     data class DeviceStatus(val deviceId: String, val isOnline: Boolean) : LiveEvent
+
+    /** A new alert, or an update to one (resolved alerts arrive again with isResolved = true). */
+    data class AlertRaised(val alert: Alert) : LiveEvent
+
+    /** Fresh SNMP reading of a printer. */
+    data class PrinterChanged(val printer: Printer) : LiveEvent
 }
 
 /** Subscription key for every device at once. */
