@@ -7,6 +7,8 @@ import com.itmanager.app.core.network.toDomain
 import com.itmanager.app.core.settings.ServerSettings
 import com.itmanager.app.data.model.ConfigDiff
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.DiagnosticKind
+import com.itmanager.app.data.model.DiagnosticResult
 import com.itmanager.app.data.model.FloorMap
 import com.itmanager.app.data.model.FloorPlan
 import com.itmanager.app.data.model.LiveEvent
@@ -74,6 +76,12 @@ class RemoteDataSource(
 
     override suspend fun configDiff(switchId: String): ConfigDiff = api.configDiff(settings, switchId).toDomain()
 
+    override suspend fun diagnostic(switchId: String, kind: DiagnosticKind, target: String): DiagnosticResult =
+        when (kind) {
+            DiagnosticKind.PING -> api.ping(settings, switchId, target, PING_COUNT)
+            DiagnosticKind.TRACEROUTE -> api.traceroute(settings, switchId, target)
+        }.toDomain()
+
     override suspend fun planSvg(url: String): String = api.text(url)
 
     override fun live(deviceId: String): Flow<LiveEvent> = liveSocket.events(settings, deviceId)
@@ -82,5 +90,7 @@ class RemoteDataSource(
         const val PLAN_MARGIN = 200f
     }
 }
+
+internal const val PING_COUNT = 5
 
 internal fun notFound(what: String): Nothing = throw UserFacingException("$what не найдено")

@@ -60,7 +60,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -71,6 +70,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.PortChange
 import com.itmanager.app.data.model.PortMode
 import com.itmanager.app.data.model.SwitchPort
@@ -82,9 +82,6 @@ import com.itmanager.app.ui.components.StatusDot
 import com.itmanager.app.ui.components.UiState
 import com.itmanager.app.ui.theme.MonoStyle
 import com.itmanager.app.ui.theme.StatusColors
-import kotlinx.coroutines.launch
-
-private const val NOT_YET = "Ping и traceroute с коммутатора появятся, когда их добавят на сервер"
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -101,10 +98,10 @@ fun SwitchScreen(
     val pending by viewModel.pending.collectAsStateWithLifecycle()
     val busy by viewModel.busy.collectAsStateWithLifecycle()
     val isDemo by viewModel.isDemo.collectAsStateWithLifecycle()
+    val diagnostic by viewModel.diagnostic.collectAsStateWithLifecycle()
+    val targets by viewModel.targets.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
     var selectedPortId by rememberSaveable(deviceId) { mutableStateOf<String?>(null) }
-    val notYet: () -> Unit = { scope.launch { snackbar.showSnackbar(NOT_YET) } }
     LaunchedEffect(viewModel) {
         viewModel.messages.collect { snackbar.showSnackbar(it) }
     }
@@ -165,8 +162,8 @@ fun SwitchScreen(
                     Spacer(Modifier.height(20.dp))
                     SectionLabel("Быстрые действия")
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        QuickAction("Ping", Icons.Outlined.NetworkCheck, notYet)
-                        QuickAction("Traceroute", Icons.Outlined.Timeline, notYet)
+                        QuickAction("Ping", Icons.Outlined.NetworkCheck) { viewModel.openDiagnostic(DiagnosticKind.PING) }
+                        QuickAction("Traceroute", Icons.Outlined.Timeline) { viewModel.openDiagnostic(DiagnosticKind.TRACEROUTE) }
                         QuickAction("Сравнить конфиг", Icons.Outlined.Difference) { onOpenDiff(device.name) }
                         QuickAction("Сохранить конфиг", Icons.Outlined.Save, viewModel::requestSaveConfig)
                     }
@@ -187,6 +184,15 @@ fun SwitchScreen(
                         onApply = { change -> viewModel.requestPortChange(port, change) },
                         onBounce = { viewModel.requestBounce(port) },
                         onDismiss = { selectedPortId = null },
+                    )
+                }
+                diagnostic?.let { run ->
+                    DiagnosticSheet(
+                        run = run,
+                        switchName = device.name,
+                        targets = targets,
+                        onRun = viewModel::runDiagnostic,
+                        onDismiss = viewModel::closeDiagnostic,
                     )
                 }
                 pending?.let { write ->

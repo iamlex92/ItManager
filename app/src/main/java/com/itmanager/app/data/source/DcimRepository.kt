@@ -6,6 +6,7 @@ import com.itmanager.app.core.network.runCatchingCancellable
 import com.itmanager.app.core.settings.ServerSettings
 import com.itmanager.app.core.settings.SettingsRepository
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.FloorMap
 import com.itmanager.app.data.model.LiveEvent
 import com.itmanager.app.data.model.PortChange
@@ -47,6 +48,9 @@ class DcimRepository @Inject constructor(
     suspend fun writeMemory(switchId: String) = load { writeMemory(switchId) }
     suspend fun backupConfig(switchId: String) = load { backupConfig(switchId) }
     suspend fun configDiff(switchId: String) = load { configDiff(switchId) }
+
+    suspend fun diagnostic(switchId: String, kind: DiagnosticKind, target: String) =
+        load { diagnostic(switchId, kind, target) }
 
     suspend fun planSvg(url: String): Result<String> = load { planSvg(url) }
 

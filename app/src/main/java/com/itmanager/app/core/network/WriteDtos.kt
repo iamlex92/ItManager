@@ -1,6 +1,7 @@
 package com.itmanager.app.core.network
 
 import com.itmanager.app.data.model.ConfigDiff
+import com.itmanager.app.data.model.DiagnosticResult
 import com.itmanager.app.data.model.PortChange
 import com.itmanager.app.data.model.PortChangeResult
 import kotlinx.serialization.SerialName
@@ -47,6 +48,14 @@ data class ConfigDiffDto(val changed: Boolean, val diff: String = "") {
 }
 
 @Serializable
+data class DiagnosticBody(val target: String, val count: Int? = null)
+
+@Serializable
+data class DiagnosticDto(val command: String = "", val output: String = "", val success: Boolean = false) {
+    fun toDomain() = DiagnosticResult(command, output, success)
+}
+
+@Serializable
 internal data class ErrorDto(val detail: ErrorDetail? = null)
 
 @Serializable
@@ -64,6 +73,7 @@ internal fun writeErrorMessage(code: String?, status: Int): String = when (code)
     "not_implemented" -> "Для реального оборудования эта операция на сервере ещё не написана."
     else -> when (status) {
         404 -> "На сервере нет сохранённой копии конфигурации."
+        422 -> "Сервер не принял запрос (код 422): проверьте введённые данные."
         else -> "Сервер отклонил изменение (код $status)."
     }
 }

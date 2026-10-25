@@ -66,6 +66,13 @@ class NetAdminApi @Inject constructor(
     suspend fun configDiff(s: ServerSettings, deviceId: String): ConfigDiffDto =
         guarded { client.get("${requireBase(s)}/api/v1/devices/$deviceId/configs/diff") { auth(s) }.body() }
 
+    /** Ping and traceroute run on the switch; read-only, so no confirmation. */
+    suspend fun ping(s: ServerSettings, deviceId: String, target: String, count: Int): DiagnosticDto =
+        post(s, "devices/$deviceId/ping", DiagnosticBody(target, count))
+
+    suspend fun traceroute(s: ServerSettings, deviceId: String, target: String): DiagnosticDto =
+        post(s, "devices/$deviceId/traceroute", DiagnosticBody(target))
+
     private suspend inline fun <reified B : Any, reified T> post(s: ServerSettings, path: String, body: B): T = guarded {
         client.post("${requireBase(s)}/api/v1/$path") {
             auth(s)

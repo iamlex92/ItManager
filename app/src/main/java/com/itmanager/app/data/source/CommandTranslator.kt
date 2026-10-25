@@ -1,5 +1,6 @@
 package com.itmanager.app.data.source
 
+import com.itmanager.app.data.model.DiagnosticResult
 import com.itmanager.app.data.model.PortChange
 import com.itmanager.app.data.model.PortMode
 import com.itmanager.app.data.model.SwitchPort
@@ -35,6 +36,50 @@ object CommandTranslator {
 
     fun writeMemory(vendor: String?): List<String> =
         if (vendor.equals("Eltex", ignoreCase = true)) listOf("write memory") else listOf("copy running-config startup-config")
+
+    /** What the switch prints for a ping; [reachable] decides whether the echoes come back. */
+    fun ping(vendor: String?, target: String, count: Int, reachable: Boolean): DiagnosticResult {
+        val received = if (reachable) count else 0
+        val loss = 100 - received * 100 / count
+        return if (vendor.equals("Eltex", ignoreCase = true)) {
+            val lines = buildList {
+                add("Pinging $target with 56 bytes of data:")
+                add("")
+                repeat(count) { i ->
+                    add(if (reachable) "56 bytes from $target: icmp_seq=${i + 1}. time=1 ms" else "PING: timeout")
+                }
+                add("")
+                add("----$target PING Statistics----")
+                add("$count packets transmitted, $received packets received, $loss% packet loss")
+                if (reachable) add("round-trip (ms) min/avg/max = 1/1/2")
+            }
+            DiagnosticResult("ping $target count $count", lines.joinToString("\n"), reachable)
+        } else {
+            val lines = buildList {
+                add("Type escape sequence to abort.")
+                add("Sending $count, 100-byte ICMP Echos to $target, timeout is 2 seconds:")
+                add((if (reachable) "!" else ".").repeat(count))
+                add(
+                    "Success rate is ${100 - loss} percent ($received/$count)" +
+                        if (reachable) ", round-trip min/avg/max = 1/1/2 ms" else "",
+                )
+            }
+            DiagnosticResult("ping $target repeat $count", lines.joinToString("\n"), reachable)
+        }
+    }
+
+    /** Traceroute through [hops] (the last one is the target); an unreachable target ends in timeouts. */
+    fun traceroute(vendor: String?, target: String, hops: List<String>, reachable: Boolean): DiagnosticResult {
+        val eltex = vendor.equals("Eltex", ignoreCase = true)
+        val shown = if (reachable) hops else hops.dropLast(1)
+        val lines = buildList {
+            if (eltex) add("Tracing the route to $target") else add("Type escape sequence to abort.\nTracing the route to $target")
+            add("")
+            shown.forEachIndexed { i, hop -> add("  ${i + 1} $hop 1 msec 1 msec 1 msec") }
+            if (!reachable) (shown.size + 1..shown.size + 3).forEach { add("  $it  *  *  *") }
+        }
+        return DiagnosticResult("traceroute $target", lines.joinToString("\n"), reachable)
+    }
 
     /** A running-config fragment for the ports, enough to diff before and after a change. */
     fun runningConfig(vendor: String?, hostname: String, ports: List<SwitchPort>): List<String> {

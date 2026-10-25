@@ -6,14 +6,18 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import com.itmanager.app.core.network.toUserMessage
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.DiagnosticKind
+import com.itmanager.app.data.model.DiagnosticResult
 import com.itmanager.app.data.model.LiveEvent
 import com.itmanager.app.data.model.PortChange
 import com.itmanager.app.data.model.SwitchPort
 import com.itmanager.app.data.model.Vlan
+import com.itmanager.app.data.model.isIpv4
 import com.itmanager.app.data.source.DcimRepository
 import com.itmanager.app.ui.components.UiState
 import com.itmanager.app.ui.navigation.SwitchRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,6 +48,14 @@ sealed interface PendingWrite {
     data object SaveConfigWrite : PendingWrite
 }
 
+/** A ping or traceroute from this switch. Read-only, so it runs without a confirmation dialog. */
+data class DiagnosticRun(
+    val kind: DiagnosticKind,
+    val running: Boolean = false,
+    val result: DiagnosticResult? = null,
+    val error: String? = null,
+)
+
 @HiltViewModel
 class SwitchViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
@@ -71,6 +83,14 @@ class SwitchViewModel @Inject constructor(
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
     val messages: SharedFlow<String> = _messages.asSharedFlow()
 
+    private val _diagnostic = MutableStateFlow<DiagnosticRun?>(null)
+    val diagnostic: StateFlow<DiagnosticRun?> = _diagnostic.asStateFlow()
+    private var diagnosticJob: Job? = null
+
+    /** Devices with an address, offered as ping targets so nobody has to type an IP on the shop floor. */
+    private val _targets = MutableStateFlow<List<Device>>(emptyList())
+    val targets: StateFlow<List<Device>> = _targets.asStateFlow()
+
     val isDemo: StateFlow<Boolean> = repository.settings.map { it.demoMode }
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
@@ -80,6 +100,42 @@ class SwitchViewModel @Inject constructor(
         viewModelScope.launch {
             repository.live(deviceId).collect(::apply)
         }
+        viewModelScope.launch {
+            repository.devices().onSuccess { all ->
+                _targets.value = all.filter { it.id != deviceId && it.ip != null }.sortedBy { it.name }
+            }
+        }
+    }
+
+    fun openDiagnostic(kind: DiagnosticKind) {
+        diagnosticJob?.cancel()
+        _diagnostic.value = DiagnosticRun(kind)
+    }
+
+    fun runDiagnostic(target: String) {
+        val run = _diagnostic.value ?: return
+        val ip = target.trim()
+        if (!isIpv4(ip)) {
+            _diagnostic.value = run.copy(error = "Нужен IPv4-адрес, например 10.50.0.31")
+            return
+        }
+        diagnosticJob?.cancel()
+        _diagnostic.value = run.copy(running = true, result = null, error = null)
+        diagnosticJob = viewModelScope.launch {
+            val result = repository.diagnostic(deviceId, run.kind, ip)
+            _diagnostic.update { current ->
+                current?.copy(
+                    running = false,
+                    result = result.getOrNull(),
+                    error = result.exceptionOrNull()?.toUserMessage(),
+                )
+            }
+        }
+    }
+
+    fun closeDiagnostic() {
+        diagnosticJob?.cancel()
+        _diagnostic.value = null
     }
 
     private fun apply(event: LiveEvent) {

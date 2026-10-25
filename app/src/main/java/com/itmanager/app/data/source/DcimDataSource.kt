@@ -2,6 +2,8 @@ package com.itmanager.app.data.source
 
 import com.itmanager.app.data.model.ConfigDiff
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.DiagnosticKind
+import com.itmanager.app.data.model.DiagnosticResult
 import com.itmanager.app.data.model.FloorMap
 import com.itmanager.app.data.model.LiveEvent
 import com.itmanager.app.data.model.PortChange
@@ -29,6 +31,9 @@ interface DcimDataSource {
     suspend fun writeMemory(switchId: String): List<String>
     suspend fun backupConfig(switchId: String)
     suspend fun configDiff(switchId: String): ConfigDiff
+
+    /** Ping or traceroute from the switch to [target] (an IPv4 address). Read-only. */
+    suspend fun diagnostic(switchId: String, kind: DiagnosticKind, target: String): DiagnosticResult
 
     /** Raw SVG of a floor plan. */
     suspend fun planSvg(url: String): String

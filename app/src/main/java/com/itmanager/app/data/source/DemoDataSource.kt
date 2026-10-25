@@ -6,6 +6,8 @@ import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Consumable
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceType
+import com.itmanager.app.data.model.DiagnosticKind
+import com.itmanager.app.data.model.DiagnosticResult
 import com.itmanager.app.data.model.FloorMap
 import com.itmanager.app.data.model.FloorPlan
 import com.itmanager.app.data.model.LiveEvent
@@ -33,6 +35,7 @@ import kotlin.random.Random
 object DemoDataSource : DcimDataSource {
 
     private const val FLOOR_ID = "floor-1"
+    private const val CORE_SWITCH_ID = "sw-core-01"
 
     private val plan = FloorPlan(
         id = FLOOR_ID,
@@ -237,6 +240,21 @@ object DemoDataSource : DcimDataSource {
     }
 
     override suspend fun planSvg(url: String): String = notFound("План")
+
+    /** Like the server's emulator: the answer follows whether the device with that IP is online. */
+    override suspend fun diagnostic(switchId: String, kind: DiagnosticKind, target: String): DiagnosticResult {
+        val switch = switchOrThrow(switchId)
+        delay(if (kind == DiagnosticKind.PING) 1_200 else 2_000)
+        val reachable = devices.firstOrNull { it.ip == target }?.isOnline == true
+        return when (kind) {
+            DiagnosticKind.PING -> CommandTranslator.ping(switch.vendor, target, PING_COUNT, reachable)
+            DiagnosticKind.TRACEROUTE -> {
+                val core = devices.first { it.id == CORE_SWITCH_ID }.ip
+                val hops = listOfNotNull(core.takeIf { it != switch.ip && it != target }, target)
+                CommandTranslator.traceroute(switch.vendor, target, hops, reachable)
+            }
+        }
+    }
 
     /**
      * Simulated live channel: a snapshot, then a spare port losing or regaining its link every few seconds,
