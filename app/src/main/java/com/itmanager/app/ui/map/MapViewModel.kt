@@ -1,23 +1,29 @@
 package com.itmanager.app.ui.map
 
+import android.graphics.Picture
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itmanager.app.core.network.toUserMessage
+import com.caverock.androidsvg.SVG
+import com.itmanager.app.data.model.ALL_DEVICES
 import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.model.FloorMap
+import com.itmanager.app.data.model.LiveEvent
 import com.itmanager.app.data.model.MapLayer
 import com.itmanager.app.data.model.traceToSwitch
 import com.itmanager.app.data.source.DcimRepository
 import com.itmanager.app.ui.components.UiState
 import com.itmanager.app.ui.navigation.MapFocus
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /** A floor map plus lookups the canvas needs every frame, computed once per load. */
@@ -35,6 +41,8 @@ data class MapUiState(
     val selectedId: String? = null,
     val tracedLinks: Set<String> = emptySet(),
     val tracePath: List<String> = emptyList(),
+    /** Vector floor plan from the server, already parsed; null while loading or when there is none. */
+    val planPicture: Picture? = null,
 )
 
 @HiltViewModel
@@ -49,9 +57,38 @@ class MapViewModel @Inject constructor(
     /** A device another tab asked to show; the screen centres on it and then calls [focusHandled]. */
     val focusRequest: StateFlow<String?> = mapFocus.deviceId
 
+    private var planUrl: String? = null
+
     init {
         viewModelScope.launch {
             repository.settings.collect { load() }
+        }
+        viewModelScope.launch {
+            repository.live(ALL_DEVICES).collect { event ->
+                if (event is LiveEvent.DeviceStatus) applyDeviceStatus(event.deviceId, event.isOnline)
+            }
+        }
+    }
+
+    private fun applyDeviceStatus(deviceId: String, isOnline: Boolean) = _state.update { s ->
+        val content = (s.content as? UiState.Content)?.data ?: return@update s
+        val device = content.devicesById[deviceId]?.takeIf { it.isOnline != isOnline } ?: return@update s
+        val updated = device.copy(isOnline = isOnline)
+        val map = content.map.copy(devices = content.map.devices.map { if (it.id == deviceId) updated else it })
+        s.copy(content = (s.content as UiState.Content).copy(data = content.copy(map = map, devicesById = content.devicesById + (deviceId to updated))))
+    }
+
+    private suspend fun loadPlan(url: String?) {
+        if (url == planUrl) return
+        planUrl = url
+        _state.update { it.copy(planPicture = null) }
+        if (url == null) return
+        repository.planSvg(url).onSuccess { svg ->
+            val picture = withContext(Dispatchers.Default) {
+                runCatching { SVG.getFromString(svg).renderToPicture() }.getOrNull()
+            }
+            // A plan that fails to load or parse is not fatal: the map still works on the grid.
+            if (planUrl == url) _state.update { it.copy(planPicture = picture) }
         }
     }
 
@@ -70,6 +107,7 @@ class MapViewModel @Inject constructor(
                 _state.update { it.copy(content = UiState.Content(content)) }
                 // Keep the selection only if the device still exists after a reload.
                 select(_state.value.selectedId?.takeIf { it in content.devicesById })
+                loadPlan(map.plan.imageUrl)
             }
             .onFailure { e -> _state.update { it.copy(content = UiState.Error(e.toUserMessage())) } }
     }

@@ -1,5 +1,6 @@
 package com.itmanager.app.data.source
 
+import com.itmanager.app.core.network.LiveSocket
 import com.itmanager.app.core.network.NetAdminApi
 import com.itmanager.app.core.network.UserFacingException
 import com.itmanager.app.core.network.toDomain
@@ -7,13 +8,16 @@ import com.itmanager.app.core.settings.ServerSettings
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.FloorMap
 import com.itmanager.app.data.model.FloorPlan
+import com.itmanager.app.data.model.LiveEvent
 import com.itmanager.app.data.model.Printer
 import com.itmanager.app.data.model.SwitchPort
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
 
 class RemoteDataSource(
     private val api: NetAdminApi,
+    private val liveSocket: LiveSocket,
     private val settings: ServerSettings,
 ) : DcimDataSource {
 
@@ -29,7 +33,7 @@ class RemoteDataSource(
         // Without a plan size from the server, frame whatever devices exist.
         val fallbackWidth = (floorDevices.maxOfOrNull { it.x } ?: 0f) + PLAN_MARGIN
         val fallbackHeight = (floorDevices.maxOfOrNull { it.y } ?: 0f) + PLAN_MARGIN
-        val plan = floorDto?.toDomain(fallbackWidth, fallbackHeight)
+        val plan = floorDto?.toDomain(settings.baseUrl, fallbackWidth, fallbackHeight)
             ?: FloorPlan("default", "План здания", fallbackWidth, fallbackHeight, 50f, emptyList())
 
         val ids = floorDevices.mapTo(HashSet()) { it.id }
@@ -49,6 +53,10 @@ class RemoteDataSource(
         api.ports(settings, deviceId).map { it.toDomain() }.sortedBy { it.number }
 
     override suspend fun printers(): List<Printer> = api.printers(settings).map { it.toDomain() }
+
+    override suspend fun planSvg(url: String): String = api.text(url)
+
+    override fun live(deviceId: String): Flow<LiveEvent> = liveSocket.events(settings, deviceId)
 
     private companion object {
         const val PLAN_MARGIN = 200f

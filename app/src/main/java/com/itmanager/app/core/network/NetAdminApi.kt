@@ -5,6 +5,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsText
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -15,6 +16,9 @@ class NetAdminApi @Inject constructor(
 ) {
     /** Health needs no token, so the settings screen can test an address before saving it. */
     suspend fun health(baseUrl: String): HealthDto = client.get("$baseUrl/api/v1/health").body()
+
+    /** Floor plan SVG; served from /static without a token. */
+    suspend fun text(url: String): String = client.get(url).bodyAsText()
 
     suspend fun floors(s: ServerSettings): List<FloorDto> = fetch(s, "floors")
 

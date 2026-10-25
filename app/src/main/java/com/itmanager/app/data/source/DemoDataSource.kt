@@ -6,12 +6,16 @@ import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.model.FloorMap
 import com.itmanager.app.data.model.FloorPlan
+import com.itmanager.app.data.model.LiveEvent
 import com.itmanager.app.data.model.PortMode
 import com.itmanager.app.data.model.Printer
 import com.itmanager.app.data.model.Room
 import com.itmanager.app.data.model.SwitchPort
 import com.itmanager.app.data.model.Vlan
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlin.random.Random
 
 /**
@@ -146,6 +150,31 @@ object DemoDataSource : DcimDataSource {
     override suspend fun printers(): List<Printer> {
         simulateNetwork()
         return printers
+    }
+
+    override suspend fun planSvg(url: String): String = notFound("План")
+
+    /**
+     * Simulated live channel: a snapshot, then a spare port losing or regaining its link every few seconds,
+     * so the live indicator and port colours can be seen moving without a server.
+     */
+    override fun live(deviceId: String): Flow<LiveEvent> = flow {
+        emit(LiveEvent.Connected)
+        val switch = byId[deviceId]?.takeIf { it.type == DeviceType.SWITCH } ?: run {
+            awaitCancellation()
+        }
+        val ports = generatePorts(switch).toMutableList()
+        emit(LiveEvent.Snapshot(deviceId, switch.isOnline, ports.toList()))
+        val random = Random(System.nanoTime())
+        while (true) {
+            delay(2_500L + random.nextLong(3_500L))
+            val candidates = ports.indices.filter { ports[it].isAdminUp && !ports[it].isUplink && ports[it].connectedDeviceName == null }
+            if (candidates.isEmpty()) continue
+            val i = candidates.random(random)
+            val flipped = ports[i].copy(isOperUp = !ports[i].isOperUp)
+            ports[i] = flipped
+            emit(LiveEvent.PortChanged(deviceId, flipped))
+        }
     }
 
     /** Copper ports per model, plus four SFP uplinks on every switch. */

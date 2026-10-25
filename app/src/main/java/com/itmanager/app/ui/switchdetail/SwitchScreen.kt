@@ -78,6 +78,7 @@ fun SwitchScreen(
     viewModel: SwitchViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val live by viewModel.live.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var selectedPortId by rememberSaveable(deviceId) { mutableStateOf<String?>(null) }
@@ -131,6 +132,8 @@ fun SwitchScreen(
                         Text(if (device.isOnline) "В сети" else "Не отвечает", style = MaterialTheme.typography.labelLarge)
                         Spacer(Modifier.width(16.dp))
                         device.ip?.let { Text(it, style = MonoStyle) }
+                        Spacer(Modifier.weight(1f))
+                        LiveBadge(live)
                     }
                     PortSummary(ports)
 
@@ -156,6 +159,26 @@ fun SwitchScreen(
                 }
             }
         }
+    }
+}
+
+/** Tells whether the colours below are live or the last known state. */
+@Composable
+private fun LiveBadge(live: LiveState) {
+    val (color, label) = when (live) {
+        LiveState.Live -> StatusColors.Online to "Онлайн-статус"
+        LiveState.Connecting -> MaterialTheme.colorScheme.onSurfaceVariant to "Подключение…"
+        is LiveState.Offline -> StatusColors.Warning to "Нет связи"
+    }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .background(color.copy(alpha = 0.14f), RoundedCornerShape(50))
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+    ) {
+        StatusDot(color, size = 7.dp)
+        Spacer(Modifier.width(6.dp))
+        Text(label, style = MaterialTheme.typography.labelMedium, color = color)
     }
 }
 

@@ -1,5 +1,6 @@
 package com.itmanager.app.ui.map
 
+import android.graphics.Picture
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -38,6 +39,8 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -84,6 +87,7 @@ fun FloorPlanView(
     vlanFilter: Int?,
     selectedId: String?,
     tracedLinks: Set<String>,
+    planPicture: Picture?,
     camera: MapCamera,
     visiblePadding: Rect,
     onSelect: (String?) -> Unit,
@@ -126,7 +130,7 @@ fun FloorPlanView(
             },
     ) {
         Canvas(Modifier.fillMaxSize()) {
-            drawPlan(content, camera, labelStyle, textMeasurer)
+            drawPlan(content, planPicture, camera, labelStyle, textMeasurer)
             if (layer == MapLayer.L3) drawSubnets(content, vlans, vlanFilter, camera, textMeasurer, labelStyle)
             if (layer != MapLayer.L3) drawCables(content, layer, vlans, vlanFilter, tracedLinks, camera)
         }
@@ -152,6 +156,7 @@ private val Vlan.color get() = Color(colorArgb)
 
 private fun DrawScope.drawPlan(
     content: MapContent,
+    planPicture: Picture?,
     camera: MapCamera,
     labelStyle: TextStyle,
     textMeasurer: TextMeasurer,
@@ -161,6 +166,11 @@ private fun DrawScope.drawPlan(
     val size = Size(plan.widthPx * camera.scale, plan.heightPx * camera.scale)
     val corner = CornerRadius(12.dp.toPx())
     drawRoundRect(Ink850, topLeft, size, corner)
+    if (planPicture != null && planPicture.width > 0) {
+        drawPlanPicture(planPicture, topLeft, size)
+        drawRoundRect(Ink700, topLeft, size, corner, style = Stroke(1.dp.toPx()))
+        return
+    }
 
     // Metre grid, coarsened when lines would crowd closer than ~14dp.
     var step = plan.pixelsPerMeter.coerceAtLeast(1f) * camera.scale
@@ -186,6 +196,39 @@ private fun DrawScope.drawPlan(
         if (br.x - tl.x > 72.dp.toPx()) {
             drawText(textMeasurer, room.name, Offset(tl.x + 8.dp.toPx(), tl.y + 6.dp.toPx()), labelStyle)
         }
+    }
+}
+
+/**
+ * Plans are drawn light-on-white for printing; this matrix inverts and dims them so the plan
+ * sits in the dark UI as a quiet background: paper becomes near-black, walls become mid-grey.
+ */
+private val darkPlanPaint = android.graphics.Paint().apply {
+    colorFilter = android.graphics.ColorMatrixColorFilter(
+        floatArrayOf(
+            -0.55f, 0f, 0f, 0f, 150f,
+            0f, -0.55f, 0f, 0f, 155f,
+            0f, 0f, -0.55f, 0f, 165f,
+            0f, 0f, 0f, 1f, 0f,
+        ),
+    )
+}
+
+/** Draws the vector plan scaled into the plan's screen rectangle; stays sharp at any zoom. */
+private fun DrawScope.drawPlanPicture(picture: Picture, topLeft: Offset, size: Size) {
+    // Only the visible part needs an offscreen layer.
+    val left = maxOf(topLeft.x, 0f)
+    val top = maxOf(topLeft.y, 0f)
+    val right = minOf(topLeft.x + size.width, this.size.width)
+    val bottom = minOf(topLeft.y + size.height, this.size.height)
+    if (right <= left || bottom <= top) return
+    drawIntoCanvas { canvas ->
+        val native = canvas.nativeCanvas
+        val layer = native.saveLayer(left, top, right, bottom, darkPlanPaint)
+        native.translate(topLeft.x, topLeft.y)
+        native.scale(size.width / picture.width, size.height / picture.height)
+        native.drawPicture(picture)
+        native.restoreToCount(layer)
     }
 }
 

@@ -133,6 +133,8 @@ data class FloorPlan(
     val heightPx: Float,
     val pixelsPerMeter: Float,
     val rooms: List<Room>,
+    /** Absolute URL of the SVG plan drawn under the devices, or null to draw [rooms] only. */
+    val imageUrl: String? = null,
 )
 
 enum class MapLayer(val short: String, val title: String) {

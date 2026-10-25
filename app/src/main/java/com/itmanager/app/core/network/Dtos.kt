@@ -31,6 +31,7 @@ data class FloorDto(
     val id: String,
     @SerialName("building_name") val buildingName: String,
     @SerialName("floor_number") val floorNumber: Int,
+    @SerialName("plan_image_url") val planImageUrl: String? = null,
     @SerialName("scale_pixels_per_meter") val scalePixelsPerMeter: Float? = null,
     @SerialName("width_px") val widthPx: Float? = null,
     @SerialName("height_px") val heightPx: Float? = null,
@@ -143,11 +144,15 @@ data class PrinterDto(
     fun toDomain() = Printer(id, name, ip, totalPages, consumables.map { it.toDomain() })
 }
 
-fun FloorDto.toDomain(fallbackWidth: Float, fallbackHeight: Float) = FloorPlan(
+fun FloorDto.toDomain(baseUrl: String, fallbackWidth: Float, fallbackHeight: Float) = FloorPlan(
     id = id,
     title = "$buildingName · этаж $floorNumber",
     widthPx = widthPx ?: fallbackWidth,
     heightPx = heightPx ?: fallbackHeight,
     pixelsPerMeter = scalePixelsPerMeter ?: 50f,
     rooms = emptyList(),
+    imageUrl = planImageUrl?.takeIf { it.isNotBlank() }?.let { url ->
+        // The server returns paths like /static/plans/floor-1.svg relative to itself.
+        if (url.startsWith("http://") || url.startsWith("https://")) url else baseUrl + "/" + url.trimStart('/')
+    },
 )
