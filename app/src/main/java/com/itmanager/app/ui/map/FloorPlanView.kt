@@ -194,9 +194,19 @@ private fun DrawScope.drawPlan(
         val br = camera.toScreen(room.right, room.bottom)
         drawRoundRect(Ink600, tl, Size(br.x - tl.x, br.y - tl.y), CornerRadius(6.dp.toPx()), style = wall)
         if (br.x - tl.x > 72.dp.toPx()) {
-            drawText(textMeasurer, room.name, Offset(tl.x + 8.dp.toPx(), tl.y + 6.dp.toPx()), labelStyle)
+            drawLabel(textMeasurer, room.name, Offset(tl.x + 8.dp.toPx(), tl.y + 6.dp.toPx()), labelStyle)
         }
     }
+}
+
+/**
+ * Draws a one-line label at any position, including off-canvas. drawText(textMeasurer, text, topLeft)
+ * limits the layout to the space right of topLeft and throws when that is negative, which happens
+ * as soon as a room or VLAN label is panned or zoomed past the right or bottom edge.
+ */
+private fun DrawScope.drawLabel(textMeasurer: TextMeasurer, text: String, topLeft: Offset, style: TextStyle) {
+    if (topLeft.x >= size.width || topLeft.y >= size.height) return
+    drawText(textMeasurer.measure(text, style, maxLines = 1, softWrap = false), topLeft = topLeft)
 }
 
 /**
@@ -317,7 +327,7 @@ private fun DrawScope.drawSubnets(
                 vlan.color.copy(alpha = 0.55f * alpha), Offset(left, top), Size(right - left, bottom - top), corner,
                 style = Stroke(1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))),
             )
-            drawText(
+            drawLabel(
                 textMeasurer, "VLAN ${vlan.id} · ${vlan.subnet}",
                 Offset(left + 6.dp.toPx(), top - 16.dp.toPx()),
                 labelStyle.copy(color = vlan.color.copy(alpha = alpha), fontSize = 10.sp),
