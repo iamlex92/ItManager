@@ -84,6 +84,21 @@ class Settings(BaseSettings):
     snmp_v3_auth_protocol: SnmpAuthProtocol = SnmpAuthProtocol.SHA
     snmp_v3_priv_protocol: SnmpPrivProtocol = SnmpPrivProtocol.AES
 
+    # --- Telegram alerts ---
+    # Both set: alerts go to this chat. Either empty: Telegram is off (the default).
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
+    # Lowest severity sent: INFO, WARNING or CRITICAL.
+    telegram_min_severity: str = Field(default="WARNING", pattern="^(INFO|WARNING|CRITICAL)$")
+    # An alert is sent only if it is still open after this many seconds, so a port that flaps
+    # and comes back at once does not wake anyone. 0 sends at once.
+    telegram_delay_seconds: float = 60.0
+    telegram_notify_resolved: bool = True
+    # Messages per minute; the rest are counted and mentioned in the next message.
+    telegram_max_per_minute: int = 20
+    # Optional HTTP(S) proxy when the server has no direct internet access: http://proxy.local:3128
+    telegram_proxy: str = ""
+
     @field_validator("api_token")
     @classmethod
     def _reject_placeholder(cls, v: str) -> str:
@@ -100,6 +115,10 @@ class Settings(BaseSettings):
         if v and not valid_key(v):
             raise ValueError("SECRET_KEY must be 32 url-safe base64 bytes: openssl rand -base64 32 | tr '+/' '-_'")
         return v
+
+    @property
+    def telegram_enabled(self) -> bool:
+        return bool(self.telegram_bot_token.strip() and self.telegram_chat_id.strip())
 
     @property
     def device_writes_enabled(self) -> bool:

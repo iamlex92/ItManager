@@ -297,7 +297,12 @@ private fun ConnectionCheckResult(check: ConnectionCheck) {
                     null -> null
                 }
                 Text(
-                    listOfNotNull(h.version?.let { "Версия $it" }, mode, secrets).joinToString(" · "),
+                    listOfNotNull(
+                        h.version?.let { "Версия $it" },
+                        mode,
+                        secrets,
+                        "уведомления в Telegram включены".takeIf { h.telegramAlerts == true },
+                    ).joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

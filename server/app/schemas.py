@@ -421,6 +421,8 @@ class HealthOut(BaseModel):
     runbook_mode: str = "emulator"
     # SNMP communities and stored credentials are encrypted at rest (SECRET_KEY is set).
     secrets_encrypted: bool = False
+    # Alerts are also sent to a Telegram chat.
+    telegram_alerts: bool = False
 
 
 class ErrorCode(BaseModel):
