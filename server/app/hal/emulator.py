@@ -6,12 +6,14 @@ access ports flap so the live status pipeline has something to show.
 """
 
 import asyncio
+import ipaddress
 import random
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 
 from . import commands
-from .base import DeviceTarget, PortConfig, PortRef, PortStatus, SwitchDriver
+from .base import DeviceTarget, DiagResult, PortConfig, PortRef, PortStatus, SwitchDriver
 from .commands import full_interface_name
 
 
@@ -45,6 +47,9 @@ class EmulatorDriver(SwitchDriver):
         self._flap_probability = flap_probability
         self._bounce_delay = bounce_delay
         self._lock = asyncio.Lock()
+        # Set by the app: IP -> True (online) / False (offline) / None (unknown),
+        # so emulated ping answers match what the map shows.
+        self.host_lookup: Callable[[str], Awaitable[bool | None]] | None = None
 
     def _device(self, target: DeviceTarget) -> _EmuDevice:
         commands._vendor(target.vendor)
@@ -117,6 +122,67 @@ class EmulatorDriver(SwitchDriver):
         async with self._lock:
             dev = self._device(target)
             return render_running_config(dev.target, [dev.ports[n].status for n in sorted(dev.ports)])
+
+    async def _reachable(self, dest: str) -> bool:
+        if self.host_lookup is None:
+            return True
+        return bool(await self.host_lookup(dest))
+
+    async def ping(self, target: DeviceTarget, dest: str, count: int) -> DiagResult:
+        self._device(target)
+        ok = await self._reachable(dest)
+        cmd = commands.ping_command(target.vendor, dest, count)
+        if target.vendor == commands.CISCO:
+            n = count if ok else 0
+            lines = [
+                "Type escape sequence to abort.",
+                f"Sending {count}, 100-byte ICMP Echos to {dest}, timeout is 2 seconds:",
+                ("!" if ok else ".") * count,
+                f"Success rate is {100 * n // count} percent ({n}/{count})"
+                + (", round-trip min/avg/max = 1/1/2 ms" if ok else ""),
+            ]
+        else:
+            lines = [f"Pinging {dest} with 18 bytes of data:", ""]
+            for i in range(1, count + 1):
+                lines.append(
+                    f"18 bytes from {dest}: icmp_seq={i}. time={self._rng.randint(0, 2)} ms" if ok else "PING: timeout"
+                )
+            lines += [
+                "",
+                f"----{dest} PING Statistics----",
+                f"{count} packets transmitted, {count if ok else 0} packets received, {0 if ok else 100}% packet loss",
+            ]
+            if ok:
+                lines.append("round-trip (ms) min/avg/max = 0/1/2")
+        return DiagResult(command=cmd, output="\n".join(lines), success=ok)
+
+    async def traceroute(self, target: DeviceTarget, dest: str) -> DiagResult:
+        self._device(target)
+        ok = await self._reachable(dest)
+        cmd = commands.traceroute_command(target.vendor, dest)
+        hops: list[str | None] = []
+        dest_net = ipaddress.ip_network(f"{dest}/24", strict=False)
+        same_net = target.ip is not None and ipaddress.ip_address(target.ip) in dest_net
+        if not same_net:
+            hops.append(str(next(dest_net.hosts())))  # SVI of the destination VLAN on the core
+        hops += [dest] if ok else [None, None, None]
+        cisco = target.vendor == commands.CISCO
+        if cisco:
+            lines = [
+                "Type escape sequence to abort.",
+                f"Tracing the route to {dest}",
+                "VRF info: (vrf in name/id, vrf out name/id)",
+            ]
+        else:
+            lines = [f"Tracing the route to {dest} ({dest}), 30 hops max, 18 byte packets"]
+        for i, hop in enumerate(hops, start=1):
+            if hop is None:
+                lines.append(f"  {i}  *  *  *" if cisco else f" {i}  *  *  *")
+            elif cisco:
+                lines.append(f"  {i} {hop} 1 msec 1 msec 2 msec")
+            else:
+                lines.append(f" {i}  {hop} ({hop})  <1 ms  <1 ms  1 ms")
+        return DiagResult(command=cmd, output="\n".join(lines), success=ok)
 
     async def apply_port_config(self, target: DeviceTarget, port: PortRef, change: PortConfig) -> list[str]:
         cmds = commands.port_config_commands(target.vendor, port.name, change)

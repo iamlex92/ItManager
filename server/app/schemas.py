@@ -255,6 +255,21 @@ class CommandsOut(BaseModel):
     commands: list[str]
 
 
+class TracerouteRequest(BaseModel):
+    # An IP address only: it ends up on the switch CLI, so no hostnames.
+    target: ipaddress.IPv4Address | ipaddress.IPv6Address
+
+
+class PingRequest(TracerouteRequest):
+    count: int = Field(default=5, ge=1, le=20)
+
+
+class DiagOut(BaseModel):
+    command: str
+    output: str
+    success: bool
+
+
 class PortConfigResult(BaseModel):
     port: PortOut
     commands: list[str]

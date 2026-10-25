@@ -18,7 +18,10 @@ from ..schemas import (
     DeviceOut,
     DeviceType,
     DeviceUpdate,
+    DiagOut,
+    PingRequest,
     PortOut,
+    TracerouteRequest,
 )
 from ..services import switches
 from ..services.serialize import device_out, port_out
@@ -241,3 +244,50 @@ async def write_memory(
     async with audit(session, request, settings, "write_memory", params) as rec:
         rec.commands = await driver.save_config(switches.device_target(device))
     return CommandsOut(commands=rec.commands)
+
+
+# --- diagnostics from the switch (exec mode, no config change) ------------
+
+
+@router.post("/{device_id}/ping", response_model=DiagOut)
+async def ping_from_switch(
+    device_id: uuid.UUID,
+    body: PingRequest,
+    request: Request,
+    session: SessionDep,
+    driver: DriverDep,
+    settings: SettingsDep,
+):
+    """Ping an IP from the switch. Read-only, so not write-guarded, but audited."""
+    device = await switches.load_switch(session, device_id)
+    if device is None:
+        raise not_found("device")
+    require_managed_switch(device)
+    params = {"device": device.name, "target": str(body.target), "count": body.count}
+    async with audit(session, request, settings, "switch_ping", params) as rec:
+        res = await driver.ping(switches.device_target(device), str(body.target), body.count)
+        rec.commands = [res.command, res.output]
+        rec.exit_code = 0 if res.success else 1
+    return DiagOut(command=res.command, output=res.output, success=res.success)
+
+
+@router.post("/{device_id}/traceroute", response_model=DiagOut)
+async def traceroute_from_switch(
+    device_id: uuid.UUID,
+    body: TracerouteRequest,
+    request: Request,
+    session: SessionDep,
+    driver: DriverDep,
+    settings: SettingsDep,
+):
+    """Traceroute to an IP from the switch. Read-only, so not write-guarded, but audited."""
+    device = await switches.load_switch(session, device_id)
+    if device is None:
+        raise not_found("device")
+    require_managed_switch(device)
+    params = {"device": device.name, "target": str(body.target)}
+    async with audit(session, request, settings, "switch_traceroute", params) as rec:
+        res = await driver.traceroute(switches.device_target(device), str(body.target))
+        rec.commands = [res.command, res.output]
+        rec.exit_code = 0 if res.success else 1
+    return DiagOut(command=res.command, output=res.output, success=res.success)

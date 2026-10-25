@@ -52,6 +52,13 @@ class PortConfig:
     is_admin_up: bool | None = None
 
 
+@dataclass(frozen=True)
+class DiagResult:
+    command: str
+    output: str
+    success: bool
+
+
 class DeviceWritesDisabled(Exception):
     """A state-changing call reached a driver that is not allowed to write."""
 
@@ -67,6 +74,13 @@ class SwitchDriver(ABC):
 
     @abstractmethod
     async def get_running_config(self, target: DeviceTarget) -> str: ...
+
+    # Ping / traceroute run from the switch itself (exec mode, no config change).
+    @abstractmethod
+    async def ping(self, target: DeviceTarget, dest: str, count: int) -> DiagResult: ...
+
+    @abstractmethod
+    async def traceroute(self, target: DeviceTarget, dest: str) -> DiagResult: ...
 
     # --- state-changing: every one of these must be guarded on real gear ---
     @abstractmethod

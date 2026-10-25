@@ -1,4 +1,4 @@
-from .base import DeviceTarget, PortConfig, PortRef, PortStatus, SwitchDriver
+from .base import DeviceTarget, DiagResult, PortConfig, PortRef, PortStatus, SwitchDriver
 
 
 class SshSwitchDriver(SwitchDriver):
@@ -13,6 +13,12 @@ class SshSwitchDriver(SwitchDriver):
         raise self._todo()
 
     async def get_running_config(self, target: DeviceTarget) -> str:
+        raise self._todo()
+
+    async def ping(self, target: DeviceTarget, dest: str, count: int) -> DiagResult:
+        raise self._todo()
+
+    async def traceroute(self, target: DeviceTarget, dest: str) -> DiagResult:
         raise self._todo()
 
     async def apply_port_config(self, target: DeviceTarget, port: PortRef, change: PortConfig) -> list[str]:
