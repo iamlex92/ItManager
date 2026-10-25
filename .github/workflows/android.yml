@@ -35,6 +35,11 @@ jobs:
       - name: Assemble debug APK
         run: ./gradlew --no-daemon assembleDebug
 
+      # Unsigned here: proves the release variant (lint-vital included) builds before anyone adds the key.
+      - name: Check release build
+        if: github.event_name == 'pull_request'
+        run: ./gradlew --no-daemon assembleRelease
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
@@ -57,6 +62,36 @@ jobs:
           else
             gh release create android-latest itmanager-debug.apk --prerelease \
               --title "ItManager: тестовая сборка" --notes "$notes" --target "$GITHUB_SHA"
+          fi
+
+      # Signed release build, only when the release key is configured as repository secrets:
+      # RELEASE_KEYSTORE_BASE64 (base64 of the .jks), RELEASE_STORE_PASSWORD, RELEASE_KEY_ALIAS, RELEASE_KEY_PASSWORD.
+      # Without them master keeps publishing only the test build above.
+      - name: Signed release APK
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          if [ -z "$RELEASE_KEYSTORE_BASE64" ]; then
+            echo "::notice::Release key secrets are not set: only the test build is published. See README, «Релизная подпись»."
+            exit 0
+          fi
+          export RELEASE_KEYSTORE_PATH="$RUNNER_TEMP/release.jks"
+          echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > "$RELEASE_KEYSTORE_PATH"
+          ./gradlew --no-daemon assembleRelease
+          rm -f "$RELEASE_KEYSTORE_PATH"
+          cp app/build/outputs/apk/release/app-release.apk itmanager-release.apk
+          notes="Рабочая сборка из master, коммит ${GITHUB_SHA::7}, сборка №${GITHUB_RUN_NUMBER}. Подписана релизным ключом."
+          if gh release view android-release >/dev/null 2>&1; then
+            gh release upload android-release itmanager-release.apk --clobber
+            gh release edit android-release --notes "$notes"
+          else
+            gh release create android-release itmanager-release.apk \
+              --title "ItManager: рабочая сборка" --notes "$notes" --target "$GITHUB_SHA"
           fi
 
       - name: Upload test reports

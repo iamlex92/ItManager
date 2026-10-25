@@ -17,7 +17,7 @@ android {
         targetSdk = 36
         // CI builds count up, so each APK installs over the previous one.
         versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
-        versionName = "0.5.0"
+        versionName = "0.6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -31,6 +31,16 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        // The release key never enters the repository: CI writes it from GitHub secrets to a temp file
+        // and passes the path and passwords in the environment (see .github/workflows/android.yml).
+        System.getenv("RELEASE_KEYSTORE_PATH")?.takeIf { it.isNotBlank() }?.let { path ->
+            create("release") {
+                storeFile = file(path)
+                storePassword = System.getenv("RELEASE_STORE_PASSWORD")
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -40,8 +50,12 @@ android {
             versionNameSuffix = "-debug"
         }
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // Unsigned without the CI secrets; then only the debug build is published.
+            signingConfig = signingConfigs.findByName("release")
+            // No R8 shrinking: Hilt, Ktor and kotlinx.serialization reflection would need rules that only a
+            // device test can confirm, and the release build gets no emulator run. Size is not a concern here.
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

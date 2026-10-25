@@ -1,6 +1,7 @@
-# Local / on-prem stack: PostgreSQL + API server.
-#   cp .env.example .env   # then set API_TOKEN
+# On-prem stack: PostgreSQL + API server + nightly backups.
+#   cp .env.example .env   # then set API_TOKEN, POSTGRES_PASSWORD, SECRET_KEY
 #   docker compose up -d --build
+# Step-by-step plant deployment: DEPLOY.md.
 services:
   db:
     image: postgres:16-alpine
@@ -27,10 +28,33 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://netadmin:${POSTGRES_PASSWORD:-netadmin}@db:5432/netadmin
     ports:
-      - "8000:8000"
+      # API_BIND: the address phones reach (the server's plant/VPN interface).
+      # Default 0.0.0.0 listens everywhere; set it to e.g. 10.99.0.50 on a multi-homed host.
+      - "${API_BIND:-0.0.0.0}:8000:8000"
       # SNMP traps: point switches at <server>:162. The container listens on
       # 1162 because it runs unprivileged (set TRAP_LISTEN_PORT=1162).
       - "162:1162/udp"
 
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: netadmin
+      PGDATABASE: netadmin
+      PGPASSWORD: ${POSTGRES_PASSWORD:-netadmin}
+      BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-24}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+    volumes:
+      # Dumps land next to this file; copy ./backups off the server too.
+      - ./backups:/backups
+      - ./scripts/backup.sh:/backup.sh:ro
+    entrypoint: ["/bin/sh", "/backup.sh"]
+
 volumes:
+  # Database files survive container rebuilds and `docker compose down`
+  # (only `down -v` deletes them).
   pgdata:

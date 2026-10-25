@@ -116,6 +116,7 @@ kotlinx.serialization, DataStore, Navigation Compose. `minSdk 31`, `targetSdk 36
 2. Укажите адрес сервера, например `10.0.0.5` (порт 8000 подставится сам) или `http://10.0.0.5:8000`.
 3. Вставьте API-токен, нажмите «Проверить соединение», выключите демо-данные и сохраните.
 
+Установка сервера на заводе по шагам: [server/DEPLOY.md](server/DEPLOY.md).
 Сервер доступен только из сети завода или через VPN и наружу не публикуется.
 Поэтому приложение разрешает обычный HTTP (см. `app/src/main/res/xml/network_security_config.xml`).
 Когда у сервера появится сертификат внутреннего УЦ, достаточно указать адрес с `https://`.
@@ -129,6 +130,26 @@ kotlinx.serialization, DataStore, Navigation Compose. `minSdk 31`, `targetSdk 36
 
 APK любой ветки и pull request тоже есть в GitHub Actions: вкладка **Actions** → запуск **Android** →
 артефакт `itmanager-debug-apk`.
+
+#### Релизная подпись
+
+Рабочая сборка подписывается отдельным релизным ключом. Ключа нет в репозитории, он хранится только в секретах GitHub.
+Пока секретов нет, публикуется только тестовая сборка. Чтобы включить рабочую:
+
+1. Один раз создать ключ на своём компьютере (JDK 17) и сохранить файл и пароли в надёжном месте, например в менеджере паролей:
+   ```bash
+   keytool -genkeypair -v -keystore itmanager-release.jks -alias itmanager \
+     -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=ItManager, O=Factory IT"
+   base64 -w0 itmanager-release.jks > itmanager-release.b64
+   ```
+2. В репозитории: **Settings → Secrets and variables → Actions → New repository secret**:
+   `RELEASE_KEYSTORE_BASE64` (содержимое `itmanager-release.b64`), `RELEASE_STORE_PASSWORD`,
+   `RELEASE_KEY_ALIAS` (`itmanager`), `RELEASE_KEY_PASSWORD`.
+3. Следующий push в master опубликует `itmanager-release.apk` на странице релиза **ItManager: рабочая сборка**
+   (`android-release`).
+
+Рабочая сборка ставится отдельным приложением рядом с тестовой (`com.itmanager.app` и `com.itmanager.app.debug`),
+настройки у них раздельные. Ключ терять нельзя: обновить установленную рабочую сборку можно только APK с тем же ключом.
 
 Локально нужны JDK 17 и Android SDK (проще всего через Android Studio):
 

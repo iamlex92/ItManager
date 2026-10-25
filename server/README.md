@@ -46,7 +46,12 @@ curl http://localhost:8000/api/v1/health
 ```
 
 The container runs migrations, seeds the demo floor if the database is empty
-(`SEED_DEMO_DATA=true`), then starts uvicorn on port 8000.
+(`SEED_DEMO_DATA=true`), then starts uvicorn on port 8000. The database lives
+in the `pgdata` volume; the `backup` service writes a `pg_dump` to `./backups`
+every `BACKUP_INTERVAL_HOURS` (24) and keeps `BACKUP_KEEP_DAYS` (14) days.
+Restore with `scripts/restore.sh backups/<file>.dump`.
+
+Plant deployment step by step (in Russian): [DEPLOY.md](DEPLOY.md).
 
 ## Run locally
 
