@@ -18,6 +18,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android/sdk/ndk /opt/ghc /usr/local/.ghcup /usr/share/swift /opt/hostedtoolcache/CodeQL
+          df -h /
+
       - uses: actions/checkout@v5
 
       - uses: actions/setup-java@v5
@@ -43,8 +48,10 @@ jobs:
           arch: x86_64
           target: google_apis
           disable-animations: true
+          disk-size: 3000M
+          ram-size: 2048M
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: .github/scripts/smoke.sh
+          script: bash .github/scripts/smoke.sh
 
       - name: Upload logcat
         if: always()
