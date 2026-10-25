@@ -26,6 +26,7 @@ import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -63,6 +64,7 @@ fun DevicesScreen(
     onOpenSwitch: (String) -> Unit,
     onShowOnMap: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenScanner: () -> Unit,
     viewModel: DevicesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -76,6 +78,11 @@ fun DevicesScreen(
             title = "Устройства",
             subtitle = if (state.offlineCount > 0) "Не отвечают: ${state.offlineCount}" else null,
             onOpenSettings = onOpenSettings,
+            actions = {
+                IconButton(onClick = onOpenScanner) {
+                    Icon(Icons.Outlined.TravelExplore, contentDescription = "Сканер сети")
+                }
+            },
         )
         SearchField(state.query, viewModel::setQuery, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
         LazyRow(

@@ -19,6 +19,13 @@ import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.DiagnosticResult
 import com.itmanager.app.data.model.FloorMap
 import com.itmanager.app.data.model.FloorPlan
+import com.itmanager.app.data.model.FoundDevice
+import com.itmanager.app.data.model.FoundLink
+import com.itmanager.app.data.model.ImportReport
+import com.itmanager.app.data.model.LinkEnd
+import com.itmanager.app.data.model.LinkSource
+import com.itmanager.app.data.model.NetworkScan
+import com.itmanager.app.data.model.ScanRanges
 import com.itmanager.app.data.model.LiveEvent
 import com.itmanager.app.data.model.PortChange
 import com.itmanager.app.data.model.PortChangeResult
@@ -38,6 +45,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.Instant
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.random.Random
 
 /**
@@ -73,7 +83,8 @@ object DemoDataSource : DcimDataSource {
         Vlan(99, "Управление", "10.99.0.0/24", 0xFF8E8E93),
     )
 
-    private val devices = listOf(
+    // Vars: devices found by the demo network scan can be added to the inventory.
+    @Volatile private var devices = listOf(
         d("sw-core-01", "SW-CORE-01", DeviceType.SWITCH, "Cisco", "C9300-24P", "10.99.0.1", 120f, 110f, vlan = 99),
         d("srv-01", "SRV-01", DeviceType.SERVER, "HPE", "ProLiant DL380 Gen11", "10.50.0.10", 140f, 230f, vlan = 50),
         d("pp-01", "PP-01", DeviceType.PATCH_PANEL, null, "Патч-панель 24 порта", null, 270f, 110f),
@@ -99,7 +110,7 @@ object DemoDataSource : DcimDataSource {
         d("ap-01", "AP-01", DeviceType.ACCESS_POINT, "Ubiquiti", "U6 Pro", "10.99.0.51", 800f, 900f, vlan = 99),
     )
 
-    private val connections = listOf(
+    @Volatile private var connections = listOf(
         c("sw-core-01", "srv-01", "Cat6"),
         c("sw-core-01", "sw-acc-02", "OM3", "Магистраль АБК"),
         c("sw-core-01", "sw-acc-03", "OM3", "Магистраль цеха"),
@@ -154,7 +165,7 @@ object DemoDataSource : DcimDataSource {
         ),
     )
 
-    private val byId = devices.associateBy { it.id }
+    @Volatile private var byId = devices.associateBy { it.id }
 
     override suspend fun floorMap(): FloorMap {
         simulateNetwork()
@@ -362,6 +373,219 @@ object DemoDataSource : DcimDataSource {
     override suspend fun audit(kind: AuditKind?): List<AuditEntry> {
         simulateNetwork()
         return DemoRunbooks.audit(kind)
+    }
+
+    // --- Network discovery: nothing is sent anywhere; the scan answers from the demo inventory. ---
+
+    private val inventoryLock = Mutex()
+
+    override suspend fun startScan(subnets: List<String>, community: String): NetworkScan {
+        simulateNetwork()
+        val (world, links) = scanWorld()
+        return annotate(DemoDiscovery.start(subnets, community, world, links))
+    }
+
+    override suspend fun scan(id: String): NetworkScan = annotate(DemoDiscovery.get(id))
+
+    override suspend fun latestScan(): NetworkScan? = DemoDiscovery.latest()?.let(::annotate)
+
+    /** Hosts answering on the demo network and the links their switches' tables show. */
+    private fun scanWorld(): Pair<List<DemoDiscovery.Host>, List<FoundLink>> {
+        val snmpTypes = setOf(DeviceType.SWITCH, DeviceType.SERVER, DeviceType.PRINTER, DeviceType.CAMERA, DeviceType.ACCESS_POINT)
+        val world = devices.filter { it.ip != null && it.isOnline && it.type != DeviceType.SOCKET && it.type != DeviceType.PATCH_PANEL }.map { d ->
+            DemoDiscovery.Host(
+                FoundDevice(d.ip!!, d.name, d.mac, d.vendor, d.model, d.type, null, d.type in snmpTypes, null, null),
+                community = if (d.type in snmpTypes) "public" else null,
+            )
+        }.toMutableList()
+        val links = ArrayList<FoundLink>()
+        val switches = devices.filter { it.type == DeviceType.SWITCH }
+        val ports = switches.associate { it.id to currentPorts(it) }
+        for (sw in switches) {
+            for (port in ports.getValue(sw.id)) {
+                val peer = port.connectedDeviceName?.let { name -> devices.firstOrNull { it.name == name } } ?: continue
+                if (peer.type == DeviceType.SWITCH) {
+                    if (links.any { it.a.name == peer.name && it.b.name == sw.name }) continue
+                    val back = ports[peer.id]?.firstOrNull { it.connectedDeviceName == sw.name }?.name.orEmpty()
+                    links += FoundLink(LinkEnd(sw.name, port.name, sw.ip, null), LinkEnd(peer.name, back, peer.ip, null), LinkSource.LLDP, false)
+                } else {
+                    links += FoundLink(LinkEnd(sw.name, port.name, sw.ip, null), LinkEnd(peer.name, "", peer.ip, null), LinkSource.FDB, false)
+                }
+            }
+        }
+
+        // Devices the inventory does not know yet: a new access switch behind the core with a printer and a camera,
+        // and a PC without SNMP on a free port of an access switch. Once added, they answer as inventory devices.
+        val known = devices.mapNotNull { it.ip }.toSet()
+        val core = byId[CORE_SWITCH_ID]
+        val sw4 = LinkEnd("SW-ACC-04", "te1/0/1", "10.99.0.4", null)
+        fun extra(device: FoundDevice, community: String?, vararg extraLinks: FoundLink?) {
+            if (device.ip in known) return
+            world += DemoDiscovery.Host(device, community)
+            links += extraLinks.filterNotNull()
+        }
+        val coreUplink = core?.let { c -> ports[c.id]?.firstOrNull { it.isUplink && it.connectedDeviceName == null } }
+        extra(
+            FoundDevice("10.99.0.4", "SW-ACC-04", "A8:F9:4B:7E:00:04", "Eltex", "MES2324P", DeviceType.SWITCH,
+                "MES2324P AC 28-port 1G/10G Managed Switch", true, null, null),
+            "public",
+            if (core != null && coreUplink != null) {
+                FoundLink(LinkEnd(core.name, coreUplink.name, core.ip, null), sw4, LinkSource.LLDP, false)
+            } else {
+                null
+            },
+        )
+        extra(
+            FoundDevice("10.40.0.57", "MFP-SKLAD", "00:17:C8:5A:00:57", "Kyocera", "ECOSYS M2540dn", DeviceType.PRINTER,
+                "KYOCERA Document Solutions Printing System", true, null, null),
+            "public",
+            FoundLink(sw4.copy(port = "gi1/0/3"), LinkEnd("MFP-SKLAD", "", "10.40.0.57", null), LinkSource.FDB, false),
+        )
+        extra(
+            FoundDevice("10.30.0.14", "CAM-04", "44:47:CC:28:00:14", "Hikvision", "DS-2CD2143G2-I", DeviceType.CAMERA,
+                "Hikvision IP camera", true, null, null),
+            "public",
+            FoundLink(sw4.copy(port = "gi1/0/7"), LinkEnd("CAM-04", "", "10.30.0.14", null), LinkSource.FDB, false),
+        )
+        val access = byId["sw-acc-03"]
+        val freePort = access?.let { a -> ports[a.id]?.firstOrNull { !it.isUplink && it.connectedDeviceName == null } }
+        extra(
+            FoundDevice("10.20.0.77", null, "3C:52:82:AA:00:77", null, null, DeviceType.UNKNOWN, null, false, null, null),
+            null,
+            if (access != null && freePort != null) {
+                FoundLink(LinkEnd(access.name, freePort.name, access.ip, null), LinkEnd("", "", "10.20.0.77", null), LinkSource.FDB, false)
+            } else {
+                null
+            },
+        )
+        return world to links
+    }
+
+    /** Marks what the inventory already has, as of now: added devices and links turn "known" right after an import. */
+    private fun annotate(scan: NetworkScan): NetworkScan {
+        val current = devices
+        val byIp = current.filter { it.ip != null }.associateBy { it.ip }
+        val pairs = knownPairs()
+        fun resolve(end: LinkEnd) = byIp[end.ip] ?: current.firstOrNull { it.name.equals(end.name, ignoreCase = true) }
+        return scan.copy(
+            devices = scan.devices.map { d -> byIp[d.ip]?.let { d.copy(inventoryId = it.id, inventoryName = it.name) } ?: d },
+            links = scan.links.map { link ->
+                val a = resolve(link.a)
+                val b = resolve(link.b)
+                link.copy(
+                    a = link.a.copy(inventoryId = a?.id),
+                    b = link.b.copy(inventoryId = b?.id, name = link.b.name.ifBlank { b?.name ?: link.b.ip.orEmpty() }),
+                    known = a != null && b != null && setOf(a.id, b.id) in pairs,
+                )
+            },
+        )
+    }
+
+    /** Device pairs already cabled to each other, also through sockets and patch panels. */
+    private fun knownPairs(): Set<Set<String>> = devices.filter { it.type == DeviceType.SWITCH }.flatMap { sw ->
+        currentPorts(sw).mapNotNull { p -> p.connectedDeviceName?.let { name -> devices.firstOrNull { it.name == name } } }
+            .map { setOf(sw.id, it.id) }
+    }.toSet() + connections.map { setOf(it.deviceAId, it.deviceBId) }
+
+    override suspend fun importScan(id: String, ips: List<String>, withLinks: Boolean): ImportReport {
+        simulateNetwork()
+        val scan = annotate(DemoDiscovery.finished(id))
+        val report = inventoryLock.withLock {
+            val found = scan.devices.associateBy { it.ip }
+            val created = ArrayList<Device>()
+            val skipped = ArrayList<String>()
+            val selected = HashSet<String>()
+            val names = devices.mapTo(HashSet()) { it.name.lowercase() }
+            for (ip in ips.distinct()) {
+                val d = found[ip]
+                if (d == null) {
+                    skipped += "$ip: нет в результатах сканирования"
+                    continue
+                }
+                val existing = devices.firstOrNull { it.ip == ip }
+                if (existing != null) {
+                    selected += existing.id
+                    continue
+                }
+                var name = d.name ?: "HOST-" + ip.replace('.', '-')
+                val base = name
+                var n = 2
+                while (!names.add(name.lowercase())) name = "$base-${n++}"
+                val device = Device(
+                    id = "found-" + ip.replace('.', '-'), name = name, type = d.type, vendor = d.vendor, model = d.model,
+                    ip = ip, mac = d.mac, floorId = FLOOR_ID, x = 0f, y = 0f, isOnline = true,
+                    vlanId = vlans.firstOrNull { ScanRanges.contains(it.subnet, ip) }?.id,
+                )
+                created += device
+                selected += device.id
+            }
+            val all = devices + created
+            fun resolve(end: LinkEnd) = all.firstOrNull { end.ip != null && it.ip == end.ip }
+                ?: all.firstOrNull { it.name.equals(end.name, ignoreCase = true) }
+            val pairs = knownPairs().toMutableSet()
+            val added = ArrayList<Connection>()
+            val addedLabels = ArrayList<String>()
+            if (withLinks) {
+                for (link in scan.links) {
+                    val a = resolve(link.a) ?: continue
+                    val b = resolve(link.b) ?: continue
+                    if (a.id == b.id || (a.id !in selected && b.id !in selected) || !pairs.add(setOf(a.id, b.id))) continue
+                    added += c(a.id, b.id, if (a.type == DeviceType.SWITCH && b.type == DeviceType.SWITCH) "OM3" else "Cat6", "авто: ${link.source.label}")
+                    addedLabels += "${a.name} ${link.a.port.ifBlank { "—" }} ↔ ${b.name} ${link.b.port.ifBlank { "—" }}"
+                }
+            }
+            placeNear(created, all, added)
+            devices = devices + created
+            connections = connections + added
+            byId = devices.associateBy { it.id }
+            ImportReport(created.map { it.name }, addedLabels, skipped)
+        }
+        DemoRunbooks.recordNetwork(
+            action = "discovery_import",
+            title = "Добавление найденных устройств",
+            arguments = listOf("ips" to ips.joinToString(), "links" to if (withLinks) "да" else "нет"),
+            stdout = (report.created.map { "+ $it" } + report.links.map { "+ связь $it" }).joinToString("
+")
+                .ifEmpty { "Новых устройств и связей нет" },
+            stderr = report.skipped.joinToString("
+"),
+            durationMs = null,
+        )
+        return report
+    }
+
+    /** Next to a linked device that already has a place, otherwise in a row along the bottom of the plan. */
+    private fun placeNear(created: MutableList<Device>, all: List<Device>, links: List<Connection>) {
+        val position = HashMap<String, Pair<Float, Float>>()
+        all.filter { it !in created }.forEach { position[it.id] = it.x to it.y }
+        val around = HashMap<String, Int>()
+        val pending = created.map { it.id }.toMutableList()
+        var progress = true
+        while (pending.isNotEmpty() && progress) {
+            progress = false
+            for (id in pending.toList()) {
+                val anchor = links.mapNotNull { l ->
+                    when (id) {
+                        l.deviceAId -> l.deviceBId
+                        l.deviceBId -> l.deviceAId
+                        else -> null
+                    }
+                }.firstOrNull { it in position } ?: continue
+                val (ax, ay) = position.getValue(anchor)
+                val k = around.getOrDefault(anchor, 0)
+                around[anchor] = k + 1
+                val angle = PI / 2 + k * PI / 3
+                position[id] = (ax + 90f * cos(angle).toFloat()).coerceIn(30f, plan.widthPx - 30f) to
+                    (ay + 90f * sin(angle).toFloat()).coerceIn(30f, plan.heightPx - 30f)
+                pending -= id
+                progress = true
+            }
+        }
+        pending.forEachIndexed { i, id -> position[id] = (100f + i * 100f).coerceAtMost(plan.widthPx - 30f) to plan.heightPx - 60f }
+        for (i in created.indices) {
+            val (x, y) = position.getValue(created[i].id)
+            created[i] = created[i].copy(x = x, y = y)
+        }
     }
 
     /**

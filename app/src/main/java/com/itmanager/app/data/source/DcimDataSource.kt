@@ -9,6 +9,8 @@ import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.DiagnosticResult
 import com.itmanager.app.data.model.FloorMap
+import com.itmanager.app.data.model.ImportReport
+import com.itmanager.app.data.model.NetworkScan
 import com.itmanager.app.data.model.LiveEvent
 import com.itmanager.app.data.model.PortChange
 import com.itmanager.app.data.model.PortChangeResult
@@ -61,6 +63,17 @@ interface DcimDataSource {
 
     /** Runbook runs and switch write attempts, newest first; [kind] null means both. */
     suspend fun audit(kind: AuditKind?): List<AuditEntry>
+
+    // Network discovery: read-only towards equipment, started only by the user with explicit ranges.
+
+    /** Starts a scan of [subnets] (already checked with [com.itmanager.app.data.model.ScanRanges]). */
+    suspend fun startScan(subnets: List<String>, community: String): NetworkScan
+    suspend fun scan(id: String): NetworkScan
+    /** The last scan, to show again after the screen was closed; null when there was none. */
+    suspend fun latestScan(): NetworkScan?
+
+    /** Adds the devices with [ips] and, with [withLinks], the links found to them to the inventory. */
+    suspend fun importScan(id: String, ips: List<String>, withLinks: Boolean): ImportReport
 
     /** Raw SVG of a floor plan. */
     suspend fun planSvg(url: String): String

@@ -178,6 +178,19 @@ internal object DemoRunbooks {
         )
     }
 
+    /** Demo network scans and imports, under the same action names the server uses. */
+    suspend fun recordNetwork(
+        action: String, title: String, arguments: List<Pair<String, String>>, stdout: String, stderr: String, durationMs: Long?,
+    ) {
+        record(
+            AuditEntry(
+                id = UUID.randomUUID().toString(), action = action, kind = AuditKind.NETWORK, title = title,
+                triggeredBy = "${Build.MODEL} · демо", arguments = arguments, authMethod = null,
+                executedAt = Instant.now(), exitCode = 0, stdout = stdout, stderr = stderr, durationMs = durationMs,
+            ),
+        )
+    }
+
     suspend fun audit(kind: AuditKind?): List<AuditEntry> = lock.withLock {
         audit.filter { kind == null || it.kind == kind }
     }
