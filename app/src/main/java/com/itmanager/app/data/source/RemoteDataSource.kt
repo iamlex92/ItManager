@@ -5,12 +5,15 @@ import com.itmanager.app.core.network.NetAdminApi
 import com.itmanager.app.core.network.UserFacingException
 import com.itmanager.app.core.network.toDomain
 import com.itmanager.app.core.settings.ServerSettings
+import com.itmanager.app.data.model.ConfigDiff
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.FloorMap
 import com.itmanager.app.data.model.FloorPlan
 import com.itmanager.app.data.model.LiveEvent
+import com.itmanager.app.data.model.PortChange
 import com.itmanager.app.data.model.Printer
 import com.itmanager.app.data.model.SwitchPort
+import com.itmanager.app.data.model.Vlan
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -53,6 +56,23 @@ class RemoteDataSource(
         api.ports(settings, deviceId).map { it.toDomain() }.sortedBy { it.number }
 
     override suspend fun printers(): List<Printer> = api.printers(settings).map { it.toDomain() }
+
+    override suspend fun vlans(): List<Vlan> = api.vlans(settings).map { it.toDomain() }
+
+    override suspend fun previewPortChange(switchId: String, portId: String, change: PortChange): List<String> =
+        api.previewPortConfig(settings, portId, change).commands
+
+    override suspend fun applyPortChange(switchId: String, portId: String, change: PortChange, confirmUplink: Boolean) =
+        api.applyPortConfig(settings, portId, change, confirmUplink).toDomain()
+
+    override suspend fun bouncePort(switchId: String, portId: String, confirmUplink: Boolean): List<String> =
+        api.bouncePort(settings, portId, confirmUplink).commands
+
+    override suspend fun writeMemory(switchId: String): List<String> = api.writeMemory(settings, switchId).commands
+
+    override suspend fun backupConfig(switchId: String) = api.backupConfig(settings, switchId)
+
+    override suspend fun configDiff(switchId: String): ConfigDiff = api.configDiff(settings, switchId).toDomain()
 
     override suspend fun planSvg(url: String): String = api.text(url)
 

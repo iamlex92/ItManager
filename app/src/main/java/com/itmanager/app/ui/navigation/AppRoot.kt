@@ -42,6 +42,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.itmanager.app.ui.automation.AutomationScreen
+import com.itmanager.app.ui.configdiff.ConfigDiffScreen
 import com.itmanager.app.ui.devices.DevicesScreen
 import com.itmanager.app.ui.map.MapScreen
 import com.itmanager.app.ui.printers.PrintersScreen
@@ -182,10 +183,23 @@ private fun AppNavHost(navController: NavHostController, contentPadding: Padding
             popEnterTransition = { EnterTransition.None },
             popExitTransition = { slideOutHorizontally(push) { it } },
         ) { entry ->
+            val deviceId = entry.toRoute<SwitchRoute>().deviceId
             SwitchScreen(
-                deviceId = entry.toRoute<SwitchRoute>().deviceId,
+                deviceId = deviceId,
                 onBack = { navController.popBackStack() },
                 onOpenSettings = openSettings,
+                onOpenDiff = { name -> navController.navigate(ConfigDiffRoute(deviceId, name)) },
+            )
+        }
+        composable<ConfigDiffRoute>(
+            enterTransition = { slideInHorizontally(push) { it } },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { slideOutHorizontally(push) { it } },
+        ) { entry ->
+            ConfigDiffScreen(
+                switchName = entry.toRoute<ConfigDiffRoute>().switchName,
+                onBack = { navController.popBackStack() },
             )
         }
         composable<SettingsRoute>(

@@ -7,15 +7,23 @@ import androidx.navigation.toRoute
 import com.itmanager.app.core.network.toUserMessage
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.LiveEvent
+import com.itmanager.app.data.model.PortChange
 import com.itmanager.app.data.model.SwitchPort
+import com.itmanager.app.data.model.Vlan
 import com.itmanager.app.data.source.DcimRepository
 import com.itmanager.app.ui.components.UiState
 import com.itmanager.app.ui.navigation.SwitchRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -27,6 +35,13 @@ sealed interface LiveState {
     data object Connecting : LiveState
     data object Live : LiveState
     data class Offline(val reason: String) : LiveState
+}
+
+/** A write waiting for the user's explicit confirmation in a dialog. */
+sealed interface PendingWrite {
+    data class PortChangeWrite(val port: SwitchPort, val change: PortChange, val commands: List<String>) : PendingWrite
+    data class BounceWrite(val port: SwitchPort) : PendingWrite
+    data object SaveConfigWrite : PendingWrite
 }
 
 @HiltViewModel
@@ -43,8 +58,25 @@ class SwitchViewModel @Inject constructor(
     private val _live = MutableStateFlow<LiveState>(LiveState.Connecting)
     val live: StateFlow<LiveState> = _live.asStateFlow()
 
+    private val _vlans = MutableStateFlow<List<Vlan>>(emptyList())
+    val vlans: StateFlow<List<Vlan>> = _vlans.asStateFlow()
+
+    private val _pending = MutableStateFlow<PendingWrite?>(null)
+    val pending: StateFlow<PendingWrite?> = _pending.asStateFlow()
+
+    /** True while a preview or a write is in flight; buttons wait instead of stacking requests. */
+    private val _busy = MutableStateFlow(false)
+    val busy: StateFlow<Boolean> = _busy.asStateFlow()
+
+    private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    val messages: SharedFlow<String> = _messages.asSharedFlow()
+
+    val isDemo: StateFlow<Boolean> = repository.settings.map { it.demoMode }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
     init {
         refresh()
+        viewModelScope.launch { repository.vlans().onSuccess { _vlans.value = it.sortedBy { v -> v.id } } }
         viewModelScope.launch {
             repository.live(deviceId).collect(::apply)
         }
@@ -71,6 +103,57 @@ class SwitchViewModel @Inject constructor(
                 d.copy(ports = d.ports.map { if (it.id == event.port.id) event.port else it })
             }
             is LiveEvent.DeviceStatus -> updateDetails { d -> d.copy(device = d.device.copy(isOnline = event.isOnline)) }
+        }
+    }
+
+    /** Step 1 of a port change: ask for the exact commands, then show them for confirmation. */
+    fun requestPortChange(port: SwitchPort, change: PortChange) = runBusy {
+        repository.previewPortChange(deviceId, port.id, change)
+            .onSuccess { _pending.value = PendingWrite.PortChangeWrite(port, change, it) }
+            .onFailure { _messages.emit(it.toUserMessage()) }
+    }
+
+    fun requestBounce(port: SwitchPort) {
+        _pending.value = PendingWrite.BounceWrite(port)
+    }
+
+    fun requestSaveConfig() {
+        _pending.value = PendingWrite.SaveConfigWrite
+    }
+
+    fun dismissPending() {
+        _pending.value = null
+    }
+
+    /** Step 2: the user confirmed in the dialog. [confirmUplink] is a separate tick for uplink ports. */
+    fun confirmPending(confirmUplink: Boolean) {
+        val write = _pending.value ?: return
+        _pending.value = null
+        runBusy {
+            val result: Result<String> = when (write) {
+                is PendingWrite.PortChangeWrite ->
+                    repository.applyPortChange(deviceId, write.port.id, write.change, confirmUplink).map { r ->
+                        updateDetails { d -> d.copy(ports = d.ports.map { if (it.id == r.port.id) r.port else it }) }
+                        "Порт ${write.port.name} настроен"
+                    }
+                is PendingWrite.BounceWrite ->
+                    repository.bouncePort(deviceId, write.port.id, confirmUplink).map { "Порт ${write.port.name} перезапущен" }
+                PendingWrite.SaveConfigWrite ->
+                    repository.writeMemory(deviceId).map { "Конфигурация сохранена в энергонезависимую память" }
+            }
+            _messages.emit(result.getOrElse { it.toUserMessage() })
+        }
+    }
+
+    private fun runBusy(block: suspend () -> Unit) {
+        if (_busy.value) return
+        viewModelScope.launch {
+            _busy.value = true
+            try {
+                block()
+            } finally {
+                _busy.value = false
+            }
         }
     }
 

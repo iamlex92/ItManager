@@ -18,6 +18,7 @@ import kotlinx.serialization.Serializable
 @Serializable data object AutomationRoute
 @Serializable data object SettingsRoute
 @Serializable data class SwitchRoute(val deviceId: String)
+@Serializable data class ConfigDiffRoute(val deviceId: String, val switchName: String? = null)
 
 /** Bottom bar tabs. Labels name what is inside, not generic "Home"-style umbrellas. */
 enum class TopLevelDestination(

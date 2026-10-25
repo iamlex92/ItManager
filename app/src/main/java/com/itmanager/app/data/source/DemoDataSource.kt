@@ -1,5 +1,7 @@
 package com.itmanager.app.data.source
 
+import com.itmanager.app.core.network.UserFacingException
+import com.itmanager.app.data.model.ConfigDiff
 import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Consumable
 import com.itmanager.app.data.model.Device
@@ -7,6 +9,8 @@ import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.model.FloorMap
 import com.itmanager.app.data.model.FloorPlan
 import com.itmanager.app.data.model.LiveEvent
+import com.itmanager.app.data.model.PortChange
+import com.itmanager.app.data.model.PortChangeResult
 import com.itmanager.app.data.model.PortMode
 import com.itmanager.app.data.model.Printer
 import com.itmanager.app.data.model.Room
@@ -15,7 +19,11 @@ import com.itmanager.app.data.model.Vlan
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlin.random.Random
 
 /**
@@ -143,9 +151,85 @@ object DemoDataSource : DcimDataSource {
 
     override suspend fun ports(deviceId: String): List<SwitchPort> {
         simulateNetwork()
-        val switch = byId[deviceId]?.takeIf { it.type == DeviceType.SWITCH } ?: notFound("Коммутатор")
-        return generatePorts(switch)
+        return currentPorts(switchOrThrow(deviceId))
     }
+
+    // --- Simulated writes. Nothing leaves the phone; state lives until the app is closed. ---
+
+    /** Ports the user changed in demo mode, by port id. */
+    private val changedPorts = HashMap<String, SwitchPort>()
+    /** Stored config copies per switch, for the diff screen. */
+    private val storedConfigs = HashMap<String, List<String>>()
+    private val demoEvents = MutableSharedFlow<LiveEvent>(extraBufferCapacity = 16)
+
+    private fun switchOrThrow(id: String) = byId[id]?.takeIf { it.type == DeviceType.SWITCH } ?: notFound("Коммутатор")
+
+    private fun currentPorts(switch: Device) = generatePorts(switch).map { changedPorts[it.id] ?: it }
+
+    private fun portOrThrow(switch: Device, portId: String) =
+        currentPorts(switch).firstOrNull { it.id == portId } ?: notFound("Порт")
+
+    override suspend fun vlans(): List<Vlan> = vlans
+
+    override suspend fun previewPortChange(switchId: String, portId: String, change: PortChange): List<String> {
+        simulateNetwork()
+        val switch = switchOrThrow(switchId)
+        val commands = CommandTranslator.portChange(switch.vendor, portOrThrow(switch, portId), change)
+        if (commands.isEmpty()) throw UserFacingException("Изменений нет: порт уже настроен так.")
+        return commands
+    }
+
+    override suspend fun applyPortChange(
+        switchId: String, portId: String, change: PortChange, confirmUplink: Boolean,
+    ): PortChangeResult {
+        val commands = previewPortChange(switchId, portId, change)
+        val switch = switchOrThrow(switchId)
+        val port = portOrThrow(switch, portId)
+        if (port.isUplink && !confirmUplink) throw UserFacingException("Это аплинк. Подтвердите изменение аплинка явно.")
+        storedConfigs.getOrPut(switchId) { runningConfig(switch) }
+        val mode = change.mode ?: port.mode
+        val updated = port.copy(
+            mode = mode,
+            accessVlan = if (mode == PortMode.ACCESS) change.accessVlan ?: port.accessVlan else null,
+            taggedVlans = if (mode == PortMode.TRUNK) change.taggedVlans ?: port.taggedVlans else emptyList(),
+            isAdminUp = change.isAdminUp ?: port.isAdminUp,
+            isOperUp = (change.isAdminUp ?: port.isAdminUp) && port.isOperUp,
+        )
+        changedPorts[portId] = updated
+        demoEvents.emit(LiveEvent.PortChanged(switchId, updated))
+        return PortChangeResult(updated, commands)
+    }
+
+    override suspend fun bouncePort(switchId: String, portId: String, confirmUplink: Boolean): List<String> {
+        val switch = switchOrThrow(switchId)
+        val port = portOrThrow(switch, portId)
+        if (port.isUplink && !confirmUplink) throw UserFacingException("Это аплинк. Подтвердите перезапуск аплинка явно.")
+        demoEvents.emit(LiveEvent.PortChanged(switchId, port.copy(isOperUp = false)))
+        delay(2_000)
+        demoEvents.emit(LiveEvent.PortChanged(switchId, port.copy(isOperUp = true)))
+        return CommandTranslator.bounce(switch.vendor, port)
+    }
+
+    override suspend fun writeMemory(switchId: String): List<String> {
+        simulateNetwork()
+        return CommandTranslator.writeMemory(switchOrThrow(switchId).vendor)
+    }
+
+    override suspend fun backupConfig(switchId: String) {
+        simulateNetwork()
+        storedConfigs[switchId] = runningConfig(switchOrThrow(switchId))
+    }
+
+    override suspend fun configDiff(switchId: String): ConfigDiff {
+        simulateNetwork()
+        val switch = switchOrThrow(switchId)
+        val stored = storedConfigs.getOrPut(switchId) { runningConfig(switch) }
+        val diff = blockDiff(stored, runningConfig(switch))
+        return ConfigDiff(changed = diff.isNotEmpty(), diff = diff)
+    }
+
+    private fun runningConfig(switch: Device) =
+        CommandTranslator.runningConfig(switch.vendor, switch.name, currentPorts(switch))
 
     override suspend fun printers(): List<Printer> {
         simulateNetwork()
@@ -158,22 +242,38 @@ object DemoDataSource : DcimDataSource {
      * Simulated live channel: a snapshot, then a spare port losing or regaining its link every few seconds,
      * so the live indicator and port colours can be seen moving without a server.
      */
-    override fun live(deviceId: String): Flow<LiveEvent> = flow {
-        emit(LiveEvent.Connected)
+    override fun live(deviceId: String): Flow<LiveEvent> = channelFlow {
+        send(LiveEvent.Connected)
         val switch = byId[deviceId]?.takeIf { it.type == DeviceType.SWITCH } ?: run {
             awaitCancellation()
         }
-        val ports = generatePorts(switch).toMutableList()
-        emit(LiveEvent.Snapshot(deviceId, switch.isOnline, ports.toList()))
+        val ports = currentPorts(switch).toMutableList()
+        val lock = Mutex()
+        send(LiveEvent.Snapshot(deviceId, switch.isOnline, ports.toList()))
+        // Changes the user makes in demo mode arrive the same way the server would push them.
+        launch {
+            demoEvents.collect { event ->
+                if (event is LiveEvent.PortChanged && event.deviceId == deviceId) {
+                    lock.withLock {
+                        val i = ports.indexOfFirst { it.id == event.port.id }
+                        if (i >= 0) ports[i] = event.port
+                    }
+                    send(event)
+                }
+            }
+        }
         val random = Random(System.nanoTime())
         while (true) {
             delay(2_500L + random.nextLong(3_500L))
-            val candidates = ports.indices.filter { ports[it].isAdminUp && !ports[it].isUplink && ports[it].connectedDeviceName == null }
-            if (candidates.isEmpty()) continue
-            val i = candidates.random(random)
-            val flipped = ports[i].copy(isOperUp = !ports[i].isOperUp)
-            ports[i] = flipped
-            emit(LiveEvent.PortChanged(deviceId, flipped))
+            val flipped = lock.withLock {
+                val candidates = ports.indices.filter {
+                    ports[it].isAdminUp && !ports[it].isUplink && ports[it].connectedDeviceName == null
+                }
+                if (candidates.isEmpty()) return@withLock null
+                val i = candidates.random(random)
+                ports[i].copy(isOperUp = !ports[i].isOperUp).also { ports[i] = it }
+            } ?: continue
+            send(LiveEvent.PortChanged(deviceId, flipped))
         }
     }
 
