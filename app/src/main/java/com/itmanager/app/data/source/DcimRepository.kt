@@ -7,12 +7,17 @@ import com.itmanager.app.core.settings.ServerSettings
 import com.itmanager.app.core.settings.SettingsRepository
 import com.itmanager.app.data.model.ALL_DEVICES
 import com.itmanager.app.data.model.Alert
+import com.itmanager.app.data.model.AuditEntry
+import com.itmanager.app.data.model.AuditKind
+import com.itmanager.app.data.model.AuthMethod
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.FloorMap
 import com.itmanager.app.data.model.LiveEvent
 import com.itmanager.app.data.model.PortChange
 import com.itmanager.app.data.model.Printer
+import com.itmanager.app.data.model.Runbook
+import com.itmanager.app.data.model.RunbookRun
 import com.itmanager.app.data.model.SwitchPort
 import com.itmanager.app.data.model.Vlan
 import kotlinx.coroutines.CoroutineScope
@@ -64,6 +69,11 @@ class DcimRepository @Inject constructor(
     suspend fun alerts(): Result<List<Alert>> = load { alerts() }
     suspend fun resolveAlert(alertId: String) = load { resolveAlert(alertId) }
     suspend fun refreshPrinter(printerId: String) = load { refreshPrinter(printerId) }
+
+    suspend fun runbooks(): Result<List<Runbook>> = load { runbooks() }
+    suspend fun runRunbook(runbook: Runbook, arguments: Map<String, String>, authMethod: AuthMethod): Result<RunbookRun> =
+        load { runRunbook(runbook, arguments, authMethod) }
+    suspend fun audit(kind: AuditKind?): Result<List<AuditEntry>> = load { audit(kind) }
 
     suspend fun planSvg(url: String): Result<String> = load { planSvg(url) }
 

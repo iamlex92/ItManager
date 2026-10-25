@@ -1,12 +1,17 @@
 package com.itmanager.app.data.source
 
+import android.os.Build
 import com.itmanager.app.core.network.LiveSocket
 import com.itmanager.app.core.network.NetAdminApi
+import com.itmanager.app.core.network.RunbookRunBody
 import com.itmanager.app.core.network.UnknownTagException
 import com.itmanager.app.core.network.UserFacingException
 import com.itmanager.app.core.network.toDomain
 import com.itmanager.app.core.settings.ServerSettings
 import com.itmanager.app.data.model.Alert
+import com.itmanager.app.data.model.AuditEntry
+import com.itmanager.app.data.model.AuditKind
+import com.itmanager.app.data.model.AuthMethod
 import com.itmanager.app.data.model.ConfigDiff
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DiagnosticKind
@@ -16,6 +21,8 @@ import com.itmanager.app.data.model.FloorPlan
 import com.itmanager.app.data.model.LiveEvent
 import com.itmanager.app.data.model.PortChange
 import com.itmanager.app.data.model.Printer
+import com.itmanager.app.data.model.Runbook
+import com.itmanager.app.data.model.RunbookRun
 import com.itmanager.app.data.model.SwitchPort
 import com.itmanager.app.data.model.Vlan
 import kotlinx.coroutines.async
@@ -103,6 +110,23 @@ class RemoteDataSource(
     override suspend fun resolveAlert(alertId: String): Alert = api.resolveAlert(settings, alertId).toDomain()
 
     override suspend fun refreshPrinter(printerId: String): Printer = api.refreshPrinter(settings, printerId).toDomain()
+
+    override suspend fun runbooks(): List<Runbook> = api.runbooks(settings).map { it.toDomain() }
+
+    override suspend fun runRunbook(runbook: Runbook, arguments: Map<String, String>, authMethod: AuthMethod): RunbookRun =
+        api.runRunbook(
+            settings,
+            runbook.id,
+            RunbookRunBody(
+                params = arguments,
+                confirm = authMethod != AuthMethod.NOT_REQUIRED,
+                authMethod = authMethod.wire,
+                // No user accounts yet: the phone model tells runs from different phones apart in the log.
+                operator = Build.MODEL,
+            ),
+        ).toDomain()
+
+    override suspend fun audit(kind: AuditKind?): List<AuditEntry> = api.audit(settings, kind).map { it.toDomain() }
 
     override suspend fun planSvg(url: String): String = api.text(url)
 

@@ -5,19 +5,20 @@ import android.graphics.Color
 import android.nfc.NfcAdapter
 import android.nfc.Tag
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.content.IntentCompat
+import androidx.fragment.app.FragmentActivity
 import com.itmanager.app.core.nfc.NfcController
 import com.itmanager.app.ui.navigation.AppRoot
 import com.itmanager.app.ui.theme.ItManagerTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
+// FragmentActivity rather than ComponentActivity: BiometricPrompt needs one.
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     @Inject lateinit var nfc: NfcController
 
     override fun onCreate(savedInstanceState: Bundle?) {

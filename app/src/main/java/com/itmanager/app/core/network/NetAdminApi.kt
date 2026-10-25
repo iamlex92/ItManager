@@ -1,6 +1,7 @@
 package com.itmanager.app.core.network
 
 import com.itmanager.app.core.settings.ServerSettings
+import com.itmanager.app.data.model.AuditKind
 import com.itmanager.app.data.model.PortChange
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -120,6 +121,15 @@ class NetAdminApi @Inject constructor(
     suspend fun refreshPrinter(s: ServerSettings, printerId: String): PrinterDto =
         client.post("${requireBase(s)}/api/v1/printers/$printerId/refresh") { auth(s) }.body()
 
+    suspend fun runbooks(s: ServerSettings): List<RunbookDto> = fetch(s, "runbooks")
+
+    /** Runs a runbook; critical ones carry confirm = true, sent only after biometric confirmation. */
+    suspend fun runRunbook(s: ServerSettings, id: String, body: RunbookRunBody): RunbookRunDto =
+        post(s, "runbooks/${id.encodeURLPathPart()}/run", body)
+
+    suspend fun audit(s: ServerSettings, kind: AuditKind?): List<AuditDto> =
+        fetch(s, "audit?limit=200" + kind?.let { "&kind=${it.wire}" }.orEmpty())
+
     private suspend inline fun <reified B : Any, reified T> post(s: ServerSettings, path: String, body: B): T = guarded {
         client.post("${requireBase(s)}/api/v1/$path") {
             auth(s)
@@ -134,8 +144,13 @@ class NetAdminApi @Inject constructor(
     } catch (e: ResponseException) {
         val status = e.response.status.value
         if (status == 401) throw e
-        val code = runCatching { json.decodeFromString(ErrorDto.serializer(), e.response.bodyAsText()).detail?.code }.getOrNull()
-        throw UserFacingException(writeErrorMessage(code, status), e)
+        val detail = runCatching { json.decodeFromString(ErrorDto.serializer(), e.response.bodyAsText()).detail }.getOrNull()
+        val message = detail?.message
+        throw UserFacingException(
+            // Argument errors come back already phrased in Russian for the form.
+            if (detail?.code == "invalid_params" && message != null) "Проверьте поля: $message." else writeErrorMessage(detail?.code, status),
+            e,
+        )
     }
 
     private fun requireBase(s: ServerSettings): String {

@@ -20,6 +20,10 @@ The only switches this will ever see are production ones, so:
   blocked ones.
 - The real SSH driver for switches (`app/hal/real.py`) is a stub that
   returns 501: nothing can change real switches yet.
+- **Runbooks are emulated.** AD password reset/unlock/enable, NTFS effective
+  access, database backup, VM snapshot and service restart run against an
+  in-memory environment; no AD or server credentials exist on the server.
+  Critical runbooks need `"confirm": true`, and every run is audited.
 - **Monitoring is read-only.** `MONITOR_MODE=real` sends only SNMP GET /
   GETNEXT to printers and one ICMP echo per device per round; the trap
   receiver only listens. `MONITOR_MODE=emulator` (default) sends nothing.

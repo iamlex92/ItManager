@@ -63,6 +63,12 @@ class Settings(BaseSettings):
     trap_listen_port: int = 0
     trap_community: str = "public"
 
+    # --- runbooks ---
+    # Runbooks (AD, file shares, backups, VMs, services) run against a built-in
+    # emulated environment only; nothing reaches AD or real servers yet.
+    # Pause per output step, so a run in the app feels like a real one. 0 in tests.
+    runbook_step_delay_seconds: float = 0.4
+
     snmp_version: str = Field(default="2c", pattern="^(2c|3)$")
     snmp_timeout_seconds: float = 2.0
     snmp_retries: int = 1
