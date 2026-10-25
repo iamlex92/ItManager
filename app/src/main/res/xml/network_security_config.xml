@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The server lives only on the factory LAN (or behind the VPN) and is usually reached
+  by IP over plain HTTP, so cleartext is allowed. Switch to HTTPS once the server gets
+  a certificate from the internal CA.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
