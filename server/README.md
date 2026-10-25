@@ -33,6 +33,12 @@ The only switches this will ever see are production ones, so:
   `MONITOR_MODE=emulator` it is answered from the inventory. Adding found
   devices to the inventory writes only to the database.
 
+- **Secrets are encrypted at rest.** With `SECRET_KEY` set, device SNMP
+  communities and stored credentials (`/credentials`) are Fernet-encrypted in
+  the database, never returned by the API and never written to the audit log.
+  Plaintext rows are encrypted at startup; a missing or wrong key stops the
+  server instead of serving broken values.
+
 The server is meant for the plant network only (reach it over VPN from
 outside); auth is a single shared `API_TOKEN`.
 
@@ -80,6 +86,7 @@ pytest
 | Variable | Default | |
 |---|---|---|
 | `API_TOKEN` | (required) | shared secret, at least 16 chars |
+| `SECRET_KEY` | empty | Fernet key for secrets at rest: `openssl rand -base64 32 \| tr '+/' '-_'` |
 | `DATABASE_URL` | `postgresql+asyncpg://netadmin:netadmin@localhost:5432/netadmin` | |
 | `HAL_MODE` | `emulator` | `emulator` or `real` |
 | `ALLOW_DEVICE_WRITES` | `false` | only matters for `real` |

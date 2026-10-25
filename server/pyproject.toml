@@ -12,6 +12,7 @@ dependencies = [
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
     "pysnmp>=7.1",
+    "cryptography>=43",
 ]
 
 [project.optional-dependencies]

@@ -9,11 +9,12 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 
-from . import __version__
+from . import __version__, crypto
 from .api import (
     alerts,
     audit,
     connections,
+    credentials,
     devices,
     discovery,
     floors,
@@ -32,7 +33,7 @@ from .discovery.manager import ScanManager
 from .hal.base import DeviceWritesDisabled, UnsupportedVendor
 from .hal.emulator import EmulatorDriver
 from .hal.factory import build_driver, build_printer_driver
-from .models import Device
+from .models import Credential, Device
 from .runbooks.emulator import RunbookEnvironment
 from .schemas import HealthOut
 from .services import heartbeat, traps
@@ -49,10 +50,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        secrets_box = crypto.configure(settings.secret_key)
         engine = make_engine(settings.database_url)
         app.state.settings = settings
         app.state.engine = engine
         app.state.sessionmaker = make_sessionmaker(engine)
+        if not secrets_box.enabled:
+            log.warning("SECRET_KEY is not set: SNMP communities and credentials are stored unencrypted")
+        # Encrypts leftover plaintext, and refuses to start when stored secrets can't be read.
+        async with app.state.sessionmaker() as s:
+            await crypto.encrypt_existing(s, [(Device, "snmp_community"), (Credential, "secret")])
         app.state.driver = build_driver(settings)
         if isinstance(app.state.driver, EmulatorDriver):
 
@@ -147,10 +154,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             device_writes_enabled=settings.device_writes_enabled,
             monitor_mode=settings.monitor_mode.value,
             runbook_mode="emulator",
+            secrets_encrypted=crypto.box().enabled,
         )
 
     api = APIRouter(prefix="/api/v1", dependencies=[Depends(require_token)])
-    for module in (floors, vlans, devices, ports, connections, alerts, misc, printers, nfc, runbooks, audit, discovery):
+    routers = (floors, vlans, devices, ports, connections, alerts, misc, printers, nfc, runbooks, audit, discovery)
+    for module in (*routers, credentials):
         api.include_router(module.router)
 
     app.include_router(public)

@@ -102,7 +102,7 @@ databases, VMs, services). Nothing reaches a real directory or server yet;
 |---|---|---|
 | GET | `/runbooks` | catalog: `id`, `category`, `title`, `description`, `critical`, `params[]` (`name`, `label`, `kind` `text`/`choice`, `required`, `choices[]`, `placeholder`) |
 | POST | `/runbooks/{id}/run` | body `{"params": {...}, "confirm": true, "auth_method": "biometric", "operator": "Pixel 10a"}` |
-| GET | `/audit?kind=all\|runbook\|switch\|network&limit=100&offset=0` | runbook runs, switch write attempts and network scans, newest first |
+| GET | `/audit?kind=all\|runbook\|switch\|network\|security&limit=100&offset=0` | runbook runs, switch write attempts and network scans, newest first |
 
 Run response: `audit_id`, `runbook_id`, `exit_code`, `stdout`, `stderr`, `secret`,
 `started_at`, `duration_ms`, `simulated`. `secret` carries a temporary password
@@ -167,6 +167,26 @@ sockets and patch panels) are left alone; links to busy ports are reported in
 
 Scans and imports are audited as `network_scan` / `discovery_import`
 (`GET /audit?kind=network`).
+
+## Credentials
+
+Logins for equipment and services (`kind`: `ssh`, `snmp_v3`, `winrm`, `other`). The secret
+is write-only: stored encrypted with `SECRET_KEY`, never returned. Nothing uses them to log in
+yet; a device points at one with `ssh_credential_id` (PATCH `/devices/{id}`) for the real
+switch driver.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/credentials` | `id`, `name`, `kind`, `username`, `has_secret`, `notes`, `devices` (how many point at it), `created_at`, `updated_at` |
+| POST | `/credentials` | `{"name", "kind", "username", "secret", "notes", "operator"}` → 201; 409 `name_taken` |
+| PATCH | `/credentials/{id}` | any of `name`, `username`, `secret`, `notes` |
+| DELETE | `/credentials/{id}?operator=...` | devices pointing at it get `ssh_credential_id: null` |
+
+Each change is audited as `credential_create` / `credential_update` / `credential_delete`
+(`GET /audit?kind=security`) with name, kind and username only.
+
+Devices: `snmp_community` is accepted on create/update but no longer returned; `has_snmp_community`
+says whether one is set. `/health` reports `secrets_encrypted`.
 
 ## WebSocket `/api/v1/ws?token=...`
 
