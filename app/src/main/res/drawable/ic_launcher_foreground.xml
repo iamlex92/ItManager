@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Network hub glyph: one core node linked to three access nodes. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:strokeColor="#FF4C9EFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M54,50 L36,68 M54,50 L54,72 M54,50 L72,68" />
+    <path
+        android:fillColor="#FF4C9EFF"
+        android:pathData="M54,32 a10,10 0 1,1 -0.01,0 Z" />
+    <path
+        android:fillColor="#FFE6EDF5"
+        android:pathData="M36,62 a6,6 0 1,1 -0.01,0 Z M54,66 a6,6 0 1,1 -0.01,0 Z M72,62 a6,6 0 1,1 -0.01,0 Z" />
+</vector>
