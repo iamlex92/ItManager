@@ -19,6 +19,7 @@ import kotlinx.serialization.Serializable
 @Serializable data object SettingsRoute
 @Serializable data object AlertsRoute
 @Serializable data object AuditRoute
+@Serializable data object ScannerRoute
 @Serializable data class SwitchRoute(val deviceId: String)
 @Serializable data class ConfigDiffRoute(val deviceId: String, val switchName: String? = null)
 

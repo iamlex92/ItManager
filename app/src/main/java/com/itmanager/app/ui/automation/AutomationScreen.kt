@@ -23,6 +23,7 @@ import androidx.compose.material.icons.automirrored.outlined.ManageSearch
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.Science
+import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -33,6 +34,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -55,6 +57,7 @@ fun AutomationScreen(
     contentPadding: PaddingValues,
     onOpenSettings: () -> Unit,
     onOpenAudit: () -> Unit,
+    onOpenScanner: () -> Unit,
     viewModel: AutomationViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -79,7 +82,22 @@ fun AutomationScreen(
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     item(key = "note") { EmulationNote(isDemo) }
-                    item(key = "audit") { AuditLink(onOpenAudit) }
+                    item(key = "scanner") {
+                        LinkCard(
+                            icon = Icons.Outlined.TravelExplore,
+                            title = "Сканер сети",
+                            subtitle = "Найти устройства в подсетях, построить связи и добавить в учёт",
+                            onClick = onOpenScanner,
+                        )
+                    }
+                    item(key = "audit") {
+                        LinkCard(
+                            icon = Icons.AutoMirrored.Outlined.ManageSearch,
+                            title = "Журнал аудита",
+                            subtitle = "Кто, когда и с какими параметрами запускал сценарии, менял коммутаторы и сканировал сеть",
+                            onClick = onOpenAudit,
+                        )
+                    }
                     s.data.groupBy { it.category }.forEach { (category, runbooks) ->
                         item(key = "cat-$category") { SectionLabel(category, Modifier.padding(top = 16.dp)) }
                         items(runbooks, key = { it.id }) { rb -> RunbookRow(rb) { viewModel.open(rb) } }
@@ -143,7 +161,7 @@ private fun EmulationNote(isDemo: Boolean) {
 }
 
 @Composable
-private fun AuditLink(onClick: () -> Unit) {
+private fun LinkCard(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -152,15 +170,11 @@ private fun AuditLink(onClick: () -> Unit) {
             .clickable(role = Role.Button, onClick = onClick)
             .padding(14.dp),
     ) {
-        Icon(Icons.AutoMirrored.Outlined.ManageSearch, contentDescription = null)
+        Icon(icon, contentDescription = null)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text("Журнал аудита", style = MaterialTheme.typography.titleMedium)
-            Text(
-                "Кто, когда и с какими параметрами запускал сценарии и менял коммутаторы",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }

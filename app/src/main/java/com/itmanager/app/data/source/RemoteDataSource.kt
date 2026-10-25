@@ -3,7 +3,9 @@ package com.itmanager.app.data.source
 import android.os.Build
 import com.itmanager.app.core.network.LiveSocket
 import com.itmanager.app.core.network.NetAdminApi
+import com.itmanager.app.core.network.ImportBody
 import com.itmanager.app.core.network.RunbookRunBody
+import com.itmanager.app.core.network.ScanBody
 import com.itmanager.app.core.network.UnknownTagException
 import com.itmanager.app.core.network.UserFacingException
 import com.itmanager.app.core.network.toDomain
@@ -18,6 +20,8 @@ import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.DiagnosticResult
 import com.itmanager.app.data.model.FloorMap
 import com.itmanager.app.data.model.FloorPlan
+import com.itmanager.app.data.model.ImportReport
+import com.itmanager.app.data.model.NetworkScan
 import com.itmanager.app.data.model.LiveEvent
 import com.itmanager.app.data.model.PortChange
 import com.itmanager.app.data.model.Printer
@@ -127,6 +131,16 @@ class RemoteDataSource(
         ).toDomain()
 
     override suspend fun audit(kind: AuditKind?): List<AuditEntry> = api.audit(settings, kind).map { it.toDomain() }
+
+    override suspend fun startScan(subnets: List<String>, community: String): NetworkScan =
+        api.startScan(settings, ScanBody(subnets, community, operator = Build.MODEL)).toDomain()
+
+    override suspend fun scan(id: String): NetworkScan = api.scan(settings, id).toDomain()
+
+    override suspend fun latestScan(): NetworkScan? = api.latestScan(settings)?.toDomain()
+
+    override suspend fun importScan(id: String, ips: List<String>, withLinks: Boolean): ImportReport =
+        api.importScan(settings, id, ImportBody(ips, withLinks, operator = Build.MODEL)).toDomain()
 
     override suspend fun planSvg(url: String): String = api.text(url)
 

@@ -58,6 +58,11 @@ fun argumentLabel(key: String): String = when (key) {
     "target" -> "Адрес"
     "count" -> "Пакетов"
     "hal_mode" -> "Режим сервера"
+    "subnets" -> "Подсети"
+    "mode" -> "Режим"
+    "scan_id" -> "Сканирование"
+    "ips" -> "Адреса"
+    "links" -> "Со связями"
     else -> key
 }
 

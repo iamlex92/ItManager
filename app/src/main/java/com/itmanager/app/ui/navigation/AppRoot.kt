@@ -68,6 +68,7 @@ import com.itmanager.app.ui.devices.DevicesScreen
 import com.itmanager.app.ui.map.MapScreen
 import com.itmanager.app.ui.nfc.BindTagSheet
 import com.itmanager.app.ui.printers.PrintersScreen
+import com.itmanager.app.ui.scanner.ScannerScreen
 import com.itmanager.app.ui.settings.SettingsScreen
 import com.itmanager.app.ui.switchdetail.SwitchScreen
 import com.itmanager.app.ui.theme.Motion
@@ -233,6 +234,14 @@ private fun AppNavHost(
     onOpenDevice: (deviceId: String) -> Unit,
 ) {
     val openSettings = { navController.navigate(SettingsRoute) { launchSingleTop = true } }
+    val openScanner = { navController.navigate(ScannerRoute) { launchSingleTop = true } }
+    val openMapTab = {
+        navController.navigate(MapRoute) {
+            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
     val tabFade = Motion.smooth<Float>(Motion.RESPONSE_SHEET)
     val push = Motion.smooth<IntOffset>(Motion.RESPONSE_DEFAULT, IntOffset.VisibilityThreshold)
 
@@ -256,14 +265,9 @@ private fun AppNavHost(
             DevicesScreen(
                 contentPadding = contentPadding,
                 onOpenSwitch = { navController.navigate(SwitchRoute(it)) },
-                onShowOnMap = {
-                    navController.navigate(MapRoute) {
-                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
-                },
+                onShowOnMap = openMapTab,
                 onOpenSettings = openSettings,
+                onOpenScanner = openScanner,
             )
         }
         composable<PrintersRoute> {
@@ -274,7 +278,16 @@ private fun AppNavHost(
                 contentPadding = contentPadding,
                 onOpenSettings = openSettings,
                 onOpenAudit = { navController.navigate(AuditRoute) { launchSingleTop = true } },
+                onOpenScanner = openScanner,
             )
+        }
+        composable<ScannerRoute>(
+            enterTransition = { slideInHorizontally(push) { it } },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { slideOutHorizontally(push) { it } },
+        ) {
+            ScannerScreen(onBack = { navController.popBackStack() }, onOpenMap = openMapTab)
         }
         composable<AuditRoute>(
             enterTransition = { slideInHorizontally(push) { it } },

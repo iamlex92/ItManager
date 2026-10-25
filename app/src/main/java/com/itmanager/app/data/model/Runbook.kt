@@ -68,9 +68,15 @@ data class RunbookRun(
     val succeeded: Boolean get() = exitCode == 0
 }
 
-enum class AuditKind(val wire: String) { RUNBOOK("runbook"), SWITCH("switch") }
+enum class AuditKind(val wire: String) {
+    RUNBOOK("runbook"), SWITCH("switch"), NETWORK("network");
 
-/** One row of the audit log: a runbook run or a switch write attempt. */
+    companion object {
+        fun parse(raw: String?): AuditKind = entries.firstOrNull { it.wire == raw } ?: SWITCH
+    }
+}
+
+/** One row of the audit log: a runbook run, a switch write attempt or a network scan. */
 data class AuditEntry(
     val id: String,
     /** Server action name: "runbook:<id>" for runbooks, e.g. "port_config" for switch writes. */

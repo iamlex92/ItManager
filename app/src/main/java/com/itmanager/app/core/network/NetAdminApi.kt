@@ -130,6 +130,37 @@ class NetAdminApi @Inject constructor(
     suspend fun audit(s: ServerSettings, kind: AuditKind?): List<AuditDto> =
         fetch(s, "audit?limit=200" + kind?.let { "&kind=${it.wire}" }.orEmpty())
 
+    /** Starts a read-only scan of the given ranges; the server answers at once and the scan runs in the background. */
+    suspend fun startScan(s: ServerSettings, body: ScanBody): ScanDto = discovery { post(s, "discovery/scans", body) }
+
+    suspend fun scan(s: ServerSettings, id: String): ScanDto =
+        discovery { guarded { fetch(s, "discovery/scans/${id.encodeURLPathPart()}") } }
+
+    /** The last scan the server remembers, or null when there was none since it started. */
+    suspend fun latestScan(s: ServerSettings): ScanDto? = try {
+        fetch<ScanDto>(s, "discovery/scans/latest")
+    } catch (e: ResponseException) {
+        if (e.response.status.value == 404) null else throw e
+    }
+
+    /** Adds chosen devices and their links to the server's inventory (database only). */
+    suspend fun importScan(s: ServerSettings, id: String, body: ImportBody): ImportDto =
+        discovery { post(s, "discovery/scans/${id.encodeURLPathPart()}/import", body) }
+
+    /** A server from before discovery answers 404 or 405 on these paths; a restarted one has forgotten its scans. */
+    private suspend inline fun <T> discovery(block: () -> T): T = try {
+        block()
+    } catch (e: UserFacingException) {
+        val response = (e.cause as? ResponseException)?.response ?: throw e
+        val code = runCatching { json.decodeFromString(ErrorDto.serializer(), response.bodyAsText()).detail?.code }.getOrNull()
+        throw when {
+            code == "not_found" -> UserFacingException("Сервер не помнит это сканирование (возможно, он перезапускался). Запустите его заново.", e)
+            response.status.value == 404 || response.status.value == 405 ->
+                UserFacingException("Сервер пока не умеет сканировать сеть: обновите сервер.", e)
+            else -> e
+        }
+    }
+
     private suspend inline fun <reified B : Any, reified T> post(s: ServerSettings, path: String, body: B): T = guarded {
         client.post("${requireBase(s)}/api/v1/$path") {
             auth(s)
@@ -148,9 +179,18 @@ class NetAdminApi @Inject constructor(
         val message = detail?.message
         throw UserFacingException(
             // Argument errors come back already phrased in Russian for the form.
-            if (detail?.code == "invalid_params" && message != null) "Проверьте поля: $message." else writeErrorMessage(detail?.code, status),
+            when {
+                detail?.code == "invalid_params" && message != null -> "Проверьте поля: $message."
+                detail?.code in PHRASED_CODES && message != null -> message.replaceFirstChar { it.uppercase() } + "."
+                else -> writeErrorMessage(detail?.code, status)
+            },
             e,
         )
+    }
+
+    private companion object {
+        /** Refusals whose message the server already writes in Russian for the user. */
+        val PHRASED_CODES = setOf("invalid_subnets", "scan_running")
     }
 
     private fun requireBase(s: ServerSettings): String {

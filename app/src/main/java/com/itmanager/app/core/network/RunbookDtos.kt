@@ -114,7 +114,7 @@ data class AuditDto(
         return AuditEntry(
             id = id,
             action = action,
-            kind = if (kind == AuditKind.RUNBOOK.wire) AuditKind.RUNBOOK else AuditKind.SWITCH,
+            kind = AuditKind.parse(kind),
             title = title,
             triggeredBy = triggeredBy,
             arguments = arguments,

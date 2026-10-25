@@ -102,7 +102,7 @@ databases, VMs, services). Nothing reaches a real directory or server yet;
 |---|---|---|
 | GET | `/runbooks` | catalog: `id`, `category`, `title`, `description`, `critical`, `params[]` (`name`, `label`, `kind` `text`/`choice`, `required`, `choices[]`, `placeholder`) |
 | POST | `/runbooks/{id}/run` | body `{"params": {...}, "confirm": true, "auth_method": "biometric", "operator": "Pixel 10a"}` |
-| GET | `/audit?kind=all\|runbook\|switch&limit=100&offset=0` | runbook runs and switch write attempts, newest first |
+| GET | `/audit?kind=all\|runbook\|switch\|network&limit=100&offset=0` | runbook runs, switch write attempts and network scans, newest first |
 
 Run response: `audit_id`, `runbook_id`, `exit_code`, `stdout`, `stderr`, `secret`,
 `started_at`, `duration_ms`, `simulated`. `secret` carries a temporary password
@@ -118,6 +118,55 @@ A failing run (unknown account, existing snapshot name) is still `200` with a
 non-zero `exit_code` and `stderr`. Every run is audited with initiator
 (`operator · client IP`), time, arguments, auth method, exit code, stdout,
 stderr and duration.
+
+## Network discovery
+
+Finds hosts in the given subnets and the links between them. Read-only towards
+equipment: one ICMP echo per address, then SNMP GET/GETNEXT (system group, ifName,
+LLDP, CDP, ARP, bridge and Q-bridge MAC tables) to the hosts that answered. A scan
+only starts from an explicit request with explicit ranges. With
+`MONITOR_MODE=emulator` (default) the scan is answered from the inventory plus a
+few devices it does not know yet (a new switch, a printer, a camera, a PC without
+SNMP); nothing leaves the server.
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/discovery/scans` | `{"subnets": ["10.99.0.0/24"], "community": "public", "operator": "Pixel 10a"}` → `202`, scan in `running` state |
+| GET | `/discovery/scans/{id}` | poll until `status` is `done` or `failed` |
+| GET | `/discovery/scans/latest` | the last scan since the server started (scans live in memory, the last 5 are kept) |
+| POST | `/discovery/scans/{id}/import` | `{"ips": [...], "links": true, "operator": "..."}`: add devices and their links to the inventory |
+
+Limits: private IPv4 only, each range at most a /22, up to 8 ranges and 2048
+addresses per scan, one scan at a time. The community is used for that scan only
+and is never stored or logged (`SNMP_VERSION=3` uses the `SNMP_V3_*` user instead).
+
+Scan: `id`, `status`, `mode` (`emulator`/`real`), `subnets`, `started_at`,
+`finished_at`, `total`, `probed`, `devices[]`, `links[]`, `error`. Devices and
+links are empty while the scan runs.
+
+- device: `ip`, `name` (sysName), `mac`, `vendor` (from sysObjectID), `model`,
+  `type` (guessed: `SWITCH`, `PRINTER`, `CAMERA`, ... or `UNKNOWN`), `description`
+  (sysDescr), `snmp`, `inventory_id` / `inventory_name` when the IP is already in
+  the inventory.
+- link: `a` / `b` (`name`, `port`, `ip`, `inventory_id`), `source` (`lldp`, `cdp`,
+  or `fdb` for a host whose MAC was learned on a switch edge port; the host's `port`
+  is empty), `known` when the inventory already has a cable between the two devices.
+
+Import writes only to the database: new devices go on the first floor next to a
+linked device that has a position (or in a row along the bottom of the plan),
+ports are created by name, and each link becomes a cable with
+`notes: "auto: lldp, ..."`. Links to devices that are already cabled (also through
+sockets and patch panels) are left alone; links to busy ports are reported in
+`skipped`. Response: `created[]` (`id`, `name`, `ip`), `links[]`, `skipped[]`.
+
+| Status | `detail.code` | Meaning |
+|---|---|---|
+| 409 | `scan_running` | another scan is running |
+| 409 | `scan_not_done` | import before the scan finished |
+| 422 | `invalid_subnets` | not a subnet, public, too large or too many; `message` in Russian |
+
+Scans and imports are audited as `network_scan` / `discovery_import`
+(`GET /audit?kind=network`).
 
 ## WebSocket `/api/v1/ws?token=...`
 

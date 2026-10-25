@@ -2,6 +2,7 @@ package com.itmanager.app.ui.components
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -25,6 +26,7 @@ fun TabTopBar(
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    actions: @Composable RowScope.() -> Unit = {},
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -39,6 +41,7 @@ fun TabTopBar(
                 Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+        actions()
         AlertsBell()
         IconButton(onClick = onOpenSettings) {
             Icon(Icons.Outlined.Settings, contentDescription = "Настройки")

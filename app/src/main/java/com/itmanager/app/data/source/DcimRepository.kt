@@ -13,6 +13,8 @@ import com.itmanager.app.data.model.AuthMethod
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.FloorMap
+import com.itmanager.app.data.model.ImportReport
+import com.itmanager.app.data.model.NetworkScan
 import com.itmanager.app.data.model.LiveEvent
 import com.itmanager.app.data.model.PortChange
 import com.itmanager.app.data.model.Printer
@@ -25,6 +27,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.shareIn
@@ -41,8 +45,11 @@ class DcimRepository @Inject constructor(
     private val api: NetAdminApi,
     private val liveSocket: LiveSocket,
 ) {
-    /** Screens reload when this emits. */
-    val settings: Flow<ServerSettings> = settingsRepository.settings
+    /** Bumped when the inventory changes from the app (devices added from a scan). */
+    private val inventoryVersion = MutableStateFlow(0)
+
+    /** Screens reload when this emits: on new settings, and after the inventory changed. */
+    val settings: Flow<ServerSettings> = combine(settingsRepository.settings, inventoryVersion) { s, _ -> s }
 
     suspend fun floorMap(): Result<FloorMap> = load { floorMap() }
     suspend fun devices(): Result<List<Device>> = load { devices() }
@@ -74,6 +81,13 @@ class DcimRepository @Inject constructor(
     suspend fun runRunbook(runbook: Runbook, arguments: Map<String, String>, authMethod: AuthMethod): Result<RunbookRun> =
         load { runRunbook(runbook, arguments, authMethod) }
     suspend fun audit(kind: AuditKind?): Result<List<AuditEntry>> = load { audit(kind) }
+
+    suspend fun startScan(subnets: List<String>, community: String): Result<NetworkScan> =
+        load { startScan(subnets, community) }
+    suspend fun scan(id: String): Result<NetworkScan> = load { scan(id) }
+    suspend fun latestScan(): Result<NetworkScan?> = load { latestScan() }
+    suspend fun importScan(id: String, ips: List<String>, withLinks: Boolean): Result<ImportReport> =
+        load { importScan(id, ips, withLinks) }.onSuccess { inventoryVersion.value++ }
 
     suspend fun planSvg(url: String): Result<String> = load { planSvg(url) }
 

@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Router
+import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -61,7 +62,7 @@ import java.time.format.DateTimeFormatter
 
 private val fullTime: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")
 
-private val filters = listOf(null to "Все", AuditKind.RUNBOOK to "Сценарии", AuditKind.SWITCH to "Коммутаторы")
+private val filters = listOf(null to "Все", AuditKind.RUNBOOK to "Сценарии", AuditKind.SWITCH to "Коммутаторы", AuditKind.NETWORK to "Сеть")
 
 /** Who ran what, when, with which arguments and what came out. Tap a row for the full record. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -141,7 +142,11 @@ private fun AuditCard(entry: AuditEntry, expanded: Boolean, onToggle: () -> Unit
                 contentAlignment = Alignment.Center,
                 modifier = Modifier.size(36.dp).background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape),
             ) {
-                val icon = if (entry.kind == AuditKind.RUNBOOK) runbookIcon(entry.action.removePrefix("runbook:")) else Icons.Outlined.Router
+                val icon = when (entry.kind) {
+                    AuditKind.RUNBOOK -> runbookIcon(entry.action.removePrefix("runbook:"))
+                    AuditKind.NETWORK -> Icons.Outlined.TravelExplore
+                    AuditKind.SWITCH -> Icons.Outlined.Router
+                }
                 Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
             }
             Spacer(Modifier.width(12.dp))
