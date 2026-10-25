@@ -412,6 +412,8 @@ class HealthOut(BaseModel):
     hal_mode: str
     device_writes_enabled: bool
     monitor_mode: str = "emulator"
+    # Runbooks only run against the built-in emulated environment for now.
+    runbook_mode: str = "emulator"
 
 
 class ErrorCode(BaseModel):
@@ -451,3 +453,66 @@ class NfcBindRequest(BaseModel):
     @classmethod
     def _uid(cls, v: str) -> str:
         return normalize_nfc_uid(v)
+
+
+# --- runbooks and audit ---
+
+
+class RunbookChoiceOut(BaseModel):
+    value: str
+    label: str
+
+
+class RunbookParamOut(BaseModel):
+    name: str
+    label: str
+    kind: str
+    required: bool
+    choices: list[RunbookChoiceOut] = []
+    placeholder: str | None = None
+
+
+class RunbookOut(BaseModel):
+    id: str
+    category: str
+    title: str
+    description: str
+    critical: bool
+    params: list[RunbookParamOut]
+
+
+class RunbookRunIn(BaseModel):
+    params: dict[str, str] = {}
+    # Required for critical runbooks; the app sets it after biometric confirmation.
+    confirm: bool = False
+    # How the operator confirmed on the phone ("biometric", "device_credential"), for the audit log.
+    auth_method: str | None = Field(default=None, max_length=40)
+    # Who or what started the run (the app sends the phone model); the client IP is added.
+    operator: str | None = Field(default=None, max_length=60)
+
+
+class RunbookRunOut(BaseModel):
+    audit_id: uuid.UUID
+    runbook_id: str
+    exit_code: int
+    stdout: str
+    stderr: str
+    # A temporary password: shown to the operator once, never written to the audit log.
+    secret: str | None = None
+    started_at: datetime
+    duration_ms: int
+    simulated: bool = True
+
+
+class AuditOut(BaseModel):
+    id: uuid.UUID
+    action: str
+    kind: str
+    title: str
+    triggered_by: str
+    parameters: dict[str, Any] | None
+    executed_at: datetime
+    exit_code: int | None
+    stdout: str | None
+    stderr: str | None
+    duration_ms: int | None

@@ -153,3 +153,6 @@ class ScriptAuditLog(Base):
     executed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     exit_code: Mapped[int | None] = mapped_column(Integer)
     output_log: Mapped[str | None] = mapped_column(Text)
+    # Runbooks keep stderr apart from stdout; switch writes leave it empty.
+    stderr_log: Mapped[str | None] = mapped_column(Text)
+    duration_ms: Mapped[int | None] = mapped_column(Integer)

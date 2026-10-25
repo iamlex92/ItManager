@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 
 from . import __version__
-from .api import alerts, connections, devices, floors, misc, nfc, ports, printers, vlans, ws
+from .api import alerts, audit, connections, devices, floors, misc, nfc, ports, printers, runbooks, vlans, ws
 from .api.deps import require_token
 from .config import MonitorMode, Settings, get_settings
 from .db import make_engine, make_sessionmaker
@@ -18,6 +18,7 @@ from .hal.base import DeviceWritesDisabled, UnsupportedVendor
 from .hal.emulator import EmulatorDriver
 from .hal.factory import build_driver, build_printer_driver
 from .models import Device
+from .runbooks.emulator import RunbookEnvironment
 from .schemas import HealthOut
 from .services import heartbeat, traps
 from .services import printers as printer_service
@@ -46,6 +47,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
             app.state.driver.host_lookup = host_lookup
         app.state.hub = Hub()
+        app.state.runbooks = RunbookEnvironment(step_delay=settings.runbook_step_delay_seconds)
         log.warning(
             "HAL mode: %s, device writes %s",
             settings.hal_mode.value,
@@ -127,10 +129,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             hal_mode=settings.hal_mode.value,
             device_writes_enabled=settings.device_writes_enabled,
             monitor_mode=settings.monitor_mode.value,
+            runbook_mode="emulator",
         )
 
     api = APIRouter(prefix="/api/v1", dependencies=[Depends(require_token)])
-    for module in (floors, vlans, devices, ports, connections, alerts, misc, printers, nfc):
+    for module in (floors, vlans, devices, ports, connections, alerts, misc, printers, nfc, runbooks, audit):
         api.include_router(module.router)
 
     app.include_router(public)

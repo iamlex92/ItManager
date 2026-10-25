@@ -92,6 +92,33 @@ Uplink ports also need `"confirm_uplink": true`.
 
 Every write attempt, including blocked ones, is recorded in `script_audit_logs`.
 
+## Runbooks and audit
+
+Runbooks run against a built-in emulated environment (AD accounts, NTFS shares,
+databases, VMs, services). Nothing reaches a real directory or server yet;
+`/health` reports `"runbook_mode": "emulator"`.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/runbooks` | catalog: `id`, `category`, `title`, `description`, `critical`, `params[]` (`name`, `label`, `kind` `text`/`choice`, `required`, `choices[]`, `placeholder`) |
+| POST | `/runbooks/{id}/run` | body `{"params": {...}, "confirm": true, "auth_method": "biometric", "operator": "Pixel 10a"}` |
+| GET | `/audit?kind=all\|runbook\|switch&limit=100&offset=0` | runbook runs and switch write attempts, newest first |
+
+Run response: `audit_id`, `runbook_id`, `exit_code`, `stdout`, `stderr`, `secret`,
+`started_at`, `duration_ms`, `simulated`. `secret` carries a temporary password
+(password reset only): it is returned once and never written to the audit log.
+
+| Status | `detail.code` | Meaning |
+|---|---|---|
+| 400 | `confirmation_required` | critical runbook without `"confirm": true` (the app confirms with biometrics first) |
+| 404 | `not_found` | unknown runbook |
+| 422 | `invalid_params` | missing, unknown or out-of-list argument; `message` is in Russian for the app |
+
+A failing run (unknown account, existing snapshot name) is still `200` with a
+non-zero `exit_code` and `stderr`. Every run is audited with initiator
+(`operator · client IP`), time, arguments, auth method, exit code, stdout,
+stderr and duration.
+
 ## WebSocket `/api/v1/ws?token=...`
 
 Client sends:
