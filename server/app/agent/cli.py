@@ -171,7 +171,10 @@ def cmd_info(args: argparse.Namespace) -> None:
         addrs = _addresses()
         for a in addrs or ["<IP этого компьютера>"]:
             print(f"  Адрес сервера: {a}:{port}")
-        print(f"  API-токен:     {os.environ.get('API_TOKEN', '')}\n")
+        if args.no_token:
+            print("  API-токен:     покажет sudo netadmin-agent info\n")
+        else:
+            print(f"  API-токен:     {os.environ.get('API_TOKEN', '')}\n")
         print(f"Настройки: {args.config}")
         print(
             f"Проверка: http://{(addrs or ['127.0.0.1'])[0]}:{port}/api/v1/health должен открываться с телефона.\n"
@@ -245,6 +248,7 @@ def build_parser() -> argparse.ArgumentParser:
     r.set_defaults(func=cmd_restore)
     i = with_config(sub.add_parser("info", help="address and API token for the app"))
     i.add_argument("--pause", action="store_true", help=argparse.SUPPRESS)
+    i.add_argument("--no-token", action="store_true", help="do not print the API token")
     i.set_defaults(func=cmd_info)
     c = sub.add_parser("init-config", help="create the settings file with fresh keys (never overwrites)")
     c.add_argument("path")

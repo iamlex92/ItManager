@@ -75,7 +75,7 @@ jobs:
           grep -q '"hal_mode":"emulator"' health.json
           grep -q '"secrets_encrypted":true' health.json
           sudo grep -q '^ALLOW_DEVICE_WRITES=false' /etc/netadmin/netadmin.env
-          test "$(stat -c '%a %U:%G' /etc/netadmin/netadmin.env)" = "640 root:netadmin"
+          test "$(sudo stat -c '%a %U:%G' /etc/netadmin/netadmin.env)" = "640 root:netadmin"
           token=$(sudo sed -n 's/^API_TOKEN=//p' /etc/netadmin/netadmin.env)
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/api/v1/devices)" = 401
           curl -sf -H "Authorization: Bearer $token" http://127.0.0.1:8000/api/v1/devices

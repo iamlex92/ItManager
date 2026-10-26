@@ -46,6 +46,7 @@ if [ "$1" = "configure" ]; then
         systemctl restart netadmin.service
     fi
     echo
-    /opt/netadmin/netadmin-agent info --config "$CONF" || true
+    # The key is not printed here: apt keeps installer output in /var/log/apt/term.log.
+    /opt/netadmin/netadmin-agent info --config "$CONF" --no-token || true
 fi
 exit 0
