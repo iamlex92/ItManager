@@ -265,6 +265,7 @@ private fun AppNavHost(
                 contentPadding = contentPadding,
                 onOpenSwitch = { navController.navigate(SwitchRoute(it)) },
                 onOpenSettings = openSettings,
+                onOpenScanner = openScanner,
             )
         }
         composable<DevicesRoute> {
