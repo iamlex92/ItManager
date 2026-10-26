@@ -16,6 +16,7 @@ from . import __version__, crypto
 from .api import (
     alerts,
     audit,
+    cliimport,
     connections,
     credentials,
     devices,
@@ -223,6 +224,7 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
         floors,
         vlans,
         devices,
+        cliimport,
         ports,
         connections,
         alerts,
