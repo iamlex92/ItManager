@@ -43,10 +43,12 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Nfc
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -83,6 +85,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -109,6 +112,7 @@ fun MapScreen(
     contentPadding: PaddingValues,
     onOpenSwitch: (String) -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenScanner: () -> Unit,
     viewModel: MapViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -134,7 +138,10 @@ fun MapScreen(
         when (val c = state.content) {
             UiState.Loading -> LoadingView()
             is UiState.Error -> ErrorView(c.message, viewModel::retry, onOpenSettings, contentPadding = contentPadding)
-            is UiState.Content -> {
+            // A fresh server has no devices yet: say what to do instead of showing an empty grid.
+            is UiState.Content -> if (c.data.map.devices.isEmpty()) {
+                EmptyMapView(onOpenScanner, onOpenSettings, contentPadding)
+            } else {
                 val bottomPx = with(density) { (contentPadding.calculateBottomPadding() + 16.dp).toPx() }
                 val sidePx = with(density) { 16.dp.toPx() }
                 FloorPlanView(
@@ -528,6 +535,39 @@ private fun DeviceCard(
                 Spacer(Modifier.width(8.dp))
                 Text("Привязать NFC-метку")
             }
+        }
+    }
+}
+
+@Composable
+private fun EmptyMapView(onOpenScanner: () -> Unit, onOpenSettings: () -> Unit, contentPadding: PaddingValues) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .padding(contentPadding)
+            .padding(32.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                Icons.Outlined.TravelExplore,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(40.dp),
+            )
+            Spacer(Modifier.height(16.dp))
+            Text("На сервере пока нет устройств", style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Найдите коммутаторы и принтеры сканером сети: он только читает (ping и SNMP GET) и ничего не меняет. " +
+                    "Посмотреть, как всё выглядит, можно на демо-данных в настройках.",
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(20.dp))
+            Button(onClick = onOpenScanner) { Text("Сканер сети") }
+            TextButton(onClick = onOpenSettings) { Text("Настройки") }
         }
     }
 }
