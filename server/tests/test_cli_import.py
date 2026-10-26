@@ -55,7 +55,7 @@ def test_vlan_brief():
     )
     rows = parse_vlan_brief(text)
     assert [r.vlan_id for r in rows] == [1, 10]
-    assert rows[1].ports == ["Gi1/0/1", "Gi1/0/2", "Gi1/0/3"]
+    assert rows[1].ports == ["Gi1/0/1", "Gi1/0/2", "gi1/0/3"]
 
 
 def _vlans(client) -> set[int]:
@@ -80,9 +80,9 @@ def test_preview_changes_nothing_and_apply_updates_inventory(client):
     out = r.json()
     assert out["applied"] is True and out["changed_ports"] >= 1
     after = {p["name"]: p for p in ports_of(client, sw["id"])}
-    shut = next(c for c in out["ports"] if c["port"] == "Gi1/0/3")
+    shut = next(c for c in out["ports"] if c["port"] == "gi1/0/3")
     assert shut["changes"]["is_admin_up"][1] is False
-    assert after["Gi1/0/3"]["is_admin_up"] is False
+    assert after["gi1/0/3"]["is_admin_up"] is False
     assert any("config_import" in str(a) for a in audit_rows())
     # Applying the same text again changes nothing.
     assert client.post(url, json={"text": text, "apply": True}).json()["changed_ports"] == 0
