@@ -75,6 +75,7 @@ import com.itmanager.app.data.model.Waypoint
 import com.itmanager.app.data.model.inserted
 import com.itmanager.app.data.model.moved
 import com.itmanager.app.ui.components.icon
+import com.itmanager.app.ui.components.tint
 import com.itmanager.app.ui.theme.Accent
 import com.itmanager.app.ui.theme.Ink400
 import com.itmanager.app.ui.theme.Ink600
@@ -212,6 +213,8 @@ fun FloorPlanView(
         val showLabels by remember(camera) { derivedStateOf { camera.scale >= camera.fitScale * 1.8f } }
         content.map.devices.forEach { device ->
             if (layer == MapLayer.L3 && device.type in PASSIVE) return@forEach
+            // A virtual machine has no cables: the physical layer leaves it out, except in the editor.
+            if (layer == MapLayer.L1 && device.type == DeviceType.VIRTUAL && editor == null) return@forEach
             val dimmed = vlanFilter != null && device.vlanId != vlanFilter
             val selected = if (editor != null) device.id == editor.linkFrom || device.id == drag?.first else device.id == selectedId
             key(device.id) {
@@ -794,7 +797,7 @@ private fun DeviceMarker(
             Icon(
                 device.type.icon,
                 contentDescription = device.name,
-                tint = if (selected) Color.White else MaterialTheme.colorScheme.onSurface,
+                tint = if (selected) Color.White else device.type.tint,
                 modifier = Modifier.size(if (passive) 13.dp else 18.dp),
             )
             if (!passive) {

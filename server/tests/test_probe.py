@@ -262,6 +262,13 @@ def host(*ports, **kw) -> HostInfo:
         (host(135, 445, netbios="SRV-FILES"), None, "SERVER"),
         (host(443, 902), None, "SERVER"),
         (host(22, ssh="SSH-2.0-OpenSSH_9.2p1 Debian"), None, "SERVER"),
+        (host(80, 443), "APC", "UPS"),
+        (host(80, http_title="PowerChute Network Shutdown"), None, "UPS"),
+        (host(80, 5060), "YEALINK", "PHONE"),
+        (host(443, http_title="FortiGate"), None, "FIREWALL"),
+        (host(80, http_title="Keenetic Giga"), None, "ROUTER"),
+        (host(22, 135, 445, 3389, mac="00:50:56:aa:bb:cc"), "VMWARE", "VIRTUAL"),
+        (host(135, 445, mac="00-15-5D-01-02-03"), "MICROSOFT", "VIRTUAL"),
         # An HP laptop is not a printer.
         (host(135, 445), "HP", "WORKSTATION"),
     ],

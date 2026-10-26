@@ -42,6 +42,7 @@
       <div class="toolbar">
         <select id="floor-select" title="Этаж"></select>
         <button id="floors-edit" title="Добавить, переименовать, упорядочить этажи">Этажи…</button>
+        <label class="check" title="Виртуальные машины не существуют физически и не имеют кабелей"><input id="show-vms" type="checkbox"> ВМ</label>
         <div class="seg" id="tools">
           <button data-tool="move" class="active" title="Перетаскивайте объекты; щелчок открывает карточку">Объекты</button>
           <button data-tool="link" title="Щёлкните два устройства, чтобы соединить их кабелем">Связи</button>
@@ -80,18 +81,27 @@
           <button id="route-delete" class="danger">Удалить кабель</button>
         </div>
         <div id="map-hint" class="map-hint"></div>
+        <div id="legend" class="legend" hidden></div>
+        <button id="legend-toggle" class="legend-toggle" title="Что значат значки">Легенда</button>
       </div>
     </section>
 
     <section id="tab-devices" class="tab" hidden>
       <div class="toolbar">
         <input id="device-filter" type="search" placeholder="Имя, IP, тип, модель">
+        <select id="type-filter" title="Показать только одну категорию"></select>
         <div class="spacer"></div>
         <button id="device-new" class="primary">+ Добавить устройство</button>
       </div>
+      <div id="bulk-bar" class="bulk-bar" hidden>
+        <strong id="bulk-count"></strong>
+        <button id="bulk-edit" class="primary">Изменить…</button>
+        <button id="bulk-delete" class="danger">Удалить</button>
+        <button id="bulk-clear">Снять выбор</button>
+      </div>
       <div class="table-wrap">
         <table class="grid">
-          <thead><tr><th>Имя</th><th>Тип</th><th>IP</th><th>Производитель</th><th>Модель</th><th>На карте</th><th></th></tr></thead>
+          <thead><tr><th class="pick"><input type="checkbox" id="pick-all" title="Выбрать все показанные"></th><th>Имя</th><th>Тип</th><th>IP</th><th>Производитель</th><th>Модель</th><th>Хост</th><th>На карте</th><th></th></tr></thead>
           <tbody id="device-rows"></tbody>
         </table>
       </div>
@@ -175,6 +185,7 @@
       <label class="grow">Производитель<input id="device-vendor" maxlength="50"></label>
       <label class="grow">Модель<input id="device-model" maxlength="100"></label>
     </div>
+    <label id="device-host-label" hidden>Хост виртуализации<select id="device-host"></select></label>
     <label id="device-floor-label">Этаж<select id="device-floor"></select></label>
     <p id="device-error" class="error" hidden></p>
     <div class="row">
@@ -182,6 +193,23 @@
       <div class="spacer"></div>
       <button type="button" id="device-cancel">Отмена</button>
       <button type="submit" class="primary">Сохранить</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="bulk-dialog">
+  <form id="bulk-form" method="dialog" class="dialog">
+    <h2 id="bulk-heading">Изменить устройства</h2>
+    <p class="muted small">Отмеченное поменяется у всех выбранных, остальное останется как есть. Оборудование не затрагивается.</p>
+    <label>Категория<select id="bulk-type"></select></label>
+    <label id="bulk-host-label" hidden>Хост виртуализации<select id="bulk-host"></select></label>
+    <label id="bulk-floor-label">Этаж<select id="bulk-floor"></select></label>
+    <label>Производитель<input id="bulk-vendor" maxlength="50" placeholder="Пусто: не менять"></label>
+    <p id="bulk-error" class="error" hidden></p>
+    <div class="row">
+      <div class="spacer"></div>
+      <button type="button" id="bulk-cancel">Отмена</button>
+      <button type="submit" class="primary">Применить</button>
     </div>
   </form>
 </dialog>

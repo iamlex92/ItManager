@@ -186,3 +186,47 @@ def test_floors_are_named_ordered_and_kept_while_in_use(client):
     busy = client.delete(f"/api/v1/floors/{first['id']}")
     assert busy.status_code == 409 and busy.json()["detail"]["code"] == "floor_not_empty"
     assert client.delete(f"/api/v1/floors/{basement['id']}").status_code == 204
+
+
+def test_group_edit_and_delete_of_devices(client):
+    floor = new_floor(client)
+    made = [
+        client.post("/api/v1/devices", json={"name": f"HOST-{i}", "type": "UNKNOWN", "x": 10 * i, "y": 5}).json()
+        for i in range(3)
+    ]
+    ids = [d["id"] for d in made]
+    r = client.post(
+        "/api/v1/devices/bulk", json={"ids": ids[:2], "set": {"type": "UPS", "floor_id": floor["id"], "vendor": "APC"}}
+    )
+    assert r.status_code == 200 and r.json() == {"changed": 2, "missing": 0}, r.text
+    after = {d["id"]: d for d in client.get("/api/v1/devices").json()}
+    assert [after[i]["type"] for i in ids] == ["UPS", "UPS", "UNKNOWN"]
+    assert after[ids[0]]["floor_id"] == floor["id"] and after[ids[0]]["vendor"] == "APC"
+    # Position and name stay as they were.
+    assert after[ids[1]]["name"] == "HOST-1" and after[ids[1]]["x"] == 10
+
+    assert client.post("/api/v1/devices/bulk", json={"ids": ids, "set": {}}).status_code == 422
+    assert client.post("/api/v1/devices/bulk", json={"ids": ids, "set": {"type": "TOASTER"}}).status_code == 422
+    gone = "00000000-0000-0000-0000-000000000000"
+    assert client.post("/api/v1/devices/bulk", json={"ids": ids, "set": {"floor_id": gone}}).status_code == 404
+
+    r = client.post("/api/v1/devices/bulk-delete", json={"ids": [*ids[:2], gone]})
+    assert r.json() == {"changed": 2, "missing": 1}
+    left = {d["id"] for d in client.get("/api/v1/devices").json()}
+    assert ids[2] in left and not left & set(ids[:2])
+
+
+def test_virtual_machine_is_bound_to_its_host(client):
+    host = client.post("/api/v1/devices", json={"name": "ESXI-01", "type": "SERVER", "x": 1, "y": 1}).json()
+    vm = client.post(
+        "/api/v1/devices", json={"name": "VM-1C", "type": "VIRTUAL", "host_id": host["id"], "x": 2, "y": 2}
+    ).json()
+    assert vm["type"] == "VIRTUAL" and vm["host_id"] == host["id"]
+    assert client.patch(f"/api/v1/devices/{vm['id']}", json={"host_id": vm["id"]}).status_code == 422
+    gone = "00000000-0000-0000-0000-000000000000"
+    assert client.patch(f"/api/v1/devices/{vm['id']}", json={"host_id": gone}).status_code == 404
+    r = client.post("/api/v1/devices/bulk", json={"ids": [vm["id"]], "set": {"host_id": host["id"]}})
+    assert r.status_code == 200
+    # Removing the host leaves the machine without one.
+    client.delete(f"/api/v1/devices/{host['id']}")
+    assert client.get(f"/api/v1/devices/{vm['id']}").json()["host_id"] is None

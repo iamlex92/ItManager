@@ -4,14 +4,17 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
-from sqlalchemy import String, cast, or_, select
+from sqlalchemy import String, cast, delete, or_, select
 from sqlalchemy.exc import IntegrityError
 
-from ..models import Device, DeviceConfig
+from ..models import Device, DeviceConfig, Floor
 from ..schemas import (
+    BulkOut,
     CommandsOut,
     ConfigDiffOut,
     Confirmation,
+    DeviceBulkDelete,
+    DeviceBulkUpdate,
     DeviceConfigMeta,
     DeviceConfigOut,
     DeviceCreate,
@@ -57,6 +60,16 @@ async def _commit_device(session, device: Device) -> None:
         raise conflict("integrity_error", "NFC tag already bound to another device or bad floor_id") from e
 
 
+async def _check_host(session, host_id: uuid.UUID | None, own: set[uuid.UUID]) -> None:
+    """A virtual machine's host must be another device that exists."""
+    if host_id is None:
+        return
+    if host_id in own:
+        raise HTTPException(422, detail={"code": "bad_host", "message": "Устройство не может быть хостом самому себе"})
+    if await session.get(Device, host_id) is None:
+        raise not_found("host device")
+
+
 async def _get(session, device_id: uuid.UUID) -> Device:
     device = await session.get(Device, device_id)
     if device is None:
@@ -95,12 +108,39 @@ def _search_clause(q: str):
 
 @router.post("", response_model=DeviceOut, status_code=status.HTTP_201_CREATED)
 async def create_device(body: DeviceCreate, session: SessionDep):
+    await _check_host(session, body.host_id, set())
     device = Device()
     _apply(device, body.model_dump())
     session.add(device)
     await _commit_device(session, device)
     await session.refresh(device)
     return device_out(device, await load_graph(session))
+
+
+@router.post("/bulk", response_model=BulkOut)
+async def bulk_update(body: DeviceBulkUpdate, session: SessionDep):
+    """One change on many devices at once: type, floor, vendor, model or active flag. Inventory only."""
+    data = body.set.model_dump(exclude_unset=True)
+    if not data:
+        raise HTTPException(422, detail={"code": "nothing_to_change", "message": "Не выбрано, что менять"})
+    if data.get("floor_id") and await session.get(Floor, data["floor_id"]) is None:
+        raise not_found("floor")
+    ids = set(body.ids)
+    await _check_host(session, data.get("host_id"), ids)
+    devices = (await session.scalars(select(Device).where(Device.id.in_(ids)))).all()
+    for device in devices:
+        _apply(device, data)
+    await session.commit()
+    return BulkOut(changed=len(devices), missing=len(ids) - len(devices))
+
+
+@router.post("/bulk-delete", response_model=BulkOut)
+async def bulk_delete(body: DeviceBulkDelete, session: SessionDep):
+    """Removes many devices from the inventory, with their ports and cables. Inventory only."""
+    ids = set(body.ids)
+    result = await session.execute(delete(Device).where(Device.id.in_(ids)))
+    await session.commit()
+    return BulkOut(changed=result.rowcount, missing=len(ids) - result.rowcount)
 
 
 @router.get("/by-nfc/{uid}", response_model=DeviceOut)
@@ -124,6 +164,7 @@ async def get_device(device_id: uuid.UUID, session: SessionDep):
 @router.patch("/{device_id}", response_model=DeviceOut)
 async def update_device(device_id: uuid.UUID, body: DeviceUpdate, session: SessionDep):
     device = await _get(session, device_id)
+    await _check_host(session, body.host_id, {device_id})
     _apply(device, body.model_dump(exclude_unset=True))
     await _commit_device(session, device)
     await session.refresh(device)

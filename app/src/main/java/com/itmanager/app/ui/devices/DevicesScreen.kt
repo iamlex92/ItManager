@@ -2,6 +2,21 @@ package com.itmanager.app.ui.devices
 
 import android.content.Intent
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.SelectAll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import com.itmanager.app.ui.components.tint
 import androidx.compose.material.icons.outlined.IosShare
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.TableChart
@@ -14,7 +29,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.itmanager.app.data.export.ExportFormat
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -98,23 +112,64 @@ fun DevicesScreen(
             )
         }
     }
+    LaunchedEffect(viewModel) {
+        viewModel.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
+    }
     val showOnMap = { id: String ->
         viewModel.showOnMap(id)
         onShowOnMap()
     }
+    val selecting = state.selected.isNotEmpty()
+    val bulk by viewModel.bulk.collectAsStateWithLifecycle()
+    var confirmDelete by remember { mutableStateOf(false) }
+    BackHandler(enabled = selecting) { viewModel.clearSelection() }
+
+    bulk?.let { b ->
+        BulkEditDialog(
+            count = state.selected.size,
+            state = b,
+            onApply = viewModel::applyBulk,
+            onDismiss = viewModel::closeBulkEdit,
+        )
+    }
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Удалить устройств: ${state.selected.size}?") },
+            text = { Text("Они пропадут из инвентаря и с карты вместе со своими портами и кабелями. Само оборудование это не затрагивает.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDelete = false
+                    viewModel.deleteSelected()
+                }) { Text("Удалить", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Отмена") } },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        )
+    }
 
     Column(Modifier.fillMaxSize()) {
-        TabTopBar(
-            title = "Устройства",
-            subtitle = if (state.offlineCount > 0) "Не отвечают: ${state.offlineCount}" else null,
-            onOpenSettings = onOpenSettings,
-            actions = {
-                IconButton(onClick = onOpenScanner) {
-                    Icon(Icons.Outlined.TravelExplore, contentDescription = "Сканер сети")
-                }
-                ExportButton(exporting, onExport = viewModel::export)
-            },
-        )
+        if (selecting) {
+            SelectionBar(
+                count = state.selected.size,
+                onClose = viewModel::clearSelection,
+                onSelectAll = viewModel::selectAllVisible,
+                onEdit = viewModel::openBulkEdit,
+                onDelete = { confirmDelete = true },
+            )
+        } else {
+            TabTopBar(
+                title = "Устройства",
+                subtitle = if (state.offlineCount > 0) "Не отвечают: ${state.offlineCount}" else "Долгое нажатие: выбрать несколько",
+                onOpenSettings = onOpenSettings,
+                actions = {
+                    IconButton(onClick = onOpenScanner) {
+                        Icon(Icons.Outlined.TravelExplore, contentDescription = "Сканер сети")
+                    }
+                    ExportButton(exporting, onExport = viewModel::export)
+                },
+            )
+        }
         SearchField(state.query, viewModel::setQuery, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -145,9 +200,16 @@ fun DevicesScreen(
                 items(devices.data, key = { it.id }) { device ->
                     DeviceRow(
                         device = device,
+                        selecting = selecting,
+                        checked = device.id in state.selected,
                         onClick = {
-                            if (device.type == DeviceType.SWITCH) onOpenSwitch(device.id) else showOnMap(device.id)
+                            when {
+                                selecting -> viewModel.toggle(device.id)
+                                device.type == DeviceType.SWITCH -> onOpenSwitch(device.id)
+                                else -> showOnMap(device.id)
+                            }
                         },
+                        onLongClick = { viewModel.toggle(device.id) },
                         onShowOnMap = { showOnMap(device.id) },
                         modifier = Modifier.animateItem(),
                     )
@@ -211,31 +273,73 @@ private fun SearchField(value: String, onValueChange: (String) -> Unit, modifier
     )
 }
 
+/** Selection mode header: how many are picked and what can be done with them. */
+@Composable
+private fun SelectionBar(count: Int, onClose: () -> Unit, onSelectAll: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .padding(horizontal = 4.dp, vertical = 8.dp),
+    ) {
+        IconButton(onClick = onClose) { Icon(Icons.Outlined.Close, contentDescription = "Закончить выбор") }
+        Text("Выбрано: $count", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+        IconButton(onClick = onSelectAll) { Icon(Icons.Outlined.SelectAll, contentDescription = "Выбрать все показанные") }
+        IconButton(onClick = onEdit) { Icon(Icons.Outlined.Edit, contentDescription = "Изменить выбранные") }
+        IconButton(onClick = onDelete) {
+            Icon(Icons.Outlined.DeleteOutline, contentDescription = "Удалить выбранные", tint = MaterialTheme.colorScheme.error)
+        }
+    }
+}
+
 @Composable
 private fun DeviceRow(
     device: Device,
+    selecting: Boolean,
+    checked: Boolean,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
     onShowOnMap: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val passive = device.type == DeviceType.SOCKET || device.type == DeviceType.PATCH_PANEL
+    val haptics = LocalHapticFeedback.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
             .pressScale(interaction, pressedScale = 0.98f)
-            .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(16.dp))
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .background(
+                if (checked) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+                RoundedCornerShape(16.dp),
+            )
+            .combinedClickable(
+                interactionSource = interaction,
+                indication = null,
+                onLongClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onLongClick()
+                },
+                onClick = onClick,
+            )
             .padding(start = 14.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
     ) {
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .size(40.dp)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape),
+                .background(
+                    if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    CircleShape,
+                ),
         ) {
-            Icon(device.type.icon, contentDescription = null, modifier = Modifier.size(20.dp))
+            if (checked) {
+                Icon(Icons.Outlined.Check, contentDescription = "Выбрано", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp))
+            } else {
+                Icon(device.type.icon, contentDescription = device.type.label, tint = device.type.tint, modifier = Modifier.size(20.dp))
+            }
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
@@ -257,10 +361,12 @@ private fun DeviceRow(
                 Text(it, style = MonoStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        IconButton(onClick = onShowOnMap) {
-            Icon(Icons.Outlined.Place, contentDescription = "Показать на карте")
+        if (!selecting) {
+            IconButton(onClick = onShowOnMap) {
+                Icon(Icons.Outlined.Place, contentDescription = "Показать на карте")
+            }
         }
-        if (device.type == DeviceType.SWITCH) {
+        if (device.type == DeviceType.SWITCH && !selecting) {
             Icon(
                 Icons.AutoMirrored.Outlined.KeyboardArrowRight,
                 contentDescription = null,

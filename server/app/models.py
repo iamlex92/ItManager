@@ -93,6 +93,8 @@ class Device(Base):
     mac_address: Mapped[str | None] = mapped_column(MACADDR)
     nfc_tag_uid: Mapped[str | None] = mapped_column(String(50), unique=True)
     ssh_credential_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("credentials.id", ondelete="SET NULL"))
+    # For a virtual machine: the server it runs on. Not a cable, so it never shows on L1.
+    host_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("devices.id", ondelete="SET NULL"))
     # Encrypted at rest when SECRET_KEY is set. The Python-side default goes through the
     # encryption; the server default only covers rows inserted outside the app.
     snmp_community: Mapped[str | None] = mapped_column(EncryptedText, default="public", server_default=text("'public'"))

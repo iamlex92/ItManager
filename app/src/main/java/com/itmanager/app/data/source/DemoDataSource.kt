@@ -17,6 +17,7 @@ import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Consumable
 import com.itmanager.app.data.model.ConsumableKind
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.DeviceBulkChange
 import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.DeviceHistoryEntry
 import com.itmanager.app.data.model.Drawing
@@ -126,6 +127,9 @@ object DemoDataSource : DcimDataSource {
     @Volatile private var devices = listOf(
         d("sw-core-01", "SW-CORE-01", DeviceType.SWITCH, "Cisco", "C9300-24P", "10.99.0.1", 120f, 110f, vlan = 99),
         d("srv-01", "SRV-01", DeviceType.SERVER, "HPE", "ProLiant DL380 Gen11", "10.50.0.10", 140f, 230f, vlan = 50),
+        // Virtual machines on SRV-01: on L2 and L3 next to their host, never on L1.
+        d("vm-1c", "VM-1C", DeviceType.VIRTUAL, "VMware", "1С:Предприятие", "10.50.0.21", 90f, 300f, vlan = 50, host = "srv-01"),
+        d("vm-dc", "VM-DC-01", DeviceType.VIRTUAL, "VMware", "Контроллер домена", "10.50.0.22", 190f, 300f, vlan = 50, host = "srv-01"),
         d("pp-01", "PP-01", DeviceType.PATCH_PANEL, null, "Патч-панель 24 порта", null, 270f, 110f),
         d("sw-acc-02", "SW-ACC-02", DeviceType.SWITCH, "Eltex", "MES2324P", "10.99.0.2", 640f, 90f, vlan = 99),
         d("pp-02", "PP-02", DeviceType.PATCH_PANEL, null, "Патч-панель 24 порта", null, 640f, 180f),
@@ -469,6 +473,7 @@ object DemoDataSource : DcimDataSource {
                 model = draft.model, ip = draft.ip, mac = null, floorId = floorOrFirst(floorId), x = x, y = y,
                 isOnline = draft.type == DeviceType.SOCKET || draft.type == DeviceType.PATCH_PANEL,
                 vlanId = draft.ip?.let { ip -> vlans.firstOrNull { ScanRanges.contains(it.subnet, ip) }?.id },
+                hostId = draft.hostId,
             )
             setDevices(devices + device)
             device
@@ -482,6 +487,7 @@ object DemoDataSource : DcimDataSource {
             checkName(draft.name, id)
             val updated = current.copy(
                 name = draft.name.trim(), type = draft.type, ip = draft.ip, vendor = draft.vendor, model = draft.model,
+                hostId = draft.hostId,
             )
             setDevices(devices.map { if (it.id == id) updated else it })
             updated
@@ -501,6 +507,36 @@ object DemoDataSource : DcimDataSource {
             if (id !in byId) notFound("Устройство")
             setDevices(devices.filter { it.id != id })
             connections = connections.filter { it.deviceAId != id && it.deviceBId != id }
+        }
+    }
+
+    override suspend fun bulkUpdateDevices(ids: List<String>, change: DeviceBulkChange): Int {
+        simulateNetwork()
+        return inventoryLock.withLock {
+            val chosen = ids.toSet()
+            if (change.hostId != null && change.hostId in chosen) throw UserFacingException("Устройство не может быть хостом самому себе.")
+            setDevices(
+                devices.map { d ->
+                    if (d.id !in chosen) d else d.copy(
+                        type = change.type ?: d.type,
+                        floorId = change.floorId?.let(::floorOrFirst) ?: d.floorId,
+                        vendor = change.vendor ?: d.vendor,
+                        hostId = change.hostId ?: d.hostId,
+                    )
+                },
+            )
+            devices.count { it.id in chosen }
+        }
+    }
+
+    override suspend fun bulkDeleteDevices(ids: List<String>): Int {
+        simulateNetwork()
+        return inventoryLock.withLock {
+            val chosen = ids.toSet()
+            val count = devices.count { it.id in chosen }
+            setDevices(devices.filter { it.id !in chosen }.map { if (it.hostId in chosen) it.copy(hostId = null) else it })
+            connections = connections.filter { it.deviceAId !in chosen && it.deviceBId !in chosen }
+            count
         }
     }
 
@@ -994,12 +1030,13 @@ object DemoDataSource : DcimDataSource {
 
     private fun d(
         id: String, name: String, type: DeviceType, vendor: String?, model: String?, ip: String?,
-        x: Float, y: Float, vlan: Int? = null, online: Boolean = true, floor: String = FLOOR_ID,
+        x: Float, y: Float, vlan: Int? = null, online: Boolean = true, floor: String = FLOOR_ID, host: String? = null,
     ) = Device(
         id = id, name = name, type = type, vendor = vendor, model = model, ip = ip,
         mac = ip?.let { fakeMac(id) }, floorId = floor, x = x, y = y,
         isOnline = online || type == DeviceType.SOCKET || type == DeviceType.PATCH_PANEL,
         vlanId = vlan,
+        hostId = host,
     )
 
     private fun c(a: String, b: String, cable: String = "Cat5e", label: String? = null, route: List<Waypoint> = emptyList()) =

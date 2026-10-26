@@ -13,6 +13,12 @@ enum class DeviceType(val label: String) {
     PATCH_PANEL("Патч-панель"),
     CAMERA("Камера"),
     ACCESS_POINT("Точка доступа"),
+    ROUTER("Маршрутизатор"),
+    FIREWALL("Межсетевой экран"),
+    UPS("ИБП"),
+    PHONE("IP-телефон"),
+    /** A virtual machine or other virtual device: it has no cables and is not drawn on L1. */
+    VIRTUAL("Виртуальная машина"),
     UNKNOWN("Устройство");
 
     companion object {
@@ -34,6 +40,8 @@ data class Device(
     val y: Float,
     val isOnline: Boolean,
     val vlanId: Int?,
+    /** For a virtual machine: the server it runs on. */
+    val hostId: String? = null,
 ) {
     fun matches(query: String): Boolean {
         val q = query.trim()
@@ -192,7 +200,18 @@ data class DeviceDraft(
     val ip: String?,
     val vendor: String?,
     val model: String?,
+    val hostId: String? = null,
 )
+
+/** One change applied to many devices at once; a null field stays as it is on each. */
+data class DeviceBulkChange(
+    val type: DeviceType? = null,
+    val floorId: String? = null,
+    val vendor: String? = null,
+    val hostId: String? = null,
+) {
+    val isEmpty get() = type == null && floorId == null && vendor == null && hostId == null
+}
 
 enum class MapLayer(val short: String, val title: String) {
     L1("L1", "Кабели"),

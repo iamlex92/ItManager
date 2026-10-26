@@ -54,6 +54,11 @@ any case and `:`/`-`/no separators are accepted and normalized.
 
 ## Inventory (database only, never touches equipment)
 
+Device types: `SWITCH`, `ROUTER`, `FIREWALL`, `ACCESS_POINT`, `SERVER`, `VIRTUAL`, `WORKSTATION`, `PRINTER`, `CAMERA`, `PHONE`,
+`UPS`, `PATCH_PANEL`, `SOCKET`, `UNKNOWN`. `VIRTUAL` is a virtual machine or other virtual device: it has no cables,
+so apps leave it off the physical layer (L1); `host_id` names the server it runs on (deleting the host clears it).
+The scanner proposes `VIRTUAL` from hypervisor MAC prefixes (VMware, Hyper-V, KVM/QEMU, VirtualBox, Xen, Proxmox).
+
 `POST/PATCH/DELETE` on `/api/v1/floors`, `/api/v1/vlans`, `/api/v1/devices`, `/api/v1/connections`;
 `POST /api/v1/ports`, `DELETE /api/v1/ports/{id}`; `POST /api/v1/alerts`, `POST /api/v1/alerts/{id}/resolve`.
 
@@ -68,6 +73,8 @@ Map editor (the app's "Редактор карты"), also inventory only:
 | POST/PATCH | `/api/v1/floors` | `name` (optional, "" clears it) names a floor; otherwise apps show "Этаж N". `floor_number` sets the order, bottom to top, which is also the order `GET /floors` returns. |
 | DELETE | `/api/v1/floors/{id}` | Only an empty floor: with devices on it the answer is 409 `floor_not_empty`. |
 | PATCH | `/api/v1/connections/{id}` | `waypoints`: the cable's bends from end A to end B, `[{x, y, floor_id?}]`, up to 200. A bend without `floor_id` lies on end A's floor; a cable between floors lists its bends on each floor and the apps draw a riser where it leaves one. `[]` makes it straight again. |
+| POST | `/api/v1/devices/bulk` | `{ids: [...], set: {type?, floor_id?, vendor?, model?, is_active?, host_id?}}`: one change on up to 1000 devices; fields left out stay. `{changed, missing}`; 422 `nothing_to_change`, 404 for an unknown floor or host. |
+| POST | `/api/v1/devices/bulk-delete` | `{ids: [...]}`: removes devices with their ports and cables. `{changed, missing}` |
 | POST | `/api/v1/connections/link` | `{device_a_id, device_b_id, cable_type}`: a cable between two devices; the server picks a free port on each or adds one (`same_device`, `already_linked`, `no_free_port`). |
 
 ## Talking to switches

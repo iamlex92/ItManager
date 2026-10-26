@@ -60,9 +60,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.itmanager.app.data.model.Connection
+import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.model.FloorInfo
+import com.itmanager.app.ui.components.DEVICE_TYPES_IN_ORDER
 import com.itmanager.app.ui.components.icon
 
 private val EditTool.icon: ImageVector
@@ -214,10 +216,7 @@ fun MapEditToolbar(
 private const val ROUTE_HINT =
     "Тяните белые точки, чтобы вести кабель по трассе; «+» добавляет точку поворота. Коснитесь точки, чтобы выбрать её для удаления."
 
-private val FORM_TYPES = listOf(
-    DeviceType.SWITCH, DeviceType.ACCESS_POINT, DeviceType.CAMERA, DeviceType.PRINTER, DeviceType.WORKSTATION,
-    DeviceType.SERVER, DeviceType.PATCH_PANEL, DeviceType.SOCKET, DeviceType.UNKNOWN,
-)
+private val FORM_TYPES = DEVICE_TYPES_IN_ORDER
 
 private val IPV4 = Regex("""^((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$""")
 
@@ -232,6 +231,8 @@ fun DeviceFormDialog(
     onSave: (DeviceDraft) -> Unit,
     onDelete: (String) -> Unit,
     onDismiss: () -> Unit,
+    /** Servers a virtual machine can run on. */
+    hosts: List<Device> = emptyList(),
 ) {
     val device = form.device
     val key = device?.id ?: "new"
@@ -240,6 +241,7 @@ fun DeviceFormDialog(
     var ip by rememberSaveable(key) { mutableStateOf(device?.ip.orEmpty()) }
     var vendor by rememberSaveable(key) { mutableStateOf(device?.vendor.orEmpty()) }
     var model by rememberSaveable(key) { mutableStateOf(device?.model.orEmpty()) }
+    var hostId by rememberSaveable(key) { mutableStateOf(device?.hostId) }
     var confirmDelete by rememberSaveable(key) { mutableStateOf(false) }
     val ipError = ip.isNotBlank() && !IPV4.matches(ip.trim())
 
@@ -307,6 +309,16 @@ fun DeviceFormDialog(
                         modifier = Modifier.weight(1f),
                     )
                 }
+                val hostChoices = hosts.filter { it.id != device?.id }
+                if (type == DeviceType.VIRTUAL && hostChoices.isNotEmpty()) {
+                    Text("Хост виртуализации", style = MaterialTheme.typography.labelLarge)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FilterChip(selected = hostId == null, onClick = { hostId = null }, label = { Text("Не указан") })
+                        hostChoices.forEach { h ->
+                            FilterChip(selected = h.id == hostId, onClick = { hostId = h.id }, label = { Text(h.name) })
+                        }
+                    }
+                }
                 if (floors.size > 1) {
                     Text("Этаж", style = MaterialTheme.typography.labelLarge)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -335,6 +347,7 @@ fun DeviceFormDialog(
                             ip = ip.trim().ifEmpty { null },
                             vendor = vendor.trim().ifEmpty { null },
                             model = model.trim().ifEmpty { null },
+                            hostId = hostId.takeIf { type == DeviceType.VIRTUAL },
                         ),
                     )
                 },

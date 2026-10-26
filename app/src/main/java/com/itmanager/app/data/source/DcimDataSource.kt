@@ -9,6 +9,7 @@ import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.DeviceBulkChange
 import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.DeviceHistoryEntry
 import com.itmanager.app.data.model.DiagnosticKind
@@ -118,6 +119,9 @@ interface DcimDataSource {
     /** Also puts a device that had no floor on [floorId]. */
     suspend fun moveDevice(id: String, floorId: String, x: Float, y: Float)
     suspend fun deleteDevice(id: String)
+    /** One change on many devices; returns how many were changed. */
+    suspend fun bulkUpdateDevices(ids: List<String>, change: DeviceBulkChange): Int
+    suspend fun bulkDeleteDevices(ids: List<String>): Int
     /** A cable between two devices; the server picks or adds free ports on each. */
     suspend fun linkDevices(deviceAId: String, deviceBId: String, cableType: String): Connection
     suspend fun deleteConnection(id: String)

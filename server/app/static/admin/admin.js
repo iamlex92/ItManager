@@ -3,12 +3,17 @@
 // so whatever is entered here is what the app shows. Inventory only: nothing here reaches equipment.
 (() => {
   const $ = (id) => document.getElementById(id);
+  // Id, label and the pictogram's colour: one hue per kind, as in the app. Green and red stay free for the online dot.
   const TYPES = [
-    ["SWITCH", "Коммутатор", "SW"], ["ACCESS_POINT", "Точка доступа", "AP"], ["CAMERA", "Камера", "CAM"],
-    ["PRINTER", "МФУ", "МФУ"], ["WORKSTATION", "Рабочее место", "PC"], ["SERVER", "Сервер", "SRV"],
-    ["PATCH_PANEL", "Патч-панель", "PP"], ["SOCKET", "Розетка", "R"], ["UNKNOWN", "Устройство", "?"],
+    ["SWITCH", "Коммутатор", "#4c9eff"], ["ROUTER", "Маршрутизатор", "#64d2ff"],
+    ["FIREWALL", "Межсетевой экран", "#ff8a80"], ["ACCESS_POINT", "Точка доступа", "#ffd60a"],
+    ["SERVER", "Сервер", "#bf8cff"], ["VIRTUAL", "Виртуальная машина", "#8e9bff"],
+    ["WORKSTATION", "Рабочее место", "#e6edf5"], ["PRINTER", "МФУ", "#5ad4b0"], ["CAMERA", "Камера", "#ff9f43"],
+    ["PHONE", "IP-телефон", "#ff7eb6"], ["UPS", "ИБП", "#d4e157"], ["PATCH_PANEL", "Патч-панель", "#aeb7c4"],
+    ["SOCKET", "Розетка", "#aeb7c4"], ["UNKNOWN", "Устройство", "#8d97a5"],
   ];
-  const TYPE = Object.fromEntries(TYPES.map(([id, label, short]) => [id, { label, short }]));
+  const TYPE = Object.fromEntries(TYPES.map(([id, label, color]) => [id, { label, color }]));
+  const typeOf = (d) => TYPE[d.type] || TYPE.UNKNOWN;
   const PASSIVE = new Set(["SOCKET", "PATCH_PANEL"]);
   const PENS = ["#FFD60A", "#FF453A", "#30D158", "#0A84FF", "#FFFFFF"];
   const MAX_PLAN = 15 * 1024 * 1024;
@@ -134,7 +139,7 @@
   // ---------------------------------------------------------------- map state
 
   const S = {
-    floor: null, floors: [], floorId: null, devices: [], remote: new Map(), links: [], image: null, imageUrl: null,
+    floor: null, floors: [], floorId: null, allHere: [], showVms: false, devices: [], remote: new Map(), links: [], image: null, imageUrl: null,
     // The cable whose route is being edited, its picked bend, and a bend being dragged.
     selLink: null, selPoint: null, routeDrag: null,
     tool: "move", pen: PENS[0], linkFrom: null, cable: "Cat6",
@@ -179,7 +184,9 @@
     const known = new Set(floors.map((f) => f.id));
     const floorOf = (d) => (d.floor_id && known.has(d.floor_id) ? d.floor_id : first && first.id);
     const all = devices.map((d) => ({ ...d, x: d.x ?? 40, y: d.y ?? 40, floor_id: floorOf(d) }));
-    S.devices = all.filter((d) => !S.floor || d.floor_id === S.floor.id);
+    // A virtual machine has no cable and is not physically there: the map leaves it out unless asked.
+    S.allHere = all.filter((d) => !S.floor || d.floor_id === S.floor.id);
+    S.devices = S.allHere.filter((d) => d.type !== "VIRTUAL" || S.showVms);
     const here = new Set(S.devices.map((d) => d.id));
     const byId = new Map(all.map((d) => [d.id, d]));
     S.links = links.filter((l) => (here.has(l.device_a_id) || here.has(l.device_b_id))
@@ -190,11 +197,28 @@
     }
     if (S.selLink && !S.links.some((l) => l.id === S.selLink)) { S.selLink = null; S.selPoint = null; }
     renderFloorSelect();
+    renderLegend();
     await loadPlanImage();
     if (!S.touched) fit();
     draw();
     hint();
   }
+
+  /** Pictograms present on this floor, with counts. */
+  function renderLegend() {
+    const box = $("legend");
+    const counts = new Map();
+    for (const d of S.allHere) counts.set(d.type, (counts.get(d.type) || 0) + 1);
+    box.replaceChildren(...TYPES.filter(([id]) => counts.has(id)).map(([id, label]) => {
+      const row = document.createElement("div");
+      row.append(glyphCanvas(id), `${label} · ${counts.get(id)}`);
+      return row;
+    }));
+    $("legend-toggle").hidden = !box.children.length;
+    if (!box.children.length) box.hidden = true;
+  }
+  $("legend-toggle").addEventListener("click", () => { $("legend").hidden = !$("legend").hidden; });
+  $("show-vms").addEventListener("change", (ev) => { S.showVms = ev.target.checked; loadMap().catch(fail); });
 
   function floorTitle(f) {
     if (!f) return "другой этаж";
@@ -211,6 +235,119 @@
     }));
     sel.hidden = S.floors.length === 0;
     if (S.floor) sel.value = S.floor.id;
+  }
+
+  // ---------------------------------------------------------------- pictograms
+
+  /** Draws the pictogram of a device type, [size] px wide, centred on (cx, cy). Same shapes on the map, list and legend. */
+  function drawGlyph(c, type, cx, cy, size, color) {
+    const r = size / 2;
+    c.save();
+    c.translate(cx, cy);
+    c.scale(r, r);
+    c.strokeStyle = color;
+    c.fillStyle = color;
+    c.lineWidth = 2.2 / r;
+    c.lineJoin = "round";
+    c.lineCap = "round";
+    const box = (x, y, w, h) => { c.beginPath(); c.rect(x, y, w, h); c.stroke(); };
+    const dot = (x, y, d) => { c.beginPath(); c.arc(x, y, d, 0, Math.PI * 2); c.fill(); };
+    const line = (...pts) => {
+      c.beginPath();
+      c.moveTo(pts[0], pts[1]);
+      for (let i = 2; i < pts.length; i += 2) c.lineTo(pts[i], pts[i + 1]);
+      c.stroke();
+    };
+    switch (type) {
+      case "SWITCH":
+        box(-0.9, -0.45, 1.8, 0.9);
+        for (const x of [-0.55, -0.18, 0.18, 0.55]) c.fillRect(x - 0.11, -0.05, 0.22, 0.25);
+        break;
+      case "ROUTER":
+        box(-0.9, 0, 1.8, 0.7);
+        line(-0.5, 0, -0.75, -0.8);
+        line(0.5, 0, 0.75, -0.8);
+        dot(-0.45, 0.35, 0.12);
+        dot(0, 0.35, 0.12);
+        break;
+      case "FIREWALL":
+        c.beginPath();
+        c.moveTo(0, -0.95); c.lineTo(0.8, -0.62); c.lineTo(0.8, 0.02);
+        c.quadraticCurveTo(0.78, 0.68, 0, 1); c.quadraticCurveTo(-0.78, 0.68, -0.8, 0.02);
+        c.lineTo(-0.8, -0.62); c.closePath(); c.stroke();
+        line(-0.8, -0.05, 0.8, -0.05);
+        line(0, -0.95, 0, 1);
+        break;
+      case "SERVER":
+        for (const y of [-0.9, -0.28, 0.34]) { box(-0.8, y, 1.6, 0.52); dot(0.45, y + 0.26, 0.1); }
+        break;
+      case "VIRTUAL":
+        c.beginPath();
+        c.arc(-0.42, 0.2, 0.42, 0, Math.PI * 2);
+        c.arc(0.1, -0.12, 0.55, 0, Math.PI * 2);
+        c.arc(0.55, 0.25, 0.38, 0, Math.PI * 2);
+        c.fill();
+        c.fillRect(-0.42, 0.2, 0.97, 0.43);
+        break;
+      case "WORKSTATION":
+        box(-0.9, -0.8, 1.8, 1.15);
+        line(0, 0.35, 0, 0.75);
+        line(-0.45, 0.8, 0.45, 0.8);
+        break;
+      case "PRINTER":
+        box(-0.9, -0.3, 1.8, 0.85);
+        box(-0.5, -0.9, 1, 0.6);
+        box(-0.5, 0.3, 1, 0.6);
+        break;
+      case "CAMERA":
+        box(-0.95, -0.5, 1.25, 1);
+        c.beginPath(); c.moveTo(0.3, -0.12); c.lineTo(0.95, -0.5); c.lineTo(0.95, 0.5); c.lineTo(0.3, 0.12); c.closePath(); c.stroke();
+        break;
+      case "ACCESS_POINT":
+        for (const rr of [0.4, 0.8, 1.2]) { c.beginPath(); c.arc(0, 0.6, rr, Math.PI * 1.25, Math.PI * 1.75); c.stroke(); }
+        dot(0, 0.6, 0.14);
+        break;
+      case "PHONE":
+        box(-0.75, -0.1, 1.5, 0.95);
+        c.beginPath(); c.rect(-0.9, -0.75, 1.8, 0.38); c.fill();
+        for (const x of [-0.35, 0, 0.35]) { dot(x, 0.18, 0.08); dot(x, 0.5, 0.08); }
+        break;
+      case "UPS":
+        box(-0.9, -0.55, 1.6, 1.1);
+        c.fillRect(0.7, -0.22, 0.2, 0.44);
+        c.beginPath(); c.moveTo(-0.05, -0.45); c.lineTo(-0.35, 0.05); c.lineTo(-0.05, 0.05); c.lineTo(-0.2, 0.45);
+        c.lineTo(0.3, -0.1); c.lineTo(0, -0.1); c.lineTo(0.15, -0.45); c.closePath(); c.fill();
+        break;
+      case "PATCH_PANEL":
+        box(-0.95, -0.38, 1.9, 0.76);
+        for (const x of [-0.6, -0.2, 0.2, 0.6]) c.fillRect(x - 0.1, -0.1, 0.2, 0.2);
+        break;
+      case "SOCKET":
+        box(-0.75, -0.75, 1.5, 1.5);
+        c.fillRect(-0.35, -0.2, 0.7, 0.42);
+        c.fillRect(-0.15, 0.22, 0.3, 0.16);
+        break;
+      default:
+        c.scale(1 / r, 1 / r);
+        c.font = `700 ${Math.round(size * 0.9)}px system-ui, sans-serif`;
+        c.textAlign = "center";
+        c.textBaseline = "middle";
+        c.fillText("?", 0, 1);
+    }
+    c.restore();
+  }
+
+  /** A small canvas with a type's pictogram, for tables, the legend and pickers. */
+  function glyphCanvas(type, size = 18) {
+    const k = window.devicePixelRatio || 1;
+    const cv = document.createElement("canvas");
+    cv.width = cv.height = Math.ceil(size * k);
+    cv.style.width = cv.style.height = `${size}px`;
+    cv.className = "glyph";
+    const c = cv.getContext("2d");
+    c.scale(k, k);
+    drawGlyph(c, type, size / 2, size / 2, size * 0.86, (TYPE[type] || TYPE.UNKNOWN).color);
+    return cv;
   }
 
   // ---------------------------------------------------------------- cable routes
@@ -480,16 +617,20 @@
       const passive = PASSIVE.has(d.type);
       const rad = passive ? 10 : 15;
       const active = d.id === S.linkFrom || (S.drag && S.drag.id === d.id);
+      // A virtual machine has no cables: a dashed ring says it is not physically there.
+      const virtual = d.type === "VIRTUAL";
       ctx.beginPath();
       ctx.arc(sx, sy, rad, 0, Math.PI * 2);
       ctx.fillStyle = active ? "#4c9eff" : "#1c222c";
       ctx.fill();
-      ctx.strokeStyle = active ? "#4c9eff" : "#6b7686";
+      ctx.strokeStyle = active ? "#4c9eff" : virtual ? "#8e9bff" : "#6b7686";
       ctx.lineWidth = 1.5;
+      if (virtual) ctx.setLineDash([3, 3]);
       ctx.stroke();
-      ctx.fillStyle = "#e6edf5";
-      ctx.font = `600 ${passive ? 8 : 9}px system-ui, sans-serif`;
-      ctx.fillText((TYPE[d.type] || TYPE.UNKNOWN).short, sx, sy);
+      ctx.setLineDash([]);
+      drawGlyph(ctx, d.type, sx, sy, passive ? 12 : 17, active ? "#ffffff" : typeOf(d).color);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
       if (!passive) {
         ctx.beginPath();
         ctx.arc(sx + rad * 0.72, sy - rad * 0.72, 4, 0, Math.PI * 2);
@@ -1019,8 +1160,17 @@
     b.addEventListener("click", () => selectType(id));
     $("device-types").appendChild(b);
   }
+  /** Fills a select with the servers a virtual machine can run on. */
+  function fillHosts(select, selfId, value, none) {
+    select.replaceChildren(new Option(none, ""));
+    for (const h of allDevicesOrMap().filter((x) => x.type === "SERVER" && x.id !== selfId)) select.append(new Option(h.name, h.id));
+    select.value = value;
+  }
+  const allDevicesOrMap = () => (allDevices.length ? allDevices : S.allHere);
+
   function selectType(id) {
     dialogType = id;
+    $("device-host-label").hidden = id !== "VIRTUAL";
     for (const b of $("device-types").children) b.classList.toggle("active", b.dataset.type === id);
   }
 
@@ -1042,6 +1192,7 @@
     }));
     floorSel.value = (device && device.floor_id) || (S.floor && S.floor.id) || "";
     $("device-floor-label").hidden = S.floors.length < 2;
+    fillHosts($("device-host"), device && device.id, (device && device.host_id) || "", "Не указан");
     $("device-error").hidden = true;
     selectType(device ? device.type : dialogType);
     $("device-dialog").showModal();
@@ -1057,6 +1208,7 @@
       ip: $("device-ip").value.trim() || null,
       vendor: $("device-vendor").value.trim() || null,
       model: $("device-model").value.trim() || null,
+      host_id: dialogType === "VIRTUAL" ? $("device-host").value || null : null,
     };
     try {
       const floorId = S.floors.length > 1 ? $("device-floor").value : null;
@@ -1089,9 +1241,46 @@
   // ---------------------------------------------------------------- devices tab
 
   let allDevices = [];
+  // Devices ticked for a group change, and the category the list is narrowed to.
+  const picked = new Set();
+  let typeFilter = "";
   async function loadDevices() {
     allDevices = await api("GET", "devices");
+    for (const id of [...picked]) if (!allDevices.some((d) => d.id === id)) picked.delete(id);
     renderDevices();
+  }
+
+  function visibleDevices() {
+    const q = $("device-filter").value.trim().toLowerCase();
+    return allDevices.filter((d) => {
+      if (typeFilter && d.type !== typeFilter) return false;
+      return !q || [d.name, d.ip, typeOf(d).label, d.vendor, d.model].join(" ").toLowerCase().includes(q);
+    });
+  }
+
+  function togglePick(id, on) {
+    if (on) picked.add(id); else picked.delete(id);
+    renderBulkBar();
+  }
+
+  function renderBulkBar() {
+    $("bulk-bar").hidden = !picked.size;
+    $("bulk-count").textContent = `Выбрано: ${picked.size}`;
+    const shown = visibleDevices();
+    const all = $("pick-all");
+    all.checked = shown.length > 0 && shown.every((d) => picked.has(d.id));
+  }
+
+  {
+    const sel = $("type-filter");
+    sel.append(new Option("Все категории", ""));
+    for (const [id, label] of TYPES) sel.append(new Option(label, id));
+    sel.addEventListener("change", () => { typeFilter = sel.value; renderDevices(); });
+    $("pick-all").addEventListener("change", (ev) => {
+      for (const d of visibleDevices()) { if (ev.target.checked) picked.add(d.id); else picked.delete(d.id); }
+      renderDevices();
+    });
+    $("bulk-clear").addEventListener("click", () => { picked.clear(); renderDevices(); });
   }
 
   function cell(tr, text) {
@@ -1106,15 +1295,27 @@
     const rows = $("device-rows");
     rows.replaceChildren();
     for (const d of allDevices) {
-      const label = (TYPE[d.type] || TYPE.UNKNOWN).label;
+      const label = typeOf(d).label;
       const hay = [d.name, d.ip, label, d.vendor, d.model].join(" ").toLowerCase();
       if (q && !hay.includes(q)) continue;
+      if (typeFilter && d.type !== typeFilter) continue;
       const tr = document.createElement("tr");
+      tr.classList.toggle("picked", picked.has(d.id));
+      const pickCell = document.createElement("td");
+      pickCell.className = "pick";
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = picked.has(d.id);
+      box.addEventListener("change", () => { togglePick(d.id, box.checked); tr.classList.toggle("picked", box.checked); });
+      pickCell.appendChild(box);
+      tr.appendChild(pickCell);
       cell(tr, d.name);
-      cell(tr, label);
+      const typeCell = cell(tr, "");
+      typeCell.append(glyphCanvas(d.type), label);
       cell(tr, d.ip);
       cell(tr, d.vendor);
       cell(tr, d.model);
+      cell(tr, d.host_id ? (allDevices.find((h) => h.id === d.host_id) || {}).name : null);
       cell(tr, d.x != null ? "да" : "нет");
       const actions = cell(tr, "");
       actions.className = "actions";
@@ -1130,12 +1331,65 @@
     if (!rows.children.length) {
       const tr = document.createElement("tr");
       const td = cell(tr, allDevices.length ? "Ничего не найдено" : "Устройств пока нет: добавьте их здесь или найдите сканером сети.");
-      td.colSpan = 7;
+      td.colSpan = 9;
       td.className = "muted";
       rows.appendChild(tr);
     }
+    renderBulkBar();
   }
   $("device-filter").addEventListener("input", renderDevices);
+
+  // ---------------------------------------------------------------- group edit
+
+  const bulkType = $("bulk-type");
+  bulkType.append(new Option("Не менять", ""));
+  for (const [id, label] of TYPES) bulkType.append(new Option(label, id));
+  bulkType.addEventListener("change", () => { $("bulk-host-label").hidden = bulkType.value !== "VIRTUAL"; });
+
+  $("bulk-edit").addEventListener("click", async () => {
+    $("bulk-heading").textContent = `Изменить устройства: ${picked.size}`;
+    bulkType.value = "";
+    $("bulk-host-label").hidden = true;
+    fillHosts($("bulk-host"), null, "", "Не менять");
+    const floors = S.floors.length ? S.floors : await api("GET", "floors");
+    const sel = $("bulk-floor");
+    sel.replaceChildren(new Option("Не менять", ""), ...[...floors].reverse().map((f) => new Option(floorTitle(f), f.id)));
+    $("bulk-floor-label").hidden = floors.length < 2;
+    $("bulk-vendor").value = "";
+    $("bulk-error").hidden = true;
+    $("bulk-dialog").showModal();
+  });
+  $("bulk-cancel").addEventListener("click", () => $("bulk-dialog").close());
+  $("bulk-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const set = {};
+    if (bulkType.value) set.type = bulkType.value;
+    if ($("bulk-floor").value) set.floor_id = $("bulk-floor").value;
+    if ($("bulk-vendor").value.trim()) set.vendor = $("bulk-vendor").value.trim();
+    if (bulkType.value === "VIRTUAL" && $("bulk-host").value) set.host_id = $("bulk-host").value;
+    if (!Object.keys(set).length) {
+      $("bulk-error").hidden = false;
+      $("bulk-error").textContent = "Выберите, что менять.";
+      return;
+    }
+    try {
+      await api("POST", "devices/bulk", { ids: [...picked], set });
+      picked.clear();
+      $("bulk-dialog").close();
+      await loadDevices();
+    } catch (e) {
+      $("bulk-error").hidden = false;
+      $("bulk-error").textContent = e.message;
+    }
+  });
+  $("bulk-delete").addEventListener("click", async () => {
+    if (!confirm(`Удалить устройств: ${picked.size}? Они пропадут из инвентаря и с карты вместе с портами и кабелями. Само оборудование это не затрагивает.`)) return;
+    try {
+      await api("POST", "devices/bulk-delete", { ids: [...picked] });
+      picked.clear();
+      await loadDevices();
+    } catch (e) { fail(e); }
+  });
   $("device-new").addEventListener("click", () => openDeviceDialog(null));
 
   async function showOnMap(id) {
@@ -1216,7 +1470,7 @@
       tr.appendChild(td);
       cell(tr, d.ip);
       cell(tr, d.name);
-      cell(tr, (TYPE[d.type] || TYPE.UNKNOWN).label);
+      cell(tr, typeOf(d).label);
       cell(tr, [d.vendor, d.model].filter(Boolean).join(" ") || null);
       const how = cell(tr, foundHow(d));
       if (d.description) how.title = d.description;

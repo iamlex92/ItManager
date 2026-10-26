@@ -3,6 +3,9 @@ package com.itmanager.app.data.source
 import android.os.Build
 import com.itmanager.app.core.network.LiveSocket
 import com.itmanager.app.core.network.NetAdminApi
+import com.itmanager.app.core.network.BulkDeleteBody
+import com.itmanager.app.core.network.BulkSetBody
+import com.itmanager.app.core.network.BulkUpdateBody
 import com.itmanager.app.core.network.DeviceBody
 import com.itmanager.app.core.network.DeviceMove
 import com.itmanager.app.core.network.FloorCreateBody
@@ -30,6 +33,7 @@ import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.DeviceBulkChange
 import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.DeviceHistoryEntry
 import com.itmanager.app.data.model.DiagnosticKind
@@ -56,6 +60,8 @@ import com.itmanager.app.data.model.Waypoint
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 
 class RemoteDataSource(
     private val api: NetAdminApi,
@@ -214,7 +220,7 @@ class RemoteDataSource(
     override suspend fun createDevice(floorId: String, draft: DeviceDraft, x: Float, y: Float): Device =
         api.createDevice(
             settings,
-            DeviceBody(draft.name, draft.type.name, floorId, x, y, draft.ip, draft.vendor, draft.model),
+            DeviceBody(draft.name, draft.type.name, floorId, x, y, draft.ip, draft.vendor, draft.model, draft.hostId),
         ).toDomain()
 
     override suspend fun updateDevice(id: String, draft: DeviceDraft): Device =
@@ -225,6 +231,27 @@ class RemoteDataSource(
     }
 
     override suspend fun deleteDevice(id: String) = api.deleteDevice(settings, id)
+
+    override suspend fun bulkUpdateDevices(ids: List<String>, change: DeviceBulkChange): Int {
+        val set = BulkSetBody(change.type?.name, change.floorId, change.vendor, change.hostId)
+        return try {
+            api.bulkUpdateDevices(settings, BulkUpdateBody(ids, set)).changed
+        } catch (e: Exception) {
+            if (!api.isMissingEndpoint(e)) throw e
+            // An older server: the same change, one device at a time.
+            val patch = Json { explicitNulls = false }.encodeToJsonElement(BulkSetBody.serializer(), set).jsonObject
+            ids.forEach { api.patchDevice(settings, it, patch) }
+            ids.size
+        }
+    }
+
+    override suspend fun bulkDeleteDevices(ids: List<String>): Int = try {
+        api.bulkDeleteDevices(settings, BulkDeleteBody(ids)).changed
+    } catch (e: Exception) {
+        if (!api.isMissingEndpoint(e)) throw e
+        ids.forEach { api.deleteDevice(settings, it) }
+        ids.size
+    }
 
     override suspend fun linkDevices(deviceAId: String, deviceBId: String, cableType: String): Connection =
         api.linkDevices(settings, LinkBody(deviceAId, deviceBId, cableType)).toDomain()
