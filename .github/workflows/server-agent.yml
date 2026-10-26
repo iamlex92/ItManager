@@ -6,16 +6,18 @@ name: server agent
 # Each package is installed on a clean runner and checked over HTTP before master publishes it
 # to the prerelease "server-latest".
 
+# PRs: only the Linux .deb is built and install-tested. The Windows setup (2x minutes) and publishing
+# to server-latest happen on a v* tag or by hand.
 on:
-  push:
-    paths: ["server/**", ".github/workflows/server-agent.yml"]
   pull_request:
     paths: ["server/**", ".github/workflows/server-agent.yml"]
+  push:
+    tags: ["v*"]
   workflow_dispatch:
 
 concurrency:
   group: server-agent-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: write
@@ -101,6 +103,7 @@ jobs:
 
   windows:
     name: Build and install Windows setup
+    if: github.event_name != 'pull_request'
     runs-on: windows-latest
     timeout-minutes: 40
     defaults:
@@ -208,7 +211,7 @@ jobs:
 
   publish:
     name: Publish server-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: github.event_name != 'pull_request'
     needs: [deb, deb-install, windows]
     runs-on: ubuntu-latest
     steps:
@@ -221,7 +224,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           ls -l dist
-          notes="Сервер NetAdmin без Docker, из master: коммит ${GITHUB_SHA::7}, версия ${{ needs.deb.outputs.version }}.
+          notes="Сервер NetAdmin без Docker, коммит ${GITHUB_SHA::7}, версия ${{ needs.deb.outputs.version }}.
           Debian/Ubuntu: sudo apt install ./netadmin-agent_*.deb. Windows: NetAdmin-Server-Setup.exe. Инструкция: server/DEPLOY.md."
           if gh release view server-latest >/dev/null 2>&1; then
             for old in $(gh release view server-latest --json assets -q '.assets[].name'); do

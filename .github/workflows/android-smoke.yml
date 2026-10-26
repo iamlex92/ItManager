@@ -1,20 +1,22 @@
 name: Android smoke test
 
 # Starts the app on an emulator: catches crashes at launch that unit tests and assembleDebug cannot see.
+# The most expensive job: PRs touching the app (not drafts), a v* tag, or by hand. Never on a plain push to master.
 on:
-  push:
-    paths-ignore: ["server/**", "**.md"]
   pull_request:
-    paths-ignore: ["server/**", "**.md"]
+    paths: ["app/**", "gradle/**", "*.gradle*", "gradle.properties", "gradlew*", ".github/workflows/android-smoke.yml", ".github/scripts/smoke.sh"]
+  push:
+    tags: ["v*"]
   workflow_dispatch:
 
 concurrency:
   group: android-smoke-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   launch:
     name: Launch on emulator
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -31,6 +33,8 @@ jobs:
           java-version: "17"
 
       - uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
 
       - name: Assemble debug APK
         run: ./gradlew --no-daemon assembleDebug

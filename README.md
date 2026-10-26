@@ -179,7 +179,7 @@ kotlinx.serialization, DataStore, Navigation Compose. `minSdk 31`, `targetSdk 36
 
 ### Сборка
 
-Свежая тестовая сборка из master всегда лежит на странице релиза **ItManager: тестовая сборка**
+Тестовая сборка публикуется при выпуске релиза (тег `v*` или ручной запуск, см. [docs/CI.md](docs/CI.md)) и лежит на странице релиза **ItManager: тестовая сборка**
 (Releases → `android-latest`): откройте её на телефоне и нажмите `itmanager-debug.apk`.
 Сборки подписаны общим тестовым ключом (`app/debug.keystore`, не секрет) и нумеруются по запуску CI,
 поэтому новая версия ставится поверх старой.
@@ -201,7 +201,7 @@ APK любой ветки и pull request тоже есть в GitHub Actions: �
 2. В репозитории: **Settings → Secrets and variables → Actions → New repository secret**:
    `RELEASE_KEYSTORE_BASE64` (содержимое `itmanager-release.b64`), `RELEASE_STORE_PASSWORD`,
    `RELEASE_KEY_ALIAS` (`itmanager`), `RELEASE_KEY_PASSWORD`.
-3. Следующий push в master опубликует `itmanager-release.apk` на странице релиза **ItManager: рабочая сборка**
+3. Следующий релиз (тег `v*` или ручной запуск) опубликует `itmanager-release.apk` на странице релиза **ItManager: рабочая сборка**
    (`android-release`).
 
 Рабочая сборка ставится отдельным приложением рядом с тестовой (`com.itmanager.app` и `com.itmanager.app.debug`),
