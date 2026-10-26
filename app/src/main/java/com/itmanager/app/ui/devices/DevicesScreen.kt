@@ -138,7 +138,9 @@ fun DevicesScreen(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 if (devices.data.isEmpty()) {
-                    item { EmptyView(if (state.query.isBlank()) "Устройств нет" else "Ничего не найдено") }
+                    item {
+                        EmptyView(if (state.query.isBlank()) "Устройств нет. Найдите их сканером сети: значок поиска сверху." else "Ничего не найдено")
+                    }
                 }
                 items(devices.data, key = { it.id }) { device ->
                     DeviceRow(
