@@ -854,3 +854,27 @@ class HistoryEntry(BaseModel):
     summary: str
     actor: str
     commands: list[str] = []
+
+
+# --- CLI import -------------------------------------------------------------
+
+
+class ConfigImportIn(BaseModel):
+    text: str = Field(min_length=1, max_length=2_000_000, description="pasted running-config or show vlan brief output")
+    apply: bool = Field(default=False, description="false: only show what would change")
+
+
+class ConfigImportPort(BaseModel):
+    port: str
+    matched: bool
+    changes: dict[str, list[Any]] = Field(default_factory=dict, description="field: [current, from the text]")
+
+
+class ConfigImportOut(BaseModel):
+    kind: str
+    hostname: str | None = None
+    applied: bool
+    ports: list[ConfigImportPort]
+    unmatched_interfaces: list[str]
+    unknown_vlans: dict[int, str] = Field(default_factory=dict, description="VLANs in the text that the server does not know")
+    changed_ports: int
