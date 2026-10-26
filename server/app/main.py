@@ -32,7 +32,7 @@ from .api import (
     ws,
 )
 from .api.deps import require_token
-from .config import MonitorMode, Settings, get_settings
+from .config import MonitorMode, RunbookMode, Settings, get_settings
 from .db import make_engine, make_sessionmaker
 from .discovery.manager import ScanManager
 from .hal.base import DeviceWritesDisabled, UnsupportedVendor
@@ -40,6 +40,7 @@ from .hal.emulator import EmulatorDriver
 from .hal.factory import build_driver, build_printer_driver
 from .models import Credential, Device
 from .runbooks.emulator import RunbookEnvironment
+from .runbooks.real import RealRunbooks
 from .schemas import HealthOut
 from .services import backup, heartbeat, telegram, traps
 from .services import printers as printer_service
@@ -75,7 +76,15 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
 
             app.state.driver.host_lookup = host_lookup
         app.state.hub = Hub()
-        app.state.runbooks = RunbookEnvironment(step_delay=settings.runbook_step_delay_seconds)
+        if settings.runbook_mode is RunbookMode.REAL:
+            app.state.runbooks = RealRunbooks(settings)
+            log.warning(
+                "runbooks: real AD (%s), AD writes %s",
+                settings.ad_ldap_url or "AD_LDAP_URL not set",
+                "ENABLED" if settings.allow_runbook_writes else "disabled",
+            )
+        else:
+            app.state.runbooks = RunbookEnvironment(step_delay=settings.runbook_step_delay_seconds)
         app.state.discovery = ScanManager(app.state.sessionmaker, settings)
         log.warning(
             "HAL mode: %s, device writes %s",
@@ -184,7 +193,8 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
             hal_mode=settings.hal_mode.value,
             device_writes_enabled=settings.device_writes_enabled,
             monitor_mode=settings.monitor_mode.value,
-            runbook_mode="emulator",
+            runbook_mode=settings.runbook_mode.value,
+            runbook_writes_enabled=settings.runbook_writes_enabled,
             secrets_encrypted=crypto.box().enabled,
             telegram_alerts=settings.telegram_enabled,
         )

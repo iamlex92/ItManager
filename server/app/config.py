@@ -12,6 +12,13 @@ class HalMode(StrEnum):
     REAL = "real"
 
 
+class RunbookMode(StrEnum):
+    # Runbooks act on a built-in emulated AD and file servers. Nothing leaves the server.
+    EMULATOR = "emulator"
+    # AD over LDAPS and NTFS rights over WinRM. Read-only unless ALLOW_RUNBOOK_WRITES is set.
+    REAL = "real"
+
+
 class MonitorMode(StrEnum):
     # Printers, heartbeat: answered from the emulator and the database.
     EMULATOR = "emulator"
@@ -74,9 +81,28 @@ class Settings(BaseSettings):
     trap_community: str = "public"
 
     # --- runbooks ---
-    # Runbooks (AD, file shares, backups, VMs, services) run against a built-in
-    # emulated environment only; nothing reaches AD or real servers yet.
-    # Pause per output step, so a run in the app feels like a real one. 0 in tests.
+    # emulator (default): a built-in emulated AD and file servers.
+    # real: AD over LDAPS and folder rights over WinRM (app/runbooks/real.py); backups, VM snapshots
+    # and service restarts are not offered in this mode yet.
+    runbook_mode: RunbookMode = RunbookMode.EMULATOR
+    # Real mode only: allow password resets, unlocks and enable/disable in AD. Off: those runbooks
+    # show the account and what they would change, nothing more.
+    allow_runbook_writes: bool = False
+    # Name of the stored credential (⚙ → Учётные данные in the app) used for LDAP and WinRM.
+    runbook_credential: str = ""
+    # ldaps://dc01.factory.local, or ldap:// with AD_START_TLS=true. Plain LDAP is refused.
+    ad_ldap_url: str = ""
+    ad_start_tls: bool = False
+    # CA certificate (PEM) of the domain controllers, when the system store does not have it.
+    ad_ca_file: str = ""
+    # Empty: read from the domain controller.
+    ad_base_dn: str = ""
+    # Comma-separated file servers the folder-rights runbook may connect to over WinRM: fs01,fs02.
+    runbook_file_servers: str = ""
+    winrm_https: bool = False
+    # 0: 5985 (HTTP, NTLM-encrypted) or 5986 (HTTPS).
+    winrm_port: int = 0
+    # Pause per output step in the emulator, so a run in the app feels like a real one. 0 in tests.
     runbook_step_delay_seconds: float = 0.4
 
     snmp_version: str = Field(default="2c", pattern="^(2c|3)$")
@@ -131,6 +157,10 @@ class Settings(BaseSettings):
     @property
     def telegram_enabled(self) -> bool:
         return bool(self.telegram_bot_token.strip() and self.telegram_chat_id.strip())
+
+    @property
+    def runbook_writes_enabled(self) -> bool:
+        return self.runbook_mode is RunbookMode.EMULATOR or self.allow_runbook_writes
 
     @property
     def device_writes_enabled(self) -> bool:

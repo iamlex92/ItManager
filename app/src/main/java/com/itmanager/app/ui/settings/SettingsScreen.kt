@@ -333,6 +333,11 @@ private fun ConnectionCheckResult(check: ConnectionCheck) {
                         mode,
                         secrets,
                         "уведомления в Telegram включены".takeIf { h.telegramAlerts == true },
+                        when {
+                            h.runbookMode != "real" -> null
+                            h.runbookWritesEnabled == true -> "runbooks: реальный AD, изменения разрешены"
+                            else -> "runbooks: реальный AD, только чтение"
+                        },
                     ).joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -21,6 +21,7 @@ def test_init_config_creates_private_file_with_safe_defaults(tmp_path: Path):
     values = configfile.read(path)
     assert values["HAL_MODE"] == "emulator" and values["ALLOW_DEVICE_WRITES"] == "false"
     assert values["MONITOR_MODE"] == "emulator" and values["SEED_DEMO_DATA"] == "false"
+    assert values["RUNBOOK_MODE"] == "emulator" and values["ALLOW_RUNBOOK_WRITES"] == "false"
     assert len(values["API_TOKEN"]) >= 32 and valid_key(values["SECRET_KEY"])
     url = make_url(values["DATABASE_URL"])
     assert (url.host, url.port, url.username) == ("127.0.0.1", 54329, "netadmin") and len(url.password) >= 24
