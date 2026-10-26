@@ -50,6 +50,15 @@ class NetAdminApi @Inject constructor(
 
     suspend fun patchFloor(s: ServerSettings, id: String, body: FloorPatch): FloorDto = patch(s, "floors/$id", body)
 
+    suspend fun renameFloor(s: ServerSettings, id: String, body: FloorRename): FloorDto = patch(s, "floors/$id", body)
+
+    suspend fun deleteFloor(s: ServerSettings, id: String) {
+        guarded { client.delete("${requireBase(s)}/api/v1/floors/$id") { auth(s) } }
+    }
+
+    suspend fun routeConnection(s: ServerSettings, id: String, body: RouteBody): ConnectionDto =
+        patch(s, "connections/$id", body)
+
     suspend fun uploadPlan(s: ServerSettings, floorId: String, bytes: ByteArray, mime: String, width: Int, height: Int): FloorDto = guarded {
         client.put("${requireBase(s)}/api/v1/floors/$floorId/plan-image") {
             auth(s)

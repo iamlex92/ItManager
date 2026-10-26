@@ -8,6 +8,9 @@ import com.itmanager.app.core.network.DeviceMove
 import com.itmanager.app.core.network.FloorCreateBody
 import com.itmanager.app.core.network.FloorDto
 import com.itmanager.app.core.network.FloorPatch
+import com.itmanager.app.core.network.FloorRename
+import com.itmanager.app.core.network.RouteBody
+import com.itmanager.app.core.network.WaypointDto
 import com.itmanager.app.core.network.ImportBody
 import com.itmanager.app.core.network.LinkBody
 import com.itmanager.app.core.network.RunbookRunBody
@@ -32,6 +35,8 @@ import com.itmanager.app.data.model.DeviceHistoryEntry
 import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.DiagnosticResult
 import com.itmanager.app.data.model.Drawing
+import com.itmanager.app.data.model.FloorDraft
+import com.itmanager.app.data.model.FloorInfo
 import com.itmanager.app.data.model.FloorMap
 import com.itmanager.app.data.model.FloorPlan
 import com.itmanager.app.data.model.ImportReport
@@ -47,6 +52,7 @@ import com.itmanager.app.data.model.RunbookRun
 import com.itmanager.app.data.model.SwitchPort
 import com.itmanager.app.data.model.TrafficSeries
 import com.itmanager.app.data.model.Vlan
+import com.itmanager.app.data.model.Waypoint
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -57,16 +63,24 @@ class RemoteDataSource(
     private val settings: ServerSettings,
 ) : DcimDataSource {
 
-    override suspend fun floorMap(): FloorMap = coroutineScope {
+    override suspend fun floorMap(floorId: String?): FloorMap = coroutineScope {
         val floors = async { api.floors(settings) }
         val devices = async { api.devices(settings).map { it.toDomain() } }
         val connections = async { api.connections(settings).mapNotNull { it.toDomain() } }
         val vlans = async { api.vlans(settings).map { it.toDomain() } }
 
-        val floorDto = floors.await().firstOrNull()
+        val allFloors = floors.await()
+        val first = allFloors.firstOrNull()
+        val floorDto = allFloors.firstOrNull { it.id == floorId } ?: first
         val allDevices = devices.await()
+        val floorIds = allFloors.mapTo(HashSet()) { it.id }
         // Devices without a floor (found by the scanner, added before any floor existed) show on the first one.
-        val floorDevices = if (floorDto == null) allDevices else allDevices.filter { it.floorId == floorDto.id || it.floorId == null }
+        val onFirst = { d: Device -> d.floorId == null || d.floorId !in floorIds }
+        val floorDevices = if (floorDto == null) {
+            allDevices
+        } else {
+            allDevices.filter { it.floorId == floorDto.id || (floorDto.id == first?.id && onFirst(it)) }
+        }
         // Without a plan size from the server, frame whatever devices exist, and leave room to add more.
         val fallbackWidth = ((floorDevices.maxOfOrNull { it.x } ?: 0f) + PLAN_MARGIN).coerceAtLeast(MIN_WIDTH)
         val fallbackHeight = ((floorDevices.maxOfOrNull { it.y } ?: 0f) + PLAN_MARGIN).coerceAtLeast(MIN_HEIGHT)
@@ -74,11 +88,17 @@ class RemoteDataSource(
             ?: FloorPlan(NO_FLOOR, "План здания", fallbackWidth, fallbackHeight, 50f, emptyList(), stored = false)
 
         val ids = floorDevices.mapTo(HashSet()) { it.id }
+        val links = connections.await().filter { it.deviceAId in ids || it.deviceBId in ids }
+        val byId = allDevices.associateBy { it.id }
+        val remote = links.flatMap { listOf(it.deviceAId, it.deviceBId) }.filter { it !in ids }
+            .mapNotNull { id -> byId[id]?.let { d -> id to if (onFirst(d)) d.copy(floorId = first?.id) else d } }.toMap()
         FloorMap(
             plan = plan,
             devices = floorDevices,
-            connections = connections.await().filter { it.deviceAId in ids && it.deviceBId in ids },
+            connections = links.filter { (it.deviceAId in ids || it.deviceAId in remote) && (it.deviceBId in ids || it.deviceBId in remote) },
             vlans = vlans.await(),
+            floors = allFloors.map { it.info() },
+            remoteDevices = remote,
         )
     }
 
@@ -211,6 +231,25 @@ class RemoteDataSource(
             ?: throw UserFacingException("Сервер не вернул кабель")
 
     override suspend fun deleteConnection(id: String) = api.deleteConnection(settings, id)
+
+    override suspend fun routeConnection(id: String, waypoints: List<Waypoint>): Connection =
+        api.routeConnection(settings, id, RouteBody(waypoints.map(WaypointDto::of))).toDomain()
+            ?: throw UserFacingException("Сервер не вернул кабель")
+
+    override suspend fun createFloor(draft: FloorDraft): FloorInfo {
+        // A new floor takes the size of the lowest one, so devices placed by hand land in the same frame.
+        val base = api.floors(settings).firstOrNull()
+        val body = FloorCreateBody(
+            draft.building, draft.number, base?.widthPx?.toInt() ?: MIN_WIDTH.toInt(), base?.heightPx?.toInt() ?: MIN_HEIGHT.toInt(),
+            draft.name?.takeIf { it.isNotBlank() },
+        )
+        return api.createFloor(settings, body).info()
+    }
+
+    override suspend fun renameFloor(id: String, draft: FloorDraft): FloorInfo =
+        api.renameFloor(settings, id, FloorRename(draft.building, draft.number, draft.name.orEmpty())).info()
+
+    override suspend fun deleteFloor(id: String) = api.deleteFloor(settings, id)
 
     override suspend fun uploadPlan(plan: FloorPlan, file: PlanFile): FloorPlan =
         api.uploadPlan(settings, plan.id, file.bytes, file.mime, file.width, file.height).toPlan(plan)

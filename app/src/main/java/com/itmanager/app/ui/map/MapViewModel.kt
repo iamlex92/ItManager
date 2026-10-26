@@ -14,11 +14,16 @@ import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.model.Drawing
+import com.itmanager.app.data.model.CableRoute
+import com.itmanager.app.data.model.FloorDraft
 import com.itmanager.app.data.model.FloorMap
 import com.itmanager.app.data.model.FloorPlan
 import com.itmanager.app.data.model.LiveEvent
 import com.itmanager.app.data.model.MapLayer
 import com.itmanager.app.data.model.PlanRect
+import com.itmanager.app.data.model.Waypoint
+import com.itmanager.app.data.model.removed
+import com.itmanager.app.data.model.routeOn
 import com.itmanager.app.data.model.traceToSwitch
 import com.itmanager.app.data.source.DcimRepository
 import com.itmanager.app.ui.components.UiState
@@ -39,13 +44,30 @@ import javax.inject.Inject
 /** A floor map plus lookups the canvas needs every frame, computed once per load. */
 data class MapContent(
     val map: FloorMap,
+    /** Devices on this floor. */
     val devicesById: Map<String, Device>,
     /** VLAN carried by each access cable, or null for trunks between switches. */
     val linkVlan: Map<String, Int?>,
-)
+) {
+    /** This floor's devices and the far ends of cables to other floors, for tracing a path. */
+    val allDevices: Map<String, Device> get() = devicesById + map.remoteDevices
+
+    /** Each cable as it runs on this floor; [waypoints] overrides routes being edited. */
+    fun routes(waypoints: Map<String, List<Waypoint>> = emptyMap()): List<CableRoute> {
+        val floorId = map.plan.id
+        return map.connections.mapNotNull { link ->
+            val l = waypoints[link.id]?.let { link.copy(waypoints = it) } ?: link
+            routeOn(l, floorId, devicesById) { id -> map.remoteDevices[id]?.floorId }
+        }
+    }
+
+    fun floorTitle(id: String?): String = map.floors.firstOrNull { it.id == id }?.title ?: "другой этаж"
+}
 
 data class MapUiState(
     val content: UiState<MapContent> = UiState.Loading,
+    /** The floor picked in the switcher; null: the lowest one. */
+    val floorId: String? = null,
     val layer: MapLayer = MapLayer.L1,
     val vlanFilter: Int? = null,
     val selectedId: String? = null,
@@ -60,7 +82,7 @@ data class MapUiState(
 
 enum class EditTool(val label: String, val hint: String) {
     MOVE("Объекты", "Перетащите устройство или коснитесь его, чтобы изменить. «+» добавляет новое."),
-    LINK("Связи", "Коснитесь двух устройств, чтобы соединить их. Коснитесь кабеля, чтобы удалить."),
+    LINK("Связи", "Коснитесь двух устройств, чтобы соединить их. Коснитесь кабеля, чтобы проложить его по своей трассе."),
     DRAW("Карандаш", "Рисуйте одним пальцем, двумя двигайте карту."),
     PLAN("Подложка", "Загрузите план здания и подвиньте его пальцем под устройства."),
 }
@@ -73,14 +95,19 @@ data class MapEditorState(
     val penColor: Long = PEN_COLORS.first(),
     /** Positions already dropped on the map while the server saves them, by device id. */
     val moved: Map<String, Offset> = emptyMap(),
+    /** The cable whose route is being edited, and its bend picked for deletion (index in its waypoints). */
+    val selectedLink: String? = null,
+    val selectedPoint: Int? = null,
+    /** Routes already changed on the map while the server saves them, by cable id. */
+    val routes: Map<String, List<Waypoint>> = emptyMap(),
     val form: DeviceForm? = null,
     val busy: Boolean = false,
     /** An error from the last change; the tool hint shows when there is none. */
     val error: String? = null,
 )
 
-/** The device form: [device] null adds a new object at [x], [y]. */
-data class DeviceForm(val device: Device?, val x: Float, val y: Float, val error: String? = null)
+/** The device form: [device] null adds a new object at [x], [y]. [floorId]: the floor it stands on. */
+data class DeviceForm(val device: Device?, val x: Float, val y: Float, val floorId: String?, val error: String? = null)
 
 const val CABLE_COPPER = "Cat6"
 const val CABLE_FIBER = "OM3"
@@ -156,17 +183,46 @@ class MapViewModel @Inject constructor(
         _state.update {
             it.copy(content = if (previous is UiState.Content) previous.copy(isRefreshing = true) else UiState.Loading)
         }
-        repository.floorMap()
+        val floorId = _state.value.floorId
+        repository.floorMap(floorId)
             .onSuccess { map ->
+                // The floor was switched again while this one loaded: the newer load wins.
+                if (_state.value.floorId != floorId) return
                 val content = MapContent(map, map.devices.associateBy { it.id }, accessLinkVlans(map))
-                // Dropped positions are on the server now; the reload carries them.
-                _state.update { it.copy(content = UiState.Content(content), editor = it.editor.copy(moved = emptyMap())) }
+                // Dropped positions and routes are on the server now; the reload carries them.
+                _state.update { s ->
+                    s.copy(
+                        content = UiState.Content(content),
+                        editor = s.editor.copy(
+                            moved = emptyMap(),
+                            routes = emptyMap(),
+                            selectedLink = s.editor.selectedLink?.takeIf { id -> map.connections.any { it.id == id } },
+                        ),
+                    )
+                }
                 // Keep the selection only if the device still exists after a reload.
                 select(_state.value.selectedId?.takeIf { it in content.devicesById })
                 loadPlan(map.plan.imageUrl)
             }
             .onFailure { e -> _state.update { it.copy(content = UiState.Error(e.toUserMessage())) } }
     }
+
+    /** Shows another floor: its plan, devices and cables. */
+    fun selectFloor(id: String) {
+        if (id == currentFloorId()) return
+        select(null)
+        _state.update {
+            it.copy(
+                floorId = id,
+                planPicture = null,
+                editor = it.editor.copy(selectedLink = null, selectedPoint = null, linkFrom = null),
+            )
+        }
+        planUrl = null
+        viewModelScope.launch { load() }
+    }
+
+    private fun currentFloorId(): String? = content?.map?.plan?.id
 
     fun setLayer(layer: MapLayer) = _state.update {
         it.copy(layer = layer, vlanFilter = if (layer == MapLayer.L1) null else it.vlanFilter)
@@ -180,7 +236,7 @@ class MapViewModel @Inject constructor(
             _state.update { it.copy(selectedId = null, tracedLinks = emptySet(), tracePath = emptyList()) }
             return
         }
-        val links = traceToSwitch(deviceId, content.devicesById, content.map.connections)
+        val links = traceToSwitch(deviceId, content.allDevices, content.map.connections)
         _state.update {
             it.copy(
                 selectedId = deviceId,
@@ -201,26 +257,33 @@ class MapViewModel @Inject constructor(
         _state.update { it.copy(editing = on, editor = MapEditorState(tool = it.editor.tool, cable = it.editor.cable, penColor = it.editor.penColor)) }
     }
 
-    fun setTool(tool: EditTool) = editor { it.copy(tool = tool, linkFrom = null, error = null) }
+    fun setTool(tool: EditTool) = editor { it.copy(tool = tool, linkFrom = null, error = null, selectedLink = null, selectedPoint = null) }
     fun setCable(cable: String) = editor { it.copy(cable = cable) }
     fun cancelLink() = editor { it.copy(linkFrom = null) }
     fun setPenColor(color: Long) = editor { it.copy(penColor = color) }
     fun dismissError() = editor { it.copy(error = null) }
 
-    fun openNewDevice(x: Float, y: Float) = editor { it.copy(form = DeviceForm(null, x, y)) }
+    fun openNewDevice(x: Float, y: Float) = editor { it.copy(form = DeviceForm(null, x, y, currentFloorId())) }
     fun openDevice(id: String) {
         val device = content?.devicesById?.get(id) ?: return
-        editor { it.copy(form = DeviceForm(device, device.x, device.y)) }
+        editor { it.copy(form = DeviceForm(device, device.x, device.y, currentFloorId())) }
     }
+    fun setFormFloor(floorId: String) = editor { it.copy(form = it.form?.copy(floorId = floorId)) }
     fun closeForm() = editor { it.copy(form = null) }
 
     fun saveDevice(draft: DeviceDraft) = write {
         val form = _state.value.editor.form ?: return@write
         val result = if (form.device == null) {
             val floor = floor() ?: return@write
-            repository.createDevice(floor.id, draft, form.x, form.y)
+            val known = content?.map?.floors.orEmpty().map { it.id }
+            repository.createDevice(form.floorId?.takeIf { it in known } ?: floor.id, draft, form.x, form.y)
         } else {
-            repository.updateDevice(form.device.id, draft)
+            repository.updateDevice(form.device.id, draft).onSuccess {
+                // Moved to another floor: it keeps its place on the plan there.
+                if (form.floorId != null && form.floorId != currentFloorId()) {
+                    repository.moveDevice(form.device.id, form.floorId, form.device.x, form.device.y)
+                }
+            }
         }
         result
             .onSuccess { editor { it.copy(form = null) } }
@@ -259,7 +322,75 @@ class MapViewModel @Inject constructor(
         }
     }
 
-    fun deleteLink(connection: Connection) = write { repository.deleteConnection(connection.id).onFailure(::fail) }
+    fun deleteLink(connection: Connection) {
+        editor { it.copy(selectedLink = null, selectedPoint = null) }
+        write { repository.deleteConnection(connection.id).onFailure(::fail) }
+    }
+
+    // --- Cable routes: bends dragged on the map, inventory only. ---
+
+    /** Link tool: a tapped cable shows its bends to drag; tapping empty map lets it go. */
+    fun selectLink(id: String?) = editor { it.copy(selectedLink = id, selectedPoint = null, linkFrom = null, error = null) }
+
+    fun selectPoint(index: Int?) = editor { it.copy(selectedPoint = index) }
+
+    /** The selected cable's new bends, all floors at once: shown at once, saved behind. */
+    fun setRoute(linkId: String, waypoints: List<Waypoint>) {
+        editor { it.copy(routes = it.routes + (linkId to waypoints), selectedPoint = null) }
+        write {
+            val latest = _state.value.editor.routes[linkId] ?: waypoints
+            repository.routeConnection(linkId, latest).onFailure { e ->
+                editor { it.copy(routes = it.routes - linkId, error = e.toUserMessage()) }
+            }
+        }
+    }
+
+    fun deletePoint() {
+        val s = _state.value.editor
+        val id = s.selectedLink ?: return
+        val index = s.selectedPoint ?: return
+        setRoute(id, waypointsOf(id).removed(index))
+    }
+
+    /** Removes the bends on this floor; bends on other floors stay. */
+    fun straighten() {
+        val id = _state.value.editor.selectedLink ?: return
+        val route = content?.routes(_state.value.editor.routes)?.firstOrNull { it.link.id == id } ?: return
+        val here = route.points.mapNotNull { p -> p.index.takeIf { it in route.link.waypoints.indices } }.toSet()
+        setRoute(id, route.link.waypoints.filterIndexed { i, _ -> i !in here })
+    }
+
+    private fun waypointsOf(id: String): List<Waypoint> =
+        _state.value.editor.routes[id] ?: content?.map?.connections?.firstOrNull { it.id == id }?.waypoints.orEmpty()
+
+    // --- Floors of the building. ---
+
+    fun createFloor(draft: FloorDraft) = write {
+        repository.createFloor(draft).onSuccess { selectFloor(it.id) }.onFailure(::fail)
+    }
+
+    fun renameFloor(id: String, draft: FloorDraft) = write { repository.renameFloor(id, draft).onFailure(::fail) }
+
+    fun deleteFloor(id: String) = write {
+        repository.deleteFloor(id)
+            .onSuccess { if (_state.value.floorId == id) _state.update { it.copy(floorId = null) } }
+            .onFailure(::fail)
+    }
+
+    /** Swaps the numbers of [id] and its neighbour below ([up] false) or above, so the order changes. */
+    fun moveFloor(id: String, up: Boolean) = write {
+        val floors = content?.map?.floors ?: return@write
+        val i = floors.indexOfFirst { it.id == id }
+        val j = if (up) i + 1 else i - 1
+        if (i < 0 || j !in floors.indices) return@write
+        val a = floors[i]
+        val b = floors[j]
+        // Equal numbers (two buildings) still need an order: step past the neighbour.
+        val (na, nb) = if (a.number != b.number) b.number to a.number else (if (up) b.number + 1 else b.number - 1) to b.number
+        repository.renameFloor(a.id, FloorDraft(a.building, na, a.name))
+            .onSuccess { repository.renameFloor(b.id, FloorDraft(b.building, nb, b.name)).onFailure(::fail) }
+            .onFailure(::fail)
+    }
 
     /** A finished pen line: [points] are x, y pairs and [width] the line width, both in map pixels. */
     fun addStroke(points: List<Float>, width: Float) {
@@ -376,12 +507,12 @@ class MapViewModel @Inject constructor(
     private fun pathNames(startId: String, linkIds: List<String>, content: MapContent): List<String> {
         if (linkIds.isEmpty()) return emptyList()
         val byId = content.map.connections.associateBy { it.id }
-        val names = mutableListOf(content.devicesById[startId]?.name ?: return emptyList())
+        val names = mutableListOf(content.allDevices[startId]?.name ?: return emptyList())
         var current = startId
         for (id in linkIds) {
             val link = byId[id] ?: break
             current = if (link.deviceAId == current) link.deviceBId else link.deviceAId
-            names += content.devicesById[current]?.name ?: break
+            names += content.allDevices[current]?.name ?: break
         }
         return names
     }

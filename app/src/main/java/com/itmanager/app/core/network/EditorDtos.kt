@@ -35,7 +35,19 @@ data class FloorCreateBody(
     @SerialName("floor_number") val floorNumber: Int,
     @SerialName("width_px") val widthPx: Int,
     @SerialName("height_px") val heightPx: Int,
+    val name: String? = null,
 )
+
+/** Name and number of a floor; an empty name goes as "" so the server clears it. */
+@Serializable
+data class FloorRename(
+    @SerialName("building_name") val buildingName: String,
+    @SerialName("floor_number") val floorNumber: Int,
+    val name: String,
+)
+
+@Serializable
+data class RouteBody(val waypoints: List<WaypointDto>)
 
 @Serializable
 data class FloorPatch(

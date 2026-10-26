@@ -134,7 +134,9 @@
   // ---------------------------------------------------------------- map state
 
   const S = {
-    floor: null, devices: [], links: [], image: null, imageUrl: null,
+    floor: null, floors: [], floorId: null, devices: [], remote: new Map(), links: [], image: null, imageUrl: null,
+    // The cable whose route is being edited, its picked bend, and a bend being dragged.
+    selLink: null, selPoint: null, routeDrag: null,
     tool: "move", pen: PENS[0], linkFrom: null, cable: "Cat6",
     view: { scale: 1, ox: 0, oy: 0 },
     // Until the user zooms or pans, the view keeps fitting the whole floor as the window changes.
@@ -167,16 +169,146 @@
 
   async function loadMap() {
     const [floors, devices, links] = await Promise.all([api("GET", "floors"), api("GET", "devices"), api("GET", "connections")]);
-    S.floor = floors[0] || null;
-    // As on the phone: devices without a floor show on the first one.
-    S.devices = devices
-      .filter((d) => !S.floor || d.floor_id === S.floor.id || d.floor_id == null)
-      .map((d) => ({ ...d, x: d.x ?? 40, y: d.y ?? 40 }));
-    S.links = links;
+    S.floors = floors;
+    const first = floors[0] || null;
+    const previous = S.floor && S.floor.id;
+    S.floor = floors.find((f) => f.id === S.floorId) || first;
+    S.floorId = S.floor && S.floor.id;
+    if (previous && previous !== S.floorId) S.touched = false;
+    // As on the phone: devices without a floor (or on a floor that is gone) show on the first one.
+    const known = new Set(floors.map((f) => f.id));
+    const floorOf = (d) => (d.floor_id && known.has(d.floor_id) ? d.floor_id : first && first.id);
+    const all = devices.map((d) => ({ ...d, x: d.x ?? 40, y: d.y ?? 40, floor_id: floorOf(d) }));
+    S.devices = all.filter((d) => !S.floor || d.floor_id === S.floor.id);
+    const here = new Set(S.devices.map((d) => d.id));
+    const byId = new Map(all.map((d) => [d.id, d]));
+    S.links = links.filter((l) => (here.has(l.device_a_id) || here.has(l.device_b_id))
+      && byId.has(l.device_a_id) && byId.has(l.device_b_id));
+    S.remote = new Map();
+    for (const l of S.links) {
+      for (const id of [l.device_a_id, l.device_b_id]) if (!here.has(id)) S.remote.set(id, byId.get(id));
+    }
+    if (S.selLink && !S.links.some((l) => l.id === S.selLink)) { S.selLink = null; S.selPoint = null; }
+    renderFloorSelect();
     await loadPlanImage();
     if (!S.touched) fit();
     draw();
     hint();
+  }
+
+  function floorTitle(f) {
+    if (!f) return "другой этаж";
+    return f.name || `${f.building_name} · этаж ${f.floor_number}`;
+  }
+
+  function renderFloorSelect() {
+    const sel = $("floor-select");
+    sel.replaceChildren(...[...S.floors].reverse().map((f) => {
+      const o = document.createElement("option");
+      o.value = f.id;
+      o.textContent = floorTitle(f);
+      return o;
+    }));
+    sel.hidden = S.floors.length === 0;
+    if (S.floor) sel.value = S.floor.id;
+  }
+
+  // ---------------------------------------------------------------- cable routes
+
+  const RISER_OFFSET = 48;
+
+  /** The part of a cable on this floor: points from end A towards end B, and where it leaves the floor. */
+  function routeOf(l) {
+    const wps = (S.routeDrag && S.routeDrag.id === l.id ? S.routeDrag.points : l.waypoints) || [];
+    const byId = devicesById();
+    const a = byId.get(l.device_a_id), b = byId.get(l.device_b_id);
+    if (!a && !b) return null;
+    const floorId = S.floor && S.floor.id;
+    const floorA = a ? floorId : S.remote.get(l.device_a_id)?.floor_id;
+    const local = [];
+    wps.forEach((p, i) => { if ((p.floor_id || floorA) === floorId) local.push({ x: p.x, y: p.y, i }); });
+    const points = [];
+    if (a) points.push({ x: a.x, y: a.y, i: -1 });
+    points.push(...local);
+    if (b) points.push({ x: b.x, y: b.y, i: wps.length });
+    let riser = null;
+    if (!a || !b) {
+      const other = a ? S.remote.get(l.device_b_id)?.floor_id : floorA;
+      if (!local.length) {
+        const end = points[0];
+        riser = { x: end.x + RISER_OFFSET, y: end.y - RISER_OFFSET, other, virtual: true, insertAt: a ? 0 : wps.length };
+      } else {
+        const far = a ? local[local.length - 1] : local[0];
+        riser = { x: far.x, y: far.y, other, virtual: false };
+      }
+    }
+    return { link: l, wps, points, riser, aHere: !!a };
+  }
+
+  /** Screen points of a route, the riser included when the cable has no bend on this floor yet. */
+  function screenPath(r) {
+    const pts = r.points.map((p) => toScreen(p.x, p.y));
+    if (r.riser && r.riser.virtual) {
+      const at = toScreen(r.riser.x, r.riser.y);
+      return r.aHere ? [...pts, at] : [at, ...pts];
+    }
+    return pts;
+  }
+
+  const insertAt = (r, k) => {
+    const next = r.points[k + 1].i;
+    return next >= 0 && next < r.wps.length ? next : r.points[k].i + 1;
+  };
+
+  /** A grip of the selected cable under the pointer: a bend, or a "+" that makes one. */
+  function handleAt(sx, sy) {
+    const l = S.links.find((x) => x.id === S.selLink);
+    const r = l && routeOf(l);
+    if (!r) return null;
+    const near = (x, y) => { const [px, py] = toScreen(x, y); return Math.hypot(sx - px, sy - py) <= 9; };
+    const bend = r.points.find((p) => p.i >= 0 && p.i < r.wps.length && near(p.x, p.y));
+    if (bend) return { route: r, index: bend.i };
+    if (r.riser && r.riser.virtual && near(r.riser.x, r.riser.y)) return { route: r, insert: r.riser.insertAt };
+    for (let k = 0; k + 1 < r.points.length; k++) {
+      const a = r.points[k], b = r.points[k + 1];
+      if (near((a.x + b.x) / 2, (a.y + b.y) / 2)) return { route: r, insert: insertAt(r, k) };
+    }
+    return null;
+  }
+
+  const newBendFloor = (r) => (r.riser ? S.floor && S.floor.id : undefined);
+
+  async function saveRoute(linkId, points) {
+    const l = S.links.find((x) => x.id === linkId);
+    if (!l) return;
+    const before = l.waypoints;
+    l.waypoints = points;
+    draw();
+    try {
+      const saved = await api("PATCH", `connections/${linkId}`, {
+        waypoints: points.map((p) => (p.floor_id ? { x: round1(p.x), y: round1(p.y), floor_id: p.floor_id } : { x: round1(p.x), y: round1(p.y) })),
+      });
+      l.waypoints = saved.waypoints;
+    } catch (e) {
+      l.waypoints = before;
+      fail(e);
+    }
+    draw();
+  }
+
+  function deleteSelectedPoint() {
+    const l = S.links.find((x) => x.id === S.selLink);
+    if (!l || S.selPoint == null) return;
+    const points = l.waypoints.filter((_, i) => i !== S.selPoint);
+    S.selPoint = null;
+    saveRoute(l.id, points);
+  }
+
+  function selectLink(id) {
+    S.selLink = id;
+    S.selPoint = null;
+    hint();
+    draw();
   }
 
   async function loadPlanImage() {
@@ -262,20 +394,84 @@
     for (const d of (S.floor && S.floor.drawings) || []) polyline(d.points, d.color, d.width * k);
     if (S.stroke && S.stroke.length > 3) polyline(S.stroke, S.pen, 3);
 
-    const byId = devicesById();
-    for (const l of S.links) {
-      const a = byId.get(l.device_a_id), b = byId.get(l.device_b_id);
-      if (!a || !b) continue;
-      const fiber = /^O[MS]/i.test(l.cable_type || "");
-      ctx.strokeStyle = fiber ? "rgba(90,200,250,.8)" : "rgba(139,149,165,.8)";
-      ctx.lineWidth = fiber ? 2.5 : 1.5;
-      ctx.setLineDash(fiber ? [] : [6, 4]);
+    const routes = S.links.map(routeOf).filter(Boolean);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    for (const r of routes) {
+      const pts = screenPath(r);
+      if (pts.length < 2) continue;
+      const fiber = /^O[MS]/i.test(r.link.cable_type || "");
+      const selected = r.link.id === S.selLink && S.tool === "link";
+      ctx.strokeStyle = selected ? "#4c9eff" : fiber ? "rgba(90,200,250,.8)" : "rgba(139,149,165,.8)";
+      ctx.lineWidth = selected ? 3 : fiber ? 2.5 : 1.5;
+      ctx.setLineDash(fiber || selected ? [] : [6, 4]);
       ctx.beginPath();
-      ctx.moveTo(...toScreen(a.x, a.y));
-      ctx.lineTo(...toScreen(b.x, b.y));
+      ctx.moveTo(...pts[0]);
+      for (const p of pts.slice(1)) ctx.lineTo(...p);
       ctx.stroke();
     }
     ctx.setLineDash([]);
+    // Risers: where cables go up or down to another floor.
+    const seen = new Set();
+    const labels = [];
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    for (const r of routes) {
+      if (!r.riser) continue;
+      const [sx, sy] = toScreen(r.riser.x, r.riser.y);
+      const key = `${Math.round(sx / 4)},${Math.round(sy / 4)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      ctx.fillStyle = "#1c222c";
+      ctx.fillRect(sx - 6, sy - 6, 12, 12);
+      ctx.strokeStyle = "#5ac8fa";
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(sx - 6, sy - 6, 12, 12);
+      ctx.font = "11px system-ui, sans-serif";
+      const text = `↕ ${floorTitle(S.floors.find((f) => f.id === r.riser.other))}`;
+      const box = { x: sx + 10, y: sy - 8, w: ctx.measureText(text).width, h: 16 };
+      // Risers side by side share one label rather than printing over each other.
+      if (labels.some((o) => box.x < o.x + o.w && o.x < box.x + box.w && box.y < o.y + o.h && o.y < box.y + box.h)) continue;
+      labels.push(box);
+      ctx.fillStyle = "#5ac8fa";
+      ctx.fillText(text, box.x, sy);
+    }
+    const sel = S.tool === "link" && routes.find((r) => r.link.id === S.selLink);
+    if (sel) {
+      for (let k = 0; k + 1 < sel.points.length; k++) {
+        const a = sel.points[k], b = sel.points[k + 1];
+        const [mx, my] = toScreen((a.x + b.x) / 2, (a.y + b.y) / 2);
+        ctx.beginPath();
+        ctx.arc(mx, my, 7, 0, Math.PI * 2);
+        ctx.fillStyle = "#1c222c";
+        ctx.fill();
+        ctx.strokeStyle = "#4c9eff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(mx - 3.5, my); ctx.lineTo(mx + 3.5, my);
+        ctx.moveTo(mx, my - 3.5); ctx.lineTo(mx, my + 3.5);
+        ctx.stroke();
+      }
+      if (sel.riser && sel.riser.virtual) {
+        const [rx, ry] = toScreen(sel.riser.x, sel.riser.y);
+        ctx.beginPath();
+        ctx.arc(rx, ry, 9, 0, Math.PI * 2);
+        ctx.strokeStyle = "#4c9eff";
+        ctx.stroke();
+      }
+      for (const p of sel.points) {
+        if (p.i < 0 || p.i >= sel.wps.length) continue;
+        const [px, py] = toScreen(p.x, p.y);
+        ctx.beginPath();
+        ctx.arc(px, py, 7, 0, Math.PI * 2);
+        ctx.fillStyle = p.i === S.selPoint ? "#ff6b5e" : "#fff";
+        ctx.fill();
+        ctx.strokeStyle = "#4c9eff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    }
 
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -333,16 +529,18 @@
   }
 
   function linkAt(sx, sy) {
-    const byId = devicesById();
     let best = null, bestDist = 7;
     for (const l of S.links) {
-      const a = byId.get(l.device_a_id), b = byId.get(l.device_b_id);
-      if (!a || !b) continue;
-      const [ax, ay] = toScreen(a.x, a.y), [bx, by] = toScreen(b.x, b.y);
-      const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy;
-      const t = len2 ? Math.max(0, Math.min(1, ((sx - ax) * dx + (sy - ay) * dy) / len2)) : 0;
-      const dist = Math.hypot(sx - (ax + dx * t), sy - (ay + dy * t));
-      if (dist < bestDist) { best = l; bestDist = dist; }
+      const r = routeOf(l);
+      if (!r) continue;
+      const pts = screenPath(r);
+      for (let k = 0; k + 1 < pts.length; k++) {
+        const [ax, ay] = pts[k], [bx, by] = pts[k + 1];
+        const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy;
+        const t = len2 ? Math.max(0, Math.min(1, ((sx - ax) * dx + (sy - ay) * dy) / len2)) : 0;
+        const dist = Math.hypot(sx - (ax + dx * t), sy - (ay + dy * t));
+        if (dist < bestDist) { best = l; bestDist = dist; }
+      }
     }
     return best;
   }
@@ -352,7 +550,9 @@
       move: "Перетащите объект мышью, щёлкните по нему, чтобы изменить. Двойной щелчок по пустому месту добавляет объект. Колесо мыши масштабирует, перетаскивание пустого места двигает карту.",
       link: S.linkFrom
         ? `От ${devicesById().get(S.linkFrom)?.name || "?"}: щёлкните второе устройство (Esc — отмена).`
-        : "Щёлкните два устройства, чтобы соединить их кабелем. Щелчок по кабелю удаляет его.",
+        : S.selLink
+          ? "Тяните белые точки, чтобы вести кабель по трассе; «+» добавляет точку поворота. Щелчок по точке выбирает её, Delete или двойной щелчок удаляет. Esc — закончить."
+          : "Щёлкните два устройства, чтобы соединить их кабелем. Щёлкните кабель, чтобы проложить его по своей трассе.",
       draw: "Рисуйте мышью. Линии видны на карте в приложении.",
       plan: S.floor && S.floor.plan_image_url
         ? "Перетащите план мышью, чтобы совместить его с устройствами. «−» и «+» меняют размер."
@@ -360,6 +560,8 @@
     };
     $("map-hint").textContent = texts[S.tool];
     $("link-hint").textContent = S.tool === "link" && S.linkFrom ? "выбрано первое устройство" : "";
+    $("route-opts").hidden = !(S.tool === "link" && S.selLink);
+    $("route-point-delete").disabled = S.selPoint == null;
   }
 
   // ---------------------------------------------------------------- map gestures
@@ -373,7 +575,11 @@
     const device = deviceAt(sx, sy);
     gesture = { sx, sy, lastX: sx, lastY: sy, moved: false, kind: "pan", device };
     if (ev.button === 1) return;
-    if (S.tool === "move" && device) {
+    const handle = S.tool === "link" && S.selLink ? handleAt(sx, sy) : null;
+    if (handle) {
+      gesture.kind = "route";
+      gesture.handle = handle;
+    } else if (S.tool === "move" && device) {
       gesture.kind = "device";
       S.drag = { id: device.id, x0: device.x, y0: device.y };
     } else if (S.tool === "link" && device) {
@@ -421,6 +627,21 @@
         S.planShift.x += dx / k;
         S.planShift.y += dy / k;
         break;
+      case "route": {
+        const [x0, y0] = toPlan(sx, sy);
+        const x = Math.max(0, Math.min(w, x0)), y = Math.max(0, Math.min(h, y0));
+        const hd = gesture.handle;
+        if (!S.routeDrag) {
+          const points = hd.route.wps.map((p) => ({ ...p }));
+          if (hd.insert != null) {
+            points.splice(hd.insert, 0, { x, y, floor_id: newBendFloor(hd.route) });
+            hd.index = hd.insert;
+          }
+          S.routeDrag = { id: hd.route.link.id, points };
+        }
+        Object.assign(S.routeDrag.points[hd.index], { x, y });
+        break;
+      }
       default:
         S.touched = true;
         S.view.ox += dx;
@@ -443,7 +664,24 @@
     } else if (g.kind === "link-device" && !g.moved) {
       linkTap(g.device);
     } else if (g.kind === "link-cable" && !g.moved) {
-      deleteLink(g.link);
+      selectLink(g.link.id);
+    } else if (g.kind === "route") {
+      const drag = S.routeDrag;
+      S.routeDrag = null;
+      const hd = g.handle;
+      if (drag) saveRoute(drag.id, drag.points);
+      else if (hd.index != null) { S.selPoint = S.selPoint === hd.index ? null : hd.index; hint(); }
+      else {
+        // A click on "+" puts a bend right there.
+        const r = hd.route;
+        const k = r.points.findIndex((_, j) => j + 1 < r.points.length && insertAt(r, j) === hd.insert);
+        const at = k >= 0
+          ? { x: (r.points[k].x + r.points[k + 1].x) / 2, y: (r.points[k].y + r.points[k + 1].y) / 2 }
+          : { x: r.riser.x, y: r.riser.y };
+        const points = r.wps.map((p) => ({ ...p }));
+        points.splice(hd.insert, 0, { ...at, floor_id: newBendFloor(r) });
+        saveRoute(r.link.id, points);
+      }
     } else if (g.kind === "draw") {
       const points = S.stroke;
       S.stroke = null;
@@ -457,8 +695,10 @@
         const r = planRect();
         placePlan({ x: r.x + shift.x, y: r.y + shift.y, w: r.w, h: r.h }).catch(fail);
       }
-    } else if (g.kind === "pan" && !g.moved && S.tool === "link" && S.linkFrom) {
+    } else if (g.kind === "pan" && !g.moved && S.tool === "link" && (S.linkFrom || S.selLink)) {
       S.linkFrom = null;
+      S.selLink = null;
+      S.selPoint = null;
       hint();
     }
     draw();
@@ -467,6 +707,11 @@
   canvas.addEventListener("pointercancel", endGesture);
 
   canvas.addEventListener("dblclick", (ev) => {
+    if (S.tool === "link" && S.selLink) {
+      const hd = handleAt(ev.offsetX, ev.offsetY);
+      if (hd && hd.index != null) { S.selPoint = hd.index; deleteSelectedPoint(); }
+      return;
+    }
     if (S.tool !== "move" || deviceAt(ev.offsetX, ev.offsetY)) return;
     const [x, y] = toPlan(ev.offsetX, ev.offsetY);
     openDeviceDialog(null, { x, y });
@@ -485,7 +730,12 @@
   }, { passive: false });
 
   document.addEventListener("keydown", (ev) => {
-    if (ev.key === "Escape" && S.linkFrom) { S.linkFrom = null; hint(); draw(); }
+    if (ev.key === "Escape" && (S.linkFrom || S.selLink)) { S.linkFrom = null; S.selLink = null; S.selPoint = null; hint(); draw(); }
+    const typing = ev.target.closest && ev.target.closest("input, textarea, select, dialog");
+    if ((ev.key === "Delete" || ev.key === "Backspace") && !typing && S.tool === "link" && S.selLink && S.selPoint != null) {
+      ev.preventDefault();
+      deleteSelectedPoint();
+    }
   });
   window.addEventListener("resize", () => draw());
 
@@ -510,10 +760,10 @@
   }
 
   async function deleteLink(l) {
-    const byId = devicesById();
+    const byId = new Map([...S.remote, ...devicesById()]);
     const names = `${byId.get(l.device_a_id)?.name || "?"} — ${byId.get(l.device_b_id)?.name || "?"}`;
     if (!confirm(`Удалить кабель ${names} (${l.cable_type})?`)) return;
-    try { await api("DELETE", `connections/${l.id}`); await loadMap(); } catch (e) { fail(e); }
+    try { await api("DELETE", `connections/${l.id}`); S.selLink = null; S.selPoint = null; await loadMap(); } catch (e) { fail(e); }
   }
 
   async function saveDrawings(drawings) {
@@ -602,6 +852,8 @@
     if (!b) return;
     S.tool = b.dataset.tool;
     S.linkFrom = null;
+    S.selLink = null;
+    S.selPoint = null;
     for (const x of $("tools").querySelectorAll("button")) x.classList.toggle("active", x === b);
     for (const o of document.querySelectorAll(".tool-opts")) o.hidden = o.dataset.for !== S.tool;
     hint();
@@ -632,6 +884,128 @@
     openDeviceDialog(null, { x: Math.max(0, Math.min(w, x)), y: Math.max(0, Math.min(h, y)) });
   });
   $("map-fit").addEventListener("click", () => { S.touched = false; fit(); draw(); });
+  $("route-point-delete").addEventListener("click", deleteSelectedPoint);
+  $("route-straight").addEventListener("click", () => {
+    const l = S.links.find((x) => x.id === S.selLink);
+    const r = l && routeOf(l);
+    if (!r) return;
+    const here = new Set(r.points.map((p) => p.i));
+    S.selPoint = null;
+    saveRoute(l.id, l.waypoints.filter((_, i) => !here.has(i)));
+  });
+  $("route-delete").addEventListener("click", () => {
+    const l = S.links.find((x) => x.id === S.selLink);
+    if (l) deleteLink(l);
+  });
+  $("floor-select").addEventListener("change", (ev) => {
+    S.floorId = ev.target.value;
+    S.selLink = null;
+    S.selPoint = null;
+    S.linkFrom = null;
+    loadMap().catch(fail);
+  });
+
+  // ---------------------------------------------------------------- floors
+
+  function renderFloorRows() {
+    const rows = $("floor-rows");
+    const top = [...S.floors].reverse();
+    rows.replaceChildren(...top.map((f, i) => {
+      const tr = document.createElement("tr");
+      const input = (value, type, placeholder) => {
+        const td = document.createElement("td");
+        const el = document.createElement("input");
+        el.type = type;
+        el.value = value ?? "";
+        if (placeholder) el.placeholder = placeholder;
+        el.maxLength = 100;
+        td.appendChild(el);
+        tr.appendChild(td);
+        return el;
+      };
+      const name = input(f.name, "text", `Этаж ${f.floor_number}`);
+      const building = input(f.building_name, "text");
+      const number = input(f.floor_number, "number");
+      const save = () => patchFloor(f.id, {
+        name: name.value.trim(), building_name: building.value.trim() || f.building_name,
+        floor_number: Number.parseInt(number.value, 10) || 0,
+      });
+      for (const el of [name, building, number]) el.addEventListener("change", save);
+      const td = document.createElement("td");
+      const button = (text, title, onClick, disabled) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = text;
+        b.title = title;
+        b.disabled = !!disabled;
+        b.addEventListener("click", onClick);
+        td.appendChild(b);
+        return b;
+      };
+      button("↑", "Выше", () => moveFloor(f, true), i === 0);
+      button("↓", "Ниже", () => moveFloor(f, false), i === top.length - 1);
+      button("Открыть", "Показать на карте", () => { S.floorId = f.id; $("floors-dialog").close(); loadMap().catch(fail); });
+      button("Удалить", "Удалить пустой этаж", () => deleteFloor(f), S.floors.length < 2).classList.add("danger");
+      tr.appendChild(td);
+      return tr;
+    }));
+  }
+
+  function floorsError(e) {
+    $("floors-error").hidden = !e;
+    $("floors-error").textContent = e ? e.message : "";
+  }
+
+  async function reloadFloors() {
+    await loadMap();
+    renderFloorRows();
+  }
+
+  async function patchFloor(id, body) {
+    try { floorsError(null); await api("PATCH", `floors/${id}`, body); await reloadFloors(); } catch (e) { floorsError(e); }
+  }
+
+  async function moveFloor(f, up) {
+    const i = S.floors.findIndex((x) => x.id === f.id);
+    const other = S.floors[up ? i + 1 : i - 1];
+    if (!other) return;
+    const [na, nb] = f.floor_number !== other.floor_number
+      ? [other.floor_number, f.floor_number]
+      : [other.floor_number + (up ? 1 : -1), other.floor_number];
+    try {
+      floorsError(null);
+      await api("PATCH", `floors/${f.id}`, { floor_number: na });
+      await api("PATCH", `floors/${other.id}`, { floor_number: nb });
+      await reloadFloors();
+    } catch (e) { floorsError(e); }
+  }
+
+  async function deleteFloor(f) {
+    if (!confirm(`Удалить «${floorTitle(f)}»? Удаляется только пустой этаж: его план и линии.`)) return;
+    try {
+      floorsError(null);
+      await api("DELETE", `floors/${f.id}`);
+      if (S.floorId === f.id) S.floorId = null;
+      await reloadFloors();
+    } catch (e) { floorsError(e); }
+  }
+
+  $("floors-edit").addEventListener("click", () => { floorsError(null); renderFloorRows(); $("floors-dialog").showModal(); });
+  $("floors-close").addEventListener("click", () => $("floors-dialog").close());
+  $("floor-add").addEventListener("click", async () => {
+    const top = S.floors[S.floors.length - 1];
+    const size = floorSize();
+    try {
+      floorsError(null);
+      const f = await api("POST", "floors", {
+        building_name: top ? top.building_name : "Здание",
+        floor_number: top ? top.floor_number + 1 : 1,
+        width_px: Math.ceil(size.w), height_px: Math.ceil(size.h),
+      });
+      S.floorId = f.id;
+      await reloadFloors();
+    } catch (e) { floorsError(e); }
+  });
   $("map-reload").addEventListener("click", () => loadMap().catch(fail));
 
   // ---------------------------------------------------------------- device dialog
@@ -659,6 +1033,15 @@
     $("device-vendor").value = (device && device.vendor) || "";
     $("device-model").value = (device && device.model) || "";
     $("device-delete").hidden = !device;
+    const floorSel = $("device-floor");
+    floorSel.replaceChildren(...[...S.floors].reverse().map((f) => {
+      const o = document.createElement("option");
+      o.value = f.id;
+      o.textContent = floorTitle(f);
+      return o;
+    }));
+    floorSel.value = (device && device.floor_id) || (S.floor && S.floor.id) || "";
+    $("device-floor-label").hidden = S.floors.length < 2;
     $("device-error").hidden = true;
     selectType(device ? device.type : dialogType);
     $("device-dialog").showModal();
@@ -676,10 +1059,11 @@
       model: $("device-model").value.trim() || null,
     };
     try {
+      const floorId = S.floors.length > 1 ? $("device-floor").value : null;
       if (dialogDevice) {
-        await api("PATCH", `devices/${dialogDevice.id}`, body);
+        await api("PATCH", `devices/${dialogDevice.id}`, floorId ? { ...body, floor_id: floorId } : body);
       } else {
-        const floor = await ensureFloor();
+        const floor = floorId ? { id: floorId } : await ensureFloor();
         const { w, h } = floorSize();
         const at = dialogAt || { x: w / 2, y: h / 2 };
         await api("POST", "devices", { ...body, floor_id: floor.id, x: round1(at.x), y: round1(at.y) });

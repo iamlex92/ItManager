@@ -59,7 +59,12 @@ data class Connection(
     val deviceBId: String,
     val cableType: String,
     val label: String?,
+    /** Bends of the cable on the map, from end A towards end B; empty: a straight line. */
+    val waypoints: List<Waypoint> = emptyList(),
 )
+
+/** A bend of a cable, in map pixels of its floor; [floorId] null: the floor of end A. */
+data class Waypoint(val x: Float, val y: Float, val floorId: String? = null)
 
 enum class PortMode(val label: String) { ACCESS("Access"), TRUNK("Trunk") }
 
@@ -198,10 +203,24 @@ enum class MapLayer(val short: String, val title: String) {
 /** Everything the map screen needs for one floor. */
 data class FloorMap(
     val plan: FloorPlan,
+    /** Devices on this floor. */
     val devices: List<Device>,
+    /** Cables with at least one end on this floor. */
     val connections: List<Connection>,
     val vlans: List<Vlan>,
+    /** Every floor of the building, bottom to top. */
+    val floors: List<FloorInfo> = emptyList(),
+    /** The far ends of cables that go to another floor, by id. */
+    val remoteDevices: Map<String, Device> = emptyMap(),
 )
+
+/** A floor in the switcher: [name] is what people call it, the number orders the floors. */
+data class FloorInfo(val id: String, val building: String, val number: Int, val name: String?) {
+    val title: String get() = name?.takeIf { it.isNotBlank() } ?: "Этаж $number"
+}
+
+/** What the floor settings send: a new floor or changes to one. */
+data class FloorDraft(val building: String, val number: Int, val name: String?)
 
 data class ServerHealth(
     val status: String,
