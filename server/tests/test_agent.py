@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy.engine import make_url
 
-from app.agent import cli, configfile
+from app.agent import cli, configfile, connectqr
 from app.config import Settings
 from app.crypto import valid_key
 from app.services import backup
@@ -93,3 +93,29 @@ def test_backup_failure_leaves_no_partial_file(tmp_path: Path):
 def test_selfcheck_from_source(capsys):
     cli.main(["selfcheck"])
     assert "ok" in capsys.readouterr().out
+
+
+def test_connect_qr_payload_and_drawing():
+    data = connectqr.payload(["10.0.0.5", "192.168.1.2"], 8000, "a+b/c=")
+    assert data == "netadmin://connect?u=http%3A%2F%2F10.0.0.5%3A8000&u=http%3A%2F%2F192.168.1.2%3A8000&t=a%2Bb%2Fc%3D"
+    art = connectqr.terminal(data).splitlines()
+    assert len({len(line) for line in art}) == 1  # a rectangle
+    assert set("".join(art)) <= set("█▀▄ ")
+    assert art[0] == "█" * len(art[0])  # quiet zone drawn light
+
+
+def test_info_shows_qr_with_token_only(tmp_path: Path, capsys, monkeypatch):
+    path = tmp_path / "netadmin.env"
+    cli.main(["init-config", str(path), "--database-url", "postgresql+asyncpg://x@/y"])
+    values = configfile.read(path)
+    # info loads the file into the environment; set it through monkeypatch so other tests get theirs back.
+    for key, value in values.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setattr(cli, "_addresses", lambda: ["10.0.0.5"])
+    capsys.readouterr()
+    cli.main(["info", "--config", str(path)])
+    out = capsys.readouterr().out
+    assert values["API_TOKEN"] in out and "▀" in out
+    cli.main(["info", "--config", str(path), "--no-token"])
+    out = capsys.readouterr().out
+    assert values["API_TOKEN"] not in out and "▀" not in out

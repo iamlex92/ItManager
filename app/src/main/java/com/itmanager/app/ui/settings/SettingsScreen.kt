@@ -29,6 +29,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Button
@@ -64,6 +65,9 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import com.itmanager.app.core.security.BiometricGate
 import com.itmanager.app.core.security.GateResult
 import com.itmanager.app.core.security.findFragmentActivity
@@ -198,6 +202,33 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(24.dp))
             SectionLabel("Сервер NetAdmin")
+            OutlinedButton(
+                onClick = {
+                    val options = GmsBarcodeScannerOptions.Builder()
+                        .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+                        .enableAutoZoom()
+                        .build()
+                    GmsBarcodeScanning.getClient(context, options).startScan()
+                        .addOnSuccessListener { code ->
+                            haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                            viewModel.applyScanned(code.rawValue.orEmpty())
+                        }
+                        .addOnFailureListener {
+                            viewModel.scanFailed()
+                        }
+                },
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+            ) {
+                Icon(Icons.Outlined.QrCodeScanner, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Сканировать QR-код сервера")
+            }
+            Text(
+                "Код показывает ярлык «Адрес и ключ для приложения» на сервере Windows или sudo netadmin-agent info на Debian.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp, bottom = 12.dp),
+            )
             OutlinedTextField(
                 value = state.baseUrl,
                 onValueChange = viewModel::setBaseUrl,
