@@ -93,7 +93,8 @@
       <div class="columns">
         <form id="scan-form" class="card narrow">
           <h2>Сканирование сети</h2>
-          <p class="muted small">Только чтение: ping и SNMP GET. Оборудование не меняется. Запускается только по кнопке.</p>
+          <p class="muted small">Только чтение: ping, проверка открытых портов, баннеры и SNMP GET. Оборудование не меняется.
+            Запускается только по кнопке.</p>
           <label>Подсети (по одной в строке)
             <textarea id="scan-subnets" rows="4" placeholder="10.99.0.0/24"></textarea>
           </label>
@@ -102,6 +103,7 @@
           </label>
           <button type="submit" class="primary" id="scan-start">Начать</button>
           <p id="scan-status" class="muted"></p>
+          <ul id="scan-warnings" class="warnings" hidden></ul>
         </form>
         <div class="card grow">
           <div class="row">
@@ -112,7 +114,7 @@
           </div>
           <div class="table-wrap">
             <table class="grid">
-              <thead><tr><th><input type="checkbox" id="scan-all"></th><th>IP</th><th>Имя</th><th>Тип</th><th>Модель</th><th>В инвентаре</th></tr></thead>
+              <thead><tr><th><input type="checkbox" id="scan-all"></th><th>IP</th><th>Имя</th><th>Тип</th><th>Модель</th><th>Как найден</th><th>В инвентаре</th></tr></thead>
               <tbody id="scan-rows"></tbody>
             </table>
           </div>

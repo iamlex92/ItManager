@@ -55,6 +55,9 @@ def scan_out(scan: Scan, inv: Inventory) -> ScanOut:
                 type=d.device_type,
                 description=d.description,
                 snmp=d.snmp,
+                seen_by=d.seen_by,
+                open_ports=d.open_ports,
+                hostname=d.hostname,
                 inventory_id=known.id if known else None,
                 inventory_name=known.name if known else None,
             )
@@ -78,13 +81,15 @@ def scan_out(scan: Scan, inv: Inventory) -> ScanOut:
         devices=[] if running else devices,
         links=[] if running else links,
         error=scan.error,
+        warnings=[] if running else scan.result.warnings,
     )
 
 
 @router.post("/scans", response_model=ScanOut, status_code=status.HTTP_202_ACCEPTED)
 async def start_scan(body: ScanIn, request: Request, session: SessionDep):
-    """Starts a scan of the given private subnets: ICMP echo to every address, then SNMP
-    GET/GETNEXT (system group, LLDP, CDP, ARP and MAC tables) to those that answered.
+    """Starts a scan of the given private subnets: ICMP echo and a TCP probe of common ports to every
+    address, then ports, names, banners and SNMP GET/GETNEXT (system group, LLDP, CDP, ARP and MAC
+    tables) to those that answered.
     Read-only; in emulator mode nothing leaves the server. Poll GET /discovery/scans/{id}."""
     try:
         nets = parse_subnets(body.subnets)

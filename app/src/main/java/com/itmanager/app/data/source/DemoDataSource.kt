@@ -560,7 +560,10 @@ object DemoDataSource : DcimDataSource {
         val snmpTypes = setOf(DeviceType.SWITCH, DeviceType.SERVER, DeviceType.PRINTER, DeviceType.CAMERA, DeviceType.ACCESS_POINT)
         val world = devices.filter { it.ip != null && it.isOnline && it.type != DeviceType.SOCKET && it.type != DeviceType.PATCH_PANEL }.map { d ->
             DemoDiscovery.Host(
-                FoundDevice(d.ip!!, d.name, d.mac, d.vendor, d.model, d.type, null, d.type in snmpTypes, null, null),
+                FoundDevice(
+                    d.ip!!, d.name, d.mac, d.vendor, d.model, d.type, null, d.type in snmpTypes, null, null,
+                    openPorts = DemoDiscovery.openPorts(d.type),
+                ),
                 community = if (d.type in snmpTypes) "public" else null,
             )
         }.toMutableList()
@@ -593,7 +596,7 @@ object DemoDataSource : DcimDataSource {
         val coreUplink = core?.let { c -> ports[c.id]?.firstOrNull { it.isUplink && it.connectedDeviceName == null } }
         extra(
             FoundDevice("10.99.0.4", "SW-ACC-04", "A8:F9:4B:7E:00:04", "Eltex", "MES2324P", DeviceType.SWITCH,
-                "MES2324P AC 28-port 1G/10G Managed Switch", true, null, null),
+                "MES2324P AC 28-port 1G/10G Managed Switch", true, null, null, openPorts = DemoDiscovery.openPorts(DeviceType.SWITCH)),
             "public",
             if (core != null && coreUplink != null) {
                 FoundLink(LinkEnd(core.name, coreUplink.name, core.ip, null), sw4, LinkSource.LLDP, false)
@@ -603,20 +606,23 @@ object DemoDataSource : DcimDataSource {
         )
         extra(
             FoundDevice("10.40.0.57", "MFP-SKLAD", "00:17:C8:5A:00:57", "Kyocera", "ECOSYS M2540dn", DeviceType.PRINTER,
-                "KYOCERA Document Solutions Printing System", true, null, null),
+                "KYOCERA Document Solutions Printing System", true, null, null, openPorts = DemoDiscovery.openPorts(DeviceType.PRINTER)),
             "public",
             FoundLink(sw4.copy(port = "gi1/0/3"), LinkEnd("MFP-SKLAD", "", "10.40.0.57", null), LinkSource.FDB, false),
         )
         extra(
             FoundDevice("10.30.0.14", "CAM-04", "44:47:CC:28:00:14", "Hikvision", "DS-2CD2143G2-I", DeviceType.CAMERA,
-                "Hikvision IP camera", true, null, null),
+                "Hikvision IP camera", true, null, null, openPorts = DemoDiscovery.openPorts(DeviceType.CAMERA)),
             "public",
             FoundLink(sw4.copy(port = "gi1/0/7"), LinkEnd("CAM-04", "", "10.30.0.14", null), LinkSource.FDB, false),
         )
         val access = byId["sw-acc-03"]
         val freePort = access?.let { a -> ports[a.id]?.firstOrNull { !it.isUplink && it.connectedDeviceName == null } }
         extra(
-            FoundDevice("10.20.0.77", null, "3C:52:82:AA:00:77", null, null, DeviceType.UNKNOWN, null, false, null, null),
+            // ICMP blocked by the Windows firewall: found by its open ports, recognised as a PC by them and the MAC.
+            FoundDevice("10.20.0.77", null, "3C:52:82:AA:00:77", "HP", null, DeviceType.WORKSTATION,
+                "Тип: Windows: открыт RPC, SMB, RDP", false, null, null, seenBy = "tcp",
+                openPorts = DemoDiscovery.openPorts(DeviceType.WORKSTATION)),
             null,
             if (access != null && freePort != null) {
                 FoundLink(LinkEnd(access.name, freePort.name, access.ip, null), LinkEnd("", "", "10.20.0.77", null), LinkSource.FDB, false)

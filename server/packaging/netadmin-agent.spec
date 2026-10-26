@@ -14,6 +14,8 @@ datas += [(str(p), str(Path("app/static") / p.parent.relative_to(server / "app" 
           for p in (server / "app" / "static").rglob("*") if p.is_file()]
 # pysnmp reads its MIB modules from the package folder on disk, so they ship as files too.
 datas += collect_data_files("pysnmp", include_py_files=True)
+# The IEEE OUI and IAB lists the scan reads MAC vendors from.
+datas += collect_data_files("netaddr")
 
 hiddenimports = (
     collect_submodules("app")

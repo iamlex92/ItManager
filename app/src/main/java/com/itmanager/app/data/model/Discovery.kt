@@ -27,6 +27,11 @@ data class FoundDevice(
     val snmp: Boolean,
     val inventoryId: String?,
     val inventoryName: String?,
+    /** How it was found: ping, tcp (ICMP blocked, a port answered) or arp (only the server's ARP cache knew it). */
+    val seenBy: String = "ping",
+    val openPorts: List<Int> = emptyList(),
+    /** Reverse DNS name. */
+    val hostname: String? = null,
 ) {
     val isNew: Boolean get() = inventoryId == null
     val displayName: String get() = inventoryName ?: name ?: ip
@@ -62,6 +67,8 @@ data class NetworkScan(
     val devices: List<FoundDevice>,
     val links: List<FoundLink>,
     val error: String?,
+    /** What limited the scan, in plain words: no ping on the server, server outside the subnet, no SNMP. */
+    val warnings: List<String> = emptyList(),
 ) {
     val progress: Float get() = if (total <= 0) 0f else (probed.toFloat() / total).coerceIn(0f, 1f)
     val newDevices: List<FoundDevice> get() = devices.filter { it.isNew }

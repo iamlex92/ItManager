@@ -66,6 +66,8 @@ async def import_found(session: AsyncSession, scan: Scan, ips: list[str], with_l
                     "scan_id": str(scan.id),
                     "at": datetime.now(UTC).isoformat(timespec="seconds"),
                     "snmp": dev.snmp,
+                    "seen_by": dev.seen_by,
+                    "open_ports": dev.open_ports,
                     "description": dev.description,
                 }
             },

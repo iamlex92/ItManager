@@ -120,6 +120,9 @@ fun ScannerScreen(
             state.error?.let { message -> item(key = "error") { ErrorCard(message) } }
             if (scan != null) {
                 item(key = "progress") { ScanProgress(scan) }
+                if (scan.warnings.isNotEmpty()) {
+                    item(key = "warnings") { WarningsCard(scan.warnings) }
+                }
             }
             state.report?.let { report ->
                 item(key = "report") { ReportCard(report, onOpenMap, viewModel::dismissReport) }
@@ -189,7 +192,8 @@ private fun SafetyNote(isDemo: Boolean, scan: NetworkScan?) {
             when {
                 isDemo -> "Демо-режим: сеть эмулируется внутри приложения, в настоящую сеть ничего не уходит."
                 scan?.emulated == true -> "Сервер в режиме эмуляции: ответы берутся из учёта и нескольких придуманных устройств."
-                else -> "Только чтение: ping и SNMP-запросы GET к указанным адресам. На оборудовании ничего не меняется."
+                else -> "Только чтение: ping, проверка открытых портов, баннеры и SNMP GET к указанным адресам. " +
+                    "На оборудовании ничего не меняется."
             },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -288,7 +292,11 @@ private fun ScanProgress(scan: NetworkScan) {
                 LinearProgressIndicator(progress = { scan.progress }, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "Проверено ${scan.probed} из ${scan.total} адресов",
+                    if (scan.total > 0 && scan.probed >= scan.total) {
+                        "Адреса проверены, определяю устройства: порты, имена, SNMP…"
+                    } else {
+                        "Проверено ${scan.probed} из ${scan.total} адресов"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -327,12 +335,17 @@ private fun FoundRow(device: FoundDevice, checked: Boolean?, onToggle: () -> Uni
         Column(Modifier.weight(1f)) {
             Text(device.displayName, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                listOfNotNull(device.vendor, device.model).joinToString(" ").ifEmpty {
-                    if (device.snmp) device.type.label else "Ответил только на ping"
-                },
+                (listOf(device.type.label) + listOfNotNull(device.vendor, device.model)).joinToString(" · "),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                foundHow(device),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
@@ -440,6 +453,33 @@ private fun ReportCard(report: ImportReport, onOpenMap: () -> Unit, onDismiss: (
                 Spacer(Modifier.width(6.dp))
                 Text("Открыть карту")
             }
+        }
+    }
+}
+
+/** How the host answered and what it has open: "SNMP · порты 22, 80" or "Найден по TCP (ping закрыт) · порты 445, 3389". */
+internal fun foundHow(device: FoundDevice): String {
+    val how = when {
+        device.snmp -> "SNMP"
+        device.seenBy == "tcp" -> "Найден по TCP (ping закрыт)"
+        device.seenBy == "arp" -> "Найден только по ARP"
+        else -> "Ответил на ping"
+    }
+    val ports = device.openPorts.takeIf { it.isNotEmpty() }?.joinToString(", ", prefix = "порты ")
+    return listOfNotNull(how, ports).joinToString(" · ")
+}
+
+@Composable
+private fun WarningsCard(warnings: List<String>) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.tertiaryContainer, RoundedCornerShape(12.dp))
+            .padding(12.dp),
+    ) {
+        warnings.forEach { warning ->
+            Text(warning, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onTertiaryContainer)
         }
     }
 }

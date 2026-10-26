@@ -1,6 +1,7 @@
 :root {
   --bg: #0b0e13; --surface: #11151c; --card: #1c222c; --raised: #262e3a; --line: #343d4b;
   --muted: #8b95a5; --text: #e6edf5; --accent: #4c9eff; --accent-ink: #fff; --danger: #ff6b5e; --ok: #30d158;
+  --warn-bg: #3a2f12;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -96,3 +97,5 @@ dialog::backdrop { background: rgba(0, 0, 0, .55); }
   .tab { padding: 10px; }
   .param { grid-template-columns: 1fr 1fr; }
 }
+.warnings { margin: 8px 0 0; padding: 10px 12px 10px 28px; border-radius: 8px; background: var(--warn-bg); color: var(--text); }
+.warnings li + li { margin-top: 6px; }

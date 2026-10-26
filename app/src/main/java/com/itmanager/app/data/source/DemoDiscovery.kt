@@ -22,6 +22,17 @@ internal object DemoDiscovery {
     /** What answers on the emulated network: the host, and the community it answers SNMP with (null: ping only). */
     class Host(val device: FoundDevice, val community: String?)
 
+    /** What each kind of device has open on the emulated network, as the server's emulator has it. */
+    fun openPorts(type: DeviceType): List<Int> = when (type) {
+        DeviceType.SWITCH -> listOf(22, 23, 80, 443)
+        DeviceType.PRINTER -> listOf(80, 443, 515, 631, 9100)
+        DeviceType.CAMERA -> listOf(80, 443, 554, 8000)
+        DeviceType.ACCESS_POINT -> listOf(22, 80, 443)
+        DeviceType.SERVER -> listOf(22, 135, 445, 3389, 5985)
+        DeviceType.WORKSTATION -> listOf(135, 445, 3389)
+        else -> emptyList()
+    }
+
     private class Run(val scan: NetworkScan, val startedMs: Long, val durationMs: Long, var audited: Boolean = false)
 
     private const val MS_PER_HOST = 6L
@@ -43,8 +54,11 @@ internal object DemoDiscovery {
                 if (host.community != null && host.community == community) {
                     host.device
                 } else {
-                    // Ping only: no name, model or switch tables.
-                    FoundDevice(ip, null, host.device.mac, null, null, DeviceType.UNKNOWN, null, false, null, null)
+                    // No SNMP: no name, model or switch tables; the type still shows from open ports and the MAC vendor.
+                    host.device.copy(
+                        name = null, model = null, snmp = false,
+                        description = host.device.description.takeIf { host.community == null },
+                    )
                 }
             }
             val foundByIp = found.associateBy { it.ip }

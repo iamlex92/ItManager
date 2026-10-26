@@ -454,6 +454,8 @@ class HealthOut(BaseModel):
     hal_mode: str
     device_writes_enabled: bool
     monitor_mode: str = "emulator"
+    # Network scan: real (read-only, started by an operator) or emulator.
+    discovery_mode: str = "emulator"
     # emulator, or real (AD over LDAPS, folder rights over WinRM).
     runbook_mode: str = "emulator"
     # Runbooks may change AD: always in the emulator, with ALLOW_RUNBOOK_WRITES in real mode.
@@ -640,6 +642,11 @@ class FoundDeviceOut(BaseModel):
     type: str
     description: str | None
     snmp: bool
+    # How it was found: ping, tcp (ICMP blocked, a port answered) or arp (only the server's ARP cache knew it).
+    seen_by: Literal["ping", "tcp", "arp"] = "ping"
+    open_ports: list[int] = []
+    # Reverse DNS name.
+    hostname: str | None = None
     # Set when a device with this IP is already in the inventory.
     inventory_id: uuid.UUID | None
     inventory_name: str | None
@@ -672,6 +679,8 @@ class ScanOut(BaseModel):
     devices: list[FoundDeviceOut]
     links: list[FoundLinkOut]
     error: str | None
+    # What limited the scan, in plain words (no ping on the server, server outside the subnet, no SNMP).
+    warnings: list[str] = []
 
 
 class ImportIn(BaseModel):

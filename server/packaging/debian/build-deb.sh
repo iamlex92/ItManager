@@ -19,7 +19,7 @@ Version: $VERSION
 Architecture: amd64
 Maintainer: ItManager <noreply@github.com>
 Installed-Size: $SIZE
-Depends: postgresql (>= 13), adduser, libc6 (>= 2.36)
+Depends: postgresql (>= 13), adduser, libc6 (>= 2.36), iputils-ping
 Recommends: iputils-ping
 Section: net
 Priority: optional

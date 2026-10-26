@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from ..config import MonitorMode, Settings
+from ..config import DiscoveryMode, Settings
 from ..models import ScriptAuditLog
 from ..services import heartbeat
 from .emulator import EmulatedScanner
@@ -42,7 +42,7 @@ class ScanManager:
 
     @property
     def mode(self) -> str:
-        return "real" if self._settings.monitor_mode is MonitorMode.REAL else "emulator"
+        return "real" if self._settings.discovery_mode is DiscoveryMode.REAL else "emulator"
 
     def get(self, scan_id) -> Scan | None:
         return self._scans.get(scan_id)
@@ -67,9 +67,8 @@ class ScanManager:
 
     async def _scanner(self):
         if self.mode == "real":
-            if not heartbeat.ping_available():
-                raise RuntimeError("на сервере нет утилиты ping")
-            return SnmpScanner(self._settings)
+            # Without the ping binary the scan still works, by TCP ports and ARP, and says so in its warnings.
+            return SnmpScanner(self._settings, pinger=heartbeat.icmp_ping if heartbeat.ping_available() else None)
         async with self._sm() as session:
             inventory = await load_inventory(session)
         return EmulatedScanner(inventory, self._settings.discovery_step_delay_seconds)
@@ -104,6 +103,7 @@ class ScanManager:
                 f"Проверено адресов: {scan.probed} из {scan.total}",
                 f"Ответили: {len(r.devices)}, по SNMP: {sum(d.snmp for d in r.devices)}",
                 f"Связей найдено: {len(r.links)}",
+                *r.warnings,
             ]
         )
         async with self._sm() as session:
