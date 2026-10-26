@@ -40,6 +40,8 @@
   <main>
     <section id="tab-map" class="tab">
       <div class="toolbar">
+        <select id="floor-select" title="Этаж"></select>
+        <button id="floors-edit" title="Добавить, переименовать, упорядочить этажи">Этажи…</button>
         <div class="seg" id="tools">
           <button data-tool="move" class="active" title="Перетаскивайте объекты; щелчок открывает карточку">Объекты</button>
           <button data-tool="link" title="Щёлкните два устройства, чтобы соединить их кабелем">Связи</button>
@@ -71,6 +73,12 @@
       </div>
       <div class="map-wrap">
         <canvas id="map"></canvas>
+        <!-- Over the map, so picking a cable does not shift the plan under the pointer. -->
+        <div id="route-opts" class="route-opts" hidden>
+          <button id="route-point-delete" title="Удалить выбранную точку поворота (Delete)" disabled>Удалить точку</button>
+          <button id="route-straight" title="Убрать точки поворота на этом этаже">Выпрямить</button>
+          <button id="route-delete" class="danger">Удалить кабель</button>
+        </div>
         <div id="map-hint" class="map-hint"></div>
       </div>
     </section>
@@ -167,6 +175,7 @@
       <label class="grow">Производитель<input id="device-vendor" maxlength="50"></label>
       <label class="grow">Модель<input id="device-model" maxlength="100"></label>
     </div>
+    <label id="device-floor-label">Этаж<select id="device-floor"></select></label>
     <p id="device-error" class="error" hidden></p>
     <div class="row">
       <button type="button" id="device-delete" class="danger">Удалить</button>
@@ -175,6 +184,24 @@
       <button type="submit" class="primary">Сохранить</button>
     </div>
   </form>
+</dialog>
+
+<dialog id="floors-dialog">
+  <div class="dialog">
+    <h2>Этажи</h2>
+    <p class="muted small">У каждого этажа свой план, свои объекты и линии. Номер задаёт порядок: подвал 0 или −1.
+      Удалить можно только пустой этаж.</p>
+    <table class="grid">
+      <thead><tr><th>Название</th><th>Здание</th><th>№</th><th></th></tr></thead>
+      <tbody id="floor-rows"></tbody>
+    </table>
+    <p id="floors-error" class="error" hidden></p>
+    <div class="row">
+      <button type="button" id="floor-add">+ Этаж</button>
+      <div class="spacer"></div>
+      <button type="button" id="floors-close" class="primary">Готово</button>
+    </div>
+  </div>
 </dialog>
 
 <div id="toast" class="toast" hidden></div>

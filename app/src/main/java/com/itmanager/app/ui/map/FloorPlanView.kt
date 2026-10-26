@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.itmanager.app.data.model.CableRoute
 import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceType
@@ -70,6 +71,9 @@ import com.itmanager.app.data.model.Drawing
 import com.itmanager.app.data.model.MapLayer
 import com.itmanager.app.data.model.PlanRect
 import com.itmanager.app.data.model.Vlan
+import com.itmanager.app.data.model.Waypoint
+import com.itmanager.app.data.model.inserted
+import com.itmanager.app.data.model.moved
 import com.itmanager.app.ui.components.icon
 import com.itmanager.app.ui.theme.Accent
 import com.itmanager.app.ui.theme.Ink400
@@ -101,7 +105,15 @@ class MapEditing(
     val moved: Map<String, Offset>,
     val onTapDevice: (String) -> Unit,
     val onMoveDevice: (id: String, x: Float, y: Float) -> Unit,
-    val onTapLink: (Connection) -> Unit,
+    /** Link tool: a cable tapped, to edit its route; null: empty map tapped. */
+    val onTapLink: (Connection?) -> Unit,
+    /** The cable whose route is being edited, the bend picked on it, and routes not yet reloaded. */
+    val selectedLink: String?,
+    val selectedPoint: Int?,
+    val routes: Map<String, List<Waypoint>>,
+    val onTapPoint: (Int) -> Unit,
+    /** A cable's bends after a drag: the whole list, all floors. */
+    val onRoute: (linkId: String, List<Waypoint>) -> Unit,
     /** A finished pen line: x, y pairs and its width, in map pixels. */
     val onStroke: (List<Float>, Float) -> Unit,
     val onPlanMoved: (PlanRect) -> Unit,
@@ -129,6 +141,8 @@ fun FloorPlanView(
     var drag by remember { mutableStateOf<Pair<String, Offset>?>(null) }
     var stroke by remember { mutableStateOf<List<Offset>>(emptyList()) }
     var planShift by remember { mutableStateOf(Offset.Zero) }
+    // A cable route being dragged: its id and bends as they are under the finger.
+    var routeDrag by remember { mutableStateOf<Pair<String, List<Waypoint>>?>(null) }
     val positions = editor?.moved.orEmpty().let { moved -> drag?.let { moved + it } ?: moved }
     @Suppress("NAME_SHADOWING")
     val content = remember(content, positions) { content.withPositions(positions) }
@@ -137,8 +151,11 @@ fun FloorPlanView(
         val r = plan.imageRect ?: PlanRect(0f, 0f, plan.widthPx, plan.heightPx)
         if (planShift == Offset.Zero) r else r.copy(x = r.x + planShift.x, y = r.y + planShift.y)
     }
+    val routeOverrides = editor?.routes.orEmpty().let { r -> routeDrag?.let { r + it } ?: r }
+    val routes = remember(content, routeOverrides) { content.routes(routeOverrides) }
     val currentEditor by rememberUpdatedState(editor)
     val currentContent by rememberUpdatedState(content)
+    val currentRoutes by rememberUpdatedState(routes)
     val vlans = remember(content) { content.map.vlans.associateBy { it.id } }
     val textMeasurer = rememberTextMeasurer()
     val labelStyle = MaterialTheme.typography.labelSmall.copy(color = Ink400)
@@ -173,7 +190,7 @@ fun FloorPlanView(
                         val e = currentEditor
                         when {
                             e == null -> currentOnSelect(null)
-                            e.tool == EditTool.LINK -> linkAt(currentContent, camera, at, 16.dp.toPx())?.let(e.onTapLink)
+                            e.tool == EditTool.LINK -> e.onTapLink(linkAt(currentRoutes, camera, at, 16.dp.toPx()))
                         }
                     },
                     onDoubleTap = { camera.toggleZoom(it) },
@@ -186,7 +203,10 @@ fun FloorPlanView(
             drawDrawings(plan.drawings, camera)
             if (stroke.size > 1) drawPolyline(stroke.map { camera.toScreen(it.x, it.y) }, penColor, PEN_WIDTH.toPx())
             if (layer == MapLayer.L3) drawSubnets(content, vlans, vlanFilter, camera, textMeasurer, labelStyle)
-            if (layer != MapLayer.L3) drawCables(content, layer, vlans, vlanFilter, tracedLinks, camera)
+            if (layer != MapLayer.L3) drawCables(content, routes, layer, vlans, vlanFilter, tracedLinks, camera)
+            drawRisers(content, routes, camera, textMeasurer, labelStyle)
+            val selectedRoute = editor?.selectedLink?.let { id -> routes.firstOrNull { it.link.id == id } }
+            if (editor?.tool == EditTool.LINK && selectedRoute != null) drawRouteHandles(selectedRoute, editor.selectedPoint, camera)
         }
 
         val showLabels by remember(camera) { derivedStateOf { camera.scale >= camera.fitScale * 1.8f } }
@@ -242,6 +262,55 @@ fun FloorPlanView(
                     )
                 },
             )
+            EditTool.LINK -> editor?.selectedLink?.let { linkId ->
+                Box(
+                    Modifier.fillMaxSize().pointerInput(linkId) {
+                        detectHandleDrag(
+                            handleAt = { at ->
+                                val route = currentRoutes.firstOrNull { it.link.id == linkId } ?: return@detectHandleDrag null
+                                handleAt(route, camera, at, 24.dp.toPx())
+                            },
+                            onTap = { handle ->
+                                val route = currentRoutes.firstOrNull { it.link.id == linkId } ?: return@detectHandleDrag
+                                when (handle) {
+                                    is Handle.Bend -> currentEditor?.onTapPoint(handle.index)
+                                    // A tap on "+" adds a bend right there; dragging it places it.
+                                    is Handle.Insert -> currentEditor?.onRoute(
+                                        linkId,
+                                        route.link.waypoints.inserted(handle.at, Waypoint(handle.x, handle.y, newBendFloor(route, plan.id))),
+                                    )
+                                }
+                            },
+                            onDrag = { handle, at, index ->
+                                val route = currentRoutes.firstOrNull { it.link.id == linkId } ?: return@detectHandleDrag index
+                                val p = camera.toPlan(at)
+                                val x = p.x.coerceIn(0f, plan.widthPx)
+                                val y = p.y.coerceIn(0f, plan.heightPx)
+                                val base = routeDrag?.second ?: route.link.waypoints
+                                when {
+                                    index != null -> {
+                                        routeDrag = linkId to base.moved(index, x, y)
+                                        index
+                                    }
+                                    handle is Handle.Bend -> {
+                                        routeDrag = linkId to base.moved(handle.index, x, y)
+                                        handle.index
+                                    }
+                                    handle is Handle.Insert -> {
+                                        routeDrag = linkId to base.inserted(handle.at, Waypoint(x, y, newBendFloor(route, plan.id)))
+                                        handle.at
+                                    }
+                                    else -> null
+                                }
+                            },
+                            onEnd = {
+                                routeDrag?.let { (id, points) -> currentEditor?.onRoute(id, points) }
+                                routeDrag = null
+                            },
+                        )
+                    },
+                )
+            }
             EditTool.PLAN -> if (planRect != null) {
                 Box(
                     Modifier.fillMaxSize().pointerInput(Unit) {
@@ -270,16 +339,78 @@ private fun MapContent.withPositions(positions: Map<String, Offset>): MapContent
 }
 
 /** The cable nearest to a tap, if it passes within [slop] screen pixels. */
-private fun linkAt(content: MapContent, camera: MapCamera, at: Offset, slop: Float): Connection? =
-    content.map.connections
-        .mapNotNull { link ->
-            val a = content.devicesById[link.deviceAId] ?: return@mapNotNull null
-            val b = content.devicesById[link.deviceBId] ?: return@mapNotNull null
-            link to distanceToSegment(at, camera.toScreen(a.x, a.y), camera.toScreen(b.x, b.y))
+private fun linkAt(routes: List<CableRoute>, camera: MapCamera, at: Offset, slop: Float): Connection? =
+    routes
+        .map { route ->
+            val pts = route.screenPoints(camera)
+            route.link to pts.zipWithNext().minOfOrNull { (a, b) -> distanceToSegment(at, a, b) }.let { it ?: Float.MAX_VALUE }
         }
         .filter { it.second <= slop }
         .minByOrNull { it.second }
         ?.first
+
+/** The route on screen, with the riser at its far end for a cable that leaves the floor. */
+private fun CableRoute.screenPoints(camera: MapCamera): List<Offset> {
+    val pts = points.map { camera.toScreen(it.x, it.y) }
+    val r = riser?.takeIf { it.virtual } ?: return pts
+    val riserAt = camera.toScreen(r.x, r.y)
+    // End A here: the cable runs from the device out to the riser; end B here: in from the riser.
+    return if (points.first().index == -1) pts + riserAt else listOf(riserAt) + pts
+}
+
+/** A grip on the cable being edited: an existing bend, or a "+" that makes a new one at [at]. */
+private sealed interface Handle {
+    data class Bend(val index: Int) : Handle
+    data class Insert(val at: Int, val x: Float, val y: Float) : Handle
+}
+
+private fun handleAt(route: CableRoute, camera: MapCamera, at: Offset, slop: Float): Handle? {
+    fun near(x: Float, y: Float) = (camera.toScreen(x, y) - at).getDistance() <= slop
+    route.points.firstOrNull { it.index in route.link.waypoints.indices && near(it.x, it.y) }?.let { return Handle.Bend(it.index) }
+    route.riser?.takeIf { it.virtual && near(it.x, it.y) }?.let { return Handle.Insert(it.insertAt, it.x, it.y) }
+    for (k in 0 until route.points.size - 1) {
+        val a = route.points[k]
+        val b = route.points[k + 1]
+        val mx = (a.x + b.x) / 2f
+        val my = (a.y + b.y) / 2f
+        if (near(mx, my)) return Handle.Insert(route.insertAt(k), mx, my)
+    }
+    return null
+}
+
+/** A bend on a cable between floors keeps the floor it was made on; on a cable within one floor it needs none. */
+private fun newBendFloor(route: CableRoute, floorId: String): String? = if (route.riser != null) floorId else null
+
+/**
+ * One-finger drag that starts only on a handle: elsewhere the touch is left to the map and the taps.
+ * [onDrag] gets the handle, the finger and the bend index from the previous call, and returns the index to keep.
+ */
+private suspend fun PointerInputScope.detectHandleDrag(
+    handleAt: (Offset) -> Handle?,
+    onTap: (Handle) -> Unit,
+    onDrag: (Handle, Offset, Int?) -> Int?,
+    onEnd: () -> Unit,
+) = awaitEachGesture {
+    val down = awaitFirstDown(requireUnconsumed = false)
+    val handle = handleAt(down.position) ?: return@awaitEachGesture
+    down.consume()
+    var travelled = Offset.Zero
+    var dragging = false
+    var index: Int? = null
+    while (true) {
+        val event = awaitPointerEvent()
+        val change = event.changes.firstOrNull { it.id == down.id }
+        if (change == null || !change.pressed || event.changes.count { it.pressed } > 1) {
+            if (dragging) onEnd() else if (change != null && !change.pressed) onTap(handle)
+            change?.consume()
+            return@awaitEachGesture
+        }
+        travelled += change.positionChange()
+        if (!dragging && travelled.getDistance() > viewConfiguration.touchSlop) dragging = true
+        if (dragging) index = onDrag(handle, change.position, index)
+        change.consume()
+    }
+}
 
 private fun distanceToSegment(p: Offset, a: Offset, b: Offset): Float {
     val ab = b - a
@@ -446,32 +577,35 @@ private fun DrawScope.drawPlanPicture(picture: Picture, topLeft: Offset, size: S
 
 private fun DrawScope.drawCables(
     content: MapContent,
+    routes: List<CableRoute>,
     layer: MapLayer,
     vlans: Map<Int, Vlan>,
     vlanFilter: Int?,
     tracedLinks: Set<String>,
     camera: MapCamera,
 ) {
-    val devices = content.devicesById
+    val devices = content.allDevices
     val dash = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx()))
     val thin = 1.5.dp.toPx()
     val thick = 3.dp.toPx()
 
-    content.map.connections.forEach { link ->
+    routes.forEach { route ->
+        val link = route.link
         if (link.id in tracedLinks) return@forEach
         val a = devices[link.deviceAId] ?: return@forEach
         val b = devices[link.deviceBId] ?: return@forEach
-        val start = camera.toScreen(a.x, a.y)
-        val end = camera.toScreen(b.x, b.y)
+        val pts = route.screenPoints(camera)
+        if (pts.size < 2) return@forEach
         val isTrunk = a.type == DeviceType.SWITCH && b.type == DeviceType.SWITCH
         val isFiber = link.cableType.startsWith("OM", ignoreCase = true) || link.cableType.startsWith("OS", ignoreCase = true)
         val vlan = content.linkVlan[link.id]
 
         when (layer) {
-            MapLayer.L1 -> drawLine(
+            MapLayer.L1 -> drawRoute(
+                pts,
                 color = if (isFiber) Color(0xFF5AC8FA).copy(alpha = 0.7f) else Ink400.copy(alpha = 0.7f),
-                start = start, end = end, strokeWidth = if (isFiber) thick * 0.75f else thin,
-                pathEffect = if (isFiber) null else dash, cap = StrokeCap.Round,
+                width = if (isFiber) thick * 0.75f else thin,
+                effect = if (isFiber) null else dash,
             )
             else -> {
                 val base = when {
@@ -480,24 +614,80 @@ private fun DrawScope.drawCables(
                     else -> Ink400
                 }
                 val faded = vlanFilter != null && !isTrunk && vlan != vlanFilter
-                drawLine(
-                    color = if (faded) base.copy(alpha = 0.12f) else base,
-                    start = start, end = end, strokeWidth = if (isTrunk) thick else thin * 1.3f,
-                    cap = StrokeCap.Round,
-                )
+                drawRoute(pts, if (faded) base.copy(alpha = 0.12f) else base, if (isTrunk) thick else thin * 1.3f)
             }
         }
     }
 
     // The traced path goes last so it is never hidden under other cables, with a soft glow beneath.
-    content.map.connections.forEach { link ->
-        if (link.id !in tracedLinks) return@forEach
-        val a = devices[link.deviceAId] ?: return@forEach
-        val b = devices[link.deviceBId] ?: return@forEach
-        val start = camera.toScreen(a.x, a.y)
-        val end = camera.toScreen(b.x, b.y)
-        drawLine(Accent.copy(alpha = 0.25f), start, end, strokeWidth = 10.dp.toPx(), cap = StrokeCap.Round)
-        drawLine(Accent, start, end, strokeWidth = thick, cap = StrokeCap.Round)
+    routes.forEach { route ->
+        if (route.link.id !in tracedLinks) return@forEach
+        val pts = route.screenPoints(camera)
+        if (pts.size < 2) return@forEach
+        drawRoute(pts, Accent.copy(alpha = 0.25f), 10.dp.toPx())
+        drawRoute(pts, Accent, thick)
+    }
+}
+
+private fun DrawScope.drawRoute(points: List<Offset>, color: Color, width: Float, effect: PathEffect? = null) {
+    val path = Path()
+    path.moveTo(points[0].x, points[0].y)
+    for (i in 1 until points.size) path.lineTo(points[i].x, points[i].y)
+    drawPath(path, color, style = Stroke(width, cap = StrokeCap.Round, join = StrokeJoin.Round, pathEffect = effect))
+}
+
+/** Where cables leave for another floor: a square riser mark with the floor's name. */
+private fun DrawScope.drawRisers(
+    content: MapContent,
+    routes: List<CableRoute>,
+    camera: MapCamera,
+    textMeasurer: TextMeasurer,
+    labelStyle: TextStyle,
+) {
+    val side = 12.dp.toPx()
+    val drawn = HashSet<Pair<Int, Int>>()
+    val labels = ArrayList<Rect>()
+    routes.forEach { route ->
+        val r = route.riser ?: return@forEach
+        val at = camera.toScreen(r.x, r.y)
+        // Several cables up the same riser share one mark and one label.
+        if (!drawn.add(at.x.roundToInt() / 4 to at.y.roundToInt() / 4)) return@forEach
+        drawRect(Ink850, Offset(at.x - side / 2, at.y - side / 2), Size(side, side))
+        drawRect(Color(0xFF5AC8FA), Offset(at.x - side / 2, at.y - side / 2), Size(side, side), style = Stroke(1.5.dp.toPx()))
+        val text = "↕ " + content.floorTitle(r.otherFloorId)
+        val layout = textMeasurer.measure(text, labelStyle.copy(color = Color(0xFF5AC8FA)))
+        val box = Rect(Offset(at.x + side, at.y - layout.size.height / 2f), Size(layout.size.width.toFloat(), layout.size.height.toFloat()))
+        // Risers side by side share one label rather than printing over each other.
+        if (labels.any { it.overlaps(box) }) return@forEach
+        labels += box
+        drawText(layout, topLeft = box.topLeft)
+    }
+}
+
+/** Grips of the cable being edited: bends to drag or pick, and "+" between them to add one. */
+private fun DrawScope.drawRouteHandles(route: CableRoute, selectedPoint: Int?, camera: MapCamera) {
+    val pts = route.screenPoints(camera)
+    if (pts.size >= 2) drawRoute(pts, Accent, 3.dp.toPx())
+    val ring = 2.dp.toPx()
+    for (k in 0 until route.points.size - 1) {
+        val a = route.points[k]
+        val b = route.points[k + 1]
+        val mid = camera.toScreen((a.x + b.x) / 2f, (a.y + b.y) / 2f)
+        drawCircle(Ink850, 8.dp.toPx(), mid)
+        drawCircle(Accent, 8.dp.toPx(), mid, style = Stroke(ring))
+        val arm = 4.dp.toPx()
+        drawLine(Accent, mid - Offset(arm, 0f), mid + Offset(arm, 0f), ring)
+        drawLine(Accent, mid - Offset(0f, arm), mid + Offset(0f, arm), ring)
+    }
+    route.riser?.takeIf { it.virtual }?.let { r ->
+        val at = camera.toScreen(r.x, r.y)
+        drawCircle(Accent, 9.dp.toPx(), at, style = Stroke(ring))
+    }
+    route.points.filter { it.index in route.link.waypoints.indices }.forEach { p ->
+        val at = camera.toScreen(p.x, p.y)
+        val picked = p.index == selectedPoint
+        drawCircle(if (picked) StatusColors.Offline else Color.White, 9.dp.toPx(), at)
+        drawCircle(Accent, 9.dp.toPx(), at, style = Stroke(ring))
     }
 }
 

@@ -12,7 +12,7 @@ Clients should ignore unknown fields.
 | Method | Path | Returns |
 |---|---|---|
 | GET | `/api/v1/health` | `{status, version, hal_mode: "emulator"\|"real", device_writes_enabled, monitor_mode: "emulator"\|"real"}` (no auth) |
-| GET | `/api/v1/floors` | `[{id, building_name, floor_number, plan_image_url, scale_pixels_per_meter, width_px, height_px, created_at}]` |
+| GET | `/api/v1/floors` | `[{id, building_name, floor_number, name, plan_image_url, scale_pixels_per_meter, width_px, height_px, created_at}]` |
 | GET | `/static/plans/floor-1.svg` | plan image referenced by `plan_image_url` (no auth) |
 | GET | `/api/v1/devices?floor_id=&type=&q=` | `[{id, name, type, vendor, model, ip, mac, floor_id, x, y, is_online, last_seen_at, vlan_id, is_active, nfc_tag_uid, snmp_community, metadata}]` |
 | GET | `/api/v1/devices/{id}` | one device |
@@ -21,7 +21,7 @@ Clients should ignore unknown fields.
 | GET | `/api/v1/devices/{id}/ports` | `[{id, device_id, number, name, is_uplink, mode, access_vlan, tagged_vlans, is_admin_up, is_oper_up, speed_mbps, poe_enabled, connected_mac, connected_device_name}]` |
 | GET | `/api/v1/ports/{id}/trace` | `{hops: [{device_id, device_name, device_type, port_id, port_name}]}`, e.g. PC → socket → patch panel → switch |
 | GET | `/api/v1/vlans` | `[{vlan_id, name, subnet_cidr, color_hex, description}]` |
-| GET | `/api/v1/connections?device_id=` | `[{id, port_a_id, port_b_id, device_a_id, device_b_id, cable_type, length_meters, label, notes}]` |
+| GET | `/api/v1/connections?device_id=` | `[{id, port_a_id, port_b_id, device_a_id, device_b_id, cable_type, length_meters, label, notes, waypoints}]` |
 | GET | `/api/v1/printers` | `[{id, name, ip, model, is_online, total_pages, consumables: [{name, color_hex, kind, level_percent}], low_supply, polled_at}]` |
 | GET | `/api/v1/printers/{id}` | one printer |
 | GET | `/api/v1/alerts?is_resolved=&severity=&device_id=` | `[{id, device_id, port_id, severity, alert_type, message, is_resolved, created_at, resolved_at}]` |
@@ -65,6 +65,9 @@ Map editor (the app's "Редактор карты"), also inventory only:
 | GET | `/api/v1/floors/{id}/plan-image` | The uploaded plan, with the token. |
 | DELETE | `/api/v1/floors/{id}/plan-image` | Removes the plan and its placement. |
 | PATCH | `/api/v1/floors/{id}` | `plan_x`, `plan_y`, `plan_w`, `plan_h`: where the plan lies, in map pixels. `drawings`: `[{color: "#RRGGBB", width, points: [x, y, ...]}]`, up to 500 lines. |
+| POST/PATCH | `/api/v1/floors` | `name` (optional, "" clears it) names a floor; otherwise apps show "Этаж N". `floor_number` sets the order, bottom to top, which is also the order `GET /floors` returns. |
+| DELETE | `/api/v1/floors/{id}` | Only an empty floor: with devices on it the answer is 409 `floor_not_empty`. |
+| PATCH | `/api/v1/connections/{id}` | `waypoints`: the cable's bends from end A to end B, `[{x, y, floor_id?}]`, up to 200. A bend without `floor_id` lies on end A's floor; a cable between floors lists its bends on each floor and the apps draw a riser where it leaves one. `[]` makes it straight again. |
 | POST | `/api/v1/connections/link` | `{device_a_id, device_b_id, cable_type}`: a cable between two devices; the server picks a free port on each or adds one (`same_device`, `already_linked`, `no_free_port`). |
 
 ## Talking to switches

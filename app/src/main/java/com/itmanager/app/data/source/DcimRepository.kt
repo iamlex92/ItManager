@@ -17,6 +17,8 @@ import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.Drawing
+import com.itmanager.app.data.model.FloorDraft
+import com.itmanager.app.data.model.FloorInfo
 import com.itmanager.app.data.model.FloorMap
 import com.itmanager.app.data.model.FloorPlan
 import com.itmanager.app.data.model.ImportReport
@@ -30,6 +32,7 @@ import com.itmanager.app.data.model.Runbook
 import com.itmanager.app.data.model.RunbookRun
 import com.itmanager.app.data.model.SwitchPort
 import com.itmanager.app.data.model.Vlan
+import com.itmanager.app.data.model.Waypoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -59,7 +62,7 @@ class DcimRepository @Inject constructor(
     /** Screens reload when this emits: on new settings, and after the inventory changed. */
     val settings: Flow<ServerSettings> = combine(settingsRepository.settings, inventoryVersion) { s, _ -> s }
 
-    suspend fun floorMap(): Result<FloorMap> = load { floorMap() }
+    suspend fun floorMap(floorId: String? = null): Result<FloorMap> = load { floorMap(floorId) }
     suspend fun devices(): Result<List<Device>> = load { devices() }
     suspend fun device(id: String): Result<Device> = load { device(id) }
     suspend fun ports(deviceId: String): Result<List<SwitchPort>> = load { ports(deviceId) }
@@ -120,6 +123,11 @@ class DcimRepository @Inject constructor(
     suspend fun linkDevices(a: String, b: String, cableType: String): Result<Connection> =
         edit { linkDevices(a, b, cableType) }
     suspend fun deleteConnection(id: String): Result<Unit> = edit { deleteConnection(id) }
+    suspend fun routeConnection(id: String, waypoints: List<Waypoint>): Result<Connection> =
+        edit { routeConnection(id, waypoints) }
+    suspend fun createFloor(draft: FloorDraft): Result<FloorInfo> = edit { createFloor(draft) }
+    suspend fun renameFloor(id: String, draft: FloorDraft): Result<FloorInfo> = edit { renameFloor(id, draft) }
+    suspend fun deleteFloor(id: String): Result<Unit> = edit { deleteFloor(id) }
     suspend fun uploadPlan(plan: FloorPlan, file: PlanFile): Result<FloorPlan> = load { uploadPlan(plan, file) }
     suspend fun removePlan(plan: FloorPlan): Result<FloorPlan> = load { removePlan(plan) }
     suspend fun placePlan(plan: FloorPlan, rect: PlanRect): Result<FloorPlan> = load { placePlan(plan, rect) }

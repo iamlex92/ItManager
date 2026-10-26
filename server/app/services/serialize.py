@@ -57,6 +57,7 @@ def connection_out(c: Connection, graph: Graph) -> ConnectionOut:
         length_meters=float(c.length_meters) if c.length_meters is not None else None,
         label=c.label,
         notes=c.notes,
+        waypoints=c.waypoints or [],
     )
 
 

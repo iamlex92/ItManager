@@ -2,11 +2,11 @@ import hashlib
 import uuid
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 
-from ..models import Floor, FloorPlanImage
+from ..models import Device, Floor, FloorPlanImage
 from ..schemas import FloorCreate, FloorOut, FloorUpdate
-from .deps import SessionDep, not_found
+from .deps import SessionDep, conflict, not_found
 
 # A phone photo of a plan or a PDF page rendered by the app fits; anything bigger is a mistake.
 MAX_PLAN_BYTES = 15 * 1024 * 1024
@@ -17,7 +17,9 @@ router = APIRouter(prefix="/floors", tags=["floors"])
 
 @router.get("", response_model=list[FloorOut])
 async def list_floors(session: SessionDep):
-    return (await session.scalars(select(Floor).order_by(Floor.building_name, Floor.floor_number))).all()
+    # Bottom to top: the order the floor switcher shows them in.
+    order = (Floor.floor_number, Floor.building_name, Floor.created_at)
+    return (await session.scalars(select(Floor).order_by(*order))).all()
 
 
 @router.post("", response_model=FloorOut, status_code=status.HTTP_201_CREATED)
@@ -137,5 +139,9 @@ async def delete_floor(floor_id: uuid.UUID, session: SessionDep):
     floor = await session.get(Floor, floor_id)
     if floor is None:
         raise not_found("floor")
+    count = await session.scalar(select(func.count()).select_from(Device).where(Device.floor_id == floor_id))
+    if count:
+        # Devices would lose their place on the map: they have to be moved or removed first.
+        raise conflict("floor_not_empty", f"на этаже {count} устройств: перенесите их на другой этаж или удалите")
     await session.delete(floor)
     await session.commit()

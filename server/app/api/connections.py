@@ -113,7 +113,10 @@ async def update_connection(connection_id: uuid.UUID, body: ConnectionUpdate, se
     conn = await session.get(Connection, connection_id)
     if conn is None:
         raise not_found("connection")
-    for k, v in body.model_dump(exclude_unset=True).items():
+    for k, v in body.model_dump(exclude_unset=True, mode="json").items():
+        if k == "waypoints":
+            # Stored without empty floor ids, so a plain route stays [{"x": .., "y": ..}].
+            v = [{key: val for key, val in p.items() if val is not None} for p in v or []]
         setattr(conn, k, v)
     await session.commit()
     await session.refresh(conn)

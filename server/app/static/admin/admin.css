@@ -65,6 +65,8 @@ main { flex: 1; min-height: 0; display: flex; }
 
 .map-wrap { position: relative; flex: 1; min-height: 360px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--bg); }
 #map { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+.route-opts { position: absolute; left: 12px; top: 12px; display: flex; gap: 8px; flex-wrap: wrap; padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); box-shadow: 0 4px 16px rgba(0, 0, 0, .25); }
+.route-opts[hidden] { display: none; }
 .map-hint { position: absolute; left: 12px; bottom: 10px; right: 12px; color: var(--muted); font-size: 12px; pointer-events: none; }
 
 .table-wrap { overflow: auto; flex: 1; min-height: 0; }
@@ -99,3 +101,8 @@ dialog::backdrop { background: rgba(0, 0, 0, .55); }
 }
 .warnings { margin: 8px 0 0; padding: 10px 12px 10px 28px; border-radius: 8px; background: var(--warn-bg); color: var(--text); }
 .warnings li + li { margin-top: 6px; }
+#floor-select { max-width: 220px; }
+#floor-rows input { width: 100%; min-width: 0; }
+#floor-rows input[type=number] { width: 64px; }
+#floor-rows td:last-child { white-space: nowrap; }
+#floors-dialog { width: min(720px, calc(100% - 32px)); }

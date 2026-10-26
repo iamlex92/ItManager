@@ -7,6 +7,7 @@ import com.itmanager.app.data.model.Consumable
 import com.itmanager.app.data.model.ConsumableKind
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceType
+import com.itmanager.app.data.model.FloorInfo
 import com.itmanager.app.data.model.FloorPlan
 import com.itmanager.app.data.model.PlanRect
 import com.itmanager.app.data.model.PortMode
@@ -14,6 +15,7 @@ import com.itmanager.app.data.model.Printer
 import com.itmanager.app.data.model.ServerHealth
 import com.itmanager.app.data.model.SwitchPort
 import com.itmanager.app.data.model.Vlan
+import com.itmanager.app.data.model.Waypoint
 import com.itmanager.app.data.model.parseColorHex
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -45,6 +47,7 @@ data class FloorDto(
     val id: String,
     @SerialName("building_name") val buildingName: String,
     @SerialName("floor_number") val floorNumber: Int,
+    val name: String? = null,
     @SerialName("plan_image_url") val planImageUrl: String? = null,
     @SerialName("scale_pixels_per_meter") val scalePixelsPerMeter: Float? = null,
     @SerialName("width_px") val widthPx: Float? = null,
@@ -54,7 +57,9 @@ data class FloorDto(
     @SerialName("plan_w") val planW: Float? = null,
     @SerialName("plan_h") val planH: Float? = null,
     val drawings: List<DrawingDto> = emptyList(),
-)
+) {
+    fun info() = FloorInfo(id, buildingName, floorNumber, name)
+}
 
 @Serializable
 data class DeviceDto(
@@ -135,11 +140,21 @@ data class ConnectionDto(
     @SerialName("device_b_id") val deviceBId: String? = null,
     @SerialName("cable_type") val cableType: String = "Cat5e",
     val label: String? = null,
+    val waypoints: List<WaypointDto> = emptyList(),
 ) {
     fun toDomain(): Connection? {
         val a = deviceAId ?: return null
         val b = deviceBId ?: return null
-        return Connection(id, a, b, cableType, label)
+        return Connection(id, a, b, cableType, label, waypoints.map { it.toDomain() })
+    }
+}
+
+@Serializable
+data class WaypointDto(val x: Float, val y: Float, @SerialName("floor_id") val floorId: String? = null) {
+    fun toDomain() = Waypoint(x, y, floorId)
+
+    companion object {
+        fun of(p: Waypoint) = WaypointDto(p.x, p.y, p.floorId)
     }
 }
 
@@ -219,7 +234,7 @@ fun parseInstant(raw: String?): Instant? {
 
 fun FloorDto.toDomain(baseUrl: String, fallbackWidth: Float, fallbackHeight: Float) = FloorPlan(
     id = id,
-    title = "$buildingName · этаж $floorNumber",
+    title = name?.takeIf { it.isNotBlank() } ?: "$buildingName · этаж $floorNumber",
     widthPx = widthPx ?: fallbackWidth,
     heightPx = heightPx ?: fallbackHeight,
     pixelsPerMeter = scalePixelsPerMeter ?: 50f,

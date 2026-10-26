@@ -25,6 +25,8 @@ import com.itmanager.app.data.model.describePortChange
 import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.DiagnosticResult
+import com.itmanager.app.data.model.FloorDraft
+import com.itmanager.app.data.model.FloorInfo
 import com.itmanager.app.data.model.FloorMap
 import com.itmanager.app.data.model.FloorPlan
 import com.itmanager.app.data.model.FoundDevice
@@ -48,6 +50,7 @@ import com.itmanager.app.data.model.RunbookRun
 import com.itmanager.app.data.model.SwitchPort
 import com.itmanager.app.data.model.TrafficSeries
 import com.itmanager.app.data.model.Vlan
+import com.itmanager.app.data.model.Waypoint
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -69,22 +72,46 @@ import kotlin.random.Random
 object DemoDataSource : DcimDataSource {
 
     private const val FLOOR_ID = "floor-1"
+    private const val FLOOR_2_ID = "floor-2"
     private const val CORE_SWITCH_ID = "sw-core-01"
 
-    @Volatile private var plan = FloorPlan(
-        id = FLOOR_ID,
-        title = "АБК и цех №1 · этаж 1",
-        widthPx = 1600f,
-        heightPx = 1000f,
-        pixelsPerMeter = 25f,
-        rooms = listOf(
-            Room("Серверная", 40f, 40f, 360f, 300f),
-            Room("ИТ-отдел", 380f, 40f, 700f, 300f),
-            Room("Бухгалтерия", 720f, 40f, 1100f, 300f),
-            Room("Склад", 1120f, 40f, 1560f, 300f),
-            Room("Цех №1", 40f, 340f, 1560f, 960f),
+    /** Floors bottom to top; the first one also holds devices added without a floor. */
+    @Volatile private var floors = listOf(
+        FloorInfo(FLOOR_ID, "АБК и цех №1", 1, null),
+        FloorInfo(FLOOR_2_ID, "АБК", 2, null),
+    )
+
+    @Volatile private var plans = mapOf(
+        FLOOR_ID to FloorPlan(
+            id = FLOOR_ID,
+            title = titleOf(floors[0]),
+            widthPx = 1600f,
+            heightPx = 1000f,
+            pixelsPerMeter = 25f,
+            rooms = listOf(
+                Room("Серверная", 40f, 40f, 360f, 300f),
+                Room("ИТ-отдел", 380f, 40f, 700f, 300f),
+                Room("Бухгалтерия", 720f, 40f, 1100f, 300f),
+                Room("Склад", 1120f, 40f, 1560f, 300f),
+                Room("Цех №1", 40f, 340f, 1560f, 960f),
+            ),
+        ),
+        FLOOR_2_ID to FloorPlan(
+            id = FLOOR_2_ID,
+            title = titleOf(floors[1]),
+            widthPx = 1600f,
+            heightPx = 1000f,
+            pixelsPerMeter = 25f,
+            rooms = listOf(
+                Room("Кроссовая", 40f, 40f, 360f, 300f),
+                Room("Отдел кадров", 380f, 40f, 860f, 300f),
+                Room("Приёмная", 880f, 40f, 1560f, 300f),
+                Room("Переговорная", 40f, 340f, 860f, 700f),
+            ),
         ),
     )
+
+    private fun titleOf(info: FloorInfo) = info.name?.takeIf { it.isNotBlank() } ?: "${info.building} · этаж ${info.number}"
 
     private val vlans = listOf(
         Vlan(10, "Бухгалтерия", "10.10.0.0/24", 0xFF0A84FF),
@@ -120,11 +147,24 @@ object DemoDataSource : DcimDataSource {
         d("cam-02", "CAM-02", DeviceType.CAMERA, "Hikvision", "DS-2CD2143G2", "10.30.0.12", 1400f, 740f, vlan = 30),
         d("cam-03", "CAM-03", DeviceType.CAMERA, "Hikvision", "DS-2CD2143G2", "10.30.0.13", 1500f, 400f, vlan = 30, online = false),
         d("ap-01", "AP-01", DeviceType.ACCESS_POINT, "Ubiquiti", "U6 Pro", "10.99.0.51", 800f, 900f, vlan = 99),
+        // Second floor of the office building, fed by a riser from the server room.
+        d("sw-acc-05", "SW-ACC-05", DeviceType.SWITCH, "Eltex", "MES2324P", "10.99.0.5", 150f, 120f, vlan = 99, floor = FLOOR_2_ID),
+        d("pc-hr-01", "PC-HR-01", DeviceType.WORKSTATION, "Lenovo", "ThinkCentre M70q", "10.10.0.41", 560f, 170f, vlan = 10, floor = FLOOR_2_ID),
+        d("mfp-adm", "MFP-ADM", DeviceType.PRINTER, "Kyocera", "TASKalfa 2553ci", "10.40.0.11", 1200f, 120f, vlan = 40, floor = FLOOR_2_ID),
+        d("ap-02", "AP-02", DeviceType.ACCESS_POINT, "Ubiquiti", "U6 Pro", "10.99.0.52", 450f, 520f, vlan = 99, floor = FLOOR_2_ID),
     )
 
     @Volatile private var connections = listOf(
         c("sw-core-01", "srv-01", "Cat6"),
-        c("sw-core-01", "sw-acc-02", "OM3", "Магистраль АБК"),
+        c("sw-core-01", "sw-acc-02", "OM3", "Магистраль АБК", listOf(Waypoint(120f, 60f), Waypoint(640f, 60f))),
+        // Up the riser in the server room corner to the second floor.
+        c(
+            "sw-core-01", "sw-acc-05", "OM3", "Стояк на 2 этаж",
+            listOf(Waypoint(330f, 110f, FLOOR_ID), Waypoint(330f, 60f, FLOOR_ID), Waypoint(330f, 60f, FLOOR_2_ID)),
+        ),
+        c("pc-hr-01", "sw-acc-05", "Cat6", null, listOf(Waypoint(560f, 260f), Waypoint(250f, 260f))),
+        c("mfp-adm", "sw-acc-05", "Cat6", null, listOf(Waypoint(1200f, 280f), Waypoint(250f, 280f))),
+        c("ap-02", "sw-acc-05"),
         c("sw-core-01", "sw-acc-03", "OM3", "Магистраль цеха"),
         c("pc-it-01", "r-201"), c("r-201", "pp-02"),
         c("pc-buh-01", "r-101"), c("r-101", "pp-02"),
@@ -179,9 +219,15 @@ object DemoDataSource : DcimDataSource {
 
     @Volatile private var byId = devices.associateBy { it.id }
 
-    override suspend fun floorMap(): FloorMap {
+    override suspend fun floorMap(floorId: String?): FloorMap {
         simulateNetwork()
-        return FloorMap(plan, devices, connections, vlans)
+        val info = floors.firstOrNull { it.id == floorId } ?: floors.first()
+        val here = devices.filter { it.floorId == info.id }
+        val ids = here.mapTo(HashSet()) { it.id }
+        val links = connections.filter { it.deviceAId in ids || it.deviceBId in ids }
+        val remote = links.flatMap { listOf(it.deviceAId, it.deviceBId) }.filter { it !in ids }
+            .mapNotNull { id -> byId[id]?.let { id to it } }.toMap()
+        return FloorMap(plans.getValue(info.id), here, links, vlans, floors, remote)
     }
 
     override suspend fun devices(): List<Device> {
@@ -396,10 +442,23 @@ object DemoDataSource : DcimDataSource {
     private val planImages = HashMap<String, ByteArray>()
     private var planVersion = 0
     private var createdDevices = 0
+    private var createdFloors = 0
 
     override suspend fun planBytes(url: String): ByteArray = planImages[url] ?: notFound("План")
 
-    override suspend fun ensureFloor(plan: FloorPlan): FloorPlan = this.plan
+    override suspend fun ensureFloor(plan: FloorPlan): FloorPlan = plans[plan.id] ?: plans.getValue(floors.first().id)
+
+    private fun floorOrFirst(id: String) = if (id in plans) id else floors.first().id
+
+    /** The floor new devices from a scan go to. */
+    private val firstPlan get() = plans.getValue(floorOrFirst(FLOOR_ID))
+
+    private fun planOf(plan: FloorPlan) = plans[plan.id] ?: notFound("Этаж")
+
+    private fun setPlan(plan: FloorPlan): FloorPlan {
+        plans = plans + (plan.id to plan)
+        return plan
+    }
 
     override suspend fun createDevice(floorId: String, draft: DeviceDraft, x: Float, y: Float): Device {
         simulateNetwork()
@@ -407,7 +466,7 @@ object DemoDataSource : DcimDataSource {
             checkName(draft.name, null)
             val device = Device(
                 id = "new-${++createdDevices}", name = draft.name.trim(), type = draft.type, vendor = draft.vendor,
-                model = draft.model, ip = draft.ip, mac = null, floorId = FLOOR_ID, x = x, y = y,
+                model = draft.model, ip = draft.ip, mac = null, floorId = floorOrFirst(floorId), x = x, y = y,
                 isOnline = draft.type == DeviceType.SOCKET || draft.type == DeviceType.PATCH_PANEL,
                 vlanId = draft.ip?.let { ip -> vlans.firstOrNull { ScanRanges.contains(it.subnet, ip) }?.id },
             )
@@ -432,7 +491,7 @@ object DemoDataSource : DcimDataSource {
     override suspend fun moveDevice(id: String, floorId: String, x: Float, y: Float) {
         inventoryLock.withLock {
             if (id !in byId) notFound("Устройство")
-            setDevices(devices.map { if (it.id == id) it.copy(x = x, y = y, floorId = FLOOR_ID) else it })
+            setDevices(devices.map { if (it.id == id) it.copy(x = x, y = y, floorId = floorOrFirst(floorId)) else it })
         }
     }
 
@@ -462,13 +521,54 @@ object DemoDataSource : DcimDataSource {
         inventoryLock.withLock { connections = connections.filter { it.id != id } }
     }
 
+    override suspend fun routeConnection(id: String, waypoints: List<Waypoint>): Connection = inventoryLock.withLock {
+        val link = connections.firstOrNull { it.id == id } ?: notFound("Кабель")
+        val updated = link.copy(waypoints = waypoints.take(200))
+        connections = connections.map { if (it.id == id) updated else it }
+        updated
+    }
+
+    override suspend fun createFloor(draft: FloorDraft): FloorInfo {
+        simulateNetwork()
+        return inventoryLock.withLock {
+            val info = FloorInfo("floor-new-${++createdFloors}", draft.building.trim(), draft.number, draft.name?.trim())
+            floors = (floors + info).sortedBy { it.number }
+            setPlan(FloorPlan(info.id, titleOf(info), 1600f, 1000f, 25f, emptyList()))
+            info
+        }
+    }
+
+    override suspend fun renameFloor(id: String, draft: FloorDraft): FloorInfo {
+        simulateNetwork()
+        return inventoryLock.withLock {
+            val info = FloorInfo(id, draft.building.trim(), draft.number, draft.name?.trim()?.takeIf { it.isNotEmpty() })
+            if (floors.none { it.id == id }) notFound("Этаж")
+            floors = floors.map { if (it.id == id) info else it }.sortedBy { it.number }
+            setPlan(plans.getValue(id).copy(title = titleOf(info)))
+            info
+        }
+    }
+
+    override suspend fun deleteFloor(id: String) {
+        simulateNetwork()
+        inventoryLock.withLock {
+            if (floors.none { it.id == id }) notFound("Этаж")
+            val count = devices.count { it.floorId == id }
+            if (count > 0) throw UserFacingException("На этаже $count устройств: перенесите их на другой этаж или удалите.")
+            if (floors.size == 1) throw UserFacingException("Это единственный этаж.")
+            plans[id]?.imageUrl?.let(planImages::remove)
+            floors = floors.filter { it.id != id }
+            plans = plans - id
+        }
+    }
+
     override suspend fun uploadPlan(plan: FloorPlan, file: PlanFile): FloorPlan {
         simulateNetwork()
         return inventoryLock.withLock {
-            this.plan.imageUrl?.let(planImages::remove)
+            val current = planOf(plan)
+            current.imageUrl?.let(planImages::remove)
             val url = "demo://plan/${++planVersion}"
             planImages[url] = file.bytes
-            val current = this.plan
             val rect = current.imageRect ?: run {
                 val w = current.widthPx
                 PlanRect(0f, 0f, w, w * file.height / file.width.coerceAtLeast(1))
@@ -476,23 +576,27 @@ object DemoDataSource : DcimDataSource {
             current.copy(
                 imageUrl = url, imageRect = rect,
                 widthPx = maxOf(current.widthPx, rect.right), heightPx = maxOf(current.heightPx, rect.bottom),
-            ).also { this.plan = it }
+            ).let(::setPlan)
         }
     }
 
     override suspend fun removePlan(plan: FloorPlan): FloorPlan = inventoryLock.withLock {
-        this.plan.imageUrl?.let(planImages::remove)
-        this.plan.copy(imageUrl = null, imageRect = null).also { this.plan = it }
+        val current = planOf(plan)
+        current.imageUrl?.let(planImages::remove)
+        setPlan(current.copy(imageUrl = null, imageRect = null))
     }
 
     override suspend fun placePlan(plan: FloorPlan, rect: PlanRect): FloorPlan = inventoryLock.withLock {
-        this.plan.copy(
-            imageRect = rect, widthPx = maxOf(this.plan.widthPx, rect.right), heightPx = maxOf(this.plan.heightPx, rect.bottom),
-        ).also { this.plan = it }
+        val current = planOf(plan)
+        setPlan(
+            current.copy(
+                imageRect = rect, widthPx = maxOf(current.widthPx, rect.right), heightPx = maxOf(current.heightPx, rect.bottom),
+            ),
+        )
     }
 
     override suspend fun saveDrawings(plan: FloorPlan, drawings: List<Drawing>): FloorPlan = inventoryLock.withLock {
-        this.plan.copy(drawings = drawings).also { this.plan = it }
+        setPlan(planOf(plan).copy(drawings = drawings))
     }
 
     private fun setDevices(list: List<Device>) {
@@ -685,7 +789,7 @@ object DemoDataSource : DcimDataSource {
                 while (!names.add(name.lowercase())) name = "$base-${n++}"
                 val device = Device(
                     id = "found-" + ip.replace('.', '-'), name = name, type = d.type, vendor = d.vendor, model = d.model,
-                    ip = ip, mac = d.mac, floorId = FLOOR_ID, x = 0f, y = 0f, isOnline = true,
+                    ip = ip, mac = d.mac, floorId = floorOrFirst(FLOOR_ID), x = 0f, y = 0f, isOnline = true,
                     vlanId = vlans.firstOrNull { ScanRanges.contains(it.subnet, ip) }?.id,
                 )
                 created += device
@@ -745,13 +849,13 @@ object DemoDataSource : DcimDataSource {
                 val k = around.getOrDefault(anchor, 0)
                 around[anchor] = k + 1
                 val angle = PI / 2 + k * PI / 3
-                position[id] = (ax + 90f * cos(angle).toFloat()).coerceIn(30f, plan.widthPx - 30f) to
-                    (ay + 90f * sin(angle).toFloat()).coerceIn(30f, plan.heightPx - 30f)
+                position[id] = (ax + 90f * cos(angle).toFloat()).coerceIn(30f, firstPlan.widthPx - 30f) to
+                    (ay + 90f * sin(angle).toFloat()).coerceIn(30f, firstPlan.heightPx - 30f)
                 pending -= id
                 progress = true
             }
         }
-        pending.forEachIndexed { i, id -> position[id] = (100f + i * 100f).coerceAtMost(plan.widthPx - 30f) to plan.heightPx - 60f }
+        pending.forEachIndexed { i, id -> position[id] = (100f + i * 100f).coerceAtMost(firstPlan.widthPx - 30f) to firstPlan.heightPx - 60f }
         for (i in created.indices) {
             val (x, y) = position.getValue(created[i].id)
             created[i] = created[i].copy(x = x, y = y)
@@ -890,16 +994,16 @@ object DemoDataSource : DcimDataSource {
 
     private fun d(
         id: String, name: String, type: DeviceType, vendor: String?, model: String?, ip: String?,
-        x: Float, y: Float, vlan: Int? = null, online: Boolean = true,
+        x: Float, y: Float, vlan: Int? = null, online: Boolean = true, floor: String = FLOOR_ID,
     ) = Device(
         id = id, name = name, type = type, vendor = vendor, model = model, ip = ip,
-        mac = ip?.let { fakeMac(id) }, floorId = FLOOR_ID, x = x, y = y,
+        mac = ip?.let { fakeMac(id) }, floorId = floor, x = x, y = y,
         isOnline = online || type == DeviceType.SOCKET || type == DeviceType.PATCH_PANEL,
         vlanId = vlan,
     )
 
-    private fun c(a: String, b: String, cable: String = "Cat5e", label: String? = null) =
-        Connection("$a--$b", a, b, cable, label)
+    private fun c(a: String, b: String, cable: String = "Cat5e", label: String? = null, route: List<Waypoint> = emptyList()) =
+        Connection("$a--$b", a, b, cable, label, route)
 
     private fun fakeMac(seed: String): String {
         val r = Random(seed.hashCode())

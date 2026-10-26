@@ -38,6 +38,8 @@ class Floor(Base):
     id: Mapped[uuid.UUID] = _uuid_pk()
     building_name: Mapped[str] = mapped_column(String(100))
     floor_number: Mapped[int] = mapped_column(Integer)
+    # What people call the floor: «2 этаж», «Подвал», «Серверная». Empty: «Этаж N».
+    name: Mapped[str | None] = mapped_column(String(100))
     plan_image_url: Mapped[str] = mapped_column(Text)
     scale_pixels_per_meter: Mapped[Decimal] = mapped_column(Numeric(10, 2), server_default=text("50.0"))
     # Not in the original spec: plan size so clients can lay out the canvas.
@@ -153,6 +155,9 @@ class Connection(Base):
     length_meters: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
     label: Mapped[str | None] = mapped_column(String(50))
     notes: Mapped[str | None] = mapped_column(Text)
+    # The route drawn on the map between the two ends: [{"x": 1.0, "y": 2.0, "floor_id": "..."}].
+    # A point without floor_id lies on the floor of end A. Empty: a straight line.
+    waypoints: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
 
 
 class DeviceConfig(Base):

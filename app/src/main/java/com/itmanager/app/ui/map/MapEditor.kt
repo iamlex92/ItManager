@@ -31,6 +31,7 @@ import androidx.compose.material.icons.outlined.FitScreen
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.OpenWith
 import androidx.compose.material.icons.outlined.Remove
+import androidx.compose.material.icons.outlined.RemoveCircleOutline
 import androidx.compose.material.icons.outlined.UploadFile
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilledTonalButton
@@ -61,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.DeviceType
+import com.itmanager.app.data.model.FloorInfo
 import com.itmanager.app.ui.components.icon
 
 private val EditTool.icon: ImageVector
@@ -76,12 +78,18 @@ private val EditTool.icon: ImageVector
 fun MapEditToolbar(
     state: MapEditorState,
     linkFromName: String?,
+    /** The cable whose route is being edited, as "SW-01 — PC-07". */
+    selectedLinkName: String?,
     hasPlan: Boolean,
     hasDrawings: Boolean,
     onTool: (EditTool) -> Unit,
     onAddDevice: () -> Unit,
     onCable: (String) -> Unit,
     onCancelLink: () -> Unit,
+    onDeletePoint: () -> Unit,
+    onStraighten: () -> Unit,
+    onDeleteLink: () -> Unit,
+    onDoneLink: () -> Unit,
     onPenColor: (Long) -> Unit,
     onUndo: () -> Unit,
     onClearDrawings: () -> Unit,
@@ -126,7 +134,21 @@ fun MapEditToolbar(
                         Spacer(Modifier.width(8.dp))
                         Text("Добавить объект")
                     }
-                    EditTool.LINK -> if (linkFromName != null) {
+                    EditTool.LINK -> if (selectedLinkName != null) {
+                        Text(
+                            selectedLinkName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(onClick = onDeletePoint, enabled = state.selectedPoint != null) {
+                            Icon(Icons.Outlined.RemoveCircleOutline, contentDescription = "Удалить точку поворота")
+                        }
+                        TextButton(onClick = onStraighten) { Text("Выпрямить") }
+                        IconButton(onClick = onDeleteLink) { Icon(Icons.Outlined.DeleteOutline, contentDescription = "Удалить кабель") }
+                        IconButton(onClick = onDoneLink) { Icon(Icons.Outlined.Close, contentDescription = "Закончить с кабелем") }
+                    } else if (linkFromName != null) {
                         Text(
                             "От $linkFromName: коснитесь второго устройства",
                             style = MaterialTheme.typography.bodyMedium,
@@ -178,7 +200,7 @@ fun MapEditToolbar(
             Spacer(Modifier.height(6.dp))
             val error = state.error
             Text(
-                error ?: state.tool.hint,
+                error ?: if (selectedLinkName != null) ROUTE_HINT else state.tool.hint,
                 style = MaterialTheme.typography.bodySmall,
                 color = if (error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
@@ -188,6 +210,9 @@ fun MapEditToolbar(
         }
     }
 }
+
+private const val ROUTE_HINT =
+    "Тяните белые точки, чтобы вести кабель по трассе; «+» добавляет точку поворота. Коснитесь точки, чтобы выбрать её для удаления."
 
 private val FORM_TYPES = listOf(
     DeviceType.SWITCH, DeviceType.ACCESS_POINT, DeviceType.CAMERA, DeviceType.PRINTER, DeviceType.WORKSTATION,
@@ -202,6 +227,8 @@ private val IPV4 = Regex("""^((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[
 fun DeviceFormDialog(
     form: DeviceForm,
     busy: Boolean,
+    floors: List<FloorInfo>,
+    onFloor: (String) -> Unit,
     onSave: (DeviceDraft) -> Unit,
     onDelete: (String) -> Unit,
     onDismiss: () -> Unit,
@@ -279,6 +306,14 @@ fun DeviceFormDialog(
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                     )
+                }
+                if (floors.size > 1) {
+                    Text("Этаж", style = MaterialTheme.typography.labelLarge)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        floors.forEach { f ->
+                            FilterChip(selected = f.id == form.floorId, onClick = { onFloor(f.id) }, label = { Text(f.title) })
+                        }
+                    }
                 }
                 form.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                 if (device != null) {

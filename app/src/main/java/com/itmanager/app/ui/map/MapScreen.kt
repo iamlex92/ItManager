@@ -16,6 +16,13 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import com.itmanager.app.data.model.FloorInfo
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Layers
+import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -131,6 +138,7 @@ fun MapScreen(
     var linkToDelete by remember { mutableStateOf<Connection?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
     var confirmRemovePlan by remember { mutableStateOf(false) }
+    var showFloors by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val pickPlan = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let(viewModel::uploadPlan)
@@ -139,6 +147,18 @@ fun MapScreen(
     BackHandler(enabled = state.editing) { viewModel.setEditing(false) }
 
     val content = (state.content as? UiState.Content)?.data
+
+    // Another floor opened: show all of it, as on the first load.
+    val floorId = content?.map?.plan?.id
+    var shownFloor by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(floorId) {
+        if (floorId == null) return@LaunchedEffect
+        if (shownFloor != null && shownFloor != floorId) {
+            repeat(2) { withFrameNanos { } }
+            camera.fit()
+        }
+        shownFloor = floorId
+    }
 
     // "Show on map" from the devices tab: centre on the device once the map is loaded.
     LaunchedEffect(focusRequest, content) {
@@ -154,7 +174,7 @@ fun MapScreen(
             UiState.Loading -> LoadingView()
             is UiState.Error -> ErrorView(c.message, viewModel::retry, onOpenSettings, contentPadding = contentPadding)
             // A fresh server has no devices yet: say what to do instead of showing an empty grid.
-            is UiState.Content -> if (!state.editing && c.data.map.isBlank()) {
+            is UiState.Content -> if (!state.editing && c.data.map.isBlank() && c.data.map.floors.size <= 1) {
                 EmptyMapView(onOpenScanner, onOpenSettings, onDraw = { viewModel.setEditing(true) }, contentPadding)
             } else {
                 val bottomPx = if (state.editing) {
@@ -190,7 +210,21 @@ fun MapScreen(
                             haptics.performHapticFeedback(HapticFeedbackType.GestureEnd)
                             viewModel.moveDevice(id, x, y)
                         },
-                        onTapLink = { linkToDelete = it },
+                        onTapLink = { link ->
+                            if (link != null) haptics.performHapticFeedback(HapticFeedbackType.ContextClick)
+                            viewModel.selectLink(link?.id)
+                        },
+                        selectedLink = editor.selectedLink,
+                        selectedPoint = editor.selectedPoint,
+                        routes = editor.routes,
+                        onTapPoint = { index ->
+                            haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                            viewModel.selectPoint(if (index == editor.selectedPoint) null else index)
+                        },
+                        onRoute = { id, points ->
+                            haptics.performHapticFeedback(HapticFeedbackType.GestureEnd)
+                            viewModel.setRoute(id, points)
+                        },
                         onStroke = viewModel::addStroke,
                         onPlanMoved = viewModel::placePlan,
                     ),
@@ -208,6 +242,13 @@ fun MapScreen(
             editing = state.editing,
             onToggleEdit = if (content != null) ({ viewModel.setEditing(!state.editing) }) else null,
             isRefreshing = (state.content as? UiState.Content)?.isRefreshing == true,
+            floors = content?.map?.floors.orEmpty(),
+            currentFloorId = floorId,
+            onFloor = {
+                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                viewModel.selectFloor(it)
+            },
+            onManageFloors = { showFloors = true },
             layer = state.layer,
             onLayerChange = {
                 haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
@@ -290,6 +331,11 @@ fun MapScreen(
             MapEditToolbar(
                 state = editor,
                 linkFromName = editor.linkFrom?.let { content?.devicesById?.get(it)?.name },
+                selectedLinkName = editor.selectedLink?.let { id ->
+                    val link = content?.map?.connections?.firstOrNull { it.id == id } ?: return@let null
+                    val all = content?.allDevices.orEmpty()
+                    "${all[link.deviceAId]?.name ?: "?"} — ${all[link.deviceBId]?.name ?: "?"}"
+                },
                 hasPlan = plan?.imageUrl != null,
                 hasDrawings = plan?.drawings?.isNotEmpty() == true,
                 onTool = {
@@ -305,6 +351,10 @@ fun MapScreen(
                 },
                 onCable = viewModel::setCable,
                 onCancelLink = viewModel::cancelLink,
+                onDeletePoint = viewModel::deletePoint,
+                onStraighten = viewModel::straighten,
+                onDeleteLink = { linkToDelete = editor.selectedLink?.let { id -> content?.map?.connections?.firstOrNull { it.id == id } } },
+                onDoneLink = { viewModel.selectLink(null) },
                 onPenColor = viewModel::setPenColor,
                 onUndo = viewModel::undoStroke,
                 onClearDrawings = { confirmClear = true },
@@ -320,13 +370,15 @@ fun MapScreen(
             DeviceFormDialog(
                 form = form,
                 busy = state.editor.busy,
+                floors = content?.map?.floors.orEmpty(),
+                onFloor = viewModel::setFormFloor,
                 onSave = viewModel::saveDevice,
                 onDelete = viewModel::deleteDevice,
                 onDismiss = viewModel::closeForm,
             )
         }
         linkToDelete?.let { link ->
-            val names = content?.devicesById.orEmpty().let {
+            val names = content?.allDevices.orEmpty().let {
                 (it[link.deviceAId]?.name ?: "?") to (it[link.deviceBId]?.name ?: "?")
             }
             DeleteLinkDialog(
@@ -337,6 +389,26 @@ fun MapScreen(
                     linkToDelete = null
                 },
                 onDismiss = { linkToDelete = null },
+            )
+        }
+        if (showFloors && content != null) {
+            FloorsDialog(
+                floors = content.map.floors,
+                currentId = floorId,
+                busy = state.editor.busy,
+                error = state.editor.error,
+                onOpen = {
+                    viewModel.selectFloor(it)
+                    showFloors = false
+                },
+                onCreate = viewModel::createFloor,
+                onRename = viewModel::renameFloor,
+                onMove = viewModel::moveFloor,
+                onDelete = viewModel::deleteFloor,
+                onDismiss = {
+                    viewModel.dismissError()
+                    showFloors = false
+                },
             )
         }
         if (confirmClear) {
@@ -378,6 +450,10 @@ private fun MapTopPanel(
     editing: Boolean,
     onToggleEdit: (() -> Unit)?,
     isRefreshing: Boolean,
+    floors: List<FloorInfo>,
+    currentFloorId: String?,
+    onFloor: (String) -> Unit,
+    onManageFloors: () -> Unit,
     layer: MapLayer,
     onLayerChange: (MapLayer) -> Unit,
     vlans: List<Pair<Int, Pair<String, Color>>>,
@@ -419,10 +495,48 @@ private fun MapTopPanel(
                 )
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        if (subtitle != null) {
-                            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    var floorMenu by remember { mutableStateOf(false) }
+                    Box(Modifier.weight(1f)) {
+                        Column(Modifier.clickable(onClickLabel = "Выбрать этаж") { floorMenu = true }) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    title,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false),
+                                )
+                                Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
+                            }
+                            if (subtitle != null) {
+                                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        DropdownMenu(expanded = floorMenu, onDismissRequest = { floorMenu = false }) {
+                            floors.reversed().forEach { f ->
+                                DropdownMenuItem(
+                                    text = { Text(f.title) },
+                                    onClick = {
+                                        floorMenu = false
+                                        onFloor(f.id)
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Outlined.Layers,
+                                            contentDescription = null,
+                                            tint = if (f.id == currentFloorId) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                                        )
+                                    },
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = { Text("Настроить этажи…") },
+                                onClick = {
+                                    floorMenu = false
+                                    onManageFloors()
+                                },
+                                leadingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null) },
+                            )
                         }
                     }
                     if (editing) {
@@ -446,6 +560,22 @@ private fun MapTopPanel(
         }
         Box(Modifier.fillMaxWidth().padding(end = 12.dp).height(2.dp)) {
             if (isRefreshing) LinearProgressIndicator(Modifier.fillMaxWidth())
+        }
+        // More than one floor: they sit right above the layers, one tap away, bottom floor on the left.
+        if (floors.size > 1) {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(end = 12.dp),
+                modifier = Modifier.padding(top = 6.dp),
+            ) {
+                items(floors, key = { it.id }) { f ->
+                    FilterChip(
+                        selected = f.id == currentFloorId,
+                        onClick = { onFloor(f.id) },
+                        label = { Text(f.title, maxLines = 1) },
+                    )
+                }
+            }
         }
         Spacer(Modifier.height(8.dp))
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(end = 12.dp)) {

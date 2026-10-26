@@ -131,3 +131,58 @@ def test_link_to_a_full_switch_is_refused(client):
     assert codes[-1] == 409 and 201 in codes
     # No new port was invented on the switch.
     assert len(client.get(f"/api/v1/devices/{switch['id']}/ports").json()) == len(ports)
+
+
+def test_cable_route_with_bends_on_two_floors(client):
+    ground = client.get("/api/v1/floors").json()[0]
+    upper = new_floor(client)
+    sw = find(client, "SW-ACC-03")
+    r = client.post(
+        "/api/v1/devices", json={"name": "AP-2F", "type": "ACCESS_POINT", "floor_id": upper["id"], "x": 400, "y": 300}
+    )
+    ap = r.json()
+    link = client.post("/api/v1/connections/link", json={"device_a_id": sw["id"], "device_b_id": ap["id"]}).json()
+    assert link["waypoints"] == []
+
+    route = [
+        {"x": 120.04, "y": 80},
+        {"x": 900, "y": 80, "floor_id": ground["id"]},
+        {"x": 50, "y": 60, "floor_id": upper["id"]},
+    ]
+    r = client.patch(f"/api/v1/connections/{link['id']}", json={"waypoints": route})
+    assert r.status_code == 200, r.text
+    assert r.json()["waypoints"] == [
+        {"x": 120.0, "y": 80.0, "floor_id": None},
+        {"x": 900.0, "y": 80.0, "floor_id": ground["id"]},
+        {"x": 50.0, "y": 60.0, "floor_id": upper["id"]},
+    ]
+    # Other fields are left as they were; listing carries the route too.
+    assert r.json()["cable_type"] == "Cat6"
+    listed = client.get("/api/v1/connections", params={"device_id": ap["id"]}).json()
+    assert len(listed[0]["waypoints"]) == 3
+
+    too_many = [{"x": i, "y": i} for i in range(201)]
+    assert client.patch(f"/api/v1/connections/{link['id']}", json={"waypoints": too_many}).status_code == 422
+    assert client.patch(f"/api/v1/connections/{link['id']}", json={"waypoints": [{"x": 1}]}).status_code == 422
+    # Straight again.
+    assert client.patch(f"/api/v1/connections/{link['id']}", json={"waypoints": []}).json()["waypoints"] == []
+
+
+def test_floors_are_named_ordered_and_kept_while_in_use(client):
+    first = client.get("/api/v1/floors").json()[0]
+    basement = client.post("/api/v1/floors", json={"building_name": "АБК", "floor_number": 0, "name": "Подвал"}).json()
+    second = client.post("/api/v1/floors", json={"building_name": "АБК", "floor_number": 2}).json()
+    assert basement["name"] == "Подвал" and second["name"] is None
+    # Bottom to top.
+    assert [f["id"] for f in client.get("/api/v1/floors").json()] == [basement["id"], first["id"], second["id"]]
+
+    r = client.patch(f"/api/v1/floors/{second['id']}", json={"name": "2 этаж, серверная", "floor_number": -1})
+    assert r.json()["name"] == "2 этаж, серверная"
+    assert client.get("/api/v1/floors").json()[0]["id"] == second["id"]
+    # Clearing the name brings back "floor N".
+    assert client.patch(f"/api/v1/floors/{second['id']}", json={"name": "  "}).json()["name"] is None
+
+    # A floor with devices on it is not deleted: they would lose their place.
+    busy = client.delete(f"/api/v1/floors/{first['id']}")
+    assert busy.status_code == 409 and busy.json()["detail"]["code"] == "floor_not_empty"
+    assert client.delete(f"/api/v1/floors/{basement['id']}").status_code == 204

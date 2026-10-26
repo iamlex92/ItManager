@@ -14,6 +14,8 @@ import com.itmanager.app.data.model.DeviceHistoryEntry
 import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.DiagnosticResult
 import com.itmanager.app.data.model.Drawing
+import com.itmanager.app.data.model.FloorDraft
+import com.itmanager.app.data.model.FloorInfo
 import com.itmanager.app.data.model.FloorMap
 import com.itmanager.app.data.model.FloorPlan
 import com.itmanager.app.data.model.ImportReport
@@ -30,11 +32,13 @@ import com.itmanager.app.data.model.RunbookRun
 import com.itmanager.app.data.model.SwitchPort
 import com.itmanager.app.data.model.TrafficSeries
 import com.itmanager.app.data.model.Vlan
+import com.itmanager.app.data.model.Waypoint
 import kotlinx.coroutines.flow.Flow
 
 /** One place the app reads DCIM data from: built-in demo data or the NetAdmin server. */
 interface DcimDataSource {
-    suspend fun floorMap(): FloorMap
+    /** The map of floor [floorId]; null or an unknown id: the lowest floor. */
+    suspend fun floorMap(floorId: String? = null): FloorMap
     suspend fun devices(): List<Device>
     suspend fun device(id: String): Device
     suspend fun ports(deviceId: String): List<SwitchPort>
@@ -117,6 +121,15 @@ interface DcimDataSource {
     /** A cable between two devices; the server picks or adds free ports on each. */
     suspend fun linkDevices(deviceAId: String, deviceBId: String, cableType: String): Connection
     suspend fun deleteConnection(id: String)
+    /** The cable's bends on the map, all floors at once. */
+    suspend fun routeConnection(id: String, waypoints: List<Waypoint>): Connection
+
+    // Floors of the building.
+
+    suspend fun createFloor(draft: FloorDraft): FloorInfo
+    suspend fun renameFloor(id: String, draft: FloorDraft): FloorInfo
+    /** Refused while devices stand on the floor: they would lose their place. */
+    suspend fun deleteFloor(id: String)
     suspend fun uploadPlan(plan: FloorPlan, file: PlanFile): FloorPlan
     suspend fun removePlan(plan: FloorPlan): FloorPlan
     suspend fun placePlan(plan: FloorPlan, rect: PlanRect): FloorPlan

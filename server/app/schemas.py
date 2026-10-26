@@ -75,6 +75,7 @@ MAX_DRAWINGS = 500
 class FloorBase(BaseModel):
     building_name: str = Field(max_length=100)
     floor_number: int
+    name: str | None = Field(default=None, max_length=100)
     plan_image_url: str = ""
     scale_pixels_per_meter: float = 50.0
     width_px: int | None = None
@@ -85,6 +86,12 @@ class FloorBase(BaseModel):
     plan_h: float | None = Field(default=None, gt=0)
     drawings: list[Drawing] = Field(default_factory=list, max_length=MAX_DRAWINGS)
 
+    @field_validator("name")
+    @classmethod
+    def _blank_name(cls, v: str | None) -> str | None:
+        # An empty name means "no name": the floor is then shown by its number.
+        return (v or "").strip() or None
+
 
 class FloorCreate(FloorBase):
     pass
@@ -93,6 +100,7 @@ class FloorCreate(FloorBase):
 class FloorUpdate(BaseModel):
     building_name: str | None = Field(default=None, max_length=100)
     floor_number: int | None = None
+    name: str | None = Field(default=None, max_length=100)
     plan_image_url: str | None = None
     scale_pixels_per_meter: float | None = None
     width_px: int | None = None
@@ -102,6 +110,12 @@ class FloorUpdate(BaseModel):
     plan_w: float | None = Field(default=None, gt=0)
     plan_h: float | None = Field(default=None, gt=0)
     drawings: list[Drawing] | None = Field(default=None, max_length=MAX_DRAWINGS)
+
+    @field_validator("name")
+    @classmethod
+    def _blank_name(cls, v: str | None) -> str | None:
+        # An empty name means "no name": the floor is then shown by its number.
+        return (v or "").strip() or None
 
 
 class FloorOut(ORM, FloorBase):
@@ -335,6 +349,23 @@ class PortConfigResult(BaseModel):
 # --- connections ----------------------------------------------------------
 
 
+MAX_WAYPOINTS = 200
+
+
+class Waypoint(BaseModel):
+    """A bend of a cable on the map, in map pixels of its floor."""
+
+    x: float = Field(ge=-100_000, le=100_000)
+    y: float = Field(ge=-100_000, le=100_000)
+    # The floor this bend is on, for a cable between floors. None: the floor of end A.
+    floor_id: uuid.UUID | None = None
+
+    @field_validator("x", "y")
+    @classmethod
+    def _round(cls, v: float) -> float:
+        return round(v, 1)
+
+
 class ConnectionCreate(BaseModel):
     port_a_id: uuid.UUID
     port_b_id: uuid.UUID
@@ -358,6 +389,7 @@ class ConnectionUpdate(BaseModel):
     length_meters: float | None = None
     label: str | None = Field(default=None, max_length=50)
     notes: str | None = None
+    waypoints: list[Waypoint] | None = Field(default=None, max_length=MAX_WAYPOINTS)
 
 
 class ConnectionOut(BaseModel):
@@ -370,6 +402,7 @@ class ConnectionOut(BaseModel):
     length_meters: float | None
     label: str | None
     notes: str | None
+    waypoints: list[Waypoint] = []
 
 
 # --- alerts ---------------------------------------------------------------
