@@ -1,5 +1,8 @@
 package com.itmanager.app.ui.map
 
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
@@ -40,6 +43,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.CenterFocusStrong
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.EditLocationAlt
 import androidx.compose.material.icons.outlined.Nfc
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
@@ -91,8 +95,10 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceType
+import com.itmanager.app.data.model.FloorMap
 import com.itmanager.app.data.model.MapLayer
 import com.itmanager.app.ui.components.AlertsBell
 import com.itmanager.app.ui.components.ErrorView
@@ -121,7 +127,16 @@ fun MapScreen(
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
     var topPanelHeight by remember { mutableIntStateOf(0) }
+    var toolbarHeight by remember { mutableIntStateOf(0) }
+    var linkToDelete by remember { mutableStateOf<Connection?>(null) }
+    var confirmClear by remember { mutableStateOf(false) }
+    var confirmRemovePlan by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val pickPlan = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let(viewModel::uploadPlan)
+    }
+
+    BackHandler(enabled = state.editing) { viewModel.setEditing(false) }
 
     val content = (state.content as? UiState.Content)?.data
 
@@ -139,11 +154,16 @@ fun MapScreen(
             UiState.Loading -> LoadingView()
             is UiState.Error -> ErrorView(c.message, viewModel::retry, onOpenSettings, contentPadding = contentPadding)
             // A fresh server has no devices yet: say what to do instead of showing an empty grid.
-            is UiState.Content -> if (c.data.map.devices.isEmpty()) {
-                EmptyMapView(onOpenScanner, onOpenSettings, contentPadding)
+            is UiState.Content -> if (!state.editing && c.data.map.isBlank()) {
+                EmptyMapView(onOpenScanner, onOpenSettings, onDraw = { viewModel.setEditing(true) }, contentPadding)
             } else {
-                val bottomPx = with(density) { (contentPadding.calculateBottomPadding() + 16.dp).toPx() }
+                val bottomPx = if (state.editing) {
+                    toolbarHeight + with(density) { (contentPadding.calculateBottomPadding() + 24.dp).toPx() }
+                } else {
+                    with(density) { (contentPadding.calculateBottomPadding() + 16.dp).toPx() }
+                }
                 val sidePx = with(density) { 16.dp.toPx() }
+                val editor = state.editor
                 FloorPlanView(
                     content = c.data,
                     layer = state.layer,
@@ -157,13 +177,36 @@ fun MapScreen(
                         if (id != null && id != state.selectedId) haptics.performHapticFeedback(HapticFeedbackType.ContextClick)
                         viewModel.select(id)
                     },
+                    editor = if (!state.editing) null else MapEditing(
+                        tool = editor.tool,
+                        linkFrom = editor.linkFrom,
+                        penColor = Color(editor.penColor),
+                        moved = editor.moved,
+                        onTapDevice = { id ->
+                            haptics.performHapticFeedback(HapticFeedbackType.ContextClick)
+                            if (editor.tool == EditTool.LINK) viewModel.tapForLink(id) else viewModel.openDevice(id)
+                        },
+                        onMoveDevice = { id, x, y ->
+                            haptics.performHapticFeedback(HapticFeedbackType.GestureEnd)
+                            viewModel.moveDevice(id, x, y)
+                        },
+                        onTapLink = { linkToDelete = it },
+                        onStroke = viewModel::addStroke,
+                        onPlanMoved = viewModel::placePlan,
+                    ),
                 )
             }
         }
 
         MapTopPanel(
             title = content?.map?.plan?.title ?: "Карта",
-            subtitle = content?.let { "${it.map.devices.count { d -> d.type != DeviceType.SOCKET && d.type != DeviceType.PATCH_PANEL }} устройств" },
+            subtitle = if (state.editing) {
+                "Редактор карты · только инвентарь"
+            } else {
+                content?.let { "${it.map.devices.count { d -> d.type != DeviceType.SOCKET && d.type != DeviceType.PATCH_PANEL }} устройств" }
+            },
+            editing = state.editing,
+            onToggleEdit = if (content != null) ({ viewModel.setEditing(!state.editing) }) else null,
             isRefreshing = (state.content as? UiState.Content)?.isRefreshing == true,
             layer = state.layer,
             onLayerChange = {
@@ -192,7 +235,7 @@ fun MapScreen(
         val selected = state.selectedId?.let { content?.devicesById?.get(it) }
         // Fit button steps aside while a device card occupies the bottom.
         AnimatedVisibility(
-            visible = content != null && selected == null,
+            visible = content != null && selected == null && !state.editing,
             enter = fadeIn(Motion.smooth()),
             exit = fadeOut(Motion.smooth()),
             modifier = Modifier
@@ -231,14 +274,109 @@ fun MapScreen(
                 )
             }
         }
+
+        AnimatedVisibility(
+            visible = state.editing && content != null,
+            enter = slideInVertically(Motion.smooth(Motion.RESPONSE_SHEET, IntOffset.VisibilityThreshold)) { it } + fadeIn(),
+            exit = slideOutVertically(Motion.smooth(Motion.RESPONSE_SHEET, IntOffset.VisibilityThreshold)) { it } + fadeOut(),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(contentPadding)
+                .padding(12.dp)
+                .onSizeChanged { toolbarHeight = it.height },
+        ) {
+            val plan = content?.map?.plan
+            val editor = state.editor
+            MapEditToolbar(
+                state = editor,
+                linkFromName = editor.linkFrom?.let { content?.devicesById?.get(it)?.name },
+                hasPlan = plan?.imageUrl != null,
+                hasDrawings = plan?.drawings?.isNotEmpty() == true,
+                onTool = {
+                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                    viewModel.setTool(it)
+                },
+                onAddDevice = {
+                    val at = camera.visibleCentreOnPlan()
+                    viewModel.openNewDevice(
+                        at.x.coerceIn(0f, plan?.widthPx ?: at.x),
+                        at.y.coerceIn(0f, plan?.heightPx ?: at.y),
+                    )
+                },
+                onCable = viewModel::setCable,
+                onCancelLink = viewModel::cancelLink,
+                onPenColor = viewModel::setPenColor,
+                onUndo = viewModel::undoStroke,
+                onClearDrawings = { confirmClear = true },
+                onPickPlan = { pickPlan.launch(arrayOf("application/pdf", "image/*")) },
+                onScalePlan = viewModel::scalePlan,
+                onFitPlan = viewModel::fitPlan,
+                onRemovePlan = { confirmRemovePlan = true },
+                onDismissError = viewModel::dismissError,
+            )
+        }
+
+        state.editor.form?.let { form ->
+            DeviceFormDialog(
+                form = form,
+                busy = state.editor.busy,
+                onSave = viewModel::saveDevice,
+                onDelete = viewModel::deleteDevice,
+                onDismiss = viewModel::closeForm,
+            )
+        }
+        linkToDelete?.let { link ->
+            val names = content?.devicesById.orEmpty().let {
+                (it[link.deviceAId]?.name ?: "?") to (it[link.deviceBId]?.name ?: "?")
+            }
+            DeleteLinkDialog(
+                link = link,
+                names = names,
+                onConfirm = {
+                    viewModel.deleteLink(link)
+                    linkToDelete = null
+                },
+                onDismiss = { linkToDelete = null },
+            )
+        }
+        if (confirmClear) {
+            ConfirmDialog(
+                title = "Стереть все линии?",
+                text = "Пропадут все линии карандаша на этом этаже. Устройства и кабели останутся.",
+                action = "Стереть",
+                onConfirm = {
+                    viewModel.clearDrawings()
+                    confirmClear = false
+                },
+                onDismiss = { confirmClear = false },
+            )
+        }
+        if (confirmRemovePlan) {
+            ConfirmDialog(
+                title = "Убрать план здания?",
+                text = "Подложка пропадёт с карты. Устройства, кабели и линии останутся на своих местах.",
+                action = "Убрать",
+                onConfirm = {
+                    viewModel.removePlan()
+                    confirmRemovePlan = false
+                },
+                onDismiss = { confirmRemovePlan = false },
+            )
+        }
     }
 }
+
+/** Nothing to show yet: no devices, no plan and no drawings. */
+private fun FloorMap.isBlank() =
+    devices.isEmpty() && plan.imageUrl == null && plan.drawings.isEmpty()
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MapTopPanel(
     title: String,
     subtitle: String?,
+    editing: Boolean,
+    onToggleEdit: (() -> Unit)?,
     isRefreshing: Boolean,
     layer: MapLayer,
     onLayerChange: (MapLayer) -> Unit,
@@ -287,8 +425,17 @@ private fun MapTopPanel(
                             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    IconButton(onClick = { searching = true }, enabled = devices.isNotEmpty()) {
-                        Icon(Icons.Outlined.Search, contentDescription = "Поиск на карте")
+                    if (editing) {
+                        TextButton(onClick = { onToggleEdit?.invoke() }) { Text("Готово") }
+                    } else {
+                        if (onToggleEdit != null) {
+                            IconButton(onClick = onToggleEdit) {
+                                Icon(Icons.Outlined.EditLocationAlt, contentDescription = "Редактировать карту")
+                            }
+                        }
+                        IconButton(onClick = { searching = true }, enabled = devices.isNotEmpty()) {
+                            Icon(Icons.Outlined.Search, contentDescription = "Поиск на карте")
+                        }
                     }
                     AlertsBell()
                     IconButton(onClick = onOpenSettings) {
@@ -540,7 +687,12 @@ private fun DeviceCard(
 }
 
 @Composable
-private fun EmptyMapView(onOpenScanner: () -> Unit, onOpenSettings: () -> Unit, contentPadding: PaddingValues) {
+private fun EmptyMapView(
+    onOpenScanner: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onDraw: () -> Unit,
+    contentPadding: PaddingValues,
+) {
     Box(
         Modifier
             .fillMaxSize()
@@ -560,13 +712,14 @@ private fun EmptyMapView(onOpenScanner: () -> Unit, onOpenSettings: () -> Unit, 
             Spacer(Modifier.height(8.dp))
             Text(
                 "Найдите коммутаторы и принтеры сканером сети: он только читает (ping и SNMP GET) и ничего не меняет. " +
-                    "Посмотреть, как всё выглядит, можно на демо-данных в настройках.",
+                    "Или нарисуйте карту сами: загрузите план здания и расставьте объекты вручную.",
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(20.dp))
             Button(onClick = onOpenScanner) { Text("Сканер сети") }
+            FilledTonalButton(onClick = onDraw, modifier = Modifier.padding(top = 8.dp)) { Text("Нарисовать вручную") }
             TextButton(onClick = onOpenSettings) { Text("Настройки") }
         }
     }

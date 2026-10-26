@@ -6,6 +6,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -22,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,14 +39,18 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
@@ -55,9 +63,12 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceType
+import com.itmanager.app.data.model.Drawing
 import com.itmanager.app.data.model.MapLayer
+import com.itmanager.app.data.model.PlanRect
 import com.itmanager.app.data.model.Vlan
 import com.itmanager.app.ui.components.icon
 import com.itmanager.app.ui.theme.Accent
@@ -69,12 +80,32 @@ import com.itmanager.app.ui.theme.Ink850
 import com.itmanager.app.ui.theme.Ink950
 import com.itmanager.app.ui.theme.Motion
 import com.itmanager.app.ui.theme.StatusColors
+import kotlin.math.hypot
 import kotlin.math.roundToInt
 
 private val PASSIVE = setOf(DeviceType.SOCKET, DeviceType.PATCH_PANEL)
 
 /** Wide enough for a device name under the marker; only the circle itself takes touches. */
 private val MARKER_SLOT_WIDTH = 120.dp
+
+/** Pen lines look this wide at the zoom they were drawn at. */
+private val PEN_WIDTH = 3.dp
+
+/** What the map needs from the open editor. */
+class MapEditing(
+    val tool: EditTool,
+    /** First end of a cable being made, shown as selected. */
+    val linkFrom: String?,
+    val penColor: Color,
+    /** Positions dropped but not yet reloaded from the server. */
+    val moved: Map<String, Offset>,
+    val onTapDevice: (String) -> Unit,
+    val onMoveDevice: (id: String, x: Float, y: Float) -> Unit,
+    val onTapLink: (Connection) -> Unit,
+    /** A finished pen line: x, y pairs and its width, in map pixels. */
+    val onStroke: (List<Float>, Float) -> Unit,
+    val onPlanMoved: (PlanRect) -> Unit,
+)
 
 /**
  * The interactive floor plan. Everything is positioned in screen pixels from one [MapCamera],
@@ -92,8 +123,22 @@ fun FloorPlanView(
     visiblePadding: Rect,
     onSelect: (String?) -> Unit,
     modifier: Modifier = Modifier,
+    editor: MapEditing? = null,
 ) {
+    // A marker being dragged, with its position in map pixels; a pen line in progress; a plan being moved.
+    var drag by remember { mutableStateOf<Pair<String, Offset>?>(null) }
+    var stroke by remember { mutableStateOf<List<Offset>>(emptyList()) }
+    var planShift by remember { mutableStateOf(Offset.Zero) }
+    val positions = editor?.moved.orEmpty().let { moved -> drag?.let { moved + it } ?: moved }
+    @Suppress("NAME_SHADOWING")
+    val content = remember(content, positions) { content.withPositions(positions) }
     val plan = content.map.plan
+    val planRect = plan.imageUrl?.let {
+        val r = plan.imageRect ?: PlanRect(0f, 0f, plan.widthPx, plan.heightPx)
+        if (planShift == Offset.Zero) r else r.copy(x = r.x + planShift.x, y = r.y + planShift.y)
+    }
+    val currentEditor by rememberUpdatedState(editor)
+    val currentContent by rememberUpdatedState(content)
     val vlans = remember(content) { content.map.vlans.associateBy { it.id } }
     val textMeasurer = rememberTextMeasurer()
     val labelStyle = MaterialTheme.typography.labelSmall.copy(color = Ink400)
@@ -124,13 +169,22 @@ fun FloorPlanView(
             }
             .pointerInput(camera) {
                 detectTapGestures(
-                    onTap = { currentOnSelect(null) },
+                    onTap = { at ->
+                        val e = currentEditor
+                        when {
+                            e == null -> currentOnSelect(null)
+                            e.tool == EditTool.LINK -> linkAt(currentContent, camera, at, 16.dp.toPx())?.let(e.onTapLink)
+                        }
+                    },
                     onDoubleTap = { camera.toggleZoom(it) },
                 )
             },
     ) {
+        val penColor = editor?.penColor ?: Color.Transparent
         Canvas(Modifier.fillMaxSize()) {
-            drawPlan(content, planPicture, camera, labelStyle, textMeasurer)
+            drawPlan(content, planPicture, planRect, editor?.tool == EditTool.PLAN, camera, labelStyle, textMeasurer)
+            drawDrawings(plan.drawings, camera)
+            if (stroke.size > 1) drawPolyline(stroke.map { camera.toScreen(it.x, it.y) }, penColor, PEN_WIDTH.toPx())
             if (layer == MapLayer.L3) drawSubnets(content, vlans, vlanFilter, camera, textMeasurer, labelStyle)
             if (layer != MapLayer.L3) drawCables(content, layer, vlans, vlanFilter, tracedLinks, camera)
         }
@@ -139,16 +193,148 @@ fun FloorPlanView(
         content.map.devices.forEach { device ->
             if (layer == MapLayer.L3 && device.type in PASSIVE) return@forEach
             val dimmed = vlanFilter != null && device.vlanId != vlanFilter
-            DeviceMarker(
-                device = device,
-                vlanColor = if (layer == MapLayer.L1) null else device.vlanId?.let { vlans[it] }?.color,
-                selected = device.id == selectedId,
-                dimmed = dimmed,
-                showLabel = showLabels || device.id == selectedId,
-                camera = camera,
-                onClick = { onSelect(device.id) },
-            )
+            val selected = if (editor != null) device.id == editor.linkFrom || device.id == drag?.first else device.id == selectedId
+            key(device.id) {
+                DeviceMarker(
+                    device = device,
+                    vlanColor = if (layer == MapLayer.L1) null else device.vlanId?.let { vlans[it] }?.color,
+                    selected = selected,
+                    dimmed = dimmed,
+                    showLabel = showLabels || selected || editor != null,
+                    camera = camera,
+                    onClick = { if (editor != null) editor.onTapDevice(device.id) else onSelect(device.id) },
+                    draggable = editor?.tool == EditTool.MOVE,
+                    onDrag = { delta ->
+                        val from = drag?.second ?: Offset(device.x, device.y)
+                        drag = device.id to Offset(
+                            (from.x + delta.x / camera.scale).coerceIn(0f, plan.widthPx),
+                            (from.y + delta.y / camera.scale).coerceIn(0f, plan.heightPx),
+                        )
+                    },
+                    onDragEnd = {
+                        drag?.let { (id, at) -> currentEditor?.onMoveDevice(id, at.x, at.y) }
+                        drag = null
+                    },
+                )
+            }
         }
+
+        // Pen and plan tools take one-finger drags over the whole map; two fingers still pan and zoom it.
+        when (editor?.tool) {
+            EditTool.DRAW -> Box(
+                Modifier.fillMaxSize().pointerInput(Unit) {
+                    val minStep = 2.dp.toPx()
+                    detectOneFingerDrag(
+                        onStart = { stroke = listOf(camera.toPlan(it)) },
+                        onDrag = { at, _ ->
+                            val last = stroke.lastOrNull()?.let { camera.toScreen(it.x, it.y) }
+                            if (last == null || (at - last).getDistance() >= minStep) {
+                                if (stroke.size < MAX_STROKE_POINTS) stroke = stroke + camera.toPlan(at)
+                            }
+                        },
+                        onEnd = {
+                            val points = stroke
+                            stroke = emptyList()
+                            if (points.size > 1) {
+                                currentEditor?.onStroke(points.flatMap { listOf(it.x, it.y) }, PEN_WIDTH.toPx() / camera.scale)
+                            }
+                        },
+                    )
+                },
+            )
+            EditTool.PLAN -> if (planRect != null) {
+                Box(
+                    Modifier.fillMaxSize().pointerInput(Unit) {
+                        detectOneFingerDrag(
+                            onStart = {},
+                            onDrag = { _, delta -> planShift += delta / camera.scale },
+                            onEnd = {
+                                val p = currentContent.map.plan
+                                val r = p.imageRect ?: PlanRect(0f, 0f, p.widthPx, p.heightPx)
+                                if (planShift != Offset.Zero) currentEditor?.onPlanMoved(r.copy(x = r.x + planShift.x, y = r.y + planShift.y))
+                                planShift = Offset.Zero
+                            },
+                        )
+                    },
+                )
+            }
+            else -> Unit
+        }
+    }
+}
+
+private fun MapContent.withPositions(positions: Map<String, Offset>): MapContent {
+    if (positions.isEmpty()) return this
+    val devices = map.devices.map { d -> positions[d.id]?.let { d.copy(x = it.x, y = it.y) } ?: d }
+    return copy(map = map.copy(devices = devices), devicesById = devices.associateBy { it.id })
+}
+
+/** The cable nearest to a tap, if it passes within [slop] screen pixels. */
+private fun linkAt(content: MapContent, camera: MapCamera, at: Offset, slop: Float): Connection? =
+    content.map.connections
+        .mapNotNull { link ->
+            val a = content.devicesById[link.deviceAId] ?: return@mapNotNull null
+            val b = content.devicesById[link.deviceBId] ?: return@mapNotNull null
+            link to distanceToSegment(at, camera.toScreen(a.x, a.y), camera.toScreen(b.x, b.y))
+        }
+        .filter { it.second <= slop }
+        .minByOrNull { it.second }
+        ?.first
+
+private fun distanceToSegment(p: Offset, a: Offset, b: Offset): Float {
+    val ab = b - a
+    val len2 = ab.x * ab.x + ab.y * ab.y
+    val t = if (len2 == 0f) 0f else (((p.x - a.x) * ab.x + (p.y - a.y) * ab.y) / len2).coerceIn(0f, 1f)
+    val q = a + ab * t
+    return hypot(p.x - q.x, p.y - q.y)
+}
+
+/**
+ * One-finger drag that leaves two-finger gestures to the map: a second finger before the touch slop
+ * gives the gesture up, and the drag ends if one lands later. Consumes what it uses, so the map stays still.
+ */
+private suspend fun PointerInputScope.detectOneFingerDrag(
+    onStart: (Offset) -> Unit,
+    onDrag: (position: Offset, delta: Offset) -> Unit,
+    onEnd: () -> Unit,
+) = awaitEachGesture {
+    val down = awaitFirstDown(requireUnconsumed = false)
+    var travelled = Offset.Zero
+    var dragging = false
+    while (true) {
+        val event = awaitPointerEvent()
+        val change = event.changes.firstOrNull { it.id == down.id }
+        val fingers = event.changes.count { it.pressed }
+        if (change == null || !change.pressed || fingers > 1) {
+            if (dragging) onEnd()
+            return@awaitEachGesture
+        }
+        if (!dragging) {
+            travelled += change.positionChange()
+            if (travelled.getDistance() <= viewConfiguration.touchSlop) continue
+            dragging = true
+            onStart(down.position)
+            onDrag(change.position, travelled)
+        } else {
+            onDrag(change.position, change.positionChange())
+        }
+        change.consume()
+    }
+}
+
+private fun DrawScope.drawPolyline(points: List<Offset>, color: Color, width: Float) {
+    val path = Path()
+    path.moveTo(points[0].x, points[0].y)
+    for (i in 1 until points.size) path.lineTo(points[i].x, points[i].y)
+    drawPath(path, color, style = Stroke(width, cap = StrokeCap.Round, join = StrokeJoin.Round))
+}
+
+/** Pen lines keep their width in map pixels, so they scale with the plan like walls do. */
+private fun DrawScope.drawDrawings(drawings: List<Drawing>, camera: MapCamera) {
+    for (d in drawings) {
+        if (d.points.size < 4) continue
+        val points = (0 until d.points.size / 2).map { camera.toScreen(d.points[2 * it], d.points[2 * it + 1]) }
+        drawPolyline(points, Color(d.colorArgb), d.width * camera.scale)
     }
 }
 
@@ -157,6 +343,8 @@ private val Vlan.color get() = Color(colorArgb)
 private fun DrawScope.drawPlan(
     content: MapContent,
     planPicture: Picture?,
+    planRect: PlanRect?,
+    highlightPlan: Boolean,
     camera: MapCamera,
     labelStyle: TextStyle,
     textMeasurer: TextMeasurer,
@@ -166,14 +354,39 @@ private fun DrawScope.drawPlan(
     val size = Size(plan.widthPx * camera.scale, plan.heightPx * camera.scale)
     val corner = CornerRadius(12.dp.toPx())
     drawRoundRect(Ink850, topLeft, size, corner)
-    if (planPicture != null && planPicture.width > 0) {
-        drawPlanPicture(planPicture, topLeft, size)
+    if (planPicture != null && planPicture.width > 0 && planRect != null) {
+        val fillsFloor = plan.imageRect == null
+        if (!fillsFloor) drawGrid(plan.pixelsPerMeter, topLeft, size, camera)
+        val rectTopLeft = camera.toScreen(planRect.x, planRect.y)
+        val rectSize = Size(planRect.width * camera.scale, planRect.height * camera.scale)
+        drawPlanPicture(planPicture, rectTopLeft, rectSize)
+        if (highlightPlan) {
+            drawRect(
+                Accent, rectTopLeft, rectSize,
+                style = Stroke(1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(8.dp.toPx(), 5.dp.toPx()))),
+            )
+        }
         drawRoundRect(Ink700, topLeft, size, corner, style = Stroke(1.dp.toPx()))
         return
     }
 
-    // Metre grid, coarsened when lines would crowd closer than ~14dp.
-    var step = plan.pixelsPerMeter.coerceAtLeast(1f) * camera.scale
+    drawGrid(plan.pixelsPerMeter, topLeft, size, camera)
+    drawRoundRect(Ink700, topLeft, size, corner, style = Stroke(1.dp.toPx()))
+
+    val wall = Stroke(1.5.dp.toPx())
+    content.map.plan.rooms.forEach { room ->
+        val tl = camera.toScreen(room.left, room.top)
+        val br = camera.toScreen(room.right, room.bottom)
+        drawRoundRect(Ink600, tl, Size(br.x - tl.x, br.y - tl.y), CornerRadius(6.dp.toPx()), style = wall)
+        if (br.x - tl.x > 72.dp.toPx()) {
+            drawLabel(textMeasurer, room.name, Offset(tl.x + 8.dp.toPx(), tl.y + 6.dp.toPx()), labelStyle)
+        }
+    }
+}
+
+/** Metre grid, coarsened when lines would crowd closer than ~14dp. */
+private fun DrawScope.drawGrid(pixelsPerMeter: Float, topLeft: Offset, size: Size, camera: MapCamera) {
+    var step = pixelsPerMeter.coerceAtLeast(1f) * camera.scale
     while (step < 14.dp.toPx()) step *= 5f
     val gridColor = Color.White.copy(alpha = 0.035f)
     var x = topLeft.x + step
@@ -185,17 +398,6 @@ private fun DrawScope.drawPlan(
     while (y < topLeft.y + size.height) {
         if (y >= 0f && y <= this.size.height) drawLine(gridColor, Offset(topLeft.x, y), Offset(topLeft.x + size.width, y), 1f)
         y += step
-    }
-    drawRoundRect(Ink700, topLeft, size, corner, style = Stroke(1.dp.toPx()))
-
-    val wall = Stroke(1.5.dp.toPx())
-    content.map.plan.rooms.forEach { room ->
-        val tl = camera.toScreen(room.left, room.top)
-        val br = camera.toScreen(room.right, room.bottom)
-        drawRoundRect(Ink600, tl, Size(br.x - tl.x, br.y - tl.y), CornerRadius(6.dp.toPx()), style = wall)
-        if (br.x - tl.x > 72.dp.toPx()) {
-            drawLabel(textMeasurer, room.name, Offset(tl.x + 8.dp.toPx(), tl.y + 6.dp.toPx()), labelStyle)
-        }
     }
 }
 
@@ -224,7 +426,7 @@ private val darkPlanPaint = android.graphics.Paint().apply {
     )
 }
 
-/** Draws the vector plan scaled into the plan's screen rectangle; stays sharp at any zoom. */
+/** Draws the plan scaled into its screen rectangle; a vector plan stays sharp at any zoom. */
 private fun DrawScope.drawPlanPicture(picture: Picture, topLeft: Offset, size: Size) {
     // Only the visible part needs an offscreen layer.
     val left = maxOf(topLeft.x, 0f)
@@ -344,8 +546,13 @@ private fun DeviceMarker(
     showLabel: Boolean,
     camera: MapCamera,
     onClick: () -> Unit,
+    draggable: Boolean = false,
+    onDrag: (Offset) -> Unit = {},
+    onDragEnd: () -> Unit = {},
 ) {
     val passive = device.type in PASSIVE
+    val currentOnDrag by rememberUpdatedState(onDrag)
+    val currentOnDragEnd by rememberUpdatedState(onDragEnd)
     val size: Dp = if (passive) 22.dp else 34.dp
     val emphasis by animateFloatAsState(if (selected) 1.18f else 1f, Motion.momentum(Motion.RESPONSE_SHEET), label = "markerScale")
     val alpha by animateFloatAsState(if (dimmed) 0.22f else 1f, Motion.smooth(Motion.RESPONSE_SHEET), label = "markerAlpha")
@@ -373,6 +580,19 @@ private fun DeviceMarker(
                     scaleX = emphasis
                     scaleY = emphasis
                 }
+                .then(
+                    if (!draggable) Modifier else Modifier.pointerInput(Unit) {
+                        // Consuming past the touch slop takes the drag from the map, which then stays still.
+                        detectDragGestures(
+                            onDrag = { change, delta ->
+                                change.consume()
+                                currentOnDrag(delta)
+                            },
+                            onDragEnd = { currentOnDragEnd() },
+                            onDragCancel = { currentOnDragEnd() },
+                        )
+                    },
+                )
                 .background(if (selected) Accent else Ink800, CircleShape)
                 .border(
                     width = if (vlanColor != null) 2.dp else 1.dp,

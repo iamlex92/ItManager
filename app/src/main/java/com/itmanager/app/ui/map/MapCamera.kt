@@ -186,6 +186,9 @@ class MapCamera internal constructor(private val scope: CoroutineScope) {
         job.invokeOnCompletion { if (animation === job) animation = null }
     }
 
+    /** The map point in the middle of the visible area, where new objects are put. */
+    fun visibleCentreOnPlan(): Offset = toPlan(visibleCentre())
+
     private fun visibleCentre() = Offset(
         padding.left + (viewport.width - padding.left - padding.right) / 2f,
         padding.top + (viewport.height - padding.top - padding.bottom) / 2f,

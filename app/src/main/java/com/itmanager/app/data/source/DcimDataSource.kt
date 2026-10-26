@@ -5,19 +5,25 @@ import com.itmanager.app.data.model.AuditEntry
 import com.itmanager.app.data.model.AuditKind
 import com.itmanager.app.data.model.AuthMethod
 import com.itmanager.app.data.model.ConfigDiff
+import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.DeviceHistoryEntry
 import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.DiagnosticResult
+import com.itmanager.app.data.model.Drawing
 import com.itmanager.app.data.model.FloorMap
+import com.itmanager.app.data.model.FloorPlan
 import com.itmanager.app.data.model.ImportReport
 import com.itmanager.app.data.model.NetworkScan
 import com.itmanager.app.data.model.LiveEvent
 import com.itmanager.app.data.model.PortChange
 import com.itmanager.app.data.model.PortChangeResult
 import com.itmanager.app.data.model.PortLoad
+import com.itmanager.app.data.model.PlanFile
+import com.itmanager.app.data.model.PlanRect
 import com.itmanager.app.data.model.Printer
 import com.itmanager.app.data.model.Runbook
 import com.itmanager.app.data.model.RunbookRun
@@ -96,8 +102,25 @@ interface DcimDataSource {
     suspend fun saveCredential(id: String?, draft: CredentialDraft): Credential
     suspend fun deleteCredential(id: String)
 
-    /** Raw SVG of a floor plan. */
-    suspend fun planSvg(url: String): String
+    /** A floor plan file: SVG, PNG or JPEG. */
+    suspend fun planBytes(url: String): ByteArray
+
+    // Map editor. Inventory only: nothing here reaches a device.
+
+    /** [plan] itself when it is stored; otherwise a new floor with its size, for a server that had none. */
+    suspend fun ensureFloor(plan: FloorPlan): FloorPlan
+    suspend fun createDevice(floorId: String, draft: DeviceDraft, x: Float, y: Float): Device
+    suspend fun updateDevice(id: String, draft: DeviceDraft): Device
+    /** Also puts a device that had no floor on [floorId]. */
+    suspend fun moveDevice(id: String, floorId: String, x: Float, y: Float)
+    suspend fun deleteDevice(id: String)
+    /** A cable between two devices; the server picks or adds free ports on each. */
+    suspend fun linkDevices(deviceAId: String, deviceBId: String, cableType: String): Connection
+    suspend fun deleteConnection(id: String)
+    suspend fun uploadPlan(plan: FloorPlan, file: PlanFile): FloorPlan
+    suspend fun removePlan(plan: FloorPlan): FloorPlan
+    suspend fun placePlan(plan: FloorPlan, rect: PlanRect): FloorPlan
+    suspend fun saveDrawings(plan: FloorPlan, drawings: List<Drawing>): FloorPlan
 
     /** Live port and device status for one switch, or for every device with [com.itmanager.app.data.model.ALL_DEVICES]. */
     fun live(deviceId: String): Flow<LiveEvent>

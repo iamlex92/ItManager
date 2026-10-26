@@ -17,7 +17,9 @@ import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Consumable
 import com.itmanager.app.data.model.ConsumableKind
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.DeviceHistoryEntry
+import com.itmanager.app.data.model.Drawing
 import com.itmanager.app.data.model.HistoryKind
 import com.itmanager.app.data.model.describePortChange
 import com.itmanager.app.data.model.DeviceType
@@ -37,6 +39,8 @@ import com.itmanager.app.data.model.PortChange
 import com.itmanager.app.data.model.PortLoad
 import com.itmanager.app.data.model.PortChangeResult
 import com.itmanager.app.data.model.PortMode
+import com.itmanager.app.data.model.PlanFile
+import com.itmanager.app.data.model.PlanRect
 import com.itmanager.app.data.model.Printer
 import com.itmanager.app.data.model.Room
 import com.itmanager.app.data.model.Runbook
@@ -67,7 +71,7 @@ object DemoDataSource : DcimDataSource {
     private const val FLOOR_ID = "floor-1"
     private const val CORE_SWITCH_ID = "sw-core-01"
 
-    private val plan = FloorPlan(
+    @Volatile private var plan = FloorPlan(
         id = FLOOR_ID,
         title = "АБК и цех №1 · этаж 1",
         widthPx = 1600f,
@@ -386,7 +390,122 @@ object DemoDataSource : DcimDataSource {
 
     override suspend fun deleteCredential(id: String) = DemoCredentials.delete(id)
 
-    override suspend fun planSvg(url: String): String = notFound("План")
+    // --- Map editor: inventory only, kept in memory until the app is closed. ---
+
+    /** Plans picked on the phone, by their demo:// url. */
+    private val planImages = HashMap<String, ByteArray>()
+    private var planVersion = 0
+    private var createdDevices = 0
+
+    override suspend fun planBytes(url: String): ByteArray = planImages[url] ?: notFound("План")
+
+    override suspend fun ensureFloor(plan: FloorPlan): FloorPlan = this.plan
+
+    override suspend fun createDevice(floorId: String, draft: DeviceDraft, x: Float, y: Float): Device {
+        simulateNetwork()
+        return inventoryLock.withLock {
+            checkName(draft.name, null)
+            val device = Device(
+                id = "new-${++createdDevices}", name = draft.name.trim(), type = draft.type, vendor = draft.vendor,
+                model = draft.model, ip = draft.ip, mac = null, floorId = FLOOR_ID, x = x, y = y,
+                isOnline = draft.type == DeviceType.SOCKET || draft.type == DeviceType.PATCH_PANEL,
+                vlanId = draft.ip?.let { ip -> vlans.firstOrNull { ScanRanges.contains(it.subnet, ip) }?.id },
+            )
+            setDevices(devices + device)
+            device
+        }
+    }
+
+    override suspend fun updateDevice(id: String, draft: DeviceDraft): Device {
+        simulateNetwork()
+        return inventoryLock.withLock {
+            val current = byId[id] ?: notFound("Устройство")
+            checkName(draft.name, id)
+            val updated = current.copy(
+                name = draft.name.trim(), type = draft.type, ip = draft.ip, vendor = draft.vendor, model = draft.model,
+            )
+            setDevices(devices.map { if (it.id == id) updated else it })
+            updated
+        }
+    }
+
+    override suspend fun moveDevice(id: String, floorId: String, x: Float, y: Float) {
+        inventoryLock.withLock {
+            if (id !in byId) notFound("Устройство")
+            setDevices(devices.map { if (it.id == id) it.copy(x = x, y = y, floorId = FLOOR_ID) else it })
+        }
+    }
+
+    override suspend fun deleteDevice(id: String) {
+        simulateNetwork()
+        inventoryLock.withLock {
+            if (id !in byId) notFound("Устройство")
+            setDevices(devices.filter { it.id != id })
+            connections = connections.filter { it.deviceAId != id && it.deviceBId != id }
+        }
+    }
+
+    override suspend fun linkDevices(deviceAId: String, deviceBId: String, cableType: String): Connection {
+        simulateNetwork()
+        return inventoryLock.withLock {
+            if (deviceAId == deviceBId) throw UserFacingException("Нельзя соединить устройство с самим собой.")
+            if (deviceAId !in byId || deviceBId !in byId) notFound("Устройство")
+            if (connections.any { setOf(it.deviceAId, it.deviceBId) == setOf(deviceAId, deviceBId) }) {
+                throw UserFacingException("Эти устройства уже соединены.")
+            }
+            c(deviceAId, deviceBId, cableType).also { connections = connections + it }
+        }
+    }
+
+    override suspend fun deleteConnection(id: String) {
+        simulateNetwork()
+        inventoryLock.withLock { connections = connections.filter { it.id != id } }
+    }
+
+    override suspend fun uploadPlan(plan: FloorPlan, file: PlanFile): FloorPlan {
+        simulateNetwork()
+        return inventoryLock.withLock {
+            this.plan.imageUrl?.let(planImages::remove)
+            val url = "demo://plan/${++planVersion}"
+            planImages[url] = file.bytes
+            val current = this.plan
+            val rect = current.imageRect ?: run {
+                val w = current.widthPx
+                PlanRect(0f, 0f, w, w * file.height / file.width.coerceAtLeast(1))
+            }
+            current.copy(
+                imageUrl = url, imageRect = rect,
+                widthPx = maxOf(current.widthPx, rect.right), heightPx = maxOf(current.heightPx, rect.bottom),
+            ).also { this.plan = it }
+        }
+    }
+
+    override suspend fun removePlan(plan: FloorPlan): FloorPlan = inventoryLock.withLock {
+        this.plan.imageUrl?.let(planImages::remove)
+        this.plan.copy(imageUrl = null, imageRect = null).also { this.plan = it }
+    }
+
+    override suspend fun placePlan(plan: FloorPlan, rect: PlanRect): FloorPlan = inventoryLock.withLock {
+        this.plan.copy(
+            imageRect = rect, widthPx = maxOf(this.plan.widthPx, rect.right), heightPx = maxOf(this.plan.heightPx, rect.bottom),
+        ).also { this.plan = it }
+    }
+
+    override suspend fun saveDrawings(plan: FloorPlan, drawings: List<Drawing>): FloorPlan = inventoryLock.withLock {
+        this.plan.copy(drawings = drawings).also { this.plan = it }
+    }
+
+    private fun setDevices(list: List<Device>) {
+        devices = list
+        byId = list.associateBy { it.id }
+    }
+
+    private fun checkName(name: String, exceptId: String?) {
+        if (name.isBlank()) throw UserFacingException("Укажите имя устройства.")
+        if (devices.any { it.id != exceptId && it.name.equals(name.trim(), ignoreCase = true) }) {
+            throw UserFacingException("Устройство с именем ${name.trim()} уже есть.")
+        }
+    }
 
     /** Like the server's emulator: the answer follows whether the device with that IP is online. */
     override suspend fun diagnostic(switchId: String, kind: DiagnosticKind, target: String): DiagnosticResult {

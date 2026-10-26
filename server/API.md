@@ -57,6 +57,16 @@ any case and `:`/`-`/no separators are accepted and normalized.
 `POST/PATCH/DELETE` on `/api/v1/floors`, `/api/v1/vlans`, `/api/v1/devices`, `/api/v1/connections`;
 `POST /api/v1/ports`, `DELETE /api/v1/ports/{id}`; `POST /api/v1/alerts`, `POST /api/v1/alerts/{id}/resolve`.
 
+Map editor (the app's "Редактор карты"), also inventory only:
+
+| Method | Path | Notes |
+|---|---|---|
+| PUT | `/api/v1/floors/{id}/plan-image?width=&height=` | Raw PNG, JPEG or SVG body, up to 15 MB (`plan_type`, `plan_too_big`, `empty_plan`). Sets `plan_image_url`; the first upload places the plan at the floor's top-left corner. |
+| GET | `/api/v1/floors/{id}/plan-image` | The uploaded plan, with the token. |
+| DELETE | `/api/v1/floors/{id}/plan-image` | Removes the plan and its placement. |
+| PATCH | `/api/v1/floors/{id}` | `plan_x`, `plan_y`, `plan_w`, `plan_h`: where the plan lies, in map pixels. `drawings`: `[{color: "#RRGGBB", width, points: [x, y, ...]}]`, up to 500 lines. |
+| POST | `/api/v1/connections/link` | `{device_a_id, device_b_id, cable_type}`: a cable between two devices; the server picks a free port on each or adds one (`same_device`, `already_linked`, `no_free_port`). |
+
 ## Talking to switches
 
 Read-only on the device:

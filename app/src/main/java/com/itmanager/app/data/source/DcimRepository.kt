@@ -10,14 +10,20 @@ import com.itmanager.app.data.model.Alert
 import com.itmanager.app.data.model.AuditEntry
 import com.itmanager.app.data.model.AuditKind
 import com.itmanager.app.data.model.AuthMethod
+import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.DiagnosticKind
+import com.itmanager.app.data.model.Drawing
 import com.itmanager.app.data.model.FloorMap
+import com.itmanager.app.data.model.FloorPlan
 import com.itmanager.app.data.model.ImportReport
 import com.itmanager.app.data.model.NetworkScan
 import com.itmanager.app.data.model.LiveEvent
+import com.itmanager.app.data.model.PlanFile
+import com.itmanager.app.data.model.PlanRect
 import com.itmanager.app.data.model.PortChange
 import com.itmanager.app.data.model.Printer
 import com.itmanager.app.data.model.Runbook
@@ -47,7 +53,7 @@ class DcimRepository @Inject constructor(
     private val api: NetAdminApi,
     private val liveSocket: LiveSocket,
 ) {
-    /** Bumped when the inventory changes from the app (devices added from a scan). */
+    /** Bumped when the inventory changes from the app (devices added from a scan or on the map). */
     private val inventoryVersion = MutableStateFlow(0)
 
     /** Screens reload when this emits: on new settings, and after the inventory changed. */
@@ -100,7 +106,28 @@ class DcimRepository @Inject constructor(
     suspend fun saveCredential(id: String?, draft: CredentialDraft): Result<Credential> = load { saveCredential(id, draft) }
     suspend fun deleteCredential(id: String): Result<Unit> = load { deleteCredential(id) }
 
-    suspend fun planSvg(url: String): Result<String> = load { planSvg(url) }
+    suspend fun planBytes(url: String): Result<ByteArray> = load { planBytes(url) }
+
+    // Map editor. Device and cable changes reload every screen; plan changes come back as the new plan.
+
+    suspend fun ensureFloor(plan: FloorPlan): Result<FloorPlan> = load { ensureFloor(plan) }
+    suspend fun createDevice(floorId: String, draft: DeviceDraft, x: Float, y: Float): Result<Device> =
+        edit { createDevice(floorId, draft, x, y) }
+    suspend fun updateDevice(id: String, draft: DeviceDraft): Result<Device> = edit { updateDevice(id, draft) }
+    suspend fun moveDevice(id: String, floorId: String, x: Float, y: Float): Result<Unit> =
+        edit { moveDevice(id, floorId, x, y) }
+    suspend fun deleteDevice(id: String): Result<Unit> = edit { deleteDevice(id) }
+    suspend fun linkDevices(a: String, b: String, cableType: String): Result<Connection> =
+        edit { linkDevices(a, b, cableType) }
+    suspend fun deleteConnection(id: String): Result<Unit> = edit { deleteConnection(id) }
+    suspend fun uploadPlan(plan: FloorPlan, file: PlanFile): Result<FloorPlan> = load { uploadPlan(plan, file) }
+    suspend fun removePlan(plan: FloorPlan): Result<FloorPlan> = load { removePlan(plan) }
+    suspend fun placePlan(plan: FloorPlan, rect: PlanRect): Result<FloorPlan> = load { placePlan(plan, rect) }
+    suspend fun saveDrawings(plan: FloorPlan, drawings: List<Drawing>): Result<FloorPlan> =
+        load { saveDrawings(plan, drawings) }
+
+    private suspend fun <T> edit(block: suspend DcimDataSource.() -> T): Result<T> =
+        load(block).onSuccess { inventoryVersion.value++ }
 
     /** Restarts the stream whenever settings change, so a new server address takes effect at once. */
     @OptIn(ExperimentalCoroutinesApi::class)

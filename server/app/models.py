@@ -7,8 +7,10 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
+    LargeBinary,
     Numeric,
     String,
     Text,
@@ -41,7 +43,27 @@ class Floor(Base):
     # Not in the original spec: plan size so clients can lay out the canvas.
     width_px: Mapped[int | None] = mapped_column(Integer)
     height_px: Mapped[int | None] = mapped_column(Integer)
+    # Where an uploaded plan image sits on the map, in map pixels. Null: it fills the whole floor.
+    plan_x: Mapped[float | None] = mapped_column(Float)
+    plan_y: Mapped[float | None] = mapped_column(Float)
+    plan_w: Mapped[float | None] = mapped_column(Float)
+    plan_h: Mapped[float | None] = mapped_column(Float)
+    # Free lines drawn over the map in the app: [{"color": "#RRGGBB", "width": 4, "points": [x, y, ...]}].
+    drawings: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class FloorPlanImage(Base):
+    """A plan uploaded from the app (PNG, JPEG or SVG), served back at /floors/{id}/plan-image."""
+
+    __tablename__ = "floor_plan_images"
+
+    floor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("floors.id", ondelete="CASCADE"), primary_key=True)
+    content_type: Mapped[str] = mapped_column(String(50))
+    data: Mapped[bytes] = mapped_column(LargeBinary)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class Vlan(Base):

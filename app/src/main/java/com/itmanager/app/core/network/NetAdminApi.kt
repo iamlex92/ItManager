@@ -22,6 +22,7 @@ import io.ktor.http.encodeURLPathPart
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 
 /**
  * Client for the NetAdmin REST API. Writes always carry an explicit "confirm": the app only sends them
@@ -35,8 +36,48 @@ class NetAdminApi @Inject constructor(
     /** Health needs no token, so the settings screen can test an address before saving it. */
     suspend fun health(baseUrl: String): HealthDto = client.get("$baseUrl/api/v1/health").body()
 
-    /** Floor plan SVG; served from /static without a token. */
-    suspend fun text(url: String): String = client.get(url).bodyAsText()
+    /**
+     * A floor plan file: the bundled SVG from /static, or a plan uploaded from the app. The token goes
+     * only to the configured server, never to another host a plan URL might name.
+     */
+    suspend fun planBytes(s: ServerSettings, url: String): ByteArray = guarded {
+        client.get(url) { if (s.baseUrl.isNotBlank() && url.startsWith(s.baseUrl + "/")) auth(s) }.body()
+    }
+
+    // Map editor. Inventory only: none of these reach a device.
+
+    suspend fun createFloor(s: ServerSettings, body: FloorCreateBody): FloorDto = post(s, "floors", body)
+
+    suspend fun patchFloor(s: ServerSettings, id: String, body: FloorPatch): FloorDto = patch(s, "floors/$id", body)
+
+    suspend fun uploadPlan(s: ServerSettings, floorId: String, bytes: ByteArray, mime: String, width: Int, height: Int): FloorDto = guarded {
+        client.put("${requireBase(s)}/api/v1/floors/$floorId/plan-image") {
+            auth(s)
+            parameter("width", width)
+            parameter("height", height)
+            contentType(ContentType.parse(mime))
+            setBody(bytes)
+        }.body()
+    }
+
+    suspend fun deletePlan(s: ServerSettings, floorId: String): FloorDto =
+        guarded { client.delete("${requireBase(s)}/api/v1/floors/$floorId/plan-image") { auth(s) }.body() }
+
+    suspend fun createDevice(s: ServerSettings, body: DeviceBody): DeviceDto = post(s, "devices", body)
+
+    suspend fun moveDevice(s: ServerSettings, id: String, body: DeviceMove): DeviceDto = patch(s, "devices/$id", body)
+
+    suspend fun patchDevice(s: ServerSettings, id: String, body: JsonObject): DeviceDto = patch(s, "devices/$id", body)
+
+    suspend fun deleteDevice(s: ServerSettings, id: String) {
+        guarded { client.delete("${requireBase(s)}/api/v1/devices/$id") { auth(s) } }
+    }
+
+    suspend fun linkDevices(s: ServerSettings, body: LinkBody): ConnectionDto = post(s, "connections/link", body)
+
+    suspend fun deleteConnection(s: ServerSettings, id: String) {
+        guarded { client.delete("${requireBase(s)}/api/v1/connections/$id") { auth(s) } }
+    }
 
     suspend fun floors(s: ServerSettings): List<FloorDto> = fetch(s, "floors")
 
@@ -235,6 +276,14 @@ class NetAdminApi @Inject constructor(
         }
     }
 
+    private suspend inline fun <reified B : Any, reified T> patch(s: ServerSettings, path: String, body: B): T = guarded {
+        client.patch("${requireBase(s)}/api/v1/$path") {
+            auth(s)
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }.body()
+    }
+
     private suspend inline fun <reified B : Any, reified T> post(s: ServerSettings, path: String, body: B): T = guarded {
         client.post("${requireBase(s)}/api/v1/$path") {
             auth(s)
@@ -264,7 +313,10 @@ class NetAdminApi @Inject constructor(
 
     private companion object {
         /** Refusals whose message the server already writes in Russian for the user. */
-        val PHRASED_CODES = setOf("invalid_subnets", "scan_running", "name_taken")
+        val PHRASED_CODES = setOf(
+            "invalid_subnets", "scan_running", "name_taken",
+            "already_linked", "no_free_port", "same_device", "plan_type", "plan_too_big", "empty_plan",
+        )
     }
 
     private fun requireBase(s: ServerSettings): String {

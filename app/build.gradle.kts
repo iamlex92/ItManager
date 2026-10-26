@@ -17,7 +17,7 @@ android {
         targetSdk = 36
         // CI builds count up, so each APK installs over the previous one.
         versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
-        versionName = "0.8.0"
+        versionName = "0.9.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

@@ -8,6 +8,7 @@ import com.itmanager.app.data.model.ConsumableKind
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.model.FloorPlan
+import com.itmanager.app.data.model.PlanRect
 import com.itmanager.app.data.model.PortMode
 import com.itmanager.app.data.model.Printer
 import com.itmanager.app.data.model.ServerHealth
@@ -48,6 +49,11 @@ data class FloorDto(
     @SerialName("scale_pixels_per_meter") val scalePixelsPerMeter: Float? = null,
     @SerialName("width_px") val widthPx: Float? = null,
     @SerialName("height_px") val heightPx: Float? = null,
+    @SerialName("plan_x") val planX: Float? = null,
+    @SerialName("plan_y") val planY: Float? = null,
+    @SerialName("plan_w") val planW: Float? = null,
+    @SerialName("plan_h") val planH: Float? = null,
+    val drawings: List<DrawingDto> = emptyList(),
 )
 
 @Serializable
@@ -222,4 +228,6 @@ fun FloorDto.toDomain(baseUrl: String, fallbackWidth: Float, fallbackHeight: Flo
         // The server returns paths like /static/plans/floor-1.svg relative to itself.
         if (url.startsWith("http://") || url.startsWith("https://")) url else baseUrl + "/" + url.trimStart('/')
     },
+    imageRect = if (planW != null && planH != null) PlanRect(planX ?: 0f, planY ?: 0f, planW, planH) else null,
+    drawings = drawings.map { it.toDomain() },
 )
