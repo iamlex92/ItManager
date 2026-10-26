@@ -6,11 +6,12 @@ from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
 
 from ..config import Settings
-from ..models import Credential, ScriptAuditLog
+from ..models import Credential, CustomScript, ScriptAuditLog
 from ..runbooks.catalog import BY_ID, CATALOG, InvalidParams, Runbook, validate
 from ..runbooks.emulator import RunbookEnvironment, RunResult
 from ..runbooks.real import REAL_CATEGORIES, Login, RealRunbooks
 from ..schemas import RunbookChoiceOut, RunbookOut, RunbookParamOut, RunbookRunIn, RunbookRunOut
+from . import scripts
 from .deps import SessionDep, not_found
 
 log = logging.getLogger(__name__)
@@ -56,9 +57,10 @@ async def runbook_login(session, settings: Settings) -> Login | None:
 
 
 @router.get("", response_model=list[RunbookOut])
-async def list_runbooks(request: Request):
+async def list_runbooks(request: Request, session: SessionDep):
     env = request.app.state.runbooks
-    return [runbook_out(rb) for rb in CATALOG if offered(rb, env)]
+    custom = (await session.scalars(select(CustomScript).order_by(CustomScript.title))).all()
+    return [runbook_out(rb) for rb in CATALOG if offered(rb, env)] + [scripts.runbook_out(s) for s in custom]
 
 
 @router.post("/{runbook_id}/run", response_model=RunbookRunOut)
@@ -66,8 +68,9 @@ async def run_runbook(runbook_id: str, body: RunbookRunIn, request: Request, ses
     """Runs a runbook (emulated, or against AD in RUNBOOK_MODE=real) and writes the run to the audit log.
     Critical runbooks need "confirm": true, which the app sends after biometric confirmation."""
     env: RunbookEnvironment | RealRunbooks = request.app.state.runbooks
-    rb = BY_ID.get(runbook_id)
-    if rb is None or not offered(rb, env):
+    custom = await scripts.by_runbook_id(session, runbook_id) if runbook_id.startswith(scripts.RUNBOOK_PREFIX) else None
+    rb = scripts.as_runbook(custom) if custom else BY_ID.get(runbook_id)
+    if rb is None or (custom is None and not offered(rb, env)):
         raise not_found("runbook")
     try:
         params = validate(rb, body.params)
@@ -82,13 +85,16 @@ async def run_runbook(runbook_id: str, body: RunbookRunIn, request: Request, ses
             },
         )
 
-    real = isinstance(env, RealRunbooks)
+    # Scripts from the web console are never executed, whatever RUNBOOK_MODE says.
+    real = isinstance(env, RealRunbooks) and custom is None
     client = request.client.host if request.client else "unknown"
     triggered_by = f"{body.operator} · {client}" if body.operator else f"api:{client}"
     started_at = datetime.now(UTC)
     t0 = time.monotonic()
     try:
-        if isinstance(env, RealRunbooks):
+        if custom is not None:
+            result = scripts.emulate(custom, params)
+        elif isinstance(env, RealRunbooks):
             result = await env.run(rb.id, params, await runbook_login(session, request.app.state.settings))
         else:
             result = await env.run(rb.id, params)

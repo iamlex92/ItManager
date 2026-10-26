@@ -114,7 +114,12 @@ class MapViewModel @Inject constructor(
         }
         viewModelScope.launch {
             repository.live(ALL_DEVICES).collect { event ->
-                if (event is LiveEvent.DeviceStatus) applyDeviceStatus(event.deviceId, event.isOnline)
+                when (event) {
+                    is LiveEvent.DeviceStatus -> applyDeviceStatus(event.deviceId, event.isOnline)
+                    // Every screen reloads: the map, the device list, the runbooks.
+                    LiveEvent.InventoryChanged -> repository.inventoryChanged()
+                    else -> Unit
+                }
             }
         }
     }

@@ -126,6 +126,11 @@ class DcimRepository @Inject constructor(
     suspend fun saveDrawings(plan: FloorPlan, drawings: List<Drawing>): Result<FloorPlan> =
         load { saveDrawings(plan, drawings) }
 
+    /** The server says the inventory changed elsewhere (the web console, another phone). */
+    fun inventoryChanged() {
+        inventoryVersion.value++
+    }
+
     private suspend fun <T> edit(block: suspend DcimDataSource.() -> T): Result<T> =
         load(block).onSuccess { inventoryVersion.value++ }
 

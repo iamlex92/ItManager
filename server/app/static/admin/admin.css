@@ -1,0 +1,98 @@
+:root {
+  --bg: #0b0e13; --surface: #11151c; --card: #1c222c; --raised: #262e3a; --line: #343d4b;
+  --muted: #8b95a5; --text: #e6edf5; --accent: #4c9eff; --accent-ink: #fff; --danger: #ff6b5e; --ok: #30d158;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+[hidden] { display: none !important; }
+h1 { font-size: 24px; margin: 0 0 8px; }
+h2 { font-size: 16px; margin: 0; }
+code, .mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+.error { color: var(--danger); }
+.spacer { flex: 1; }
+.row { display: flex; align-items: center; gap: 8px; }
+.row.wrap { flex-wrap: wrap; align-items: flex-end; }
+.grow { flex: 1; }
+
+button, .button {
+  background: var(--raised); color: var(--text); border: 1px solid var(--line); border-radius: 8px;
+  padding: 6px 12px; font: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+button:hover, .button:hover { border-color: var(--muted); }
+button:disabled { opacity: .45; cursor: default; }
+button.primary, .button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+button.danger { color: var(--danger); }
+button.ghost { background: transparent; border-color: transparent; }
+input, select, textarea {
+  background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 8px;
+  padding: 7px 10px; font: inherit; width: 100%;
+}
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+input[type=checkbox] { width: auto; }
+label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 12px; }
+label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--text); font-size: 14px; }
+label input, label select, label textarea { color: var(--text); font-size: 14px; }
+
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.login { min-height: 100%; display: grid; place-items: center; padding: 16px; }
+.login .card { width: min(420px, 100%); }
+
+.app { height: 100%; display: flex; flex-direction: column; }
+.top { display: flex; align-items: center; gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--surface); flex-wrap: wrap; }
+.brand { font-weight: 600; font-size: 16px; }
+.tabs { display: flex; gap: 4px; }
+.tabs button { background: transparent; border-color: transparent; }
+.tabs button.active { background: var(--raised); border-color: var(--line); }
+.top .right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.badge { font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; }
+main { flex: 1; min-height: 0; display: flex; }
+.tab { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 12px 16px; gap: 12px; }
+
+.toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tool-opts { display: flex; align-items: center; gap: 8px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; background: transparent; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button.active { background: var(--accent); color: var(--accent-ink); }
+.pens { display: inline-flex; gap: 6px; }
+.pens button { width: 24px; height: 24px; padding: 0; border-radius: 50%; border: 2px solid transparent; }
+.pens button.active { border-color: var(--text); }
+
+.map-wrap { position: relative; flex: 1; min-height: 360px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--bg); }
+#map { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+.map-hint { position: absolute; left: 12px; bottom: 10px; right: 12px; color: var(--muted); font-size: 12px; pointer-events: none; }
+
+.table-wrap { overflow: auto; flex: 1; min-height: 0; }
+table.grid { width: 100%; border-collapse: collapse; }
+.grid th, .grid td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.grid th { color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--bg); }
+.grid tr:hover td { background: var(--surface); }
+.grid td.actions { text-align: right; white-space: nowrap; }
+
+.columns { display: flex; gap: 12px; flex: 1; min-height: 0; align-items: flex-start; flex-wrap: wrap; }
+.columns > .narrow { width: 340px; max-width: 100%; }
+.columns > .grow { flex: 1; min-width: 320px; max-height: 100%; overflow: auto; }
+.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.list li { padding: 8px 10px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; }
+.list li:hover { background: var(--surface); }
+.list li.active { border-color: var(--accent); }
+.param { display: grid; grid-template-columns: 1fr 1.4fr 1.4fr auto auto; gap: 6px; align-items: center; margin-top: 6px; }
+.output { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px; white-space: pre-wrap; margin: 0; max-height: 360px; overflow: auto; }
+
+dialog { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 14px; padding: 0; width: min(520px, calc(100% - 32px)); }
+dialog::backdrop { background: rgba(0, 0, 0, .55); }
+.dialog { padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+.toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--raised); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; max-width: calc(100% - 32px); box-shadow: 0 8px 30px rgba(0,0,0,.4); }
+.toast.error { border-color: var(--danger); }
+
+@media (max-width: 700px) {
+  .tab { padding: 10px; }
+  .param { grid-template-columns: 1fr 1fr; }
+}
