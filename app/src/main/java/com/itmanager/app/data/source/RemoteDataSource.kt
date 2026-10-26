@@ -29,6 +29,7 @@ import com.itmanager.app.data.model.AuditEntry
 import com.itmanager.app.data.model.AuditKind
 import com.itmanager.app.data.model.AuthMethod
 import com.itmanager.app.data.model.ConfigDiff
+import com.itmanager.app.data.model.ConfigImportResult
 import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
@@ -135,6 +136,9 @@ class RemoteDataSource(
     override suspend fun backupConfig(switchId: String) = api.backupConfig(settings, switchId)
 
     override suspend fun configDiff(switchId: String): ConfigDiff = api.configDiff(settings, switchId).toDomain()
+
+    override suspend fun importConfig(switchId: String, text: String, apply: Boolean): ConfigImportResult =
+        api.importConfig(settings, switchId, text, apply).toDomain()
 
     override suspend fun diagnostic(switchId: String, kind: DiagnosticKind, target: String): DiagnosticResult =
         when (kind) {

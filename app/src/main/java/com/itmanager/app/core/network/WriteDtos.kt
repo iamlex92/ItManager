@@ -1,11 +1,17 @@
 package com.itmanager.app.core.network
 
 import com.itmanager.app.data.model.ConfigDiff
+import com.itmanager.app.data.model.ConfigImportChange
+import com.itmanager.app.data.model.ConfigImportPort
+import com.itmanager.app.data.model.ConfigImportResult
 import com.itmanager.app.data.model.DiagnosticResult
 import com.itmanager.app.data.model.PortChange
 import com.itmanager.app.data.model.PortChangeResult
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 
 // Bodies of the guarded write endpoints (server/API.md, "Talking to switches").
 
@@ -48,6 +54,44 @@ data class ConfigDiffDto(val changed: Boolean, val diff: String = "") {
 }
 
 @Serializable
+data class ConfigImportBody(val text: String, val apply: Boolean)
+
+@Serializable
+data class ConfigImportPortDto(
+    val port: String,
+    val matched: Boolean = false,
+    val changes: Map<String, List<JsonElement>> = emptyMap(),
+)
+
+@Serializable
+data class ConfigImportDto(
+    val kind: String = "",
+    val hostname: String? = null,
+    val applied: Boolean = false,
+    val ports: List<ConfigImportPortDto> = emptyList(),
+    @SerialName("unmatched_interfaces") val unmatchedInterfaces: List<String> = emptyList(),
+    @SerialName("unknown_vlans") val unknownVlans: Map<Int, String> = emptyMap(),
+    @SerialName("changed_ports") val changedPorts: Int = 0,
+) {
+    fun toDomain() = ConfigImportResult(
+        kind, hostname, applied,
+        ports.map { p ->
+            ConfigImportPort(
+                p.port, p.matched,
+                p.changes.map { (field, v) -> ConfigImportChange(field, v.getOrNull(0).shown(), v.getOrNull(1).shown()) },
+            )
+        },
+        unmatchedInterfaces, unknownVlans, changedPorts,
+    )
+
+    private fun JsonElement?.shown(): String = when (this) {
+        null, JsonNull -> "—"
+        is JsonPrimitive -> content
+        else -> toString()
+    }
+}
+
+@Serializable
 data class DiagnosticBody(val target: String, val count: Int? = null)
 
 @Serializable
@@ -76,6 +120,7 @@ internal fun writeErrorMessage(code: String?, status: Int): String = when (code)
     "not_a_managed_switch" -> "Это устройство не управляется: нужен коммутатор Cisco или Eltex."
     "not_implemented" -> "Для реального оборудования эта операция на сервере ещё не написана."
     "scan_running" -> "Уже идёт сканирование, дождитесь его окончания."
+    "unrecognised_text" -> "Не похоже на running-config или вывод show vlan brief (Cisco, Eltex)."
     "scan_not_done" -> "Сканирование ещё не закончилось."
     else -> when (status) {
         404 -> "На сервере нет сохранённой копии конфигурации."

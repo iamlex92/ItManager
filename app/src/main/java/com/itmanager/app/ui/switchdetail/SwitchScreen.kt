@@ -22,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Difference
+import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.NetworkCheck
 import androidx.compose.material.icons.outlined.Nfc
@@ -93,6 +94,7 @@ fun SwitchScreen(
     onOpenSettings: () -> Unit,
     onOpenDiff: (switchName: String?) -> Unit,
     onOpenHistory: (switchName: String) -> Unit,
+    onOpenImport: (switchName: String?) -> Unit,
     viewModel: SwitchViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -176,6 +178,7 @@ fun SwitchScreen(
                         QuickAction("Traceroute", Icons.Outlined.Timeline) { viewModel.openDiagnostic(DiagnosticKind.TRACEROUTE) }
                         QuickAction("Сравнить конфиг", Icons.Outlined.Difference) { onOpenDiff(device.name) }
                         QuickAction("История", Icons.Outlined.History) { onOpenHistory(device.name) }
+                        QuickAction("Импорт конфига", Icons.Outlined.FileDownload) { onOpenImport(device.name) }
                         QuickAction("Сохранить конфиг", Icons.Outlined.Save, viewModel::requestSaveConfig)
                         QuickAction("NFC-метка", Icons.Outlined.Nfc, viewModel::bindNfc)
                     }
