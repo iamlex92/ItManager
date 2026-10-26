@@ -36,6 +36,7 @@ import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceBulkChange
 import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.DeviceHistoryEntry
+import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.DiagnosticResult
 import com.itmanager.app.data.model.Drawing
@@ -57,6 +58,7 @@ import com.itmanager.app.data.model.SwitchPort
 import com.itmanager.app.data.model.TrafficSeries
 import com.itmanager.app.data.model.Vlan
 import com.itmanager.app.data.model.Waypoint
+import io.ktor.client.plugins.ResponseException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -217,14 +219,30 @@ class RemoteDataSource(
         return api.createFloor(settings, body).toPlan(plan)
     }
 
+    /** A server from before a category existed answers 422 to it: say that, instead of "check the fields". */
+    private suspend fun <T> knowingTypes(type: DeviceType?, block: suspend () -> T): T = try {
+        block()
+    } catch (e: UserFacingException) {
+        val status = (e.cause as? ResponseException)?.response?.status?.value
+        if (type != null && type in NEWER_TYPES && status == 422) {
+            throw UserFacingException(
+                "Этот сервер ещё не знает категорию «${type.label}»: он старой версии. Обновите сервер (установщик по ссылке в README), и она появится.",
+                e,
+            )
+        }
+        throw e
+    }
+
     override suspend fun createDevice(floorId: String, draft: DeviceDraft, x: Float, y: Float): Device =
-        api.createDevice(
-            settings,
-            DeviceBody(draft.name, draft.type.name, floorId, x, y, draft.ip, draft.vendor, draft.model, draft.hostId),
-        ).toDomain()
+        knowingTypes(draft.type) {
+            api.createDevice(
+                settings,
+                DeviceBody(draft.name, draft.type.name, floorId, x, y, draft.ip, draft.vendor, draft.model, draft.hostId),
+            ).toDomain()
+        }
 
     override suspend fun updateDevice(id: String, draft: DeviceDraft): Device =
-        api.patchDevice(settings, id, draft.toPatch()).toDomain()
+        knowingTypes(draft.type) { api.patchDevice(settings, id, draft.toPatch()).toDomain() }
 
     override suspend fun moveDevice(id: String, floorId: String, x: Float, y: Float) {
         api.moveDevice(settings, id, DeviceMove(x, y, floorId))
@@ -232,9 +250,9 @@ class RemoteDataSource(
 
     override suspend fun deleteDevice(id: String) = api.deleteDevice(settings, id)
 
-    override suspend fun bulkUpdateDevices(ids: List<String>, change: DeviceBulkChange): Int {
+    override suspend fun bulkUpdateDevices(ids: List<String>, change: DeviceBulkChange): Int = knowingTypes(change.type) {
         val set = BulkSetBody(change.type?.name, change.floorId, change.vendor, change.hostId)
-        return try {
+        try {
             api.bulkUpdateDevices(settings, BulkUpdateBody(ids, set)).changed
         } catch (e: Exception) {
             if (!api.isMissingEndpoint(e)) throw e
@@ -302,3 +320,6 @@ class RemoteDataSource(
 internal const val PING_COUNT = 5
 
 internal fun notFound(what: String): Nothing = throw UserFacingException("$what не найдено")
+
+/** Categories added after the first server release: an older server does not accept them. */
+private val NEWER_TYPES = setOf(DeviceType.ROUTER, DeviceType.FIREWALL, DeviceType.UPS, DeviceType.PHONE, DeviceType.VIRTUAL)

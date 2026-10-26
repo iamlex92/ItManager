@@ -139,7 +139,7 @@
   // ---------------------------------------------------------------- map state
 
   const S = {
-    floor: null, floors: [], floorId: null, allHere: [], showVms: false, devices: [], remote: new Map(), links: [], image: null, imageUrl: null,
+    floor: null, floors: [], floorId: null, allHere: [], showVms: false, hiddenTypes: new Set(), devices: [], remote: new Map(), links: [], image: null, imageUrl: null,
     // The cable whose route is being edited, its picked bend, and a bend being dragged.
     selLink: null, selPoint: null, routeDrag: null,
     tool: "move", pen: PENS[0], linkFrom: null, cable: "Cat6",
@@ -186,11 +186,14 @@
     const all = devices.map((d) => ({ ...d, x: d.x ?? 40, y: d.y ?? 40, floor_id: floorOf(d) }));
     // A virtual machine has no cable and is not physically there: the map leaves it out unless asked.
     S.allHere = all.filter((d) => !S.floor || d.floor_id === S.floor.id);
-    S.devices = S.allHere.filter((d) => d.type !== "VIRTUAL" || S.showVms);
+    // Kinds switched off in the legend leave the map with their cables.
+    const shown = (d) => !S.hiddenTypes.has(d.type) && (d.type !== "VIRTUAL" || S.showVms);
+    S.devices = S.allHere.filter(shown);
     const here = new Set(S.devices.map((d) => d.id));
     const byId = new Map(all.map((d) => [d.id, d]));
+    const unseen = new Set(all.filter((d) => !shown(d)).map((d) => d.id));
     S.links = links.filter((l) => (here.has(l.device_a_id) || here.has(l.device_b_id))
-      && byId.has(l.device_a_id) && byId.has(l.device_b_id));
+      && byId.has(l.device_a_id) && byId.has(l.device_b_id) && !unseen.has(l.device_a_id) && !unseen.has(l.device_b_id));
     S.remote = new Map();
     for (const l of S.links) {
       for (const id of [l.device_a_id, l.device_b_id]) if (!here.has(id)) S.remote.set(id, byId.get(id));
@@ -209,13 +212,32 @@
     const box = $("legend");
     const counts = new Map();
     for (const d of S.allHere) counts.set(d.type, (counts.get(d.type) || 0) + 1);
-    box.replaceChildren(...TYPES.filter(([id]) => counts.has(id)).map(([id, label]) => {
-      const row = document.createElement("div");
+    const rows = TYPES.filter(([id]) => counts.has(id)).map(([id, label]) => {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "legend-row";
+      row.classList.toggle("off", S.hiddenTypes.has(id));
+      row.title = S.hiddenTypes.has(id) ? "Показать на карте" : "Скрыть с карты";
       row.append(glyphCanvas(id), `${label} · ${counts.get(id)}`);
+      row.addEventListener("click", () => {
+        if (S.hiddenTypes.has(id)) S.hiddenTypes.delete(id); else S.hiddenTypes.add(id);
+        loadMap().catch(fail);
+      });
       return row;
-    }));
-    $("legend-toggle").hidden = !box.children.length;
-    if (!box.children.length) box.hidden = true;
+    });
+    if (S.hiddenTypes.size) {
+      const all = document.createElement("button");
+      all.type = "button";
+      all.textContent = "Показать всё";
+      all.addEventListener("click", () => { S.hiddenTypes.clear(); loadMap().catch(fail); });
+      rows.push(all);
+    }
+    const note = document.createElement("div");
+    note.className = "muted small";
+    note.textContent = "Нажмите на тип, чтобы скрыть или показать";
+    box.replaceChildren(note, ...rows);
+    $("legend-toggle").hidden = !rows.length;
+    if (!rows.length) box.hidden = true;
   }
   $("legend-toggle").addEventListener("click", () => { $("legend").hidden = !$("legend").hidden; });
   $("show-vms").addEventListener("change", (ev) => { S.showVms = ev.target.checked; loadMap().catch(fail); });

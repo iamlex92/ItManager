@@ -141,6 +141,8 @@ fun MapScreen(
     var confirmRemovePlan by remember { mutableStateOf(false) }
     var showFloors by remember { mutableStateOf(false) }
     var showLegend by remember { mutableStateOf(false) }
+    // Kinds switched off in the legend: they and their cables leave the map until switched back on.
+    var hiddenTypes by remember { mutableStateOf(emptySet<DeviceType>()) }
     val scope = rememberCoroutineScope()
     val pickPlan = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let(viewModel::uploadPlan)
@@ -187,7 +189,7 @@ fun MapScreen(
                 val sidePx = with(density) { 16.dp.toPx() }
                 val editor = state.editor
                 FloorPlanView(
-                    content = c.data,
+                    content = c.data.without(hiddenTypes),
                     layer = state.layer,
                     vlanFilter = state.vlanFilter,
                     selectedId = state.selectedId,
@@ -307,6 +309,12 @@ fun MapScreen(
                 devices = content?.map?.devices.orEmpty(),
                 open = showLegend,
                 onToggle = { showLegend = !showLegend },
+                hidden = hiddenTypes,
+                onToggleType = { t ->
+                    haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                    hiddenTypes = if (t in hiddenTypes) hiddenTypes - t else hiddenTypes + t
+                },
+                onShowAll = { hiddenTypes = emptySet() },
             )
         }
 
