@@ -876,5 +876,7 @@ class ConfigImportOut(BaseModel):
     applied: bool
     ports: list[ConfigImportPort]
     unmatched_interfaces: list[str]
-    unknown_vlans: dict[int, str] = Field(default_factory=dict, description="VLANs in the text that the server does not know")
+    unknown_vlans: dict[int, str] = Field(
+        default_factory=dict, description="VLANs in the text that the server does not know"
+    )
     changed_ports: int

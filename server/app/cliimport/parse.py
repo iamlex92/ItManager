@@ -158,7 +158,10 @@ class VlanBriefRow:
     ports: list[str]
 
 
-_BRIEF_HEAD = re.compile(r"^(\d{1,4})\s+(.+?)\s{2,}(active|act/unsup|suspended|act/lshut|sus/lshut)\b\s*(.*)$", re.IGNORECASE)
+_BRIEF_HEAD = re.compile(
+    r"^(\d{1,4})\s+(.+?)\s{2,}(active|act/unsup|suspended|act/lshut|sus/lshut)\b\s*(.*)$",
+    re.IGNORECASE,
+)
 
 
 def looks_like_vlan_brief(text: str) -> bool:
