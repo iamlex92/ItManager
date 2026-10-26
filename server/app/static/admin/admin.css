@@ -106,3 +106,15 @@ dialog::backdrop { background: rgba(0, 0, 0, .55); }
 #floor-rows input[type=number] { width: 64px; }
 #floor-rows td:last-child { white-space: nowrap; }
 #floors-dialog { width: min(720px, calc(100% - 32px)); }
+
+.check { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
+.glyph { vertical-align: middle; margin-right: 6px; }
+.pick { width: 28px; }
+.bulk-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+.grid tr.picked td { background: var(--raised); }
+.legend { position: absolute; right: 12px; bottom: 46px; display: grid; gap: 6px; padding: 10px 12px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 4px 16px rgba(0, 0, 0, .25); font-size: 12px; }
+.legend[hidden] { display: none; }
+.legend-toggle { position: absolute; right: 12px; bottom: 10px; }
+.toolbar select { width: auto; max-width: 260px; }
+.toolbar input[type="search"] { width: auto; flex: 1 1 220px; max-width: 420px; }
+.toolbar .check input, .pick input { width: auto; }

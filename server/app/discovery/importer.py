@@ -13,7 +13,10 @@ from ..models import Connection, Device, Floor, Port
 from ..services.topology import PASSIVE_TYPES, load_graph
 from .model import End, FoundDevice, Scan
 
-DEVICE_TYPES = {"SWITCH", "WORKSTATION", "SERVER", "PRINTER", "CAMERA", "ACCESS_POINT", "UNKNOWN"}
+DEVICE_TYPES = {
+    "SWITCH", "WORKSTATION", "SERVER", "PRINTER", "CAMERA", "ACCESS_POINT", "ROUTER", "FIREWALL", "UPS", "PHONE",
+    "VIRTUAL", "UNKNOWN",
+}  # fmt: skip
 
 
 @dataclass

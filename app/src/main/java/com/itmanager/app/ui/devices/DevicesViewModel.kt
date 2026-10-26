@@ -7,7 +7,9 @@ import com.itmanager.app.data.export.ExportFormat
 import com.itmanager.app.data.export.ExportedFile
 import com.itmanager.app.data.export.InventoryExporter
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.DeviceBulkChange
 import com.itmanager.app.data.model.DeviceType
+import com.itmanager.app.data.model.FloorInfo
 import com.itmanager.app.data.source.DcimRepository
 import com.itmanager.app.ui.components.UiState
 import com.itmanager.app.ui.navigation.MapFocus
@@ -28,11 +30,12 @@ import javax.inject.Inject
 /** Filter chips: what an IT manager looks for, with passive cabling grouped together. */
 enum class DeviceFilter(val label: String, val types: Set<DeviceType>?) {
     ALL("Все", null),
-    SWITCHES("Коммутаторы", setOf(DeviceType.SWITCH)),
-    HOSTS("Рабочие места", setOf(DeviceType.WORKSTATION, DeviceType.SERVER)),
+    SWITCHES("Сеть", setOf(DeviceType.SWITCH, DeviceType.ROUTER, DeviceType.FIREWALL)),
+    HOSTS("Компьютеры", setOf(DeviceType.WORKSTATION, DeviceType.SERVER, DeviceType.VIRTUAL)),
     PRINTERS("МФУ", setOf(DeviceType.PRINTER)),
     CAMERAS("Камеры", setOf(DeviceType.CAMERA, DeviceType.ACCESS_POINT)),
     PASSIVE("Кабельное", setOf(DeviceType.SOCKET, DeviceType.PATCH_PANEL)),
+    OTHER("Прочее", setOf(DeviceType.UPS, DeviceType.PHONE, DeviceType.UNKNOWN)),
 }
 
 data class DevicesUiState(
@@ -40,6 +43,16 @@ data class DevicesUiState(
     val query: String = "",
     val filter: DeviceFilter = DeviceFilter.ALL,
     val offlineCount: Int = 0,
+    /** Devices picked for a group change; not empty means the list is in selection mode. */
+    val selected: Set<String> = emptySet(),
+)
+
+/** The group edit dialog: floors and servers to choose from, and how the last attempt went. */
+data class BulkEditState(
+    val floors: List<FloorInfo> = emptyList(),
+    val hosts: List<Device> = emptyList(),
+    val busy: Boolean = false,
+    val error: String? = null,
 )
 
 @HiltViewModel
@@ -70,8 +83,16 @@ class DevicesViewModel @Inject constructor(
     private val all = MutableStateFlow<UiState<List<Device>>>(UiState.Loading)
     private val query = MutableStateFlow("")
     private val filter = MutableStateFlow(DeviceFilter.ALL)
+    private val selected = MutableStateFlow<Set<String>>(emptySet())
 
-    val state: StateFlow<DevicesUiState> = combine(all, query, filter) { devices, q, f ->
+    private val _bulk = MutableStateFlow<BulkEditState?>(null)
+    val bulk: StateFlow<BulkEditState?> = _bulk.asStateFlow()
+
+    /** Short reports for a toast: what a group change did. */
+    private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val messages: SharedFlow<String> = _messages.asSharedFlow()
+
+    val state: StateFlow<DevicesUiState> = combine(all, query, filter, selected) { devices, q, f, picked ->
         val visible = when (devices) {
             is UiState.Content -> devices.copy(
                 data = devices.data
@@ -83,7 +104,7 @@ class DevicesViewModel @Inject constructor(
         }
         val offline = (devices as? UiState.Content)?.data
             ?.count { !it.isOnline && it.type != DeviceType.SOCKET && it.type != DeviceType.PATCH_PANEL } ?: 0
-        DevicesUiState(visible, q, f, offline)
+        DevicesUiState(visible, q, f, offline, picked)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DevicesUiState())
 
     init {
@@ -110,4 +131,62 @@ class DevicesViewModel @Inject constructor(
     }
 
     fun showOnMap(deviceId: String) = mapFocus.request(deviceId)
+
+    // Selection mode: a long press starts it, taps add or remove, an empty selection ends it.
+
+    fun toggle(id: String) {
+        selected.update { if (id in it) it - id else it + id }
+    }
+
+    /** Picks every device the search and the filter show now. */
+    fun selectAllVisible() {
+        val shown = (state.value.devices as? UiState.Content)?.data.orEmpty().map { it.id }
+        selected.update { it + shown }
+    }
+
+    fun clearSelection() {
+        selected.value = emptySet()
+    }
+
+    fun openBulkEdit() {
+        val devices = (all.value as? UiState.Content)?.data.orEmpty()
+        _bulk.value = BulkEditState(hosts = devices.filter { it.type == DeviceType.SERVER }.sortedBy { it.name })
+        viewModelScope.launch {
+            repository.floorMap().onSuccess { map -> _bulk.update { it?.copy(floors = map.floors) } }
+        }
+    }
+
+    fun closeBulkEdit() {
+        _bulk.value = null
+    }
+
+    fun applyBulk(change: DeviceBulkChange) {
+        val ids = selected.value.toList()
+        if (ids.isEmpty() || change.isEmpty) return
+        _bulk.update { it?.copy(busy = true, error = null) }
+        viewModelScope.launch {
+            repository.bulkUpdateDevices(ids, change)
+                .onSuccess { n ->
+                    _bulk.value = null
+                    selected.value = emptySet()
+                    _messages.emit("Изменено устройств: $n")
+                    load()
+                }
+                .onFailure { e -> _bulk.update { it?.copy(busy = false, error = e.toUserMessage()) } }
+        }
+    }
+
+    fun deleteSelected() {
+        val ids = selected.value.toList()
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            repository.bulkDeleteDevices(ids)
+                .onSuccess { n ->
+                    selected.value = emptySet()
+                    _messages.emit("Удалено устройств: $n")
+                    load()
+                }
+                .onFailure { e -> _messages.emit(e.toUserMessage()) }
+        }
+    }
 }

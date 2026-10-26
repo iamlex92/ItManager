@@ -65,6 +65,9 @@ VENDORS = (
     ("yealink", "YEALINK"),
     ("grandstream", "GRANDSTREAM"),
     ("polycom", "POLY"),
+    ("eaton", "EATON"),
+    ("snom", "SNOM"),
+    ("fanvil", "FANVIL"),
 )
 PRINTER_VENDORS = {"KYOCERA", "BROTHER", "CANON", "XEROX", "RICOH", "EPSON", "LEXMARK", "KONICA MINOLTA", "SHARP"}
 PRINTER_VENDORS |= {"PANTUM", "ZEBRA"}
@@ -72,6 +75,14 @@ CAMERA_VENDORS = {"HIKVISION", "DAHUA", "AXIS"}
 NETWORK_VENDORS = {"CISCO", "ELTEX", "MIKROTIK", "HUAWEI", "H3C", "ZYXEL", "JUNIPER", "SNR", "QTECH", "D-LINK"}
 AP_VENDORS = {"UBIQUITI", "RUCKUS", "ARUBA"}
 SERVER_VENDORS = {"VMWARE", "SUPERMICRO", "SYNOLOGY", "QNAP"}
+# The first three bytes of MACs that hypervisors hand out to their guests.
+VM_MACS = {
+    "00:50:56": "VMware", "00:0c:29": "VMware", "00:05:69": "VMware", "00:1c:14": "VMware",
+    "00:15:5d": "Hyper-V", "52:54:00": "KVM/QEMU", "08:00:27": "VirtualBox", "00:16:3e": "Xen",
+    "00:1c:42": "Parallels", "bc:24:11": "Proxmox",
+}  # fmt: skip
+UPS_VENDORS = {"APC", "EATON", "IPPON", "POWERCOM"}
+PHONE_VENDORS = {"YEALINK", "GRANDSTREAM", "POLY", "SNOM", "FANVIL"}
 
 PRINTER_WORDS = ("laserjet", "officejet", "ecosys", "taskalfa", "command center", "printer", "mfp", "jetdirect",
                  "kyocera", "ricoh", "xerox", "brother", "lexmark", "pantum", "bizhub", "imagerunner", "workcentre",
@@ -81,6 +92,11 @@ CAMERA_WORDS = ("hikvision", "dahua", "camera", "ipcam", "nvr", "dvr", "axis", "
 AP_WORDS = ("unifi", "aironet", "access point", "omada", "airos", "wireless ap")
 SWITCH_WORDS = ("cisco", "eltex", "mes2", "mes3", "routeros", "mikrotik", "user access verification", "switch",
                 "huawei", "comware", "procurve", "zyxel", "catalyst", "edgeswitch", "vrp")  # fmt: skip
+UPS_WORDS = ("powerchute", "network management card", "ups network", "eaton", "ippon", "smart-ups")
+PHONE_WORDS = ("yealink", "grandstream", "voip phone", "ip phone", "sip phone", "snom", "fanvil")
+FIREWALL_WORDS = ("fortigate", "fortinet", "usergate", "pfsense", "opnsense", "sophos", "ideco", "check point",
+                  "kerio control", "continent")  # fmt: skip
+ROUTER_WORDS = ("keenetic", "openwrt", "luci", "router", "маршрутизатор")
 GENERIC = {"SERVER", "WORKSTATION"}
 SERVER_NAME = re.compile(r"(^|[-_.])(srv|server|dc\d*|esx\w*|hv\d*|hyperv|sql\w*|fs\d+|nas|backup|vcenter)([-_.\d]|$)")
 
@@ -113,8 +129,18 @@ def _has(text: str, words: tuple[str, ...]) -> bool:
     return any(w in low for w in words)
 
 
-def classify(info: HostInfo, vendor: str | None) -> tuple[str, list[str]]:
+def vm_platform(mac: str | None) -> str | None:
+    """The hypervisor whose guest has this MAC, if the MAC is one hypervisors hand out."""
+    if not mac:
+        return None
+    return VM_MACS.get(mac.lower().replace("-", ":")[:8])
+
+
+def classify(info: HostInfo, vendor: str | None, mac: str | None = None) -> tuple[str, list[str]]:
     """Device type and the evidence for it, in Russian, for the scan result."""
+    platform = vm_platform(mac or info.mac)
+    if platform:
+        return "VIRTUAL", [f"MAC виртуальной машины {platform}"]
     ports = info.open_ports
     http = info.http_text()
     cli = " ".join(x for x in (info.ssh, info.telnet) if x)
@@ -135,6 +161,13 @@ def classify(info: HostInfo, vendor: str | None) -> tuple[str, list[str]]:
     if (554 in ports or 37777 in ports) and not windows:
         return "CAMERA", ["открыт порт видеопотока RTSP" if 554 in ports else "открыт порт Dahua 37777"]
 
+    if vendor in UPS_VENDORS or _has(http, UPS_WORDS):
+        return "UPS", [f"ИБП {vendor}" if vendor in UPS_VENDORS else f"веб-страница ИБП «{http[:60]}»"]
+    if vendor in PHONE_VENDORS or _has(http, PHONE_WORDS):
+        return "PHONE", [f"IP-телефон {vendor}" if vendor in PHONE_VENDORS else f"веб-страница «{http[:60]}»"]
+    if _has(http, FIREWALL_WORDS) or _has(cli, FIREWALL_WORDS):
+        return "FIREWALL", [f"межсетевой экран «{(http or cli)[:60]}»"]
+
     if vendor in AP_VENDORS or _has(http, AP_WORDS):
         return "ACCESS_POINT", [f"точка доступа {vendor}" if vendor in AP_VENDORS else f"веб-страница «{http[:60]}»"]
 
@@ -144,6 +177,8 @@ def classify(info: HostInfo, vendor: str | None) -> tuple[str, list[str]]:
         return "SWITCH", [f"приглашение консоли «{cli[:60]}»"]
     if vendor in NETWORK_VENDORS and not windows and not ports & {3389, 5985}:
         return "SWITCH", [f"MAC производителя сетевого оборудования {vendor}"]
+    if _has(http, ROUTER_WORDS) and not windows:
+        return "ROUTER", [f"веб-страница маршрутизатора «{http[:60]}»"]
     if _has(http, SWITCH_WORDS) and not windows:
         return "SWITCH", [f"веб-страница «{http[:60]}»"]
 
@@ -172,7 +207,7 @@ def apply(dev: FoundDevice, info: HostInfo | None) -> None:
     dev.hostname = info.hostname
     if not dev.name:
         dev.name = info.netbios or _host_label(info.hostname)
-    guess, evidence = classify(info, dev.vendor)
+    guess, evidence = classify(info, dev.vendor, dev.mac)
     # SNMP's sysDescr says "Linux" for many cameras and printers too: a specific guess from ports wins over it.
     if dev.device_type == "UNKNOWN" or (dev.device_type in GENERIC and guess not in GENERIC | {"UNKNOWN"}):
         dev.device_type = guess

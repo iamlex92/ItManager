@@ -113,6 +113,7 @@ import com.itmanager.app.ui.components.LoadingView
 import com.itmanager.app.ui.components.StatusDot
 import com.itmanager.app.ui.components.UiState
 import com.itmanager.app.ui.components.icon
+import com.itmanager.app.ui.components.tint
 import com.itmanager.app.ui.theme.Ink950
 import com.itmanager.app.ui.theme.MonoStyle
 import com.itmanager.app.ui.theme.Motion
@@ -139,6 +140,7 @@ fun MapScreen(
     var confirmClear by remember { mutableStateOf(false) }
     var confirmRemovePlan by remember { mutableStateOf(false) }
     var showFloors by remember { mutableStateOf(false) }
+    var showLegend by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val pickPlan = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let(viewModel::uploadPlan)
@@ -292,6 +294,22 @@ fun MapScreen(
             }
         }
 
+        AnimatedVisibility(
+            visible = content != null && selected == null && !state.editing,
+            enter = fadeIn(Motion.smooth()),
+            exit = fadeOut(Motion.smooth()),
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(contentPadding)
+                .padding(16.dp),
+        ) {
+            MapLegend(
+                devices = content?.map?.devices.orEmpty(),
+                open = showLegend,
+                onToggle = { showLegend = !showLegend },
+            )
+        }
+
         // The card rises from the bottom edge and leaves the same way.
         var lastSelected by remember { mutableStateOf<Device?>(null) }
         if (selected != null) lastSelected = selected
@@ -312,6 +330,7 @@ fun MapScreen(
                     onOpenSwitch = { onOpenSwitch(device.id) },
                     onBindNfc = { viewModel.bindNfc(device) },
                     onDismiss = { viewModel.select(null) },
+                    hostName = device.hostId?.let { content?.allDevices?.get(it)?.name },
                 )
             }
         }
@@ -375,6 +394,7 @@ fun MapScreen(
                 onSave = viewModel::saveDevice,
                 onDelete = viewModel::deleteDevice,
                 onDismiss = viewModel::closeForm,
+                hosts = content?.allDevices.orEmpty().values.filter { it.type == DeviceType.SERVER }.sortedBy { it.name },
             )
         }
         linkToDelete?.let { link ->
@@ -718,6 +738,7 @@ private fun DeviceCard(
     onOpenSwitch: () -> Unit,
     onBindNfc: () -> Unit,
     onDismiss: () -> Unit,
+    hostName: String? = null,
 ) {
     val scope = rememberCoroutineScope()
     val drag = remember { Animatable(0f) }
@@ -762,7 +783,7 @@ private fun DeviceCard(
                     .background(MaterialTheme.colorScheme.outline, RoundedCornerShape(2.dp)),
             )
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
-                Icon(device.type.icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Icon(device.type.icon, contentDescription = null, tint = device.type.tint)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(device.name, style = MaterialTheme.typography.titleLarge)
@@ -789,6 +810,10 @@ private fun DeviceCard(
                 vlanName?.let {
                     Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
+            }
+            hostName?.let {
+                Spacer(Modifier.height(10.dp))
+                Text("Работает на хосте $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
             }
             if (tracePath.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))

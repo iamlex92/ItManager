@@ -13,7 +13,7 @@ from .serialize import alert_out
 
 # Device types whose unreachability is worth an alert. Workstations are
 # switched off every evening, so they only change status.
-HOST_DOWN_TYPES = {"SWITCH", "SERVER", "PRINTER", "CAMERA", "ACCESS_POINT"}
+HOST_DOWN_TYPES = {"SWITCH", "SERVER", "PRINTER", "CAMERA", "ACCESS_POINT", "ROUTER", "FIREWALL", "UPS", "VIRTUAL"}
 
 
 async def _open(session: AsyncSession, device_id, alert_type: str, port_id=None, prefix: str | None = None):

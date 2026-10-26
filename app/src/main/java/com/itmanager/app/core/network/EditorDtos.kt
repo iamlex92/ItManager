@@ -80,6 +80,7 @@ data class DeviceBody(
     val ip: String?,
     val vendor: String?,
     val model: String?,
+    @SerialName("host_id") val hostId: String? = null,
 )
 
 @Serializable
@@ -92,7 +93,25 @@ fun DeviceDraft.toPatch(): JsonObject = buildJsonObject {
     put("ip", ip?.let { JsonPrimitive(it) } ?: JsonNull)
     put("vendor", vendor?.let { JsonPrimitive(it) } ?: JsonNull)
     put("model", model?.let { JsonPrimitive(it) } ?: JsonNull)
+    put("host_id", hostId?.let { JsonPrimitive(it) } ?: JsonNull)
 }
+
+@Serializable
+data class BulkSetBody(
+    val type: String? = null,
+    @SerialName("floor_id") val floorId: String? = null,
+    val vendor: String? = null,
+    @SerialName("host_id") val hostId: String? = null,
+)
+
+@Serializable
+data class BulkUpdateBody(val ids: List<String>, val set: BulkSetBody)
+
+@Serializable
+data class BulkDeleteBody(val ids: List<String>)
+
+@Serializable
+data class BulkResultDto(val changed: Int = 0, val missing: Int = 0)
 
 @Serializable
 data class LinkBody(

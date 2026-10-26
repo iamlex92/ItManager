@@ -14,6 +14,7 @@ import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.DeviceBulkChange
 import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.Drawing
@@ -120,6 +121,9 @@ class DcimRepository @Inject constructor(
     suspend fun moveDevice(id: String, floorId: String, x: Float, y: Float): Result<Unit> =
         edit { moveDevice(id, floorId, x, y) }
     suspend fun deleteDevice(id: String): Result<Unit> = edit { deleteDevice(id) }
+    suspend fun bulkUpdateDevices(ids: List<String>, change: DeviceBulkChange): Result<Int> =
+        edit { bulkUpdateDevices(ids, change) }
+    suspend fun bulkDeleteDevices(ids: List<String>): Result<Int> = edit { bulkDeleteDevices(ids) }
     suspend fun linkDevices(a: String, b: String, cableType: String): Result<Connection> =
         edit { linkDevices(a, b, cableType) }
     suspend fun deleteConnection(id: String): Result<Unit> = edit { deleteConnection(id) }

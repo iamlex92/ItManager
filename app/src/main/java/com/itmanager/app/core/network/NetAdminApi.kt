@@ -78,6 +78,11 @@ class NetAdminApi @Inject constructor(
 
     suspend fun patchDevice(s: ServerSettings, id: String, body: JsonObject): DeviceDto = patch(s, "devices/$id", body)
 
+    suspend fun bulkUpdateDevices(s: ServerSettings, body: BulkUpdateBody): BulkResultDto = post(s, "devices/bulk", body)
+
+    suspend fun bulkDeleteDevices(s: ServerSettings, body: BulkDeleteBody): BulkResultDto =
+        post(s, "devices/bulk-delete", body)
+
     suspend fun deleteDevice(s: ServerSettings, id: String) {
         guarded { client.delete("${requireBase(s)}/api/v1/devices/$id") { auth(s) } }
     }
@@ -299,6 +304,12 @@ class NetAdminApi @Inject constructor(
             contentType(ContentType.Application.Json)
             setBody(body)
         }.body()
+    }
+
+    /** A server from before group edits answers 404 or 405 on their paths. */
+    fun isMissingEndpoint(e: Throwable): Boolean {
+        val status = ((e as? UserFacingException)?.cause as? ResponseException)?.response?.status?.value
+        return status == 404 || status == 405
     }
 
     /** Turns the server's `{"detail": {"code": ...}}` refusals into messages that say what happened. */

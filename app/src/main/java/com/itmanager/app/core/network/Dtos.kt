@@ -75,6 +75,7 @@ data class DeviceDto(
     val y: Float? = null,
     @SerialName("is_online") val isOnline: Boolean = false,
     @SerialName("vlan_id") val vlanId: Int? = null,
+    @SerialName("host_id") val hostId: String? = null,
 ) {
     fun toDomain() = Device(
         id = id,
@@ -89,6 +90,7 @@ data class DeviceDto(
         y = y ?: 0f,
         isOnline = isOnline,
         vlanId = vlanId,
+        hostId = hostId,
     )
 }
 

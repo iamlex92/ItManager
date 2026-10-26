@@ -23,6 +23,7 @@ def device_out(d: Device, graph: Graph | None = None) -> DeviceOut:
         has_snmp_community=bool(d.snmp_community),
         ssh_credential_id=d.ssh_credential_id,
         metadata=d.metadata_ or {},
+        host_id=d.host_id,
     )
 
 

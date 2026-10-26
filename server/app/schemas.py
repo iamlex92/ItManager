@@ -20,6 +20,11 @@ DeviceType = Literal[
     "PATCH_PANEL",
     "CAMERA",
     "ACCESS_POINT",
+    "ROUTER",
+    "FIREWALL",
+    "UPS",
+    "PHONE",
+    "VIRTUAL",
     "UNKNOWN",
 ]
 PortMode = Literal["ACCESS", "TRUNK"]
@@ -169,6 +174,8 @@ class DeviceBase(BaseModel):
     snmp_community: str | None = Field(default="public", max_length=50)
     is_active: bool = True
     metadata: dict[str, Any] = Field(default_factory=dict)
+    # A virtual machine's host server.
+    host_id: uuid.UUID | None = None
 
     @field_validator("mac")
     @classmethod
@@ -183,6 +190,34 @@ class DeviceBase(BaseModel):
 
 class DeviceCreate(DeviceBase):
     pass
+
+
+MAX_BULK = 1000
+
+
+class DeviceBulkSet(BaseModel):
+    """What a group edit changes on every chosen device; fields left out stay as they are."""
+
+    type: DeviceType | None = None
+    floor_id: uuid.UUID | None = None
+    vendor: str | None = Field(default=None, max_length=50)
+    model: str | None = Field(default=None, max_length=100)
+    is_active: bool | None = None
+    host_id: uuid.UUID | None = None
+
+
+class DeviceBulkUpdate(BaseModel):
+    ids: list[uuid.UUID] = Field(min_length=1, max_length=MAX_BULK)
+    set: DeviceBulkSet
+
+
+class DeviceBulkDelete(BaseModel):
+    ids: list[uuid.UUID] = Field(min_length=1, max_length=MAX_BULK)
+
+
+class BulkOut(BaseModel):
+    changed: int
+    missing: int = 0
 
 
 class DeviceUpdate(BaseModel):
@@ -201,6 +236,7 @@ class DeviceUpdate(BaseModel):
     ssh_credential_id: uuid.UUID | None = None
     is_active: bool | None = None
     metadata: dict[str, Any] | None = None
+    host_id: uuid.UUID | None = None
 
     @field_validator("mac")
     @classmethod
@@ -233,6 +269,7 @@ class DeviceOut(BaseModel):
     has_snmp_community: bool
     ssh_credential_id: uuid.UUID | None = None
     metadata: dict[str, Any]
+    host_id: uuid.UUID | None = None
 
 
 # --- ports ----------------------------------------------------------------
