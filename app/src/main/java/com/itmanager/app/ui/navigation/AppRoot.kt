@@ -73,6 +73,7 @@ import com.itmanager.app.ui.printers.PrintersScreen
 import com.itmanager.app.ui.scanner.ScannerScreen
 import com.itmanager.app.ui.security.AppLockOverlay
 import com.itmanager.app.ui.settings.SettingsScreen
+import com.itmanager.app.ui.tools.ToolsHubScreen
 import com.itmanager.app.ui.switchdetail.SwitchScreen
 import com.itmanager.app.ui.theme.Motion
 import dev.chrisbanes.haze.HazeState
@@ -286,6 +287,7 @@ private fun AppNavHost(
                 onOpenSettings = openSettings,
                 onOpenAudit = { navController.navigate(AuditRoute) { launchSingleTop = true } },
                 onOpenScanner = openScanner,
+                onOpenTools = { navController.navigate(ToolsRoute) { launchSingleTop = true } },
             )
         }
         composable<ScannerRoute>(
@@ -359,6 +361,29 @@ private fun AppNavHost(
             SettingsScreen(
                 onBack = { navController.popBackStack() },
                 onOpenCredentials = { navController.navigate(CredentialsRoute) { launchSingleTop = true } },
+            )
+        }
+        composable<ToolsRoute>(
+            enterTransition = { slideInHorizontally(push) { it } },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { slideOutHorizontally(push) { it } },
+        ) {
+            ToolsHubScreen(
+                onBack = { navController.popBackStack() },
+                onOpen = { kind -> navController.navigate(ToolRoute(kind)) { launchSingleTop = true } },
+            )
+        }
+        composable<ToolRoute>(
+            enterTransition = { slideInHorizontally(push) { it } },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { slideOutHorizontally(push) { it } },
+        ) { entry ->
+            com.itmanager.app.ui.tools.ToolRoute(
+                kind = entry.toRoute<ToolRoute>().kind,
+                host = "",
+                onBack = { navController.popBackStack() },
             )
         }
         composable<CredentialsRoute>(

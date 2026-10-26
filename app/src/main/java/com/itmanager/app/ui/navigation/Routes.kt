@@ -21,6 +21,8 @@ import kotlinx.serialization.Serializable
 @Serializable data object AuditRoute
 @Serializable data object ScannerRoute
 @Serializable data object CredentialsRoute
+@Serializable data object ToolsRoute
+@Serializable data class ToolRoute(val kind: String)
 @Serializable data class SwitchRoute(val deviceId: String)
 @Serializable data class HistoryRoute(val deviceId: String, val switchName: String)
 @Serializable data class ConfigDiffRoute(val deviceId: String, val switchName: String? = null)
