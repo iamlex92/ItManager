@@ -61,6 +61,18 @@ data class MapContent(
         }
     }
 
+    /** The map without the chosen device types, and the cables that end at them: the legend hides kinds this way. */
+    fun without(hidden: Set<DeviceType>): MapContent {
+        if (hidden.isEmpty()) return this
+        val gone = map.devices.filter { it.type in hidden }.map { it.id }.toSet()
+        val links = map.connections.filter { it.deviceAId !in gone && it.deviceBId !in gone }
+        return copy(
+            map = map.copy(devices = map.devices.filter { it.id !in gone }, connections = links),
+            devicesById = devicesById - gone,
+            linkVlan = linkVlan.filterKeys { id -> links.any { it.id == id } },
+        )
+    }
+
     fun floorTitle(id: String?): String = map.floors.firstOrNull { it.id == id }?.title ?: "другой этаж"
 }
 

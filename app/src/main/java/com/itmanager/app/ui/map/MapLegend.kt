@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,14 +20,20 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.ui.components.DEVICE_TYPES_IN_ORDER
 import com.itmanager.app.ui.components.icon
 import com.itmanager.app.ui.components.tint
@@ -36,7 +43,15 @@ import com.itmanager.app.ui.theme.Motion
 
 /** What each pictogram on this floor means, with how many of each there are. */
 @Composable
-fun MapLegend(devices: List<Device>, open: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+fun MapLegend(
+    devices: List<Device>,
+    open: Boolean,
+    onToggle: () -> Unit,
+    hidden: Set<DeviceType>,
+    onToggleType: (DeviceType) -> Unit,
+    onShowAll: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val counts = devices.groupingBy { it.type }.eachCount()
     val types = DEVICE_TYPES_IN_ORDER.filter { (counts[it] ?: 0) > 0 }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -52,8 +67,19 @@ fun MapLegend(devices: List<Device>, open: Boolean, onToggle: () -> Unit, modifi
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(14.dp))
                     .padding(horizontal = 12.dp, vertical = 10.dp),
             ) {
+                Text(
+                    "Нажмите на значок, чтобы скрыть или показать этот тип",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 types.forEach { type ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    val off = type in hidden
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .alpha(if (off) 0.4f else 1f)
+                            .clickable(role = Role.Switch, onClickLabel = if (off) "Показать" else "Скрыть") { onToggleType(type) },
+                    ) {
                         Box(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier
@@ -66,14 +92,22 @@ fun MapLegend(devices: List<Device>, open: Boolean, onToggle: () -> Unit, modifi
                         Text(
                             "${type.label} · ${counts[type]}",
                             style = MaterialTheme.typography.bodySmall,
+                            textDecoration = if (off) TextDecoration.LineThrough else null,
                             modifier = Modifier.padding(start = 8.dp),
                         )
                     }
                 }
+                if (hidden.isNotEmpty()) {
+                    TextButton(onClick = onShowAll) { Text("Показать всё") }
+                }
             }
         }
         SmallFloatingActionButton(onClick = onToggle, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
-            Icon(Icons.Outlined.Category, contentDescription = if (open) "Скрыть легенду" else "Легенда: что значат значки")
+            Icon(
+                Icons.Outlined.Category,
+                contentDescription = if (open) "Скрыть легенду" else "Легенда: что значат значки",
+                tint = if (hidden.isEmpty()) LocalContentColor.current else MaterialTheme.colorScheme.primary,
+            )
         }
     }
 }

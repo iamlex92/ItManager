@@ -118,3 +118,5 @@ dialog::backdrop { background: rgba(0, 0, 0, .55); }
 .toolbar select { width: auto; max-width: 260px; }
 .toolbar input[type="search"] { width: auto; flex: 1 1 220px; max-width: 420px; }
 .toolbar .check input, .pick input { width: auto; }
+.legend-row { display: flex; align-items: center; justify-content: flex-start; gap: 0; text-align: left; background: transparent; border-color: transparent; padding: 3px 6px; font-size: 12px; }
+.legend-row.off { opacity: .45; text-decoration: line-through; }
