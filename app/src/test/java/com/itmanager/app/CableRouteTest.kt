@@ -3,6 +3,7 @@ package com.itmanager.app
 import com.itmanager.app.core.network.ConnectionDto
 import com.itmanager.app.core.network.FloorDto
 import com.itmanager.app.core.network.WaypointDto
+import com.itmanager.app.core.network.toDomain
 import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceType
