@@ -79,7 +79,7 @@ def test_preview_changes_nothing_and_apply_updates_inventory(client):
     r = client.post(url, json={"text": text, "apply": True})
     out = r.json()
     assert out["applied"] is True and out["changed_ports"] >= 1
-    after = {p["port_name"]: p for p in ports_of(client, sw["id"])}
+    after = {p["name"]: p for p in ports_of(client, sw["id"])}
     shut = next(c for c in out["ports"] if c["port"] == "Gi1/0/3")
     assert shut["changes"]["is_admin_up"][1] is False
     assert after["Gi1/0/3"]["is_admin_up"] is False
