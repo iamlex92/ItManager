@@ -264,6 +264,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> None:
+    # Redirected output on Windows defaults to the ANSI code page, which has no Cyrillic.
+    for stream in (sys.stdout, sys.stderr):
+        if stream is not None and not stream.isatty() and hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname).5s [%(name)s] %(message)s")
     args = build_parser().parse_args(argv)
     args.func(args)

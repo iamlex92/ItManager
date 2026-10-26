@@ -43,6 +43,10 @@ Source: "..\..\build\pgsql\*"; DestDir: "{app}\pgsql"; Flags: recursesubdirs ign
 Source: "..\..\build\winsw\netadmin-service.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "netadmin-service.xml"; DestDir: "{app}"; Flags: ignoreversion
 
+[Dirs]
+; Created here so the permissions below apply before anything is written into it.
+Name: "{commonappdata}\NetAdmin"
+
 [Icons]
 Name: "{group}\Адрес и ключ для приложения"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
   Parameters: "-NoProfile -WindowStyle Hidden -Command ""Start-Process -Verb RunAs -FilePath '{app}\netadmin-agent.exe' -ArgumentList 'info','--pause'"""; \

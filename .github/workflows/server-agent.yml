@@ -165,6 +165,10 @@ jobs:
           $health | ConvertTo-Json
           if ($health.hal_mode -ne 'emulator' -or -not $health.secrets_encrypted) { throw "unexpected health" }
           $conf = "$env:ProgramData\NetAdmin\netadmin.env"
+          # Only SYSTEM and Administrators may read the settings (they hold the keys).
+          $sids = (Get-Acl $conf).Access | ForEach-Object { $_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value } | Sort-Object -Unique
+          "settings ACL: $($sids -join ', ')"
+          if (Compare-Object $sids @('S-1-5-18', 'S-1-5-32-544')) { throw "settings readable by others: $sids" }
           if (-not (Select-String -Quiet '^ALLOW_DEVICE_WRITES=false' $conf)) { throw "writes not off" }
           $token = (Select-String '^API_TOKEN=(.+)$' $conf).Matches[0].Groups[1].Value
           Invoke-RestMethod http://127.0.0.1:8000/api/v1/devices -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json
