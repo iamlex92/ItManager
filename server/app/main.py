@@ -211,6 +211,7 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
             hal_mode=settings.hal_mode.value,
             device_writes_enabled=settings.device_writes_enabled,
             monitor_mode=settings.monitor_mode.value,
+            discovery_mode=settings.discovery_mode.value,
             runbook_mode=settings.runbook_mode.value,
             runbook_writes_enabled=settings.runbook_writes_enabled,
             secrets_encrypted=crypto.box().enabled,

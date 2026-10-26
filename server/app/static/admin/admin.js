@@ -804,10 +804,19 @@
     if (!scan) { status.textContent = ""; return; }
     const mode = scan.mode === "emulator" ? "эмулятор" : "реальная сеть";
     status.textContent = scan.status === "running"
-      ? `Идёт сканирование: ${scan.probed} из ${scan.total} адресов (${mode})`
+      ? scan.total && scan.probed >= scan.total
+        ? `Адреса проверены, определяю устройства: порты, имена, SNMP… (${mode})`
+        : `Идёт сканирование: ${scan.probed} из ${scan.total} адресов (${mode})`
       : scan.status === "failed"
         ? `Не удалось: ${scan.error || "ошибка"}`
         : `Готово: ${scan.devices.length} устройств, ${scan.links.length} связей (${mode}, ${scan.subnets.join(", ")})`;
+    const warnings = $("scan-warnings");
+    warnings.replaceChildren(...(scan.warnings || []).map((w) => {
+      const li = document.createElement("li");
+      li.textContent = w;
+      return li;
+    }));
+    warnings.hidden = !warnings.children.length;
     const rows = $("scan-rows");
     rows.replaceChildren();
     for (const d of scan.devices) {
@@ -825,10 +834,18 @@
       cell(tr, d.name);
       cell(tr, (TYPE[d.type] || TYPE.UNKNOWN).label);
       cell(tr, [d.vendor, d.model].filter(Boolean).join(" ") || null);
+      const how = cell(tr, foundHow(d));
+      if (d.description) how.title = d.description;
       cell(tr, d.inventory_name);
       rows.appendChild(tr);
     }
     updateImport();
+  }
+
+  function foundHow(d) {
+    const how = d.snmp ? "SNMP" : d.seen_by === "tcp" ? "TCP (ping закрыт)" : d.seen_by === "arp" ? "только ARP" : "ping";
+    const ports = (d.open_ports || []).length ? `, порты ${d.open_ports.join(", ")}` : "";
+    return how + ports;
   }
 
   const scanBoxes = () => [...$("scan-rows").querySelectorAll("input[type=checkbox]:not(:disabled)")];

@@ -31,10 +31,14 @@ data class FoundDeviceDto(
     val snmp: Boolean = false,
     @SerialName("inventory_id") val inventoryId: String? = null,
     @SerialName("inventory_name") val inventoryName: String? = null,
+    @SerialName("seen_by") val seenBy: String = "ping",
+    @SerialName("open_ports") val openPorts: List<Int> = emptyList(),
+    val hostname: String? = null,
 ) {
     fun toDomain() = FoundDevice(
         ip = ip, name = name, mac = mac, vendor = vendor, model = model, type = DeviceType.parse(type),
         description = description, snmp = snmp, inventoryId = inventoryId, inventoryName = inventoryName,
+        seenBy = seenBy, openPorts = openPorts, hostname = hostname,
     )
 }
 
@@ -66,6 +70,7 @@ data class ScanDto(
     val devices: List<FoundDeviceDto> = emptyList(),
     val links: List<FoundLinkDto> = emptyList(),
     val error: String? = null,
+    val warnings: List<String> = emptyList(),
 ) {
     fun toDomain() = NetworkScan(
         id = id,
@@ -79,6 +84,7 @@ data class ScanDto(
         devices = devices.map { it.toDomain() },
         links = links.map { it.toDomain() },
         error = error,
+        warnings = warnings,
     )
 }
 

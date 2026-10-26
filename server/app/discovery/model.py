@@ -25,6 +25,11 @@ class FoundDevice:
     description: str | None = None
     # Answered SNMP with the given community.
     snmp: bool = False
+    # How the host was found: ping, tcp (ICMP blocked, a port answered) or arp (only the ARP cache knows it).
+    seen_by: str = "ping"
+    open_ports: list[int] = field(default_factory=list)
+    # Reverse DNS name, as it is.
+    hostname: str | None = None
 
 
 @dataclass(frozen=True)
@@ -49,6 +54,8 @@ class FoundLink:
 class ScanResult:
     devices: list[FoundDevice] = field(default_factory=list)
     links: list[FoundLink] = field(default_factory=list)
+    # What limited this scan, in plain words: no ping, the server outside the subnet and so on.
+    warnings: list[str] = field(default_factory=list)
 
 
 @dataclass

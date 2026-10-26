@@ -29,9 +29,10 @@ The only switches this will ever see are production ones, so:
   receiver only listens. `MONITOR_MODE=emulator` (default) sends nothing.
 - **Network discovery is read-only and manual.** A scan starts only from an
   explicit request with explicit private ranges (at most a /22 each, 2048
-  addresses in total) and sends ICMP echo plus SNMP GET/GETNEXT. In
-  `MONITOR_MODE=emulator` it is answered from the inventory. Adding found
-  devices to the inventory writes only to the database.
+  addresses in total). It sends ICMP echo, TCP connects to common ports, reads
+  the banners SSH/Telnet/HTTP offer anyway and SNMP GET/GETNEXT; no logins, no
+  SET. In `DISCOVERY_MODE=emulator` it is answered from the inventory. Adding
+  found devices to the inventory writes only to the database.
 
 - **Secrets are encrypted at rest.** With `SECRET_KEY` set, device SNMP
   communities and stored credentials (`/credentials`) are Fernet-encrypted in
@@ -111,6 +112,7 @@ pytest
 | `EMULATOR_BOUNCE_DELAY_SECONDS` | `2` | |
 | `MONITOR_MODE` | `emulator` | `real`: SNMP printer polling + ICMP heartbeat |
 | `PRINTER_POLL_INTERVAL_SECONDS` | `300` | `0` disables |
+| `DISCOVERY_MODE` | `real` | network scan: `real` (read-only, started by an operator) or `emulator` |
 | `DISCOVERY_STEP_DELAY_SECONDS` | `0.15` | emulated network scan: pause per 16 addresses |
 | `HEARTBEAT_INTERVAL_SECONDS` | `15` | real mode only; HOST_DOWN alerts for switches, servers, printers, cameras, APs (not PCs) |
 | `TRAP_LISTEN_PORT` | `0` (off) | UDP port for linkDown/linkUp traps, v1/v2c |

@@ -58,6 +58,8 @@ def make_settings(**kw) -> Settings:
         trap_listen_port=0,
         runbook_step_delay_seconds=0,
         discovery_step_delay_seconds=0,
+        # Scans in tests answer from the inventory unless a test asks for the real scanner.
+        discovery_mode="emulator",
         _env_file=None,
     )
     base.update(kw)

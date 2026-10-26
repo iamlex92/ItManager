@@ -83,6 +83,29 @@ class ScannerTest {
     }
 
     @Test
+    fun hostFoundWithoutSnmpCarriesPortsAndWarnings() {
+        val scan = json.decodeFromString(
+            ScanDto.serializer(),
+            """
+            {"id": "s2", "status": "done", "mode": "real", "total": 254, "probed": 254,
+             "devices": [{"ip": "10.20.0.77", "type": "WORKSTATION", "vendor": "HP", "snmp": false, "seen_by": "tcp",
+                          "open_ports": [135, 445, 3389], "hostname": "pc-buh-07.corp.local"}],
+             "warnings": ["На сервере нет утилиты ping: устройства ищутся по TCP-портам и ARP."]}
+            """.trimIndent(),
+        ).toDomain()
+        val pc = scan.devices.single()
+        assertEquals(DeviceType.WORKSTATION, pc.type)
+        assertEquals("tcp", pc.seenBy)
+        assertEquals(listOf(135, 445, 3389), pc.openPorts)
+        assertEquals("pc-buh-07.corp.local", pc.hostname)
+        assertEquals(1, scan.warnings.size)
+        // An older server sends neither: defaults keep working.
+        val old = json.decodeFromString(ScanDto.serializer(), """{"id": "s", "devices": [{"ip": "10.0.0.1"}]}""").toDomain()
+        assertEquals(emptyList<Int>(), old.devices.single().openPorts)
+        assertEquals(emptyList<String>(), old.warnings)
+    }
+
+    @Test
     fun runningScanReportsProgress() {
         val scan = json.decodeFromString(ScanDto.serializer(), """{"id": "s", "status": "running", "mode": "real", "total": 200, "probed": 50}""")
             .toDomain()

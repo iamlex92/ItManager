@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.config import MonitorMode
 from app.discovery.model import InvalidScan, parse_subnets, short_name
+from app.discovery.probe import Prober
 from app.discovery.snmp import ARP, BASE_PORT_IF_INDEX, DOT1Q_FDB_PORT, IF_NAME, LLDP_LOC_PORT_ID, LLDP_REM, SnmpScanner
 from app.main import create_app
 
@@ -87,6 +88,10 @@ def test_emulated_scan_finds_known_and_new_devices(client):
     assert devices["10.10.30.57"]["type"] == "PRINTER"
     pc = devices["10.10.10.231"]
     assert pc["name"] is None and not pc["snmp"] and pc["mac"]
+    # ICMP blocked, no SNMP: found by its open ports, and they tell what it is.
+    assert pc["seen_by"] == "tcp" and pc["open_ports"] == [135, 445, 3389] and pc["type"] == "WORKSTATION"
+    assert pc["vendor"] == "HP" and "Windows" in pc["description"]
+    assert scan["warnings"] == []
 
     # Existing uplinks are recognised, the new switch's uplink is not.
     assert link_between(scan, "SW-CORE-01", "SW-ACC-01")["known"] is True
@@ -102,6 +107,9 @@ def test_wrong_community_gives_ping_only_results(client):
     scan = run_scan(client, ["10.99.0.0/24"], community="wrong")
     assert scan["devices"] and all(not d["snmp"] and d["name"] is None for d in scan["devices"])
     assert scan["links"] == []
+    # Without SNMP the type still comes from open ports and the MAC vendor.
+    types = {d["type"] for d in scan["devices"]}
+    assert "SWITCH" in types and "UNKNOWN" not in types
 
 
 def test_offline_devices_do_not_answer(client):
@@ -143,7 +151,7 @@ def test_import_adds_devices_links_and_audit(client):
     conns = client.get("/api/v1/connections", params={"device_id": sw4["id"]}).json()
     assert len(conns) == 3
     pc = find(client, "HOST-10-10-10-231")
-    assert pc["type"] == "UNKNOWN" and pc["mac"] and pc["x"] is not None
+    assert pc["type"] == "WORKSTATION" and pc["mac"] and pc["vendor"] == "HP" and pc["x"] is not None
 
     # The next scan sees them as inventory, with nothing extra invented.
     again = run_scan(client)
@@ -218,6 +226,10 @@ SW_B = {
 }
 
 
+async def no_arp() -> dict[str, str]:
+    return {}
+
+
 async def test_snmp_scanner_against_agents():
     t_a, agent_a, port_a = await start_agent(SW_A, community="ro-c0mm")
     t_b, agent_b, port_b = await start_agent(SW_B, community="ro-c0mm")
@@ -237,7 +249,9 @@ async def test_snmp_scanner_against_agents():
     seen = []
     try:
         settings = make_settings(monitor_mode=MonitorMode.REAL)
-        result = await Scanner(settings, pinger=pinger).scan(
+        # No TCP probe or name lookups: the 10.0.0.x addresses here exist only for the fake agents.
+        prober = Prober(pinger, fast_ports=(), extra_ports=(), names=False)
+        result = await Scanner(settings, prober=prober, arp=no_arp).scan(
             [ipaddress.ip_network("10.0.0.0/29")], "ro-c0mm", seen.append
         )
     finally:
@@ -284,7 +298,7 @@ def test_real_mode_reports_scan_mode(seeded, monkeypatch):
 
     monkeypatch.setattr(manager.SnmpScanner, "scan", fake_scan)
     monkeypatch.setattr(manager.heartbeat, "ping_available", lambda: True)
-    with TestClient(create_app(make_settings(monitor_mode=MonitorMode.REAL)), headers=AUTH) as c:
+    with TestClient(create_app(make_settings(discovery_mode="real")), headers=AUTH) as c:
         scan = run_scan(c, ["10.99.0.0/28"])
     assert scan["mode"] == "real" and scan["probed"] == 14
     assert by_ip(scan)["10.99.0.1"]["inventory_name"] == "SW-CORE-01"

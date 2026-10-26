@@ -144,13 +144,26 @@ stderr and duration.
 
 ## Network discovery
 
-Finds hosts in the given subnets and the links between them. Read-only towards
-equipment: one ICMP echo per address, then SNMP GET/GETNEXT (system group, ifName,
-LLDP, CDP, ARP, bridge and Q-bridge MAC tables) to the hosts that answered. A scan
-only starts from an explicit request with explicit ranges. With
-`MONITOR_MODE=emulator` (default) the scan is answered from the inventory plus a
-few devices it does not know yet (a new switch, a printer, a camera, a PC without
-SNMP); nothing leaves the server.
+Finds hosts in the given subnets, tells what they are and finds the links between
+them. Read-only towards equipment, and SNMP is not required:
+
+1. Every address: one ICMP echo and a TCP connect to 22, 23, 80, 135, 443, 445, 554,
+   3389, 9100. A host that drops ICMP (Windows firewall) is still found by an open
+   or refused port; one the server's ARP cache resolved is found too.
+2. Hosts that are up: more ports (21, 53, 88, 139, 389, 515, 631, 902, 1433, 3306,
+   5432, 5900, 5985, 8000, 8080, 8291, 8443, 37777), reverse DNS, NetBIOS name, the
+   SSH and Telnet banners, `GET /` over HTTP(S) for the page title, `Server` header
+   and the device certificate, and the MAC vendor from the IEEE OUI list.
+3. SNMP GET/GETNEXT when the community fits (system group, ifName, LLDP, CDP, ARP,
+   bridge and Q-bridge MAC tables): exact names and models, and the links.
+
+The type (`SWITCH`, `PRINTER`, `CAMERA`, `ACCESS_POINT`, `SERVER`, `WORKSTATION`)
+comes from SNMP when it answers, otherwise from the ports, vendor and banners. No
+logins, no writes, no SNMP SET. A scan only starts from an explicit request with
+explicit ranges. `DISCOVERY_MODE=real` is the default for that reason; with
+`DISCOVERY_MODE=emulator` the scan is answered from the inventory plus a few devices
+it does not know yet (a new switch, a printer, a camera, a PC without SNMP or ping)
+and nothing leaves the server.
 
 | Method | Path | Notes |
 |---|---|---|
@@ -164,13 +177,19 @@ addresses per scan, one scan at a time. The community is used for that scan only
 and is never stored or logged (`SNMP_VERSION=3` uses the `SNMP_V3_*` user instead).
 
 Scan: `id`, `status`, `mode` (`emulator`/`real`), `subnets`, `started_at`,
-`finished_at`, `total`, `probed`, `devices[]`, `links[]`, `error`. Devices and
-links are empty while the scan runs.
+`finished_at`, `total`, `probed`, `devices[]`, `links[]`, `error`, `warnings[]`
+(what limited the scan, in plain Russian: no `ping` on the server, the server is
+not in a scanned subnet so MACs are unknown, nobody answered SNMP, nobody answered
+at all, a firewall refuses for every address). Devices, links and warnings are
+empty while the scan runs. `probed` reaches `total` when every address has been
+checked; identifying the hosts that are up takes a few seconds more.
 
-- device: `ip`, `name` (sysName), `mac`, `vendor` (from sysObjectID), `model`,
-  `type` (guessed: `SWITCH`, `PRINTER`, `CAMERA`, ... or `UNKNOWN`), `description`
-  (sysDescr), `snmp`, `inventory_id` / `inventory_name` when the IP is already in
-  the inventory.
+- device: `ip`, `name` (sysName, else NetBIOS or DNS name), `mac`, `vendor` (from
+  sysObjectID or the MAC), `model`, `type` (`SWITCH`, `PRINTER`, `CAMERA`, ... or
+  `UNKNOWN`), `description` (sysDescr, or the evidence: ports, banners, page title),
+  `snmp`, `seen_by` (`ping`, `tcp`: ICMP blocked but a port answered, `arp`),
+  `open_ports`, `hostname` (reverse DNS), `inventory_id` / `inventory_name` when the
+  IP is already in the inventory.
 - link: `a` / `b` (`name`, `port`, `ip`, `inventory_id`), `source` (`lldp`, `cdp`,
   or `fdb` for a host whose MAC was learned on a switch edge port; the host's `port`
   is empty), `known` when the inventory already has a cable between the two devices.

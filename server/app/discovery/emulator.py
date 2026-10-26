@@ -6,16 +6,28 @@ import asyncio
 import ipaddress
 from dataclasses import dataclass
 
+from . import classify
 from .inventory import Inventory
 from .model import End, FoundDevice, FoundLink, Progress, ScanResult, hosts
+from .probe import HostInfo
 
 CHUNK = 16
+# What each kind of device has open on the emulated network.
+OPEN_PORTS = {
+    "SWITCH": (22, 23, 80, 443),
+    "PRINTER": (80, 443, 515, 631, 9100),
+    "CAMERA": (80, 443, 554, 8000),
+    "ACCESS_POINT": (22, 80, 443),
+    "SERVER": (22, 135, 445, 3389, 5985),
+    "WORKSTATION": (135, 445, 3389),
+}
 
 
 @dataclass(frozen=True)
 class _Extra:
     device: FoundDevice
     community: str = "public"
+    ports: tuple[int, ...] = ()
 
 
 def _extras(inv: Inventory) -> tuple[list[_Extra], list[FoundLink]]:
@@ -62,8 +74,12 @@ def _extras(inv: Inventory) -> tuple[list[_Extra], list[FoundLink]]:
                 snmp=True,
             )
         ),
-        # No SNMP: only the address and, from the switch tables, MAC and port.
-        _Extra(FoundDevice(ip="10.10.10.231", mac="3c:52:82:aa:10:e7"), community=""),
+        # No SNMP and ICMP blocked by the Windows firewall: found by its open ports, MAC and port from switch tables.
+        _Extra(
+            FoundDevice(ip="10.10.10.231", mac="3c:52:82:aa:10:e7", seen_by="tcp"),
+            community="",
+            ports=OPEN_PORTS["WORKSTATION"],
+        ),
     ]
     links: list[FoundLink] = []
     sw4 = End("SW-ACC-04", "te1/0/1", "10.99.0.14")
@@ -91,7 +107,7 @@ class EmulatedScanner:
         extras, extra_links = _extras(inv)
         known_ips = {d.ip for d in inv.devices if d.ip}
         # Online inventory devices answer ping; SNMP when the community matches.
-        world: dict[str, tuple[FoundDevice, str]] = {}
+        world: dict[str, tuple[FoundDevice, str, tuple[int, ...]]] = {}
         for d in inv.devices:
             if d.ip and d.online:
                 answers = d.device_type in ("SWITCH", "PRINTER", "SERVER", "ACCESS_POINT", "CAMERA")
@@ -106,12 +122,13 @@ class EmulatedScanner:
                         snmp=answers,
                     ),
                     (d.snmp_community or "public") if answers else "",
+                    OPEN_PORTS.get(d.device_type, ()),
                 )
         # An extra already added to the inventory is answered as an inventory device.
         new_ips = set()
         for x in extras:
             if x.device.ip not in known_ips:
-                world[x.device.ip] = (x.device, x.community)
+                world[x.device.ip] = (x.device, x.community, x.ports or OPEN_PORTS.get(x.device.device_type, ()))
                 new_ips.add(x.device.ip)
 
         result = ScanResult()
@@ -120,12 +137,15 @@ class EmulatedScanner:
             for ip in targets[i : i + CHUNK]:
                 if ip not in world:
                     continue
-                dev, dev_community = world[ip]
+                dev, dev_community, ports = world[ip]
+                info = HostInfo(ip, ping=dev.seen_by == "ping", tcp=bool(ports), open_ports=set(ports))
                 if dev_community and dev_community == community:
-                    result.devices.append(FoundDevice(**vars(dev)))
+                    found = FoundDevice(**{**vars(dev), "open_ports": []})
                 else:
-                    # Ping only: no name, model or SNMP tables.
-                    result.devices.append(FoundDevice(ip=ip, mac=dev.mac))
+                    # No SNMP: no name, model or switch tables; the type comes from ports and MAC.
+                    found = FoundDevice(ip=ip, mac=dev.mac, seen_by=dev.seen_by)
+                classify.apply(found, info)
+                result.devices.append(found)
             progress(min(i + CHUNK, len(targets)))
             if self._delay:
                 await asyncio.sleep(self._delay)

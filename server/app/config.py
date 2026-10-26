@@ -26,6 +26,13 @@ class MonitorMode(StrEnum):
     REAL = "real"
 
 
+class DiscoveryMode(StrEnum):
+    # Network scan answered from the inventory plus a few made-up devices. Nothing leaves the server.
+    EMULATOR = "emulator"
+    # Ping, TCP connect to common ports, banners and SNMP GET to the ranges an operator asks for. Read-only.
+    REAL = "real"
+
+
 class SnmpAuthProtocol(StrEnum):
     MD5 = "MD5"
     SHA = "SHA"
@@ -69,6 +76,9 @@ class Settings(BaseSettings):
     # from switch ports). 0 disables.
     heartbeat_interval_seconds: float = 15.0
     heartbeat_concurrency: int = 32
+    # Network scan. It only reads (ping, TCP connect, banners, SNMP GET) and runs only when an operator
+    # starts it for the ranges they give, so it is real by default even when monitoring is emulated.
+    discovery_mode: DiscoveryMode = DiscoveryMode.REAL
     # Emulated network scan: pause per 16 addresses, so progress is visible.
     discovery_step_delay_seconds: float = 0.15
     # Port throughput sampling for the utilization charts, seconds. 0 disables.

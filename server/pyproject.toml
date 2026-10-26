@@ -12,6 +12,8 @@ dependencies = [
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
     "pysnmp>=7.1",
+    # MAC vendor (IEEE OUI list) for hosts found by the network scan.
+    "netaddr>=1.3",
     "cryptography>=43",
     "httpx>=0.27",
     "segno>=1.6",
