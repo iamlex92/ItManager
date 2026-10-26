@@ -55,7 +55,7 @@ def test_vlan_brief():
     )
     rows = parse_vlan_brief(text)
     assert [r.vlan_id for r in rows] == [1, 10]
-    assert rows[1].ports == ["Gi1/0/1", "Gi1/0/2", "gi1/0/3"]
+    assert rows[1].ports == ["Gi1/0/1", "Gi1/0/2", "Gi1/0/3"]
 
 
 def _vlans(client) -> set[int]:
