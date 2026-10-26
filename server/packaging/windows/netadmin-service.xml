@@ -1,0 +1,25 @@
+<!-- WinSW (https://github.com/winsw/winsw) config: runs netadmin-agent as the Windows service "NetAdmin".
+     The agent starts its bundled PostgreSQL itself and stops it when the service stops. -->
+<service>
+  <id>NetAdmin</id>
+  <name>NetAdmin</name>
+  <description>Сервер NetAdmin DCIM для приложения на телефоне</description>
+  <executable>%BASE%\netadmin-agent.exe</executable>
+  <arguments>run --config "%ProgramData%\NetAdmin\netadmin.env"</arguments>
+  <workingdirectory>%ProgramData%\NetAdmin</workingdirectory>
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>true</delayedAutoStart>
+  <stoptimeout>30 sec</stoptimeout>
+  <!-- Ctrl+C to the agent first: it shuts the API down, then stops its database cleanly. -->
+  <stopparentprocessfirst>true</stopparentprocessfirst>
+  <onfailure action="restart" delay="10 sec"/>
+  <onfailure action="restart" delay="30 sec"/>
+  <resetfailure>1 hour</resetfailure>
+  <logpath>%ProgramData%\NetAdmin\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>5</keepFiles>
+  </log>
+  <env name="PYTHONUNBUFFERED" value="1"/>
+  <env name="PYTHONIOENCODING" value="utf-8"/>
+</service>

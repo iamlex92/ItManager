@@ -5,6 +5,7 @@ Read-only. In emulator mode reachability comes from switch ports instead
 import asyncio
 import logging
 import shutil
+import sys
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 
@@ -24,6 +25,16 @@ Pinger = Callable[[str], Awaitable[bool]]
 async def icmp_ping(ip: str, timeout_s: int = 1) -> bool:
     """One echo request via the system ping binary (no raw sockets needed)."""
     # ip comes from an INET column and is passed as an argv item, never through a shell.
+    if sys.platform == "win32":
+        # Windows ping: -n is the count, -w the timeout in ms. It exits 0 on "destination host unreachable"
+        # from a router too, so only a reply line (it has "TTL=" in every language) counts.
+        proc = await asyncio.create_subprocess_exec(
+            "ping", "-n", "1", "-w", str(timeout_s * 1000), ip,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )  # fmt: skip
+        out, _ = await proc.communicate()
+        return proc.returncode == 0 and b"TTL=" in out.upper()
     proc = await asyncio.create_subprocess_exec(
         "ping", "-n", "-c", "1", "-W", str(timeout_s), ip,
         stdout=asyncio.subprocess.DEVNULL,
