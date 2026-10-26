@@ -3,7 +3,13 @@ package com.itmanager.app.data.source
 import android.os.Build
 import com.itmanager.app.core.network.LiveSocket
 import com.itmanager.app.core.network.NetAdminApi
+import com.itmanager.app.core.network.DeviceBody
+import com.itmanager.app.core.network.DeviceMove
+import com.itmanager.app.core.network.FloorCreateBody
+import com.itmanager.app.core.network.FloorDto
+import com.itmanager.app.core.network.FloorPatch
 import com.itmanager.app.core.network.ImportBody
+import com.itmanager.app.core.network.LinkBody
 import com.itmanager.app.core.network.RunbookRunBody
 import com.itmanager.app.core.network.ScanBody
 import com.itmanager.app.core.network.toBody
@@ -17,12 +23,15 @@ import com.itmanager.app.data.model.AuditEntry
 import com.itmanager.app.data.model.AuditKind
 import com.itmanager.app.data.model.AuthMethod
 import com.itmanager.app.data.model.ConfigDiff
+import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.DeviceHistoryEntry
 import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.DiagnosticResult
+import com.itmanager.app.data.model.Drawing
 import com.itmanager.app.data.model.FloorMap
 import com.itmanager.app.data.model.FloorPlan
 import com.itmanager.app.data.model.ImportReport
@@ -30,6 +39,8 @@ import com.itmanager.app.data.model.NetworkScan
 import com.itmanager.app.data.model.LiveEvent
 import com.itmanager.app.data.model.PortChange
 import com.itmanager.app.data.model.PortLoad
+import com.itmanager.app.data.model.PlanFile
+import com.itmanager.app.data.model.PlanRect
 import com.itmanager.app.data.model.Printer
 import com.itmanager.app.data.model.Runbook
 import com.itmanager.app.data.model.RunbookRun
@@ -54,12 +65,13 @@ class RemoteDataSource(
 
         val floorDto = floors.await().firstOrNull()
         val allDevices = devices.await()
-        val floorDevices = if (floorDto == null) allDevices else allDevices.filter { it.floorId == floorDto.id }
-        // Without a plan size from the server, frame whatever devices exist.
-        val fallbackWidth = (floorDevices.maxOfOrNull { it.x } ?: 0f) + PLAN_MARGIN
-        val fallbackHeight = (floorDevices.maxOfOrNull { it.y } ?: 0f) + PLAN_MARGIN
+        // Devices without a floor (found by the scanner, added before any floor existed) show on the first one.
+        val floorDevices = if (floorDto == null) allDevices else allDevices.filter { it.floorId == floorDto.id || it.floorId == null }
+        // Without a plan size from the server, frame whatever devices exist, and leave room to add more.
+        val fallbackWidth = ((floorDevices.maxOfOrNull { it.x } ?: 0f) + PLAN_MARGIN).coerceAtLeast(MIN_WIDTH)
+        val fallbackHeight = ((floorDevices.maxOfOrNull { it.y } ?: 0f) + PLAN_MARGIN).coerceAtLeast(MIN_HEIGHT)
         val plan = floorDto?.toDomain(settings.baseUrl, fallbackWidth, fallbackHeight)
-            ?: FloorPlan("default", "План здания", fallbackWidth, fallbackHeight, 50f, emptyList())
+            ?: FloorPlan(NO_FLOOR, "План здания", fallbackWidth, fallbackHeight, 50f, emptyList(), stored = false)
 
         val ids = floorDevices.mapTo(HashSet()) { it.id }
         FloorMap(
@@ -169,12 +181,55 @@ class RemoteDataSource(
 
     override suspend fun deleteCredential(id: String) = api.deleteCredential(settings, id, Build.MODEL)
 
-    override suspend fun planSvg(url: String): String = api.text(url)
+    override suspend fun planBytes(url: String): ByteArray = api.planBytes(settings, url)
+
+    private fun FloorDto.toPlan(current: FloorPlan) = toDomain(settings.baseUrl, current.widthPx, current.heightPx)
+
+    override suspend fun ensureFloor(plan: FloorPlan): FloorPlan {
+        if (plan.stored) return plan
+        val body = FloorCreateBody("Здание", 1, plan.widthPx.toInt(), plan.heightPx.toInt())
+        return api.createFloor(settings, body).toPlan(plan)
+    }
+
+    override suspend fun createDevice(floorId: String, draft: DeviceDraft, x: Float, y: Float): Device =
+        api.createDevice(
+            settings,
+            DeviceBody(draft.name, draft.type.name, floorId, x, y, draft.ip, draft.vendor, draft.model),
+        ).toDomain()
+
+    override suspend fun updateDevice(id: String, draft: DeviceDraft): Device =
+        api.patchDevice(settings, id, draft.toPatch()).toDomain()
+
+    override suspend fun moveDevice(id: String, floorId: String, x: Float, y: Float) {
+        api.moveDevice(settings, id, DeviceMove(x, y, floorId))
+    }
+
+    override suspend fun deleteDevice(id: String) = api.deleteDevice(settings, id)
+
+    override suspend fun linkDevices(deviceAId: String, deviceBId: String, cableType: String): Connection =
+        api.linkDevices(settings, LinkBody(deviceAId, deviceBId, cableType)).toDomain()
+            ?: throw UserFacingException("Сервер не вернул кабель")
+
+    override suspend fun deleteConnection(id: String) = api.deleteConnection(settings, id)
+
+    override suspend fun uploadPlan(plan: FloorPlan, file: PlanFile): FloorPlan =
+        api.uploadPlan(settings, plan.id, file.bytes, file.mime, file.width, file.height).toPlan(plan)
+
+    override suspend fun removePlan(plan: FloorPlan): FloorPlan = api.deletePlan(settings, plan.id).toPlan(plan)
+
+    override suspend fun placePlan(plan: FloorPlan, rect: PlanRect): FloorPlan =
+        api.patchFloor(settings, plan.id, FloorPatch.placement(rect, plan.widthPx, plan.heightPx)).toPlan(plan)
+
+    override suspend fun saveDrawings(plan: FloorPlan, drawings: List<Drawing>): FloorPlan =
+        api.patchFloor(settings, plan.id, FloorPatch.drawings(drawings)).toPlan(plan)
 
     override fun live(deviceId: String): Flow<LiveEvent> = liveSocket.events(settings, deviceId)
 
     private companion object {
         const val PLAN_MARGIN = 200f
+        const val MIN_WIDTH = 1600f
+        const val MIN_HEIGHT = 1000f
+        const val NO_FLOOR = "default"
     }
 }
 

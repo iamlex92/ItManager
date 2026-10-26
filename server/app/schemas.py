@@ -54,13 +54,36 @@ class ORM(BaseModel):
 # --- floors ---------------------------------------------------------------
 
 
+class Drawing(BaseModel):
+    """A free line drawn over the map: x, y pairs in map pixels."""
+
+    color: str = Field(default="#FFD60A", pattern=r"^#[0-9a-fA-F]{6}$")
+    width: float = Field(default=4, ge=1, le=40)
+    points: list[float] = Field(min_length=4, max_length=8000)
+
+    @field_validator("points")
+    @classmethod
+    def _pairs(cls, v: list[float]) -> list[float]:
+        if len(v) % 2:
+            raise ValueError("points are x, y pairs")
+        return [round(p, 1) for p in v]
+
+
+MAX_DRAWINGS = 500
+
+
 class FloorBase(BaseModel):
     building_name: str = Field(max_length=100)
     floor_number: int
-    plan_image_url: str
+    plan_image_url: str = ""
     scale_pixels_per_meter: float = 50.0
     width_px: int | None = None
     height_px: int | None = None
+    plan_x: float | None = None
+    plan_y: float | None = None
+    plan_w: float | None = Field(default=None, gt=0)
+    plan_h: float | None = Field(default=None, gt=0)
+    drawings: list[Drawing] = Field(default_factory=list, max_length=MAX_DRAWINGS)
 
 
 class FloorCreate(FloorBase):
@@ -74,6 +97,11 @@ class FloorUpdate(BaseModel):
     scale_pixels_per_meter: float | None = None
     width_px: int | None = None
     height_px: int | None = None
+    plan_x: float | None = None
+    plan_y: float | None = None
+    plan_w: float | None = Field(default=None, gt=0)
+    plan_h: float | None = Field(default=None, gt=0)
+    drawings: list[Drawing] | None = Field(default=None, max_length=MAX_DRAWINGS)
 
 
 class FloorOut(ORM, FloorBase):
@@ -314,6 +342,15 @@ class ConnectionCreate(BaseModel):
     length_meters: float | None = None
     label: str | None = Field(default=None, max_length=50)
     notes: str | None = None
+
+
+class LinkCreate(BaseModel):
+    """A cable drawn on the map between two devices; free ports are picked (or added) on each."""
+
+    device_a_id: uuid.UUID
+    device_b_id: uuid.UUID
+    cable_type: str = Field(default="Cat6", max_length=20)
+    label: str | None = Field(default=None, max_length=50)
 
 
 class ConnectionUpdate(BaseModel):

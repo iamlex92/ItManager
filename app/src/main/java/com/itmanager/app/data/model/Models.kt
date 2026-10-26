@@ -158,8 +158,35 @@ data class FloorPlan(
     val heightPx: Float,
     val pixelsPerMeter: Float,
     val rooms: List<Room>,
-    /** Absolute URL of the SVG plan drawn under the devices, or null to draw [rooms] only. */
+    /** Absolute URL of the plan drawn under the devices (SVG, PNG or JPEG), or null to draw [rooms] only. */
     val imageUrl: String? = null,
+    /** Where the plan image lies on the map; null: it fills the whole floor. */
+    val imageRect: PlanRect? = null,
+    /** Free lines drawn over the map in the editor. */
+    val drawings: List<Drawing> = emptyList(),
+    /** False for the placeholder floor of a server that has none yet; the editor creates one on first save. */
+    val stored: Boolean = true,
+)
+
+/** A rectangle on the map, in map pixels. */
+data class PlanRect(val x: Float, val y: Float, val width: Float, val height: Float) {
+    val right: Float get() = x + width
+    val bottom: Float get() = y + height
+}
+
+/** A free line drawn over the map: [points] are x, y pairs in map pixels. */
+data class Drawing(val colorArgb: Long, val width: Float, val points: List<Float>)
+
+/** A plan picked on the phone, ready to upload: PNG, JPEG or SVG, with its size in pixels. */
+class PlanFile(val bytes: ByteArray, val mime: String, val width: Int, val height: Int)
+
+/** What the editor's device form sends: a new object on the map or changes to one. */
+data class DeviceDraft(
+    val name: String,
+    val type: DeviceType,
+    val ip: String?,
+    val vendor: String?,
+    val model: String?,
 )
 
 enum class MapLayer(val short: String, val title: String) {
