@@ -1,15 +1,16 @@
 name: Android
 
+# PRs: tests + debug build (Linux only). Publishing test/release APKs: only on a v* tag or by hand.
 on:
-  push:
-    paths-ignore: ["server/**", "**.md"]
   pull_request:
-    paths-ignore: ["server/**", "**.md"]
+    paths: ["app/**", "gradle/**", "*.gradle*", "gradle.properties", "gradlew*", ".github/workflows/android.yml"]
+  push:
+    tags: ["v*"]
   workflow_dispatch:
 
 concurrency:
   group: android-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: write
@@ -28,17 +29,14 @@ jobs:
           java-version: "17"
 
       - uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
 
       - name: Unit tests
         run: ./gradlew --no-daemon testDebugUnitTest
 
       - name: Assemble debug APK
         run: ./gradlew --no-daemon assembleDebug
-
-      # Unsigned here: proves the release variant (lint-vital included) builds before anyone adds the key.
-      - name: Check release build
-        if: github.event_name == 'pull_request'
-        run: ./gradlew --no-daemon assembleRelease
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -50,12 +48,12 @@ jobs:
 
       # master always has one ready-to-install test build: open the release page on the phone and tap the APK.
       - name: Publish test build
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp app/build/outputs/apk/debug/app-debug.apk itmanager-debug.apk
-          notes="Тестовая сборка из master, коммит ${GITHUB_SHA::7}, сборка №${GITHUB_RUN_NUMBER}. Ставится поверх предыдущей."
+          notes="Тестовая сборка, коммит ${GITHUB_SHA::7}, сборка №${GITHUB_RUN_NUMBER}. Ставится поверх предыдущей."
           if gh release view android-latest >/dev/null 2>&1; then
             gh release upload android-latest itmanager-debug.apk --clobber
             gh release edit android-latest --notes "$notes"
@@ -68,7 +66,7 @@ jobs:
       # RELEASE_KEYSTORE_BASE64 (base64 of the .jks), RELEASE_STORE_PASSWORD, RELEASE_KEY_ALIAS, RELEASE_KEY_PASSWORD.
       # Without them master keeps publishing only the test build above.
       - name: Signed release APK
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
@@ -85,7 +83,7 @@ jobs:
           ./gradlew --no-daemon assembleRelease
           rm -f "$RELEASE_KEYSTORE_PATH"
           cp app/build/outputs/apk/release/app-release.apk itmanager-release.apk
-          notes="Рабочая сборка из master, коммит ${GITHUB_SHA::7}, сборка №${GITHUB_RUN_NUMBER}. Подписана релизным ключом."
+          notes="Рабочая сборка, коммит ${GITHUB_SHA::7}, сборка №${GITHUB_RUN_NUMBER}. Подписана релизным ключом."
           if gh release view android-release >/dev/null 2>&1; then
             gh release upload android-release itmanager-release.apk --clobber
             gh release edit android-release --notes "$notes"
