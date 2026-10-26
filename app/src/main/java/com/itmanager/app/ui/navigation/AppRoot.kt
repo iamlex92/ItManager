@@ -64,6 +64,7 @@ import com.itmanager.app.ui.automation.AutomationScreen
 import com.itmanager.app.ui.components.AlertsBellState
 import com.itmanager.app.ui.components.LocalAlertsBell
 import com.itmanager.app.ui.configdiff.ConfigDiffScreen
+import com.itmanager.app.ui.configimport.ConfigImportScreen
 import com.itmanager.app.ui.credentials.CredentialsScreen
 import com.itmanager.app.ui.devices.DevicesScreen
 import com.itmanager.app.ui.history.HistoryScreen
@@ -319,6 +320,7 @@ private fun AppNavHost(
                 onOpenSettings = openSettings,
                 onOpenDiff = { name -> navController.navigate(ConfigDiffRoute(deviceId, name)) },
                 onOpenHistory = { name -> navController.navigate(HistoryRoute(deviceId, name)) },
+                onOpenImport = { name -> navController.navigate(ConfigImportRoute(deviceId, name)) },
             )
         }
         composable<HistoryRoute>(
@@ -337,6 +339,17 @@ private fun AppNavHost(
         ) { entry ->
             ConfigDiffScreen(
                 switchName = entry.toRoute<ConfigDiffRoute>().switchName,
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable<ConfigImportRoute>(
+            enterTransition = { slideInHorizontally(push) { it } },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { slideOutHorizontally(push) { it } },
+        ) { entry ->
+            ConfigImportScreen(
+                switchName = entry.toRoute<ConfigImportRoute>().switchName,
                 onBack = { navController.popBackStack() },
             )
         }

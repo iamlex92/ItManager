@@ -79,6 +79,8 @@ class DcimRepository @Inject constructor(
     suspend fun writeMemory(switchId: String) = load { writeMemory(switchId) }
     suspend fun backupConfig(switchId: String) = load { backupConfig(switchId) }
     suspend fun configDiff(switchId: String) = load { configDiff(switchId) }
+    suspend fun importConfig(switchId: String, text: String, apply: Boolean) =
+        load { importConfig(switchId, text, apply) }
 
     suspend fun diagnostic(switchId: String, kind: DiagnosticKind, target: String) =
         load { diagnostic(switchId, kind, target) }

@@ -127,6 +127,10 @@ class NetAdminApi @Inject constructor(
     suspend fun configDiff(s: ServerSettings, deviceId: String): ConfigDiffDto =
         guarded { client.get("${requireBase(s)}/api/v1/devices/$deviceId/configs/diff") { auth(s) }.body() }
 
+    /** Reads pasted config text into the inventory only; nothing is sent to the switch. */
+    suspend fun importConfig(s: ServerSettings, deviceId: String, text: String, apply: Boolean): ConfigImportDto =
+        post(s, "devices/$deviceId/config-import", ConfigImportBody(text, apply))
+
     /** Ping and traceroute run on the switch; read-only, so no confirmation. */
     suspend fun ping(s: ServerSettings, deviceId: String, target: String, count: Int): DiagnosticDto =
         post(s, "devices/$deviceId/ping", DiagnosticBody(target, count))

@@ -11,6 +11,7 @@ import com.itmanager.app.data.model.AuditEntry
 import com.itmanager.app.data.model.AuditKind
 import com.itmanager.app.data.model.AuthMethod
 import com.itmanager.app.data.model.ConfigDiff
+import com.itmanager.app.data.model.ConfigImportResult
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
 import com.itmanager.app.data.model.Connection
@@ -350,6 +351,12 @@ object DemoDataSource : DcimDataSource {
         val stored = storedConfigs.getOrPut(switchId) { runningConfig(switch) }
         val diff = blockDiff(stored, runningConfig(switch))
         return ConfigDiff(changed = diff.isNotEmpty(), diff = diff)
+    }
+
+    override suspend fun importConfig(switchId: String, text: String, apply: Boolean): ConfigImportResult {
+        simulateNetwork()
+        switchOrThrow(switchId)
+        throw UserFacingException("Импорт конфигурации работает только с реальным сервером: в демо-режиме нет базы портов.")
     }
 
     private fun runningConfig(switch: Device) =
