@@ -102,6 +102,19 @@ Uplink ports also need `"confirm_uplink": true`.
 
 Every write attempt, including blocked ones, is recorded in `script_audit_logs`.
 
+## Custom scripts (web console)
+
+`GET/POST /api/v1/scripts`, `GET/PATCH/DELETE /api/v1/scripts/{id}`:
+`{title, description, shell: powershell|bash|cmd, body, params: [{name, label, required, placeholder}], critical}`.
+`{{name}}` in the body is replaced by the parameter's value (`unknown_placeholder` if no such parameter).
+Each script is listed by `GET /runbooks` as `custom-<id>` in the category «Свои скрипты» and run with
+`POST /runbooks/custom-<id>/run`. Runs are always emulated: the output is the script with parameters filled in.
+
+Writes to floors, devices, ports, cables, VLANs, scripts and scan imports send
+`{"type": "inventory_changed"}` to WebSocket clients subscribed to `*`, so open apps reload.
+
+The web console itself is `GET /admin` (no token for the page; every call it makes needs the token).
+
 ## Runbooks and audit
 
 Runbooks run against a built-in emulated environment (AD accounts, NTFS shares,

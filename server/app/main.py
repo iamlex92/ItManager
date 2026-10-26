@@ -1,13 +1,14 @@
 import asyncio
 import contextlib
 import logging
+import re
 from collections.abc import AsyncIterator
 from pathlib import Path
 from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Depends, FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 
@@ -27,6 +28,7 @@ from .api import (
     ports,
     printers,
     runbooks,
+    scripts,
     traffic,
     vlans,
     ws,
@@ -50,6 +52,22 @@ from .services.switches import poller
 
 log = logging.getLogger(__name__)
 STATIC_DIR = Path(__file__).parent / "static"
+
+# Requests that change the map or the inventory; the phone reloads when it hears about one.
+INVENTORY_WRITE = re.compile(
+    r"^/api/v1/(?:(?:floors|vlans|connections|scripts)(?:/.*)?"
+    r"|devices(?:/[^/]+)?|ports(?:/[^/]+)?|discovery/scans/[^/]+/import)$"
+)
+# The web console loads only its own files and talks only to this server.
+ADMIN_HEADERS = {
+    "Content-Security-Policy": (
+        "default-src 'self'; img-src 'self' blob: data:; style-src 'self'; script-src 'self'; "
+        "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+    ),
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Cache-Control": "no-cache",
+}
 
 
 def create_app(settings: Settings | None = None, telegram_transport: httpx.AsyncBaseTransport | None = None) -> FastAPI:
@@ -200,7 +218,21 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
         )
 
     api = APIRouter(prefix="/api/v1", dependencies=[Depends(require_token)])
-    routers = (floors, vlans, devices, ports, connections, alerts, misc, printers, nfc, runbooks, audit, discovery)
+    routers = (
+        floors,
+        vlans,
+        devices,
+        ports,
+        connections,
+        alerts,
+        misc,
+        printers,
+        nfc,
+        runbooks,
+        scripts,
+        audit,
+        discovery,
+    )
     for module in (*routers, credentials, notifications, traffic, history):
         api.include_router(module.router)
 
@@ -209,6 +241,30 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
     # WebSocket checks the token itself (query param or header).
     app.include_router(ws.router, prefix="/api/v1")
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+    @app.middleware("http")
+    async def announce_inventory_changes(request: Request, call_next):
+        response = await call_next(request)
+        if (
+            request.method in ("POST", "PUT", "PATCH", "DELETE")
+            and response.status_code < 400
+            and INVENTORY_WRITE.match(request.url.path)
+        ):
+            # Every listener on "*" (the phone's map, the web console) reloads its copy.
+            request.app.state.hub.publish(None, {"type": "inventory_changed"})
+        return response
+
+    admin_page = (STATIC_DIR / "admin" / "index.html").read_text(encoding="utf-8").replace("{{version}}", __version__)
+
+    @app.get("/admin", include_in_schema=False)
+    async def admin():
+        """The web console: the same API as the phone, behind the same API token."""
+        return HTMLResponse(admin_page, headers=ADMIN_HEADERS)
+
+    @app.get("/", include_in_schema=False)
+    async def root():
+        return RedirectResponse("/admin")
+
     return app
 
 

@@ -552,6 +552,64 @@ class RunbookRunOut(BaseModel):
     simulated: bool = True
 
 
+# --- custom scripts (web console) ---------------------------------------------
+
+ScriptShell = Literal["powershell", "bash", "cmd"]
+
+
+def _unique_params(params: list["ScriptParam"]) -> list["ScriptParam"]:
+    names = [p.name for p in params]
+    if len(names) != len(set(names)):
+        raise ValueError("parameter names must be unique")
+    return params
+
+
+class ScriptParam(BaseModel):
+    name: str = Field(pattern=r"^[a-z][a-z0-9_]{0,30}$")
+    label: str = Field(min_length=1, max_length=60)
+    required: bool = True
+    placeholder: str | None = Field(default=None, max_length=60)
+
+
+class ScriptBase(BaseModel):
+    title: str = Field(min_length=1, max_length=100)
+    description: str = Field(default="", max_length=500)
+    shell: ScriptShell = "powershell"
+    body: str = Field(min_length=1, max_length=20_000)
+    params: list[ScriptParam] = Field(default_factory=list, max_length=10)
+    critical: bool = False
+
+    @field_validator("params")
+    @classmethod
+    def _unique_names(cls, v: list[ScriptParam]) -> list[ScriptParam]:
+        return _unique_params(v)
+
+
+class ScriptCreate(ScriptBase):
+    pass
+
+
+class ScriptUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=100)
+    description: str | None = Field(default=None, max_length=500)
+    shell: ScriptShell | None = None
+    body: str | None = Field(default=None, min_length=1, max_length=20_000)
+    params: list[ScriptParam] | None = Field(default=None, max_length=10)
+    critical: bool | None = None
+
+    @field_validator("params")
+    @classmethod
+    def _unique_names(cls, v: list[ScriptParam] | None) -> list[ScriptParam] | None:
+        return None if v is None else _unique_params(v)
+
+
+class ScriptOut(ScriptBase):
+    id: uuid.UUID
+    runbook_id: str
+    created_at: datetime
+    updated_at: datetime
+
+
 class AuditOut(BaseModel):
     id: uuid.UUID
     action: str

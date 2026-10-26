@@ -185,6 +185,7 @@ def cmd_info(args: argparse.Namespace) -> None:
                 print("Или отсканируйте код в приложении: ⚙ → Сканировать QR-код\n")
                 print(connectqr.terminal(connectqr.payload(addrs, port, token)))
                 print()
+        print(f"Веб-консоль: http://{(addrs or ['127.0.0.1'])[0]}:{port}/admin (вход по API-токену)")
         print(f"Настройки: {args.config}")
         print(
             f"Проверка: http://{(addrs or ['127.0.0.1'])[0]}:{port}/api/v1/health должен открываться с телефона.\n"

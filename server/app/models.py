@@ -199,6 +199,26 @@ class Credential(Base):
     )
 
 
+class CustomScript(Base):
+    """A script added by the IT team in the web console. The phone lists it with the runbooks;
+    runs are emulated (the text with parameters filled in is shown, nothing is executed)."""
+
+    __tablename__ = "custom_scripts"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    title: Mapped[str] = mapped_column(String(100), unique=True)
+    description: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    shell: Mapped[str] = mapped_column(String(20), server_default=text("'powershell'"))
+    body: Mapped[str] = mapped_column(Text)
+    # [{"name": "account", "label": "Учётная запись", "required": true, "placeholder": "i.ivanov"}]
+    params: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
+    critical: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class ScriptAuditLog(Base):
     __tablename__ = "script_audit_logs"
 

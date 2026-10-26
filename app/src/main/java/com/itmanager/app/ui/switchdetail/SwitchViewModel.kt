@@ -206,7 +206,7 @@ class SwitchViewModel @Inject constructor(
             }
             is LiveEvent.DeviceStatus -> updateDetails { d -> d.copy(device = d.device.copy(isOnline = event.isOnline)) }
             // Alerts and printers have their own screens.
-            is LiveEvent.AlertRaised, is LiveEvent.PrinterChanged -> Unit
+            is LiveEvent.AlertRaised, is LiveEvent.PrinterChanged, LiveEvent.InventoryChanged -> Unit
         }
     }
 

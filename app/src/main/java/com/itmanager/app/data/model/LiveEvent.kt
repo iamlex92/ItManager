@@ -20,6 +20,9 @@ sealed interface LiveEvent {
 
     /** Fresh SNMP reading of a printer. */
     data class PrinterChanged(val printer: Printer) : LiveEvent
+
+    /** Devices, cables or the floor plan changed on the server (in the web console or on another phone). */
+    data object InventoryChanged : LiveEvent
 }
 
 /** Subscription key for every device at once. */

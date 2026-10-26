@@ -103,6 +103,7 @@ class LiveSocket @Inject constructor(
                 runCatching { json.decodeFromJsonElement(PrinterDto.serializer(), obj["printer"]!!) }.getOrNull()?.toDomain()
                     ?: return null,
             )
+            "inventory_changed" -> LiveEvent.InventoryChanged
             else -> null
         }
     }
