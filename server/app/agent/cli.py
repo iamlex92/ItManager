@@ -25,7 +25,7 @@ from pathlib import Path
 from sqlalchemy.engine import make_url
 
 from .. import __version__
-from . import configfile
+from . import configfile, connectqr
 from .pgsql import DEFAULT_PORT, ManagedPostgres
 
 log = logging.getLogger("netadmin.agent")
@@ -152,15 +152,19 @@ def cmd_restore(args: argparse.Namespace) -> None:
 
 
 def _addresses() -> list[str]:
+    """This computer's IPv4 addresses, the one of the default route first: it is the likeliest
+    to be reachable from the phone."""
+    primary = None
+    # UDP connect sends nothing; it also covers a host name that resolves to loopback only.
+    with contextlib.suppress(OSError), socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+        s.connect(("10.255.255.255", 1))
+        primary = s.getsockname()[0]
     found: set[str] = set()
     with contextlib.suppress(OSError):
         for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
             found.add(str(info[4][0]))
-    # The address used for the default route, in case the host name resolves to loopback only.
-    with contextlib.suppress(OSError), socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-        s.connect(("10.255.255.255", 1))  # UDP connect sends nothing
-        found.add(s.getsockname()[0])
-    return sorted(a for a in found if not a.startswith("127."))
+    rest = sorted(a for a in found if a != primary)
+    return [a for a in [primary, *rest] if a and not a.startswith(("127.", "0."))]
 
 
 def cmd_info(args: argparse.Namespace) -> None:
@@ -171,10 +175,16 @@ def cmd_info(args: argparse.Namespace) -> None:
         addrs = _addresses()
         for a in addrs or ["<IP этого компьютера>"]:
             print(f"  Адрес сервера: {a}:{port}")
+        token = os.environ.get("API_TOKEN", "")
         if args.no_token:
             print("  API-токен:     покажет sudo netadmin-agent info\n")
         else:
-            print(f"  API-токен:     {os.environ.get('API_TOKEN', '')}\n")
+            print(f"  API-токен:     {token}\n")
+            if addrs and not args.no_qr:
+                # The QR carries the token too, so it is shown only where the token is.
+                print("Или отсканируйте код в приложении: ⚙ → Сканировать QR-код\n")
+                print(connectqr.terminal(connectqr.payload(addrs, port, token)))
+                print()
         print(f"Настройки: {args.config}")
         print(
             f"Проверка: http://{(addrs or ['127.0.0.1'])[0]}:{port}/api/v1/health должен открываться с телефона.\n"
@@ -248,7 +258,8 @@ def build_parser() -> argparse.ArgumentParser:
     r.set_defaults(func=cmd_restore)
     i = with_config(sub.add_parser("info", help="address and API token for the app"))
     i.add_argument("--pause", action="store_true", help=argparse.SUPPRESS)
-    i.add_argument("--no-token", action="store_true", help="do not print the API token")
+    i.add_argument("--no-token", action="store_true", help="do not print the API token (nor the QR code)")
+    i.add_argument("--no-qr", action="store_true", help="do not draw the connection QR code")
     i.set_defaults(func=cmd_info)
     c = sub.add_parser("init-config", help="create the settings file with fresh keys (never overwrites)")
     c.add_argument("path")

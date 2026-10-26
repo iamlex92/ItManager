@@ -17,7 +17,7 @@ android {
         targetSdk = 36
         // CI builds count up, so each APK installs over the previous one.
         versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
-        versionName = "0.7.0"
+        versionName = "0.7.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -82,6 +82,8 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.biometric)
+    // QR codes through Google Play services: no camera permission, the scanner UI is the system one.
+    implementation(libs.play.services.code.scanner)
     // biometric pulls an old fragment; the activity must be a current FragmentActivity.
     implementation(libs.androidx.fragment.ktx)
 

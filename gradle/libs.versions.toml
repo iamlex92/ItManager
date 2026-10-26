@@ -18,6 +18,7 @@ haze = "1.7.1"
 androidsvg = "1.4"
 biometric = "1.1.0"
 fragment = "1.8.8"
+codeScanner = "16.1.0"
 junit = "4.13.2"
 
 [libraries]
@@ -49,6 +50,7 @@ haze = { group = "dev.chrisbanes.haze", name = "haze", version.ref = "haze" }
 androidsvg = { group = "com.caverock", name = "androidsvg-aar", version.ref = "androidsvg" }
 androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
 androidx-fragment-ktx = { group = "androidx.fragment", name = "fragment-ktx", version.ref = "fragment" }
+play-services-code-scanner = { group = "com.google.android.gms", name = "play-services-code-scanner", version.ref = "codeScanner" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]

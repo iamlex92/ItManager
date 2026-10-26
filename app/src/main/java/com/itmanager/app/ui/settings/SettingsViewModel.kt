@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.itmanager.app.core.network.NetAdminApi
 import com.itmanager.app.core.network.runCatchingCancellable
 import com.itmanager.app.core.network.toUserMessage
+import com.itmanager.app.core.settings.ConnectQr
 import com.itmanager.app.core.settings.ServerSettings
 import com.itmanager.app.core.settings.ServerUrl
 import com.itmanager.app.core.settings.ServerUrlCheck
@@ -101,6 +102,48 @@ class SettingsViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    /**
+     * Text read from a QR code. A NetAdmin connection code fills the form and turns demo mode off;
+     * the address is the first one in the code that answers. Nothing is saved until the user taps Save.
+     */
+    fun applyScanned(text: String) {
+        val qr = ConnectQr.parse(text)
+        if (qr == null) {
+            _state.update { it.copy(check = ConnectionCheck.Failed("Это не код подключения NetAdmin. Его показывает netadmin-agent info на сервере.")) }
+            return
+        }
+        checkJob?.cancel()
+        checkJob = viewModelScope.launch {
+            _state.update {
+                it.copy(baseUrl = qr.urls.first(), apiToken = qr.token, demoMode = false, urlError = null, check = ConnectionCheck.Running)
+            }
+            var lastError: Throwable? = null
+            for (url in qr.urls) {
+                val result = runCatchingCancellable { api.health(url).toDomain() }
+                val health = result.getOrNull()
+                if (health != null) {
+                    _state.update { it.copy(baseUrl = url, check = ConnectionCheck.Ok(health)) }
+                    return@launch
+                }
+                lastError = result.exceptionOrNull()
+            }
+            val tried = qr.urls.joinToString(", ") { it.removePrefix("http://") }
+            _state.update {
+                it.copy(
+                    check = ConnectionCheck.Failed(
+                        "Код прочитан, но сервер не отвечает ($tried): ${lastError?.toUserMessage().orEmpty().trimEnd('.')}. " +
+                            "Проверьте, что телефон в сети завода или в VPN.",
+                    ),
+                )
+            }
+        }
+    }
+
+    /** The scanner could not start (no Google Play services, the module not downloaded yet). Cancel is not a failure. */
+    fun scanFailed() = _state.update {
+        it.copy(check = ConnectionCheck.Failed("Сканер QR-кодов недоступен: нужны сервисы Google Play и интернет при первом запуске. Введите адрес и токен вручную."))
     }
 
     /** Returns false and shows the reason when the form cannot be saved as is. */
