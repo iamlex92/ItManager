@@ -23,6 +23,7 @@ import androidx.compose.material.icons.automirrored.outlined.ManageSearch
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.Science
+import androidx.compose.material.icons.outlined.Construction
 import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -58,6 +59,7 @@ fun AutomationScreen(
     onOpenSettings: () -> Unit,
     onOpenAudit: () -> Unit,
     onOpenScanner: () -> Unit,
+    onOpenTools: () -> Unit,
     viewModel: AutomationViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -89,6 +91,14 @@ fun AutomationScreen(
                             title = "Сканер сети",
                             subtitle = "Найти устройства в подсетях, построить связи и добавить в учёт",
                             onClick = onOpenScanner,
+                        )
+                    }
+                    item(key = "tools") {
+                        LinkCard(
+                            icon = Icons.Outlined.Construction,
+                            title = "Сетевые утилиты",
+                            subtitle = "Ping, трассировка, порты, SNMP, iperf3, Wake-on-LAN, MAC и подсети с телефона",
+                            onClick = onOpenTools,
                         )
                     }
                     item(key = "audit") {
