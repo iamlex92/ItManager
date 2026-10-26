@@ -2,6 +2,8 @@ package com.itmanager.app.ui.automation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.itmanager.app.core.network.NetAdminApi
+import com.itmanager.app.core.network.runCatchingCancellable
 import com.itmanager.app.core.network.toUserMessage
 import com.itmanager.app.data.model.AuthMethod
 import com.itmanager.app.data.model.Runbook
@@ -19,6 +21,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+data class ServerRunbooks(val real: Boolean, val writes: Boolean)
+
 /** One open runbook: the form, then the run's outcome. */
 data class RunbookSession(
     val runbook: Runbook,
@@ -31,6 +35,7 @@ data class RunbookSession(
 @HiltViewModel
 class AutomationViewModel @Inject constructor(
     private val repository: DcimRepository,
+    private val api: NetAdminApi,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<UiState<List<Runbook>>>(UiState.Loading)
@@ -42,8 +47,24 @@ class AutomationViewModel @Inject constructor(
     val isDemo: StateFlow<Boolean> = repository.settings.map { it.demoMode }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
+    /** The server's runbook mode from /health: emulator or real AD; null in demo mode or while unknown. */
+    private val _serverMode = MutableStateFlow<ServerRunbooks?>(null)
+    val serverMode: StateFlow<ServerRunbooks?> = _serverMode.asStateFlow()
+
     init {
-        viewModelScope.launch { repository.settings.collect { load() } }
+        viewModelScope.launch {
+            repository.settings.collect { settings ->
+                _serverMode.value = null
+                if (!settings.demoMode && settings.baseUrl.isNotBlank()) {
+                    launch {
+                        runCatchingCancellable { api.health(settings.baseUrl) }.getOrNull()?.let { h ->
+                            _serverMode.value = ServerRunbooks(real = h.runbookMode == "real", writes = h.runbookWritesEnabled == true)
+                        }
+                    }
+                }
+                load()
+            }
+        }
     }
 
     fun retry() {

@@ -184,6 +184,9 @@ data class ServerHealth(
     /** Null on a server from before credential encryption. */
     val secretsEncrypted: Boolean? = null,
     val telegramAlerts: Boolean? = null,
+    /** "emulator" or "real" (AD over LDAPS, folder rights over WinRM). */
+    val runbookMode: String? = null,
+    val runbookWritesEnabled: Boolean? = null,
 )
 
 fun parseColorHex(hex: String?, fallback: Long = 0xFF3498DB): Long {

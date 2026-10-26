@@ -89,6 +89,16 @@ MONITOR_MODE=emulator
 # true: один раз заполнить пустую базу демо-этажом. В приложении есть свой демо-режим, поэтому выключено.
 SEED_DEMO_DATA=false
 
+# Runbooks (AD, права на папки). emulator: встроенная учебная среда, настоящий AD не затрагивается.
+# real: AD по LDAPS и права на папки по WinRM (см. DEPLOY.md, раздел «Runbooks с настоящим AD»).
+RUNBOOK_MODE=emulator
+# Важно только при RUNBOOK_MODE=real. false: сброс пароля, разблокировка и отключение учётных записей
+# только показывают, что нужно сделать. Даже при true каждое изменение подтверждается в приложении.
+ALLOW_RUNBOOK_WRITES=false
+# RUNBOOK_CREDENTIAL=ad-runbooks
+# AD_LDAP_URL=ldaps://dc01.factory.local
+# RUNBOOK_FILE_SERVERS=fs01
+
 # SNMP-трапы (linkDown/linkUp) от коммутаторов. 0: выключено.
 TRAP_LISTEN_PORT={trap_port}
 TRAP_COMMUNITY=public

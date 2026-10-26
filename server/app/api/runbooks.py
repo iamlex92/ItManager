@@ -3,10 +3,13 @@ import time
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Request
+from sqlalchemy import select
 
-from ..models import ScriptAuditLog
+from ..config import Settings
+from ..models import Credential, ScriptAuditLog
 from ..runbooks.catalog import BY_ID, CATALOG, InvalidParams, Runbook, validate
 from ..runbooks.emulator import RunbookEnvironment, RunResult
+from ..runbooks.real import REAL_CATEGORIES, Login, RealRunbooks
 from ..schemas import RunbookChoiceOut, RunbookOut, RunbookParamOut, RunbookRunIn, RunbookRunOut
 from .deps import SessionDep, not_found
 
@@ -37,17 +40,34 @@ def runbook_out(rb: Runbook) -> RunbookOut:
     )
 
 
+def offered(rb: Runbook, env: object) -> bool:
+    """Real mode offers only what has a real backend: AD and folder rights."""
+    return not isinstance(env, RealRunbooks) or rb.category in REAL_CATEGORIES
+
+
+async def runbook_login(session, settings: Settings) -> Login | None:
+    name = settings.runbook_credential.strip()
+    if not name:
+        return None
+    cred = await session.scalar(select(Credential).where(Credential.name == name))
+    if cred is None or not cred.username or not cred.secret:
+        return None
+    return Login(cred.username, cred.secret)
+
+
 @router.get("", response_model=list[RunbookOut])
-async def list_runbooks():
-    return [runbook_out(rb) for rb in CATALOG]
+async def list_runbooks(request: Request):
+    env = request.app.state.runbooks
+    return [runbook_out(rb) for rb in CATALOG if offered(rb, env)]
 
 
 @router.post("/{runbook_id}/run", response_model=RunbookRunOut)
 async def run_runbook(runbook_id: str, body: RunbookRunIn, request: Request, session: SessionDep):
-    """Runs a runbook against the emulated environment and writes the run to the audit log.
+    """Runs a runbook (emulated, or against AD in RUNBOOK_MODE=real) and writes the run to the audit log.
     Critical runbooks need "confirm": true, which the app sends after biometric confirmation."""
+    env: RunbookEnvironment | RealRunbooks = request.app.state.runbooks
     rb = BY_ID.get(runbook_id)
-    if rb is None:
+    if rb is None or not offered(rb, env):
         raise not_found("runbook")
     try:
         params = validate(rb, body.params)
@@ -62,13 +82,16 @@ async def run_runbook(runbook_id: str, body: RunbookRunIn, request: Request, ses
             },
         )
 
-    env: RunbookEnvironment = request.app.state.runbooks
+    real = isinstance(env, RealRunbooks)
     client = request.client.host if request.client else "unknown"
     triggered_by = f"{body.operator} · {client}" if body.operator else f"api:{client}"
     started_at = datetime.now(UTC)
     t0 = time.monotonic()
     try:
-        result = await env.run(rb.id, params)
+        if isinstance(env, RealRunbooks):
+            result = await env.run(rb.id, params, await runbook_login(session, request.app.state.settings))
+        else:
+            result = await env.run(rb.id, params)
     except Exception as e:
         log.exception("runbook %s failed", rb.id)
         result = RunResult(exit_code=1, stdout="", stderr=f"FAILED: {e!r}")
@@ -81,7 +104,7 @@ async def run_runbook(runbook_id: str, body: RunbookRunIn, request: Request, ses
             "params": params,
             "confirmed": body.confirm,
             "auth_method": body.auth_method,
-            "simulated": True,
+            "simulated": not real,
         },
         executed_at=started_at,
         exit_code=result.exit_code,
@@ -100,4 +123,5 @@ async def run_runbook(runbook_id: str, body: RunbookRunIn, request: Request, ses
         secret=result.secret,
         started_at=started_at,
         duration_ms=duration_ms,
+        simulated=not real,
     )

@@ -11,6 +11,7 @@ def test_health_is_public(client):
         "device_writes_enabled": True,
         "monitor_mode": "emulator",
         "runbook_mode": "emulator",
+        "runbook_writes_enabled": True,
         "secrets_encrypted": False,
         "telegram_alerts": False,
     }

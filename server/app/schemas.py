@@ -417,8 +417,10 @@ class HealthOut(BaseModel):
     hal_mode: str
     device_writes_enabled: bool
     monitor_mode: str = "emulator"
-    # Runbooks only run against the built-in emulated environment for now.
+    # emulator, or real (AD over LDAPS, folder rights over WinRM).
     runbook_mode: str = "emulator"
+    # Runbooks may change AD: always in the emulator, with ALLOW_RUNBOOK_WRITES in real mode.
+    runbook_writes_enabled: bool = True
     # SNMP communities and stored credentials are encrypted at rest (SECRET_KEY is set).
     secrets_encrypted: bool = False
     # Alerts are also sent to a Telegram chat.

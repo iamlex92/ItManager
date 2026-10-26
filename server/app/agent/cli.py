@@ -220,6 +220,8 @@ def cmd_init_config(args: argparse.Namespace) -> None:
 
 def cmd_selfcheck(args: argparse.Namespace) -> None:
     """Fails loudly when the frozen build misses a module or data file."""
+    import ldap3  # noqa: F401  real-mode runbooks import these only when they run
+    import winrm  # noqa: F401
     from pysnmp.smi import builder
 
     from .. import main  # noqa: F401  imports every API module
