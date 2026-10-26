@@ -41,7 +41,7 @@ from .hal.factory import build_driver, build_printer_driver
 from .models import Credential, Device
 from .runbooks.emulator import RunbookEnvironment
 from .schemas import HealthOut
-from .services import heartbeat, telegram, traps
+from .services import backup, heartbeat, telegram, traps
 from .services import printers as printer_service
 from .services import traffic as traffic_service
 from .services.realtime import Hub
@@ -107,6 +107,9 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
                 )
             else:
                 log.error("ICMP heartbeat disabled: no ping binary found")
+        if settings.backup_dir:
+            tasks.append(asyncio.create_task(backup.backup_loop(settings)))
+            log.warning("database backups: every %g h to %s", settings.backup_interval_hours, settings.backup_dir)
         app.state.telegram = None
         if settings.telegram_enabled:
             bot = telegram.BotApi(

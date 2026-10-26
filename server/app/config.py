@@ -103,6 +103,14 @@ class Settings(BaseSettings):
     # Optional HTTP(S) proxy when the server has no direct internet access: http://proxy.local:3128
     telegram_proxy: str = ""
 
+    # --- built-in database backups (the Debian and Windows agents; Docker uses its own backup service) ---
+    # Folder for pg_dump files. Empty: no built-in backups.
+    backup_dir: str = ""
+    backup_interval_hours: float = Field(default=24, gt=0)
+    backup_keep_days: int = Field(default=14, ge=1)
+    # Folder with pg_dump/pg_restore (and initdb/pg_ctl for the bundled database). Empty: search PATH.
+    pg_bin_dir: str = ""
+
     @field_validator("api_token")
     @classmethod
     def _reject_placeholder(cls, v: str) -> str:

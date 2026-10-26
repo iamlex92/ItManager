@@ -155,7 +155,9 @@ kotlinx.serialization, DataStore, Navigation Compose. `minSdk 31`, `targetSdk 36
 2. Укажите адрес сервера, например `10.0.0.5` (порт 8000 подставится сам) или `http://10.0.0.5:8000`.
 3. Вставьте API-токен, нажмите «Проверить соединение», выключите демо-данные и сохраните.
 
-Установка сервера на заводе по шагам: [server/DEPLOY.md](server/DEPLOY.md).
+Сервер ставится пакетом на Debian/Ubuntu, установщиком на компьютер с Windows или через Docker.
+Готовые установщики: релиз [server-latest](https://github.com/iamlex92/ItManager/releases/tag/server-latest),
+инструкция по шагам: [server/DEPLOY.md](server/DEPLOY.md).
 Сервер доступен только из сети завода или через VPN и наружу не публикуется.
 Поэтому приложение разрешает обычный HTTP (см. `app/src/main/res/xml/network_security_config.xml`).
 Когда у сервера появится сертификат внутреннего УЦ, достаточно указать адрес с `https://`.

@@ -1,0 +1,235 @@
+name: server agent
+
+# The server as an installable agent, without Docker:
+#   Debian/Ubuntu: netadmin-agent_<version>_amd64.deb (systemd service, system PostgreSQL)
+#   Windows:       NetAdmin-Server-Setup.exe (Windows service, bundled PostgreSQL)
+# Each package is installed on a clean runner and checked over HTTP before master publishes it
+# to the prerelease "server-latest".
+
+on:
+  push:
+    paths: ["server/**", ".github/workflows/server-agent.yml"]
+  pull_request:
+    paths: ["server/**", ".github/workflows/server-agent.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: server-agent-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  # PostgreSQL bundled into the Windows installer (EDB binaries zip). The first one that downloads is used.
+  PG_WINDOWS_VERSIONS: "16.10-1 16.9-1 16.8-1"
+  WINSW_URL: https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe
+
+jobs:
+  deb:
+    name: Build .deb
+    runs-on: ubuntu-latest
+    # Built on Debian 12 so the binary runs on Debian 12 and newer (glibc 2.36).
+    container: python:3.12-slim-bookworm
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: server
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: version
+        run: |
+          base=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          echo "version=${base}.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+      - run: apt-get update && apt-get install -y --no-install-recommends binutils
+      - run: pip install --no-cache-dir . pyinstaller
+      - run: pyinstaller --noconfirm --distpath build/dist --workpath build/work packaging/netadmin-agent.spec
+      - run: build/dist/netadmin-agent/netadmin-agent selfcheck
+      - run: packaging/debian/build-deb.sh "${{ steps.version.outputs.version }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: netadmin-agent-deb
+          path: server/build/*.deb
+          if-no-files-found: error
+          retention-days: 30
+
+  deb-install:
+    name: Install .deb and check
+    needs: deb
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: netadmin-agent-deb
+      - name: Install
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ./netadmin-agent_*.deb
+      - name: Health and API
+        run: |
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8000/api/v1/health > health.json && break; sleep 2; done
+          cat health.json; echo
+          grep -q '"hal_mode":"emulator"' health.json
+          grep -q '"secrets_encrypted":true' health.json
+          sudo grep -q '^ALLOW_DEVICE_WRITES=false' /etc/netadmin/netadmin.env
+          test "$(sudo stat -c '%a %U:%G' /etc/netadmin/netadmin.env)" = "640 root:netadmin"
+          token=$(sudo sed -n 's/^API_TOKEN=//p' /etc/netadmin/netadmin.env)
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/api/v1/devices)" = 401
+          curl -sf -H "Authorization: Bearer $token" http://127.0.0.1:8000/api/v1/devices
+          echo
+      - name: Backup, restart, reinstall keeps settings
+        run: |
+          sudo -u netadmin netadmin-agent backup
+          sudo ls -l /var/lib/netadmin/backups
+          before=$(sudo sha256sum /etc/netadmin/netadmin.env)
+          sudo dpkg -i ./netadmin-agent_*.deb
+          test "$before" = "$(sudo sha256sum /etc/netadmin/netadmin.env)"
+          sudo systemctl restart netadmin
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8000/api/v1/health && break; sleep 2; done
+          echo
+          sudo netadmin-agent info
+      - name: Remove
+        run: |
+          sudo apt-get remove -y netadmin-agent
+          ! systemctl is-active --quiet netadmin
+      - name: Service log
+        if: failure()
+        run: sudo journalctl -u netadmin --no-pager -n 200 || true
+
+  windows:
+    name: Build and install Windows setup
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Version
+        id: version
+        run: |
+          $base = python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])"
+          "version=$base.$env:GITHUB_RUN_NUMBER" >> $env:GITHUB_OUTPUT
+      - run: pip install --no-cache-dir . pyinstaller
+      - run: pyinstaller --noconfirm --distpath build/dist --workpath build/work packaging/netadmin-agent.spec
+      - run: build/dist/netadmin-agent/netadmin-agent.exe selfcheck
+      - name: PostgreSQL binaries
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          $zip = "$env:RUNNER_TEMP\pgsql.zip"
+          $got = $null
+          foreach ($v in $env:PG_WINDOWS_VERSIONS.Split(' ')) {
+            try {
+              Invoke-WebRequest "https://get.enterprisedb.com/postgresql/postgresql-$v-windows-x64-binaries.zip" -OutFile $zip
+              $got = $v; break
+            } catch { Write-Host "PostgreSQL $v not available: $($_.Exception.Message)" }
+          }
+          if (-not $got) { throw "no PostgreSQL binaries downloaded" }
+          Write-Host "PostgreSQL $got"
+          Expand-Archive $zip -DestinationPath "$env:RUNNER_TEMP\pg"
+          New-Item -ItemType Directory build/pgsql | Out-Null
+          foreach ($d in 'bin', 'lib', 'share') { Copy-Item -Recurse "$env:RUNNER_TEMP\pg\pgsql\$d" build/pgsql/ }
+          # Visual C++ runtime next to the binaries, for computers without the redistributable.
+          foreach ($dll in 'vcruntime140.dll', 'vcruntime140_1.dll', 'msvcp140.dll') {
+            if (-not (Test-Path "build/pgsql/bin/$dll")) { Copy-Item "$env:WINDIR\System32\$dll" build/pgsql/bin/ }
+          }
+          build/pgsql/bin/postgres.exe --version
+      - name: WinSW
+        run: |
+          New-Item -ItemType Directory build/winsw | Out-Null
+          Invoke-WebRequest $env:WINSW_URL -OutFile build/winsw/netadmin-service.exe
+      - name: Installer
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; }
+          & $iscc "/DAppVersion=${{ steps.version.outputs.version }}" packaging/windows/netadmin.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
+          Get-Item build/NetAdmin-Server-Setup.exe
+      - name: Install and check
+        run: |
+          $p = Start-Process -Wait -PassThru build/NetAdmin-Server-Setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/LOG=$env:RUNNER_TEMP\install.log"
+          if ($p.ExitCode -ne 0) { throw "setup exit code $($p.ExitCode)" }
+          (Get-Service NetAdmin).Status
+          $health = $null
+          foreach ($i in 1..90) {
+            try { $health = Invoke-RestMethod http://127.0.0.1:8000/api/v1/health; break } catch { Start-Sleep 2 }
+          }
+          if (-not $health) { throw "API did not come up" }
+          $health | ConvertTo-Json
+          if ($health.hal_mode -ne 'emulator' -or -not $health.secrets_encrypted) { throw "unexpected health" }
+          $conf = "$env:ProgramData\NetAdmin\netadmin.env"
+          # Only SYSTEM and Administrators may read the settings (they hold the keys).
+          $sids = (Get-Acl $conf).Access | ForEach-Object { $_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value } | Sort-Object -Unique
+          "settings ACL: $($sids -join ', ')"
+          if (Compare-Object $sids @('S-1-5-18', 'S-1-5-32-544')) { throw "settings readable by others: $sids" }
+          if (-not (Select-String -Quiet '^ALLOW_DEVICE_WRITES=false' $conf)) { throw "writes not off" }
+          $token = (Select-String '^API_TOKEN=(.+)$' $conf).Matches[0].Groups[1].Value
+          Invoke-RestMethod http://127.0.0.1:8000/api/v1/devices -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json
+          & "$env:ProgramFiles\NetAdmin\netadmin-agent.exe" backup
+          if ($LASTEXITCODE -ne 0) { throw "backup failed" }
+          Get-ChildItem "$env:ProgramData\NetAdmin\backups"
+          Restart-Service NetAdmin
+          $health = $null
+          foreach ($i in 1..60) {
+            try { $health = Invoke-RestMethod http://127.0.0.1:8000/api/v1/health; break } catch { Start-Sleep 2 }
+          }
+          if (-not $health) { throw "API did not come back after restart" }
+          & "$env:ProgramFiles\NetAdmin\netadmin-agent.exe" info
+      - name: Upgrade over itself and uninstall
+        run: |
+          $before = (Get-FileHash "$env:ProgramData\NetAdmin\netadmin.env").Hash
+          Start-Process -Wait build/NetAdmin-Server-Setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART'
+          if ((Get-FileHash "$env:ProgramData\NetAdmin\netadmin.env").Hash -ne $before) { throw "settings were overwritten" }
+          foreach ($i in 1..60) {
+            try { Invoke-RestMethod http://127.0.0.1:8000/api/v1/health | Out-Null; $ok = $true; break } catch { Start-Sleep 2 }
+          }
+          if (-not $ok) { throw "API did not come back after upgrade" }
+          Start-Process -Wait "$env:ProgramFiles\NetAdmin\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART'
+          if (Get-Service NetAdmin -ErrorAction SilentlyContinue) { throw "service still registered" }
+      - name: Logs
+        if: failure()
+        run: |
+          Get-Content "$env:RUNNER_TEMP\install.log" -ErrorAction SilentlyContinue | Select-Object -Last 80
+          Get-ChildItem "$env:ProgramData\NetAdmin\logs" -ErrorAction SilentlyContinue |
+            ForEach-Object { "== $($_.Name)"; Get-Content $_.FullName -Tail 80 }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: netadmin-server-setup
+          path: server/build/NetAdmin-Server-Setup.exe
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    name: Publish server-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: [deb, deb-install, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          ls -l dist
+          notes="Сервер NetAdmin без Docker, из master: коммит ${GITHUB_SHA::7}, версия ${{ needs.deb.outputs.version }}.
+          Debian/Ubuntu: sudo apt install ./netadmin-agent_*.deb. Windows: NetAdmin-Server-Setup.exe. Инструкция: server/DEPLOY.md."
+          if gh release view server-latest >/dev/null 2>&1; then
+            for old in $(gh release view server-latest --json assets -q '.assets[].name'); do
+              gh release delete-asset server-latest "$old" -y
+            done
+            gh release upload server-latest dist/*
+            gh release edit server-latest --notes "$notes"
+          else
+            gh release create server-latest dist/* --prerelease \
+              --title "NetAdmin Server: установщики" --notes "$notes" --target "$GITHUB_SHA"
+          fi

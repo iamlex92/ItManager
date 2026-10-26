@@ -1,0 +1,11 @@
+#!/bin/sh
+# The database and /var/lib/netadmin/backups stay even on purge: they are the inventory.
+set -e
+if [ "$1" = "purge" ]; then
+    rm -rf /etc/netadmin
+    echo "netadmin-agent: database 'netadmin' and /var/lib/netadmin/backups are kept." >&2
+fi
+if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload || true
+fi
+exit 0

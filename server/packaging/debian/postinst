@@ -1,0 +1,52 @@
+#!/bin/sh
+# netadmin-agent: system user, PostgreSQL role and database (peer auth over the local socket,
+# no password), settings with fresh keys, then the systemd service.
+set -e
+
+CONF=/etc/netadmin/netadmin.env
+DB_URL='postgresql+asyncpg://netadmin@/netadmin?host=/var/run/postgresql'
+
+as_postgres() {
+    (cd / && runuser -u postgres -- "$@")
+}
+
+if [ "$1" = "configure" ]; then
+    if ! getent passwd netadmin >/dev/null; then
+        adduser --system --group --home /var/lib/netadmin --quiet netadmin
+    fi
+    install -d -o netadmin -g netadmin -m 750 /var/lib/netadmin
+    install -d -o netadmin -g netadmin -m 700 /var/lib/netadmin/backups
+    install -d -o root -g netadmin -m 750 /etc/netadmin
+
+    if [ -d /run/systemd/system ]; then
+        systemctl start postgresql.service || true
+    fi
+    ready=""
+    for _ in $(seq 1 30); do
+        if as_postgres psql -tAc 'SELECT 1' >/dev/null 2>&1; then ready=1; break; fi
+        sleep 1
+    done
+    if [ -z "$ready" ]; then
+        echo "netadmin-agent: PostgreSQL is not running; start it and run: dpkg-reconfigure netadmin-agent" >&2
+        exit 1
+    fi
+    as_postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname = 'netadmin'" | grep -q 1 \
+        || as_postgres createuser netadmin
+    as_postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname = 'netadmin'" | grep -q 1 \
+        || as_postgres createdb -O netadmin -E UTF8 netadmin
+
+    /opt/netadmin/netadmin-agent init-config "$CONF" --database-url "$DB_URL" \
+        --backup-dir /var/lib/netadmin/backups --trap-port 162
+    chown root:netadmin "$CONF"
+    chmod 640 "$CONF"
+
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload
+        systemctl enable netadmin.service >/dev/null 2>&1
+        systemctl restart netadmin.service
+    fi
+    echo
+    # The key is not printed here: apt keeps installer output in /var/log/apt/term.log.
+    /opt/netadmin/netadmin-agent info --config "$CONF" --no-token || true
+fi
+exit 0

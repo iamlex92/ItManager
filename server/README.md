@@ -59,6 +59,22 @@ Restore with `scripts/restore.sh backups/<file>.dump`.
 
 Plant deployment step by step (in Russian): [DEPLOY.md](DEPLOY.md).
 
+## Packages without Docker
+
+`app/agent/` is the server as a standalone program, `netadmin-agent`, built with PyInstaller
+(`packaging/netadmin-agent.spec`) and packed in CI (`.github/workflows/server-agent.yml`):
+
+- `netadmin-agent_<version>_amd64.deb`: systemd service `netadmin` as user `netadmin`, the system
+  PostgreSQL over the local socket (peer auth), settings in `/etc/netadmin/netadmin.env`
+  (`packaging/debian/`).
+- `NetAdmin-Server-Setup.exe` (Inno Setup): Windows service via WinSW, a bundled PostgreSQL 16 that
+  the agent creates on first start, starts before the API and stops after it, on `127.0.0.1:54329` only;
+  data in `%ProgramData%\NetAdmin` (`packaging/windows/`).
+
+`netadmin-agent run` applies migrations, then serves the API; `info`, `backup`, `restore` and
+`init-config` are for admins and installers. Both packages are installed on a clean runner and
+checked over HTTP in CI; master publishes them to the prerelease `server-latest`.
+
 ## Run locally
 
 ```sh
@@ -107,6 +123,9 @@ pytest
 | `TELEGRAM_NOTIFY_RESOLVED` | `true` | also send "resolved" for alerts that were sent |
 | `TELEGRAM_MAX_PER_MINUTE` | `20` | rate limit; dropped ones are counted in the next message |
 | `TELEGRAM_PROXY` | empty | HTTP(S) proxy to reach api.telegram.org |
+| `BACKUP_DIR` | empty (off) | built-in `pg_dump` backups (the packages set it; Docker uses its `backup` service) |
+| `BACKUP_INTERVAL_HOURS`, `BACKUP_KEEP_DAYS` | `24`, `14` | |
+| `PG_BIN_DIR` | empty (PATH) | folder with `pg_dump`/`pg_restore` (and `initdb`/`pg_ctl` for the bundled database) |
 | `SNMP_VERSION` | `2c` | `2c` uses each device's `snmp_community`; `3` uses the `SNMP_V3_*` settings |
 | `SNMP_V3_USER`, `SNMP_V3_AUTH_KEY`, `SNMP_V3_PRIV_KEY` | | |
 | `SNMP_V3_AUTH_PROTOCOL` / `SNMP_V3_PRIV_PROTOCOL` | `SHA` / `AES` | `MD5`, `SHA`, `SHA256` / `DES`, `AES` |
@@ -139,6 +158,8 @@ app/
   services/        port sync + alerts, cable tracing, WebSocket hub
   discovery/       network scan (emulator, ping + SNMP), import into the inventory
   runbooks/        runbook catalog and emulated environment
+  agent/           standalone server for the Debian and Windows packages (CLI, bundled PostgreSQL)
   seed.py          demo data
 alembic/           migrations
+packaging/         PyInstaller spec, .deb scripts, Windows installer
 ```
