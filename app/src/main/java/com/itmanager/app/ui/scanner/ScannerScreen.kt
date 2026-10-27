@@ -87,7 +87,6 @@ fun ScannerScreen(
     viewModel: ScannerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val isDemo by viewModel.isDemo.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -107,7 +106,7 @@ fun ScannerScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier.fillMaxSize().padding(padding).windowInsetsPadding(WindowInsets.navigationBars),
         ) {
-            item(key = "note") { SafetyNote(isDemo, scan) }
+            item(key = "note") { SafetyNote(scan) }
             item(key = "form") {
                 ScanForm(
                     state = state,
@@ -173,8 +172,8 @@ fun ScannerScreen(
 }
 
 @Composable
-private fun SafetyNote(isDemo: Boolean, scan: NetworkScan?) {
-    val emulated = isDemo || scan?.emulated == true
+private fun SafetyNote(scan: NetworkScan?) {
+    val emulated = scan?.emulated == true
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -190,7 +189,6 @@ private fun SafetyNote(isDemo: Boolean, scan: NetworkScan?) {
         Spacer(Modifier.width(12.dp))
         Text(
             when {
-                isDemo -> "Демо-режим: сеть эмулируется внутри приложения, в настоящую сеть ничего не уходит."
                 scan?.emulated == true -> "Сервер в режиме эмуляции: ответы берутся из учёта и нескольких придуманных устройств."
                 else -> "Только чтение: ping, проверка открытых портов, баннеры и SNMP GET к указанным адресам. " +
                     "На оборудовании ничего не меняется."

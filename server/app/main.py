@@ -21,16 +21,19 @@ from .api import (
     credentials,
     devices,
     discovery,
+    faceplates,
     floors,
     history,
     misc,
     netbox,
     nfc,
     notifications,
+    peripherals,
     ports,
     printers,
     runbooks,
     scripts,
+    topology,
     traffic,
     vlans,
     ws,
@@ -57,8 +60,8 @@ STATIC_DIR = Path(__file__).parent / "static"
 
 # Requests that change the map or the inventory; the phone reloads when it hears about one.
 INVENTORY_WRITE = re.compile(
-    r"^/api/v1/(?:(?:floors|vlans|connections|scripts)(?:/.*)?"
-    r"|devices(?:/[^/]+)?|ports(?:/[^/]+)?|discovery/scans/[^/]+/import)$"
+    r"^/api/v1/(?:(?:floors|vlans|connections|scripts|peripherals)(?:/.*)?"
+    r"|devices(?:/[^/]+)?|devices/[^/]+/faceplate(?:/.*)?|ports(?:/[^/]+)?|discovery/scans/[^/]+/import)$"
 )
 # The web console loads only its own files and talks only to this server.
 ADMIN_HEADERS = {
@@ -237,6 +240,9 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
         scripts,
         audit,
         discovery,
+        peripherals,
+        faceplates,
+        topology,
     )
     for module in (*routers, credentials, notifications, traffic, history):
         api.include_router(module.router)

@@ -937,3 +937,127 @@ class ConfigImportOut(BaseModel):
         default_factory=dict, description="VLANs in the text that the server does not know"
     )
     changed_ports: int
+
+
+# --- peripherals ----------------------------------------------------------------
+
+PeripheralKind = Literal[
+    "MONITOR",
+    "KEYBOARD",
+    "MOUSE",
+    "DOCK",
+    "HEADSET",
+    "WEBCAM",
+    "SPEAKERS",
+    "SCANNER",
+    "PRINTER",
+    "PROJECTOR",
+    "UPS",
+    "OTHER",
+]
+
+
+class PeripheralBase(BaseModel):
+    kind: PeripheralKind
+    vendor: str | None = Field(default=None, max_length=50)
+    model: str | None = Field(default=None, max_length=100)
+    specs: str | None = Field(default=None, max_length=200)
+    serial_number: str | None = Field(default=None, max_length=100)
+    inventory_number: str | None = Field(default=None, max_length=100)
+    comment: str | None = Field(default=None, max_length=4000)
+    # The device it is attached to (usually a computer); empty: in stock.
+    device_id: uuid.UUID | None = None
+
+
+class PeripheralCreate(PeripheralBase):
+    pass
+
+
+class PeripheralUpdate(BaseModel):
+    kind: PeripheralKind | None = None
+    vendor: str | None = Field(default=None, max_length=50)
+    model: str | None = Field(default=None, max_length=100)
+    specs: str | None = Field(default=None, max_length=200)
+    serial_number: str | None = Field(default=None, max_length=100)
+    inventory_number: str | None = Field(default=None, max_length=100)
+    comment: str | None = Field(default=None, max_length=4000)
+    device_id: uuid.UUID | None = None
+
+
+class PeripheralOut(ORM, PeripheralBase):
+    id: uuid.UUID
+    device_name: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+# --- topology ---------------------------------------------------------------------
+
+
+class TopologyNodeOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    type: str
+    vendor: str | None
+    model: str | None
+    ip: str | None
+    is_online: bool
+    floor_id: uuid.UUID | None
+    host_id: uuid.UUID | None = None
+    # Links to other active devices; 0 for a device with no cable traced to anything.
+    degree: int = 0
+
+
+class TopologyLinkOut(BaseModel):
+    """Two active devices joined by a cable, perhaps through sockets and patch panels ([via])."""
+
+    a_id: uuid.UUID
+    b_id: uuid.UUID
+    # CABLE: traced over the cable plant; VIRTUAL: a virtual machine and its host.
+    kind: Literal["CABLE", "VIRTUAL"] = "CABLE"
+    a_port: str | None = None
+    b_port: str | None = None
+    via: list[str] = Field(default_factory=list)
+    cable_types: list[str] = Field(default_factory=list)
+    # Link state from the switch side; null when neither end is a switch.
+    is_up: bool | None = None
+    speed_mbps: int | None = None
+
+
+class TopologyOut(BaseModel):
+    nodes: list[TopologyNodeOut]
+    links: list[TopologyLinkOut]
+
+
+# --- faceplates ---------------------------------------------------------------------
+
+
+class FaceplatePortIn(BaseModel):
+    """Where a port lies on the panel drawing, as fractions of its width and height (top left corner)."""
+
+    port_id: uuid.UUID
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+    w: float = Field(gt=0, le=1)
+    h: float = Field(gt=0, le=1)
+
+
+class FaceplatePortsIn(BaseModel):
+    ports: list[FaceplatePortIn] = Field(max_length=1000)
+
+
+class FaceplatePortOut(FaceplatePortIn):
+    port_name: str
+    port_number: int
+
+
+class FaceplateOut(BaseModel):
+    device_id: uuid.UUID
+    width: float
+    height: float
+    ports: list[FaceplatePortOut]
+    updated_at: datetime
+
+
+class FaceplateCopyIn(BaseModel):
+    from_device_id: uuid.UUID

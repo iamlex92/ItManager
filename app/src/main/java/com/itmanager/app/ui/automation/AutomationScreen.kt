@@ -64,7 +64,6 @@ fun AutomationScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val session by viewModel.session.collectAsStateWithLifecycle()
-    val isDemo by viewModel.isDemo.collectAsStateWithLifecycle()
     val serverMode by viewModel.serverMode.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -84,7 +83,7 @@ fun AutomationScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    item(key = "note") { EmulationNote(isDemo, serverMode) }
+                    item(key = "note") { EmulationNote(serverMode) }
                     item(key = "scanner") {
                         LinkCard(
                             icon = Icons.Outlined.TravelExplore,
@@ -149,7 +148,8 @@ fun AutomationScreen(
 }
 
 @Composable
-private fun EmulationNote(isDemo: Boolean, server: ServerRunbooks?) {
+private fun EmulationNote(server: ServerRunbooks?) {
+    if (server == null) return
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -161,10 +161,9 @@ private fun EmulationNote(isDemo: Boolean, server: ServerRunbooks?) {
         Spacer(Modifier.width(12.dp))
         Text(
             when {
-                isDemo -> "Демо-режим: сценарии выполняются в эмуляции внутри приложения. AD и серверы не затрагиваются."
-                server?.real == true && server.writes ->
+                server.real && server.writes ->
                     "Сценарии работают с настоящим AD. Изменения разрешены на сервере, каждое подтверждается биометрией."
-                server?.real == true ->
+                server.real ->
                     "Сценарии читают настоящий AD и права на папки. Изменения на сервере выключены: покажется только, что нужно сделать."
                 else -> "Сценарии выполняются на сервере в эмулированной среде: настоящие AD и серверы не затрагиваются."
             },

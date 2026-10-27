@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -54,6 +56,8 @@ import androidx.compose.ui.window.DialogProperties
 import com.itmanager.app.data.model.DEFAULT_RACK_UNITS
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceType
+import com.itmanager.app.data.model.FaceplatePort
+import com.itmanager.app.data.model.PortMode
 import com.itmanager.app.ui.components.StatusDot
 import com.itmanager.app.ui.components.icon
 import com.itmanager.app.ui.components.tint
@@ -74,6 +78,9 @@ fun RackDialog(
     onRemove: (deviceId: String) -> Unit,
     onOpenSwitch: (String) -> Unit,
     onDismiss: () -> Unit,
+    /** Front panel drawings of the mounted devices, by device id. */
+    plates: Map<String, FaceplateView> = emptyMap(),
+    onEditFaceplate: (Device) -> Unit = {},
 ) {
     val units = rack.rackUnits ?: DEFAULT_RACK_UNITS
     val members = state.devices.filter { it.rackId == rack.id && it.rackU != null }.sortedBy { it.rackU }
@@ -120,7 +127,7 @@ fun RackDialog(
                         Column {
                             for (u in units downTo 1) UnitRow(u, free = u !in occupied) { slot = u }
                         }
-                        members.forEach { device -> DeviceBlock(device, units) { picked = device } }
+                        members.forEach { device -> DeviceBlock(device, units, plates[device.id]) { picked = device } }
                     }
                 }
             }
@@ -141,11 +148,36 @@ fun RackDialog(
         )
     }
     picked?.let { device ->
+        val plate = plates[device.id]
+        var port by remember(device.id) { mutableStateOf<FaceplatePort?>(null) }
         AlertDialog(
             onDismissRequest = { picked = null },
             title = { Text(device.name) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (plate != null) {
+                        FaceplateImage(
+                            plate,
+                            Modifier.fillMaxWidth().aspectRatio(plate.faceplate.aspect.coerceIn(1.5f, 30f)),
+                            selectedPortId = port?.portId,
+                            onPort = { port = it },
+                        )
+                        val p = port?.let { plate.ports[it.portId] }
+                        Text(
+                            when {
+                                port == null -> "Коснитесь порта на схеме"
+                                p == null -> port!!.portName
+                                else -> listOfNotNull(
+                                    p.name,
+                                    p.status.label,
+                                    if (p.mode == PortMode.TRUNK) "trunk ${p.taggedVlans.joinToString(",")}" else p.accessVlan?.let { "VLAN $it" },
+                                    p.connectedDeviceName?.let { "→ $it" },
+                                ).joinToString(" · ")
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                     Text(
                         listOfNotNull(device.type.label, device.vendor, device.model).joinToString(" · "),
                         style = MaterialTheme.typography.bodyMedium,
@@ -154,6 +186,9 @@ fun RackDialog(
                     device.comment?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                     if (device.type == DeviceType.SWITCH) {
                         TextButton(onClick = { picked = null; onOpenSwitch(device.id) }) { Text("Открыть панель портов") }
+                    }
+                    TextButton(onClick = { picked = null; onEditFaceplate(device) }) {
+                        Text(if (plate == null) "Добавить схему панели (SVG)" else "Схема панели и порты…")
                     }
                 }
             },
@@ -184,9 +219,9 @@ private fun UnitRow(unit: Int, free: Boolean, onClick: () -> Unit) {
     }
 }
 
-/** One device over its units, counted from the bottom of a rack that is [units] high. */
+/** One device over its units, counted from the bottom of a rack that is [units] high. With [plate], its panel drawing. */
 @Composable
-private fun DeviceBlock(device: Device, units: Int, onClick: () -> Unit) {
+private fun DeviceBlock(device: Device, units: Int, plate: FaceplateView?, onClick: () -> Unit) {
     val top = device.rackTop ?: return
     val height = device.rackH ?: 1
     val tint = device.type.tint
@@ -216,7 +251,10 @@ private fun DeviceBlock(device: Device, units: Int, onClick: () -> Unit) {
                     )
                 }
             }
-            if (device.type == DeviceType.SWITCH || device.type == DeviceType.PATCH_PANEL) {
+            if (plate != null) {
+                FaceplateImage(plate, Modifier.weight(2.2f).fillMaxHeight().padding(vertical = 2.dp))
+                Spacer(Modifier.width(6.dp))
+            } else if (device.type == DeviceType.SWITCH || device.type == DeviceType.PATCH_PANEL) {
                 PortStrip(if (device.isOnline) StatusColors.Online.copy(alpha = 0.85f) else Color.Gray.copy(alpha = 0.6f))
                 Spacer(Modifier.width(8.dp))
             }

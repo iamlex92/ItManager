@@ -145,3 +145,18 @@ dialog::backdrop { background: rgba(0, 0, 0, .55); }
 .rb-item { display: block; width: 100%; text-align: left; margin-bottom: 4px; }
 .rb-item.active { border-color: var(--accent); }
 details.row-details > summary { cursor: pointer; color: var(--muted); }
+
+#topo { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+.topo-card { position: absolute; left: 12px; top: 12px; width: min(420px, calc(100% - 24px)); max-height: calc(100% - 60px); overflow: auto; padding: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 4px 16px rgba(0, 0, 0, .25); display: flex; flex-direction: column; gap: 6px; }
+.topo-card .link { cursor: pointer; font-size: 12px; }
+.topo-card .link:hover { color: var(--accent); }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+#plate-dialog { width: min(1100px, calc(100% - 32px)); }
+.plate-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: #15191f; max-height: 50vh; }
+.plate-stage { position: relative; width: 100%; min-width: 800px; cursor: crosshair; }
+.plate-stage img { display: block; width: 100%; height: auto; user-select: none; -webkit-user-drag: none; }
+.plate-mark { position: absolute; border: 1.5px solid #64d2ff; background: rgba(100, 210, 255, .35); font-size: 10px; color: #fff; display: grid; place-items: center; overflow: hidden; }
+.plate-mark.sel { border-color: var(--accent); background: rgba(76, 158, 255, .55); }
+#plate-ports button.marked { border-color: var(--ok); }
+#plate-copy { width: auto; }
+.plate-cell { cursor: pointer; }

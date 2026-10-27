@@ -70,6 +70,8 @@ import com.itmanager.app.ui.devices.DevicesScreen
 import com.itmanager.app.ui.history.HistoryScreen
 import com.itmanager.app.ui.map.MapScreen
 import com.itmanager.app.ui.nfc.BindTagSheet
+import com.itmanager.app.ui.peripherals.PeripheralsScreen
+import com.itmanager.app.ui.topology.TopologyScreen
 import com.itmanager.app.ui.printers.PrintersScreen
 import com.itmanager.app.ui.scanner.ScannerScreen
 import com.itmanager.app.ui.security.AppLockOverlay
@@ -277,7 +279,24 @@ private fun AppNavHost(
                 onShowOnMap = openMapTab,
                 onOpenSettings = openSettings,
                 onOpenScanner = openScanner,
+                onOpenPeripherals = { navController.navigate(PeripheralsRoute) { launchSingleTop = true } },
             )
+        }
+        composable<TopologyRoute> {
+            TopologyScreen(
+                contentPadding = contentPadding,
+                onOpenSwitch = { navController.navigate(SwitchRoute(it)) },
+                onShowOnMap = openMapTab,
+                onOpenSettings = openSettings,
+            )
+        }
+        composable<PeripheralsRoute>(
+            enterTransition = { slideInHorizontally(push) { it } },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { slideOutHorizontally(push) { it } },
+        ) {
+            PeripheralsScreen(onBack = { navController.popBackStack() }, onOpenSettings = openSettings)
         }
         composable<PrintersRoute> {
             PrintersScreen(contentPadding = contentPadding, onOpenSettings = openSettings)

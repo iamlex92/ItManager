@@ -12,17 +12,13 @@ import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * How the app reaches the NetAdmin server.
- *
- * [demoMode] is on by default: the app shows built-in demo data and never calls the server,
- * so it is usable before the server is deployed and can never touch production switches by accident.
- */
+/** How the app reaches the NetAdmin server. Nothing is shown until [baseUrl] is set. */
 data class ServerSettings(
     val baseUrl: String = "",
     val apiToken: String = "",
-    val demoMode: Boolean = true,
-)
+) {
+    val isConfigured: Boolean get() = baseUrl.isNotBlank()
+}
 
 @Singleton
 class SettingsRepository @Inject constructor(
@@ -33,7 +29,6 @@ class SettingsRepository @Inject constructor(
             ServerSettings(
                 baseUrl = prefs[KEY_BASE_URL].orEmpty(),
                 apiToken = prefs[KEY_API_TOKEN].orEmpty(),
-                demoMode = prefs[KEY_DEMO_MODE] ?: true,
             )
         }
         .distinctUntilChanged()
@@ -51,14 +46,15 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { prefs ->
             prefs[KEY_BASE_URL] = settings.baseUrl
             prefs[KEY_API_TOKEN] = settings.apiToken
-            prefs[KEY_DEMO_MODE] = settings.demoMode
+            // A switch left by older versions of the app.
+            prefs.remove(KEY_LEGACY_OFFLINE)
         }
     }
 
     private companion object {
         val KEY_BASE_URL = stringPreferencesKey("server_base_url")
         val KEY_API_TOKEN = stringPreferencesKey("server_api_token")
-        val KEY_DEMO_MODE = booleanPreferencesKey("demo_mode")
+        val KEY_LEGACY_OFFLINE = booleanPreferencesKey("demo_mode")
         val KEY_APP_LOCK = booleanPreferencesKey("app_lock")
     }
 }

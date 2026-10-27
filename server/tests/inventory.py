@@ -1,23 +1,14 @@
-"""Realistic demo data: one floor, four Cisco/Eltex switches, patch panels,
-wall sockets, PCs, printers, cameras and servers, all cabled together.
+"""Test inventory: one floor, four Cisco/Eltex switches, patch panels, wall sockets, PCs,
+printers, cameras and servers, all cabled together. Loaded before each API test."""
 
-    python -m app.seed            # refuses if the database already has devices
-    python -m app.seed --reset    # wipes all tables first
-    python -m app.seed --if-empty # seeds only an empty database, else does nothing
-"""
-
-import argparse
-import asyncio
 import itertools
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .config import get_settings
-from .db import make_engine, make_sessionmaker
-from .models import Base, Connection, Device, DeviceAlert, Floor, Port, Vlan
+from app.models import Base, Connection, Device, DeviceAlert, Floor, Port, Vlan
 
 VLANS = [
     (1, "default", "10.0.1.0/24", "#95a5a6", "Неиспользуемые порты"),
@@ -306,7 +297,7 @@ async def seed(session: AsyncSession) -> None:
     floor = Floor(
         building_name="Административно-производственный корпус",
         floor_number=1,
-        plan_image_url="/static/plans/floor-1.svg",
+        plan_image_url="",
         scale_pixels_per_meter=40,
         width_px=2400,
         height_px=1200,
@@ -527,29 +518,3 @@ async def reset(session: AsyncSession) -> None:
     tables = ", ".join(t.name for t in Base.metadata.sorted_tables)
     await session.execute(text(f"TRUNCATE {tables} CASCADE"))
     await session.commit()
-
-
-async def main(do_reset: bool, if_empty: bool = False) -> None:
-    engine = make_engine(get_settings().database_url)
-    sm = make_sessionmaker(engine)
-    async with sm() as session:
-        if do_reset:
-            await reset(session)
-        elif await session.scalar(select(func.count()).select_from(Device)):
-            if if_empty:
-                print("database already has devices, not seeding")
-                await engine.dispose()
-                return
-            raise SystemExit("database already has devices; use --reset to wipe and reseed")
-        await seed(session)
-        n = await session.scalar(select(func.count()).select_from(Device))
-    await engine.dispose()
-    print(f"seeded {n} devices")
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--reset", action="store_true", help="truncate all tables before seeding")
-    parser.add_argument("--if-empty", action="store_true", help="seed only when there are no devices yet")
-    args = parser.parse_args()
-    asyncio.run(main(args.reset, args.if_empty))

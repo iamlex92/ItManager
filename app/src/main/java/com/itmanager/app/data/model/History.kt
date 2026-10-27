@@ -25,16 +25,3 @@ data class DeviceHistoryEntry(
     val actor: String,
     val commands: List<String>,
 )
-
-/** The same wording the server uses, for demo mode. */
-fun describePortChange(port: SwitchPort, change: PortChange): String {
-    fun vlans(v: List<Int>) = if (v.isEmpty()) "—" else v.sorted().joinToString(",")
-    val parts = buildList {
-        change.mode?.takeIf { it != port.mode }?.let { add("режим ${port.mode.name.lowercase()} → ${it.name.lowercase()}") }
-        change.accessVlan?.takeIf { it != port.accessVlan }?.let { add("VLAN ${port.accessVlan ?: "—"} → $it") }
-        change.taggedVlans?.takeIf { it.sorted() != port.taggedVlans.sorted() }
-            ?.let { add("trunk VLAN ${vlans(port.taggedVlans)} → ${vlans(it)}") }
-        change.isAdminUp?.takeIf { it != port.isAdminUp }?.let { add(if (it) "включён" else "выключен (shutdown)") }
-    }
-    return "${port.name}: ${parts.joinToString().ifEmpty { "без изменений" }}"
-}

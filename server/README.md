@@ -9,7 +9,8 @@ WebSocket. API reference: [API.md](API.md), Swagger UI at `/docs`.
 The only switches this will ever see are production ones, so:
 
 - **`HAL_MODE=emulator` is the default.** Switches are emulated in memory;
-  nothing leaves the server. Demo data is seeded on first start.
+  nothing leaves the server. The database starts empty: the inventory is
+  built with the network scanner, the map editor or the web console.
 - **`HAL_MODE=real` is read-only by default.** The real driver is always
   wrapped in a write guard. Port mode/VLAN changes, shutdown, port bounce
   and `write memory` return 403 unless `ALLOW_DEVICE_WRITES=true`.
@@ -52,8 +53,7 @@ docker compose up -d --build
 curl http://localhost:8000/api/v1/health
 ```
 
-The container runs migrations, seeds the demo floor if the database is empty
-(`SEED_DEMO_DATA=true`), then starts uvicorn on port 8000. The database lives
+The container runs migrations, then starts uvicorn on port 8000. The database lives
 in the `pgdata` volume; the `backup` service writes a `pg_dump` to `./backups`
 every `BACKUP_INTERVAL_HOURS` (24) and keeps `BACKUP_KEEP_DAYS` (14) days.
 Restore with `scripts/restore.sh backups/<file>.dump`.
@@ -85,7 +85,6 @@ pip install -e '.[dev]'
 export DATABASE_URL=postgresql+asyncpg://netadmin:netadmin@localhost:5432/netadmin
 export API_TOKEN=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
 alembic upgrade head
-python -m app.seed            # --reset to wipe and reseed
 uvicorn app.main:app_factory --factory --reload
 ```
 
@@ -139,14 +138,21 @@ switches send traps, on Cisco: `snmp-server enable traps snmp linkdown linkup`
 and `snmp-server host <server> version 2c <community>`; on Eltex MES:
 `snmp-server server` plus `snmp-server host <server> traps version 2 <community>`.
 
-## Demo data
+## Test inventory
 
-One floor (`Административно-производственный корпус`, 2400×1200 px plan):
-core Cisco C9300-48P, access Eltex MES2324P (24), Eltex MES2348P (48) and
-Cisco 2960X-24PS (24) with 10G/1G uplinks; patch panels, wall sockets,
-PCs for accounting, HR and the production floor, three printers (one low on
-toner), cameras on PoE, servers in the server room, an access point on a
-trunk port, and two open LINK_DOWN alerts.
+The tests load `tests/inventory.py` before each API test: one floor, core Cisco C9300-48P, access
+Eltex MES2324P (24), Eltex MES2348P (48) and Cisco 2960X-24PS (24) with 10G/1G uplinks; patch panels,
+wall sockets, PCs, printers, cameras on PoE, servers and an access point. It is never loaded into a
+real database.
+
+## Peripherals, topology, faceplates
+
+- `/peripherals`: monitors, keyboards, docking stations and the like, attached to a device
+  (`device_id`) or in stock (`device_id: null`). Deleting the device puts them back in stock.
+- `/topology`: active devices and the cables between them, traced through sockets and patch panels,
+  plus virtual machines tied to their hosts. Read from the inventory only.
+- `/devices/{id}/faceplate`: an SVG of the device's front panel and where each port lies on it
+  (fractions of the drawing). The app draws it in the rack view with ports coloured by link state.
 
 ## Layout
 
@@ -161,7 +167,6 @@ app/
   discovery/       network scan (emulator, ping + SNMP), import into the inventory
   runbooks/        runbook catalog and emulated environment
   agent/           standalone server for the Debian and Windows packages (CLI, bundled PostgreSQL)
-  seed.py          demo data
 alembic/           migrations
 packaging/         PyInstaller spec, .deb scripts, Windows installer
 ```

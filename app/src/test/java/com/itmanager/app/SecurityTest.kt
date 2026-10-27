@@ -3,22 +3,18 @@ package com.itmanager.app
 import com.itmanager.app.core.network.CredentialDto
 import com.itmanager.app.core.network.CredentialPatch
 import com.itmanager.app.core.network.HealthDto
-import com.itmanager.app.core.network.UserFacingException
 import com.itmanager.app.core.network.toBody
 import com.itmanager.app.core.network.toPatch
 import com.itmanager.app.core.security.LockTimer
 import com.itmanager.app.data.model.AuditKind
 import com.itmanager.app.data.model.CredentialDraft
 import com.itmanager.app.data.model.CredentialKind
-import com.itmanager.app.data.source.DemoCredentials
-import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Assert.fail
 import org.junit.Test
 
 class SecurityTest {
@@ -83,16 +79,5 @@ class SecurityTest {
         assertEquals(true, health.telegramAlerts)
         val old = json.decodeFromString(HealthDto.serializer(), """{"status":"ok"}""").toDomain()
         assertNull(old.secretsEncrypted)
-    }
-
-    @Test
-    fun `demo store refuses a new login without a secret`() = runTest {
-        assertTrue(DemoCredentials.list().all { it.hasSecret })
-        try {
-            DemoCredentials.save(null, draft(secret = ""))
-            fail("saved without a secret")
-        } catch (e: UserFacingException) {
-            assertTrue(e.message!!.startsWith("Укажите"))
-        }
     }
 }

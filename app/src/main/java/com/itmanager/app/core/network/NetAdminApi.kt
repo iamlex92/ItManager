@@ -104,6 +104,85 @@ class NetAdminApi @Inject constructor(
         guarded { client.delete("${requireBase(s)}/api/v1/connections/$id") { auth(s) } }
     }
 
+    // Peripherals: monitors, keyboards and the like attached to devices. Inventory only.
+
+    suspend fun peripherals(s: ServerSettings): List<PeripheralDto> =
+        newerFeature("учитывать периферию") { guarded { fetch<List<PeripheralDto>>(s, "peripherals") } }
+
+    suspend fun createPeripheral(s: ServerSettings, body: JsonObject): PeripheralDto =
+        newerFeature("учитывать периферию") { post(s, "peripherals", body) }
+
+    suspend fun patchPeripheral(s: ServerSettings, id: String, body: JsonObject): PeripheralDto =
+        newerFeature("учитывать периферию") { patch(s, "peripherals/${id.encodeURLPathPart()}", body) }
+
+    suspend fun deletePeripheral(s: ServerSettings, id: String) {
+        newerFeature("учитывать периферию") {
+            guarded { client.delete("${requireBase(s)}/api/v1/peripherals/${id.encodeURLPathPart()}") { auth(s) } }
+        }
+    }
+
+    /** Active devices and the cables between them, traced through the cable plant. Read-only. */
+    suspend fun topology(s: ServerSettings): TopologyDto =
+        newerFeature("строить топологию") { guarded { fetch<TopologyDto>(s, "topology") } }
+
+    // Front panel drawings (SVG) with port marks, shown in the rack view.
+
+    /** The device's panel drawing, or null when it has none. */
+    suspend fun faceplate(s: ServerSettings, deviceId: String): FaceplateDto? = try {
+        fetch<FaceplateDto>(s, "devices/${deviceId.encodeURLPathPart()}/faceplate")
+    } catch (e: ResponseException) {
+        if (e.response.status.value == 404) null else throw e
+    }
+
+    suspend fun faceplateSvg(s: ServerSettings, deviceId: String): ByteArray = guarded {
+        client.get("${requireBase(s)}/api/v1/devices/${deviceId.encodeURLPathPart()}/faceplate/svg") { auth(s) }.body()
+    }
+
+    suspend fun uploadFaceplate(s: ServerSettings, deviceId: String, svg: ByteArray): FaceplateDto =
+        newerFeature("хранить схемы панелей") {
+            guarded {
+                client.put("${requireBase(s)}/api/v1/devices/${deviceId.encodeURLPathPart()}/faceplate") {
+                    auth(s)
+                    contentType(ContentType.parse("image/svg+xml"))
+                    setBody(svg)
+                }.body()
+            }
+        }
+
+    suspend fun setFaceplatePorts(s: ServerSettings, deviceId: String, body: FaceplatePortsBody): FaceplateDto =
+        guarded {
+            client.put("${requireBase(s)}/api/v1/devices/${deviceId.encodeURLPathPart()}/faceplate/ports") {
+                auth(s)
+                contentType(ContentType.Application.Json)
+                setBody(body)
+            }.body()
+        }
+
+    suspend fun copyFaceplate(s: ServerSettings, deviceId: String, fromDeviceId: String): FaceplateDto = try {
+        post(s, "devices/${deviceId.encodeURLPathPart()}/faceplate/copy", FaceplateCopyBody(fromDeviceId))
+    } catch (e: UserFacingException) {
+        val status = (e.cause as? ResponseException)?.response?.status?.value
+        throw if (status == 404) UserFacingException("У выбранного устройства нет схемы панели.", e) else e
+    }
+
+    suspend fun deleteFaceplate(s: ServerSettings, deviceId: String) {
+        guarded { client.delete("${requireBase(s)}/api/v1/devices/${deviceId.encodeURLPathPart()}/faceplate") { auth(s) } }
+    }
+
+    /** A server from before [what] answers a bare 404 or 405 on the new paths: say it needs an update. */
+    private suspend inline fun <T> newerFeature(what: String, block: () -> T): T = try {
+        block()
+    } catch (e: UserFacingException) {
+        val response = (e.cause as? ResponseException)?.response ?: throw e
+        val code = runCatching { json.decodeFromString(ErrorDto.serializer(), response.bodyAsText()).detail?.code }.getOrNull()
+        throw when {
+            code == "not_found" -> UserFacingException("Запись не найдена на сервере: её могли удалить. Обновите экран.", e)
+            code == null && (response.status.value == 404 || response.status.value == 405) ->
+                UserFacingException("Сервер пока не умеет $what: обновите сервер.", e)
+            else -> e
+        }
+    }
+
     suspend fun floors(s: ServerSettings): List<FloorDto> = fetch(s, "floors")
 
     suspend fun devices(s: ServerSettings): List<DeviceDto> = fetch(s, "devices")
@@ -351,12 +430,13 @@ class NetAdminApi @Inject constructor(
         val PHRASED_CODES = setOf(
             "invalid_subnets", "scan_running", "name_taken",
             "already_linked", "no_free_port", "same_device", "plan_type", "plan_too_big", "empty_plan",
+            "bad_svg", "svg_too_big", "bad_device", "bad_port", "duplicate_port", "kind_required",
         )
     }
 
     private fun requireBase(s: ServerSettings): String {
         if (s.baseUrl.isBlank()) {
-            throw UserFacingException("Укажите адрес сервера в настройках или включите демо-данные.")
+            throw UserFacingException("Сервер не настроен: укажите его адрес и API-токен в настройках (⚙).")
         }
         return s.baseUrl
     }

@@ -13,7 +13,7 @@ Clients should ignore unknown fields.
 |---|---|---|
 | GET | `/api/v1/health` | `{status, version, hal_mode: "emulator"\|"real", device_writes_enabled, monitor_mode: "emulator"\|"real"}` (no auth) |
 | GET | `/api/v1/floors` | `[{id, building_name, floor_number, name, plan_image_url, scale_pixels_per_meter, width_px, height_px, created_at}]` |
-| GET | `/static/plans/floor-1.svg` | plan image referenced by `plan_image_url` (no auth) |
+| GET | `/api/v1/floors/{id}/plan-image` | plan image uploaded for the floor (`plan_image_url` points here) |
 | GET | `/api/v1/devices?floor_id=&type=&q=` | `[{id, name, type, vendor, model, ip, mac, floor_id, x, y, is_online, last_seen_at, vlan_id, is_active, nfc_tag_uid, snmp_community, metadata}]` |
 | GET | `/api/v1/devices/{id}` | one device |
 | GET | `/api/v1/devices/by-nfc/{uid}` | device bound to an NFC tag |
@@ -301,3 +301,44 @@ Devices have `comment` (free text, up to 4000 characters). A `RACK` device is a 
 A device is mounted by `rack_id` (the rack), `rack_u` (lowest unit, 1 is the bottom) and `rack_h` (height in units, default 1).
 The server answers 422 when the rack is not a `RACK` device or the device does not fit, and 409 when the units are taken
 or a rack would become lower than its highest mounted device. Deleting a rack leaves its devices unmounted.
+
+## Peripherals
+
+Equipment without a network port that belongs to a workplace. Inventory only.
+
+| Method | Path | Body / returns |
+|---|---|---|
+| GET | `/api/v1/peripherals?device_id=&unassigned=true&q=` | `[{id, kind, vendor, model, specs, serial_number, inventory_number, comment, device_id, device_name, created_at, updated_at}]` |
+| POST | `/api/v1/peripherals` | `{kind, vendor?, model?, specs?, serial_number?, inventory_number?, comment?, device_id?}` → 201 |
+| GET | `/api/v1/peripherals/{id}` | one peripheral |
+| PATCH | `/api/v1/peripherals/{id}` | any of the fields; `device_id: null` puts it back in stock |
+| DELETE | `/api/v1/peripherals/{id}` | 204 |
+
+`kind`: `MONITOR, KEYBOARD, MOUSE, DOCK, HEADSET, WEBCAM, SPEAKERS, SCANNER, PRINTER, PROJECTOR, UPS, OTHER`.
+Blank strings are stored as null. A peripheral cannot go to a rack, a socket or a patch panel (422 `bad_device`).
+Deleting the device keeps its peripherals, in stock.
+
+## Topology
+
+`GET /api/v1/topology` → `{nodes: [{id, name, type, vendor, model, ip, is_online, floor_id, host_id, degree}],
+links: [{a_id, b_id, kind: "CABLE"|"VIRTUAL", a_port, b_port, via: [names], cable_types, is_up, speed_mbps}]}`.
+Nodes are active devices (no sockets, patch panels or racks). A `CABLE` link is a chain of cables traced through
+sockets and patch panels; `via` names what it passes. `is_up` and `speed_mbps` come from the switch side
+(null when neither end is a switch). `VIRTUAL` links a virtual machine (`b_id`) to its host (`a_id`).
+
+## Faceplates
+
+A drawing of a device's front panel (SVG) and where its ports are on it, as fractions of the drawing
+(`x`, `y` top left, `w`, `h`, all 0..1).
+
+| Method | Path | Body / returns |
+|---|---|---|
+| GET | `/api/v1/devices/{id}/faceplate` | `{device_id, width, height, ports: [{port_id, port_name, port_number, x, y, w, h}], updated_at}`; 404 when none |
+| GET | `/api/v1/devices/{id}/faceplate/svg` | the SVG, served with a sandbox CSP |
+| PUT | `/api/v1/devices/{id}/faceplate` | raw SVG body (UTF-8, up to 2 MB, viewBox or width/height required, no DOCTYPE); marks are kept |
+| PUT | `/api/v1/devices/{id}/faceplate/ports` | `{ports: [{port_id, x, y, w, h}]}` replaces the marks; ports of this device only, each once |
+| POST | `/api/v1/devices/{id}/faceplate/copy` | `{from_device_id}`: takes the drawing and marks of another device, ports matched by name, then number |
+| DELETE | `/api/v1/devices/{id}/faceplate` | 204 |
+
+Errors: 415 `bad_svg`, 413 `svg_too_big`, 422 `bad_port` / `duplicate_port`.
+

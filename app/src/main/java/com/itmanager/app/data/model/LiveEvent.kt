@@ -1,6 +1,6 @@
 package com.itmanager.app.data.model
 
-/** Live updates pushed by the server over the WebSocket (or simulated in demo mode). */
+/** Live updates pushed by the server over the WebSocket. */
 sealed interface LiveEvent {
     /** The socket is up; the following events are live. */
     data object Connected : LiveEvent

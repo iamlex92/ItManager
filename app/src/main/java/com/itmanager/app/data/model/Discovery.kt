@@ -57,7 +57,7 @@ data class FoundLink(val a: LinkEnd, val b: LinkEnd, val source: LinkSource, val
 data class NetworkScan(
     val id: String,
     val status: ScanStatus,
-    /** Answered by an emulator (demo mode or a server without real monitoring), not by the network. */
+    /** Answered by an emulator (a server with DISCOVERY_MODE=emulator), not by the network. */
     val emulated: Boolean,
     val subnets: List<String>,
     val startedAt: Instant?,

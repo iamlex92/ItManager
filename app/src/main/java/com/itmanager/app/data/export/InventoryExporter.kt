@@ -27,7 +27,7 @@ enum class ExportFormat(val label: String, val extension: String, val mime: Stri
 data class ExportedFile(val uri: Uri, val mime: String, val name: String)
 
 /**
- * Builds the inventory report from the current data source (demo or server) and writes it to the app's
+ * Builds the inventory report from the current data source (the server) and writes it to the app's
  * cache, from where the share sheet hands it to mail, a messenger or Files. Reads only.
  */
 @Singleton
@@ -64,7 +64,7 @@ class InventoryExporter @Inject constructor(
             .map { sw -> async { repository.ports(sw.id).getOrNull()?.let { sw to it } } }
         InventoryReport(
             generatedAt = Instant.now(),
-            source = if (s.demoMode) "демо-данные" else s.baseUrl,
+            source = s.baseUrl,
             devices = devices,
             vlans = vlans.await(),
             switchPorts = ports.awaitAll().filterNotNull(),

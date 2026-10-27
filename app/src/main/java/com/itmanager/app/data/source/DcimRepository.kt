@@ -18,6 +18,11 @@ import com.itmanager.app.data.model.DeviceBulkChange
 import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.Drawing
+import com.itmanager.app.data.model.Faceplate
+import com.itmanager.app.data.model.FaceplatePort
+import com.itmanager.app.data.model.Peripheral
+import com.itmanager.app.data.model.PeripheralDraft
+import com.itmanager.app.data.model.Topology
 import com.itmanager.app.data.model.FloorDraft
 import com.itmanager.app.data.model.FloorInfo
 import com.itmanager.app.data.model.FloorMap
@@ -50,8 +55,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Picks the data source from the current settings on every call, so switching demo mode
- * or the server address in settings takes effect on the next load without a restart.
+ * Builds the server source from the current settings on every call, so a new server address
+ * or token takes effect on the next load without a restart.
  */
 @Singleton
 class DcimRepository @Inject constructor(
@@ -64,6 +69,12 @@ class DcimRepository @Inject constructor(
 
     /** Screens reload when this emits: on new settings, and after the inventory changed. */
     val settings: Flow<ServerSettings> = combine(settingsRepository.settings, inventoryVersion) { s, _ -> s }
+
+    /** Bumped when a peripheral is added, changed or moved from this phone. */
+    private val peripheralVersion = MutableStateFlow(0)
+
+    /** Peripheral lists reload when this emits: with [settings], and after a peripheral changed here. */
+    val peripheralChanges: Flow<ServerSettings> = combine(settings, peripheralVersion) { s, _ -> s }
 
     suspend fun floorMap(floorId: String? = null): Result<FloorMap> = load { floorMap(floorId) }
     suspend fun devices(): Result<List<Device>> = load { devices() }
@@ -147,6 +158,25 @@ class DcimRepository @Inject constructor(
         load { saveDrawings(plan, drawings) }
     suspend fun saveZones(plan: FloorPlan, zones: List<Zone>): Result<FloorPlan> = load { saveZones(plan, zones) }
 
+    // Peripherals change only their own list; the map and the device list stay as they are.
+    suspend fun peripherals(): Result<List<Peripheral>> = load { peripherals() }
+    suspend fun savePeripheral(id: String?, draft: PeripheralDraft): Result<Peripheral> =
+        load { savePeripheral(id, draft) }.onSuccess { peripheralVersion.value++ }
+    suspend fun attachPeripheral(id: String, deviceId: String?): Result<Peripheral> =
+        load { attachPeripheral(id, deviceId) }.onSuccess { peripheralVersion.value++ }
+    suspend fun deletePeripheral(id: String): Result<Unit> = load { deletePeripheral(id) }.onSuccess { peripheralVersion.value++ }
+
+    suspend fun topology(): Result<Topology> = load { topology() }
+
+    suspend fun faceplate(deviceId: String): Result<Faceplate?> = load { faceplate(deviceId) }
+    suspend fun faceplateSvg(deviceId: String): Result<ByteArray> = load { faceplateSvg(deviceId) }
+    suspend fun uploadFaceplate(deviceId: String, svg: ByteArray): Result<Faceplate> = load { uploadFaceplate(deviceId, svg) }
+    suspend fun saveFaceplatePorts(deviceId: String, marks: Collection<FaceplatePort>): Result<Faceplate> =
+        load { saveFaceplatePorts(deviceId, marks) }
+    suspend fun copyFaceplate(deviceId: String, fromDeviceId: String): Result<Faceplate> =
+        load { copyFaceplate(deviceId, fromDeviceId) }
+    suspend fun deleteFaceplate(deviceId: String): Result<Unit> = load { deleteFaceplate(deviceId) }
+
     /** The server says the inventory changed elsewhere (the web console, another phone). */
     fun inventoryChanged() {
         inventoryVersion.value++
@@ -172,7 +202,7 @@ class DcimRepository @Inject constructor(
         .shareIn(CoroutineScope(SupervisorJob() + Dispatchers.Default), SharingStarted.WhileSubscribed(5_000))
 
     private fun source(settings: ServerSettings): DcimDataSource =
-        if (settings.demoMode) DemoDataSource else RemoteDataSource(api, liveSocket, settings)
+        RemoteDataSource(api, liveSocket, settings)
 
     private suspend fun <T> load(block: suspend DcimDataSource.() -> T): Result<T> {
         val source = source(settingsRepository.current())
