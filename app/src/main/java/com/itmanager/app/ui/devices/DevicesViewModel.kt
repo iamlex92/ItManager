@@ -3,6 +3,7 @@ package com.itmanager.app.ui.devices
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itmanager.app.core.network.toUserMessage
+import com.itmanager.app.core.nfc.TagPayload
 import com.itmanager.app.data.export.ExportFormat
 import com.itmanager.app.data.export.ExportedFile
 import com.itmanager.app.data.export.InventoryExporter
@@ -131,6 +132,24 @@ class DevicesViewModel @Inject constructor(
     }
 
     fun showOnMap(deviceId: String) = mapFocus.request(deviceId)
+
+    /** A device found by scanning its QR label; the label carries the same JSON as the NFC tag. */
+    private val _scanned = MutableSharedFlow<Device>(extraBufferCapacity = 1)
+    val scanned: SharedFlow<Device> = _scanned.asSharedFlow()
+
+    fun openScanned(raw: String) {
+        val payload = TagPayload.parse(raw.encodeToByteArray())
+        if (payload == null) {
+            _messages.tryEmit("Это не наклейка ItManager")
+            return
+        }
+        viewModelScope.launch {
+            repository.deviceForTag(payload.id, "").fold(
+                onSuccess = { _scanned.emit(it) },
+                onFailure = { _messages.emit(it.toUserMessage()) },
+            )
+        }
+    }
 
     // Selection mode: a long press starts it, taps add or remove, an empty selection ends it.
 

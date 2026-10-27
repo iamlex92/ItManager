@@ -14,12 +14,16 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import com.itmanager.app.ui.components.tint
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.IosShare
 import androidx.compose.material.icons.outlined.QrCode2
+import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.TableChart
 import androidx.compose.material3.CircularProgressIndicator
@@ -67,6 +71,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -114,6 +119,17 @@ fun DevicesScreen(
                 },
                 onFailure = { e -> Toast.makeText(context, e.message ?: "Отчёт не получился", Toast.LENGTH_LONG).show() },
             )
+        }
+    }
+    val showOnMapLater = rememberUpdatedState(onShowOnMap)
+    LaunchedEffect(viewModel) {
+        viewModel.scanned.collect { device ->
+            if (device.type == DeviceType.SWITCH) {
+                onOpenSwitch(device.id)
+            } else {
+                viewModel.showOnMap(device.id)
+                showOnMapLater.value()
+            }
         }
     }
     LaunchedEffect(viewModel) {
@@ -169,6 +185,21 @@ fun DevicesScreen(
                 actions = {
                     IconButton(onClick = onOpenPeripherals) {
                         Icon(Icons.Outlined.Keyboard, contentDescription = "Периферия")
+                    }
+                    IconButton(
+                        onClick = {
+                            val options = GmsBarcodeScannerOptions.Builder()
+                                .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+                                .enableAutoZoom()
+                                .build()
+                            GmsBarcodeScanning.getClient(context, options).startScan()
+                                .addOnSuccessListener { viewModel.openScanned(it.rawValue.orEmpty()) }
+                                .addOnFailureListener {
+                                    Toast.makeText(context, "Сканер QR недоступен", Toast.LENGTH_SHORT).show()
+                                }
+                        },
+                    ) {
+                        Icon(Icons.Outlined.QrCodeScanner, contentDescription = "Сканировать наклейку")
                     }
                     IconButton(onClick = onOpenScanner) {
                         Icon(Icons.Outlined.TravelExplore, contentDescription = "Сканер сети")
