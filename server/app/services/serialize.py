@@ -64,6 +64,7 @@ def connection_out(c: Connection, graph: Graph) -> ConnectionOut:
         label=c.label,
         notes=c.notes,
         waypoints=c.waypoints or [],
+        color=c.color,
     )
 
 

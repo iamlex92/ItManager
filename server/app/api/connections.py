@@ -93,7 +93,9 @@ async def link_devices(body: LinkCreate, session: SessionDep):
             session.add(free)
             await session.flush()
         ends.append(free)
-    conn = Connection(port_a_id=ends[0].id, port_b_id=ends[1].id, cable_type=body.cable_type, label=body.label)
+    conn = Connection(
+        port_a_id=ends[0].id, port_b_id=ends[1].id, cable_type=body.cable_type, label=body.label, color=body.color
+    )
     session.add(conn)
     await session.commit()
     await session.refresh(conn)

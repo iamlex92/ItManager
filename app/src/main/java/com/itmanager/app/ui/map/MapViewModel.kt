@@ -146,6 +146,7 @@ data class DeviceForm(
 
 const val CABLE_COPPER = "Cat6"
 const val CABLE_FIBER = "OM3"
+val CABLE_COLORS = listOf(0xFFFF453AL, 0xFFFF9F0AL, 0xFFFFD60AL, 0xFF30D158L, 0xFF0A84FFL, 0xFFBF5AF2L, 0xFFFFFFFFL)
 val PEN_COLORS = listOf(0xFFFFD60AL, 0xFFFF453AL, 0xFF30D158L, 0xFF0A84FFL, 0xFFFFFFFFL)
 
 /** Server limits on drawings: lines per floor and x, y pairs per line. */
@@ -362,6 +363,12 @@ class MapViewModel @Inject constructor(
                 write { repository.linkDevices(from, id, _state.value.editor.cable).onFailure(::fail) }
             }
         }
+    }
+
+    /** Gives the selected cable a colour on the map; null gives the automatic one back. */
+    fun recolorLink(colorArgb: Long?) {
+        val id = _state.value.editor.selectedLink ?: return
+        write { repository.recolorConnection(id, colorArgb).onFailure(::fail) }
     }
 
     fun deleteLink(connection: Connection) {

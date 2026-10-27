@@ -13,6 +13,7 @@ import com.itmanager.app.core.network.FloorDto
 import com.itmanager.app.core.network.FloorPatch
 import com.itmanager.app.core.network.FloorRename
 import com.itmanager.app.core.network.RouteBody
+import com.itmanager.app.core.network.cableColorPatch
 import com.itmanager.app.core.network.WaypointDto
 import com.itmanager.app.core.network.ImportBody
 import com.itmanager.app.core.network.LinkBody
@@ -49,6 +50,7 @@ import com.itmanager.app.data.model.ImportReport
 import com.itmanager.app.data.model.NetworkScan
 import com.itmanager.app.data.model.LiveEvent
 import com.itmanager.app.data.model.PortChange
+import com.itmanager.app.data.model.PortDraft
 import com.itmanager.app.data.model.PortLoad
 import com.itmanager.app.data.model.PlanFile
 import com.itmanager.app.data.model.PlanRect
@@ -284,6 +286,18 @@ class RemoteDataSource(
             ?: throw UserFacingException("Сервер не вернул кабель")
 
     override suspend fun deleteConnection(id: String) = api.deleteConnection(settings, id)
+
+    override suspend fun recolorConnection(id: String, colorArgb: Long?): Connection =
+        api.patchConnection(settings, id, cableColorPatch(colorArgb)).toDomain()
+            ?: throw UserFacingException("Сервер не вернул кабель")
+
+    override suspend fun createPort(deviceId: String, draft: PortDraft): SwitchPort =
+        api.createPort(settings, draft.toPatch(deviceId)).toDomain()
+
+    override suspend fun updatePortRecord(portId: String, draft: PortDraft): SwitchPort =
+        api.patchPort(settings, portId, draft.toPatch()).toDomain()
+
+    override suspend fun deletePort(portId: String) = api.deletePort(settings, portId)
 
     override suspend fun routeConnection(id: String, waypoints: List<Waypoint>): Connection =
         api.routeConnection(settings, id, RouteBody(waypoints.map(WaypointDto::of))).toDomain()

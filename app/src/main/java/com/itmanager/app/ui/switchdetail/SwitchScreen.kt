@@ -21,7 +21,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Difference
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.NetworkCheck
@@ -109,6 +111,7 @@ fun SwitchScreen(
     val portTraffic by viewModel.portTraffic.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     var selectedPortId by rememberSaveable(deviceId) { mutableStateOf<String?>(null) }
+    var recordTarget by remember { mutableStateOf<PortRecordTarget?>(null) }
     var portView by rememberSaveable { mutableStateOf(PortView.STATUS) }
     var highlightVlan by rememberSaveable(deviceId) { mutableStateOf<Int?>(null) }
     val palette = remember(vlans) { VlanPalette(vlans) }
@@ -181,6 +184,9 @@ fun SwitchScreen(
                         QuickAction("Импорт конфига", Icons.Outlined.FileDownload) { onOpenImport(device.name) }
                         QuickAction("Сохранить конфиг", Icons.Outlined.Save, viewModel::requestSaveConfig)
                         QuickAction("NFC-метка", Icons.Outlined.Nfc, viewModel::bindNfc)
+                        QuickAction("Добавить порт", Icons.Outlined.Add) {
+                            recordTarget = PortRecordTarget(null, (ports.maxOfOrNull { it.number } ?: 0) + 1)
+                        }
                     }
 
                     Spacer(Modifier.height(20.dp))
@@ -227,7 +233,23 @@ fun SwitchScreen(
                         busy = busy,
                         onApply = { change -> viewModel.requestPortChange(port, change) },
                         onBounce = { viewModel.requestBounce(port) },
+                        onEditRecord = { recordTarget = PortRecordTarget(port, port.number) },
                         onDismiss = { selectedPortId = null },
+                    )
+                }
+                recordTarget?.let { target ->
+                    PortRecordDialog(
+                        target = target,
+                        vlans = vlans,
+                        busy = busy,
+                        onSave = { draft -> viewModel.savePortRecord(target.port, draft) { recordTarget = null } },
+                        onDelete = { p ->
+                            viewModel.deletePortRecord(p) {
+                                recordTarget = null
+                                selectedPortId = null
+                            }
+                        },
+                        onDismiss = { recordTarget = null },
                     )
                 }
                 diagnostic?.let { run ->
@@ -304,6 +326,7 @@ private fun PortSheet(
     busy: Boolean,
     onApply: (PortChange) -> Unit,
     onBounce: () -> Unit,
+    onEditRecord: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(
@@ -344,6 +367,21 @@ private fun PortSheet(
 
             Spacer(Modifier.height(20.dp))
             PortEditor(port, vlans, busy, onApply, onBounce)
+
+            Spacer(Modifier.height(20.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(12.dp))
+            OutlinedButton(onClick = onEditRecord, modifier = Modifier.fillMaxWidth().height(50.dp)) {
+                Icon(Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Изменить запись о порте (только база)")
+            }
+            Text(
+                "Имя, номер, режим, VLAN, скорость, PoE и аплинк как они записаны в базе. Коммутатор не затрагивается.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp),
+            )
         }
     }
 }

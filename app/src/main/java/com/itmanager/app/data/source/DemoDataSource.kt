@@ -41,6 +41,7 @@ import com.itmanager.app.data.model.NetworkScan
 import com.itmanager.app.data.model.ScanRanges
 import com.itmanager.app.data.model.LiveEvent
 import com.itmanager.app.data.model.PortChange
+import com.itmanager.app.data.model.PortDraft
 import com.itmanager.app.data.model.PortLoad
 import com.itmanager.app.data.model.PortChangeResult
 import com.itmanager.app.data.model.PortMode
@@ -283,6 +284,26 @@ object DemoDataSource : DcimDataSource {
         currentPorts(switch).firstOrNull { it.id == portId } ?: notFound("Порт")
 
     override suspend fun vlans(): List<Vlan> = vlans
+
+    override suspend fun createPort(deviceId: String, draft: PortDraft): SwitchPort =
+        throw UserFacingException("В демо-режиме набор портов фиксирован: подключитесь к серверу, чтобы добавлять порты.")
+
+    override suspend fun deletePort(portId: String) =
+        throw UserFacingException("В демо-режиме набор портов фиксирован: подключитесь к серверу, чтобы удалять порты.")
+
+    override suspend fun updatePortRecord(portId: String, draft: PortDraft): SwitchPort {
+        simulateNetwork()
+        val port = devices.filter { it.type == DeviceType.SWITCH }.flatMap { currentPorts(it) }.firstOrNull { it.id == portId }
+            ?: notFound("Порт")
+        val updated = port.copy(
+            number = draft.number, name = draft.name, isUplink = draft.isUplink, mode = draft.mode,
+            accessVlan = if (draft.mode == PortMode.ACCESS) draft.accessVlan else null,
+            taggedVlans = if (draft.mode == PortMode.TRUNK) draft.taggedVlans else emptyList(),
+            speedMbps = draft.speedMbps, poeEnabled = draft.poeEnabled,
+        )
+        changedPorts[portId] = updated
+        return updated
+    }
 
     override suspend fun previewPortChange(switchId: String, portId: String, change: PortChange): List<String> {
         simulateNetwork()
@@ -556,6 +577,14 @@ object DemoDataSource : DcimDataSource {
             setDevices(devices.filter { it.id !in chosen }.map { if (it.hostId in chosen) it.copy(hostId = null) else it })
             connections = connections.filter { it.deviceAId !in chosen && it.deviceBId !in chosen }
             count
+        }
+    }
+
+    override suspend fun recolorConnection(id: String, colorArgb: Long?): Connection {
+        simulateNetwork()
+        return inventoryLock.withLock {
+            val link = connections.firstOrNull { it.id == id } ?: notFound("Кабель")
+            link.copy(colorArgb = colorArgb).also { updated -> connections = connections.map { if (it.id == id) updated else it } }
         }
     }
 

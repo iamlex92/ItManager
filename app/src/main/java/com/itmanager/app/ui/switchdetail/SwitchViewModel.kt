@@ -11,6 +11,7 @@ import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.DiagnosticResult
 import com.itmanager.app.data.model.LiveEvent
 import com.itmanager.app.data.model.PortChange
+import com.itmanager.app.data.model.PortDraft
 import com.itmanager.app.data.model.PortLoad
 import com.itmanager.app.data.model.SwitchPort
 import com.itmanager.app.data.model.TrafficSeries
@@ -247,6 +248,19 @@ class SwitchViewModel @Inject constructor(
             }
             _messages.emit(result.getOrElse { it.toUserMessage() })
         }
+    }
+
+    /** Saves the inventory record of a port (a new one when [port] is null). Nothing reaches the switch. */
+    fun savePortRecord(port: SwitchPort?, draft: PortDraft, done: () -> Unit) = runBusy {
+        val result = if (port == null) repository.createPort(deviceId, draft) else repository.updatePortRecord(port.id, draft)
+        result.onSuccess { done(); refresh() }
+        _messages.emit(result.fold({ "Запись о порте сохранена в базе" }, { it.toUserMessage() }))
+    }
+
+    fun deletePortRecord(port: SwitchPort, done: () -> Unit) = runBusy {
+        val result = repository.deletePort(port.id)
+        result.onSuccess { done(); refresh() }
+        _messages.emit(result.fold({ "Запись о порте ${port.name} удалена из базы" }, { it.toUserMessage() }))
     }
 
     private fun runBusy(block: suspend () -> Unit) {

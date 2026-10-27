@@ -3,6 +3,7 @@ package com.itmanager.app.core.network
 import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.Drawing
 import com.itmanager.app.data.model.PlanRect
+import com.itmanager.app.data.model.PortDraft
 import com.itmanager.app.data.model.parseColorHex
 import com.itmanager.app.data.model.Zone
 import kotlinx.serialization.SerialName
@@ -149,3 +150,21 @@ data class LinkBody(
     @SerialName("device_b_id") val deviceBId: String,
     @SerialName("cable_type") val cableType: String,
 )
+
+/** A port record from the form, nulls included: a cleared access VLAN is cleared on the server too. */
+fun PortDraft.toPatch(deviceId: String? = null): JsonObject = buildJsonObject {
+    deviceId?.let { put("device_id", it) }
+    put("number", number)
+    put("name", name)
+    put("is_uplink", isUplink)
+    put("mode", mode.name)
+    put("access_vlan", accessVlan?.let { JsonPrimitive(it) } ?: JsonNull)
+    put("tagged_vlans", kotlinx.serialization.json.JsonArray(taggedVlans.map { JsonPrimitive(it) }))
+    put("speed_mbps", speedMbps)
+    put("poe_enabled", poeEnabled)
+}
+
+/** The cable colour as the server stores it; null clears it. */
+fun cableColorPatch(colorArgb: Long?): JsonObject = buildJsonObject {
+    put("color", colorArgb?.let { JsonPrimitive("#%06X".format(it and 0xFFFFFF)) } ?: JsonNull)
+}

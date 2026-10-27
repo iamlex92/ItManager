@@ -28,6 +28,7 @@ import com.itmanager.app.data.model.LiveEvent
 import com.itmanager.app.data.model.PlanFile
 import com.itmanager.app.data.model.PlanRect
 import com.itmanager.app.data.model.PortChange
+import com.itmanager.app.data.model.PortDraft
 import com.itmanager.app.data.model.Printer
 import com.itmanager.app.data.model.Runbook
 import com.itmanager.app.data.model.RunbookRun
@@ -130,6 +131,10 @@ class DcimRepository @Inject constructor(
     suspend fun linkDevices(a: String, b: String, cableType: String): Result<Connection> =
         edit { linkDevices(a, b, cableType) }
     suspend fun deleteConnection(id: String): Result<Unit> = edit { deleteConnection(id) }
+    suspend fun recolorConnection(id: String, colorArgb: Long?): Result<Connection> = edit { recolorConnection(id, colorArgb) }
+    suspend fun createPort(deviceId: String, draft: PortDraft): Result<SwitchPort> = edit { createPort(deviceId, draft) }
+    suspend fun updatePortRecord(portId: String, draft: PortDraft): Result<SwitchPort> = edit { updatePortRecord(portId, draft) }
+    suspend fun deletePort(portId: String): Result<Unit> = edit { deletePort(portId) }
     suspend fun routeConnection(id: String, waypoints: List<Waypoint>): Result<Connection> =
         edit { routeConnection(id, waypoints) }
     suspend fun createFloor(draft: FloorDraft): Result<FloorInfo> = edit { createFloor(draft) }
