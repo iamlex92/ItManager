@@ -111,10 +111,6 @@ def cmd_run(args: argparse.Namespace) -> None:
     with _database(owner=True):
         log.warning("NetAdmin %s: applying database migrations", __version__)
         migrate(settings.database_url)
-        if os.environ.get("SEED_DEMO_DATA", "false").strip().lower() == "true":
-            from ..seed import main as seed_main
-
-            asyncio.run(seed_main(do_reset=False, if_empty=True))
         host = os.environ.get("API_BIND", "0.0.0.0").strip() or "0.0.0.0"
         port = int(os.environ.get("API_PORT", "8000"))
         log.warning("listening on %s:%d", host, port)

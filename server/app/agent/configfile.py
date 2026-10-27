@@ -89,9 +89,6 @@ MONITOR_MODE=emulator
 # и SNMP GET к указанным подсетям. Только чтение и только по кнопке. emulator: ответы из учёта, сеть не трогается.
 DISCOVERY_MODE=real
 
-# true: один раз заполнить пустую базу демо-этажом. В приложении есть свой демо-режим, поэтому выключено.
-SEED_DEMO_DATA=false
-
 # Runbooks (AD, права на папки). emulator: встроенная учебная среда, настоящий AD не затрагивается.
 # real: AD по LDAPS и права на папки по WinRM (см. DEPLOY.md, раздел «Runbooks с настоящим AD»).
 RUNBOOK_MODE=emulator

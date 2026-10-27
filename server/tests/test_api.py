@@ -43,8 +43,8 @@ def test_floors_and_plan(client):
     assert len(floors) == 1
     f = floors[0]
     assert f["width_px"] == 2400 and f["height_px"] == 1200
-    r = client.get(f["plan_image_url"], headers={"Authorization": ""})
-    assert r.status_code == 200 and r.text.startswith("<svg")
+    # No plan is bundled: each site uploads its own.
+    assert f["plan_image_url"] == ""
 
 
 def test_seed_shape(client):

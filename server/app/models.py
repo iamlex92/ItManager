@@ -250,3 +250,45 @@ class ScriptAuditLog(Base):
     # Runbooks keep stderr apart from stdout; switch writes leave it empty.
     stderr_log: Mapped[str | None] = mapped_column(Text)
     duration_ms: Mapped[int | None] = mapped_column(Integer)
+
+
+class Peripheral(Base):
+    """Equipment without a network port that belongs to a workplace: a monitor, a keyboard, a docking
+    station. Attached to a device (usually a computer) or kept in stock when device_id is empty."""
+
+    __tablename__ = "peripherals"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    device_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("devices.id", ondelete="SET NULL"), index=True
+    )
+    kind: Mapped[str] = mapped_column(String(30))
+    vendor: Mapped[str | None] = mapped_column(String(50))
+    model: Mapped[str | None] = mapped_column(String(100))
+    # What matters about it in a few words: «24", 1920×1080, DP/HDMI».
+    specs: Mapped[str | None] = mapped_column(String(200))
+    serial_number: Mapped[str | None] = mapped_column(String(100))
+    inventory_number: Mapped[str | None] = mapped_column(String(100))
+    comment: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class DeviceFaceplate(Base):
+    """A drawing of a switch's front panel (SVG) and where each of its ports lies on it.
+
+    Port places are fractions of the drawing: {"port_id": "...", "x": 0.1, "y": 0.2, "w": 0.02, "h": 0.1},
+    x and y the top left corner, so the marks follow the drawing at any size."""
+
+    __tablename__ = "device_faceplates"
+
+    device_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"), primary_key=True)
+    svg: Mapped[str] = mapped_column(Text)
+    width: Mapped[float] = mapped_column(Float)
+    height: Mapped[float] = mapped_column(Float)
+    ports: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

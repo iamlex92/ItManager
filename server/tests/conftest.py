@@ -11,7 +11,7 @@ from app import crypto
 from app.config import HalMode, Settings
 from app.db import make_engine, make_sessionmaker
 from app.main import create_app
-from app.seed import reset, seed
+from tests.inventory import reset, seed
 
 TEST_DB = os.environ.get("TEST_DATABASE_URL", "postgresql+asyncpg://netadmin:netadmin@127.0.0.1:5432/netadmin_test")
 TOKEN = "test-token-0123456789abcdef"
