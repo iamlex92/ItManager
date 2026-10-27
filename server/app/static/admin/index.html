@@ -325,6 +325,7 @@
     <label id="bulk-host-label" hidden>Хост виртуализации<select id="bulk-host"></select></label>
     <label id="bulk-floor-label">Этаж<select id="bulk-floor"></select></label>
     <label>Производитель<input id="bulk-vendor" maxlength="50" placeholder="Пусто: не менять"></label>
+    <label id="bulk-room-label" hidden>Помещение <span class="muted small">(устройства раскладываются внутри контура)</span><select id="bulk-room"></select></label>
     <p id="bulk-error" class="error" hidden></p>
     <div class="row">
       <div class="spacer"></div>
@@ -416,6 +417,7 @@
       <button data-part="vlan" class="active">По VLAN</button>
       <button data-part="history">История</button>
       <button data-part="traffic">Трафик</button>
+      <button data-part="configs">Конфигурация</button>
     </div>
     <div id="detail-vlan"></div>
     <div id="detail-history" hidden></div>
@@ -427,6 +429,18 @@
         <tbody id="traffic-rows"></tbody>
       </table></div>
       <canvas id="traffic-chart" class="chart" width="900" height="220" hidden></canvas>
+    </div>
+    <div id="detail-configs" hidden>
+      <div class="row wrap">
+        <button type="button" id="config-backup" title="Прочитать running-config с коммутатора и сохранить копию (только чтение)">Снять копию сейчас</button>
+        <button type="button" id="config-live" title="Сравнить выбранную копию с текущей конфигурацией на коммутаторе">Сравнить с коммутатором</button>
+        <span class="muted small">Выберите копию; для сравнения двух копий отметьте вторую «со»</span>
+      </div>
+      <div class="table-wrap"><table class="grid">
+        <thead><tr><th></th><th>Снята</th><th>Кем</th><th>Хэш</th><th>со</th><th></th></tr></thead>
+        <tbody id="config-rows"></tbody>
+      </table></div>
+      <pre id="config-output" class="output" hidden></pre>
     </div>
     <p id="detail-error" class="error" hidden></p>
     <div class="row"><div class="spacer"></div><button type="button" id="detail-close" class="primary">Готово</button></div>

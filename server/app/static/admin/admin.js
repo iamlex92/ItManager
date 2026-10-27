@@ -304,6 +304,22 @@
     return best;
   }
 
+  /** [n] points inside the outline, nearest the middle first, for laying devices out in a room. */
+  function spreadPoints(points, n) {
+    const xs = points.filter((_, i) => i % 2 === 0), ys = points.filter((_, i) => i % 2 === 1);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    // Spaced so the pictograms and their names do not overlap; tighter only when the room is small.
+    const step = Math.max(24, Math.min(90, Math.sqrt(((x1 - x0) * (y1 - y0)) / Math.max(n, 1)) / 1.2));
+    const found = [];
+    for (let x = cx - Math.floor((cx - x0) / step) * step; x <= x1; x += step) {
+      for (let y = cy - Math.floor((cy - y0) / step) * step; y <= y1; y += step) if (inPolygon(points, x, y)) found.push({ x, y });
+    }
+    if (!found.length) found.push(innerPoint(points));
+    found.sort((a, b) => Math.hypot(a.x - cx, a.y - cy) - Math.hypot(b.x - cx, b.y - cy));
+    return Array.from({ length: n }, (_, i) => found[i % found.length]);
+  }
+
   /** The smallest zone (room or not) of the floor that holds the point. */
   function zoneAtPoint(floor, x, y, roomsOnly = false) {
     let best = null;
@@ -320,6 +336,17 @@
   function roomOf(d) {
     if (d.x == null || d.y == null) return null;
     return zoneAtPoint(floorById(d.floor_id), d.x, d.y, true);
+  }
+
+  /** The corner of a finished outline under the pointer, in screen pixels. */
+  function zoneVertexAt(sx, sy) {
+    for (const zone of zonesOf(S.floor)) {
+      for (let index = 0; index * 2 + 1 < zone.points.length; index++) {
+        const [px, py] = toScreen(zone.points[index * 2], zone.points[index * 2 + 1]);
+        if (Math.hypot(sx - px, sy - py) <= 8) return { zone, index };
+      }
+    }
+    return null;
   }
 
   function fitDraftButtons() {
@@ -708,6 +735,20 @@
     ctx.strokeRect(fx, fy, w * k, h * k);
 
     for (const z of zonesOf(S.floor)) drawZone(z);
+    if (S.tool === "zones" && !S.zoneDraft) {
+      for (const z of zonesOf(S.floor)) {
+        for (let i = 0; i + 1 < z.points.length; i += 2) {
+          const [px, py] = toScreen(z.points[i], z.points[i + 1]);
+          ctx.beginPath();
+          ctx.arc(px, py, 5, 0, Math.PI * 2);
+          ctx.fillStyle = "#fff";
+          ctx.fill();
+          ctx.strokeStyle = z.color;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+      }
+    }
     if (S.zoneDraft && S.zoneDraft.length) {
       polyline(S.zoneDraft, "#4c9eff", 2);
       for (let i = 0; i + 1 < S.zoneDraft.length; i += 2) {
@@ -918,7 +959,7 @@
           : "Щёлкните два устройства, чтобы соединить их кабелем. Щёлкните кабель, чтобы проложить его по своей трассе.",
       zones: S.zoneDraft
         ? "Щёлкайте по углам контура. «Готово» или двойной щелчок замыкает его, «Убрать точку» отменяет последний угол."
-        : "Щёлкните по плану, чтобы начать контур помещения или зоны; щелчок по готовому контуру открывает его для правки. Устройство считается в помещении, если стоит внутри контура.",
+        : "Щёлкните по плану, чтобы начать контур помещения или зоны. Белые точки на контуре можно тянуть, двойной щелчок по точке удаляет её; щелчок внутри контура открывает его для правки. Устройство считается в помещении, если стоит внутри контура.",
       draw: "Рисуйте мышью. Линии видны на карте в приложении.",
       plan: S.floor && S.floor.plan_image_url
         ? "Перетащите план мышью, чтобы совместить его с устройствами. «−» и «+» меняют размер."
@@ -954,6 +995,9 @@
     } else if (S.tool === "link" && linkAt(sx, sy)) {
       gesture.kind = "link-cable";
       gesture.link = linkAt(sx, sy);
+    } else if (S.tool === "zones" && !S.zoneDraft && zoneVertexAt(sx, sy)) {
+      gesture.kind = "zone-vertex";
+      gesture.vertex = zoneVertexAt(sx, sy);
     } else if (S.tool === "draw") {
       gesture.kind = "draw";
       S.stroke = toPlan(sx, sy);
@@ -981,6 +1025,13 @@
         const d = gesture.device;
         d.x = Math.max(0, Math.min(w, d.x + dx / k));
         d.y = Math.max(0, Math.min(h, d.y + dy / k));
+        break;
+      }
+      case "zone-vertex": {
+        const [x, y] = toPlan(sx, sy);
+        const { zone, index } = gesture.vertex;
+        zone.points[index * 2] = round1(x);
+        zone.points[index * 2 + 1] = round1(y);
         break;
       }
       case "draw": {
@@ -1049,6 +1100,9 @@
         points.splice(hd.insert, 0, { ...at, floor_id: newBendFloor(r) });
         saveRoute(r.link.id, points);
       }
+    } else if (g.kind === "zone-vertex") {
+      if (g.moved) saveZones(zonesOf(S.floor)).catch((e) => { fail(e); loadMap().catch(fail); });
+      else openZoneDialog(g.vertex.zone);
     } else if (g.kind === "draw") {
       const points = S.stroke;
       S.stroke = null;
@@ -1081,7 +1135,17 @@
       if (hd && hd.index != null) { S.selPoint = hd.index; deleteSelectedPoint(); }
       return;
     }
-    if (S.tool === "zones") { if (S.zoneDraft && S.zoneDraft.length >= 6) finishZone(); return; }
+    if (S.tool === "zones") {
+      if (S.zoneDraft) { if (S.zoneDraft.length >= 6) finishZone(); return; }
+      // A double click on a corner removes it (an outline keeps at least three).
+      const v = zoneVertexAt(ev.offsetX, ev.offsetY);
+      if (v && v.zone.points.length > 6) {
+        v.zone.points.splice(v.index * 2, 2);
+        saveZones(zonesOf(S.floor)).catch((e) => { fail(e); loadMap().catch(fail); });
+        draw();
+      }
+      return;
+    }
     if (S.tool !== "move" || deviceAt(ev.offsetX, ev.offsetY)) return;
     const [x, y] = toPlan(ev.offsetX, ev.offsetY);
     openDeviceDialog(null, { x, y });
@@ -1902,23 +1966,37 @@
     $("bulk-floor-label").hidden = floors.length < 2;
     $("bulk-vendor").value = "";
     $("bulk-error").hidden = true;
+    const rooms = floors.flatMap((f) => zonesOf(f).filter((z) => z.is_room).map((z) => ({ f, z })));
+    $("bulk-room").replaceChildren(new Option("Не менять", ""), ...rooms.map(({ f, z }) => new Option(floors.length > 1 ? `${floorTitle(f)} · ${z.name}` : z.name, z.id)));
+    bulkRooms = rooms;
+    $("bulk-room-label").hidden = !rooms.length;
     $("bulk-dialog").showModal();
   });
   $("bulk-cancel").addEventListener("click", () => $("bulk-dialog").close());
+  let bulkRooms = [];
   $("bulk-form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const set = {};
+    const room = bulkRooms.find(({ z }) => z.id === $("bulk-room").value);
     if (bulkType.value) set.type = bulkType.value;
     if ($("bulk-floor").value) set.floor_id = $("bulk-floor").value;
     if ($("bulk-vendor").value.trim()) set.vendor = $("bulk-vendor").value.trim();
     if (bulkType.value === "VIRTUAL" && $("bulk-host").value) set.host_id = $("bulk-host").value;
-    if (!Object.keys(set).length) {
+    if (!Object.keys(set).length && !room) {
       $("bulk-error").hidden = false;
       $("bulk-error").textContent = "Выберите, что менять.";
       return;
     }
     try {
-      await api("POST", "devices/bulk", { ids: [...picked], set });
+      if (Object.keys(set).length) await api("POST", "devices/bulk", { ids: [...picked], set });
+      if (room) {
+        // Everyone goes inside the room's outline, spread out so they do not stack on one spot.
+        const ids = [...picked];
+        const spots = spreadPoints(room.z.points, ids.length);
+        for (const [i, id] of ids.entries()) {
+          await api("PATCH", `devices/${id}`, { x: round1(spots[i].x), y: round1(spots[i].y), floor_id: room.f.id });
+        }
+      }
       picked.clear();
       $("bulk-dialog").close();
       await loadDevices();
