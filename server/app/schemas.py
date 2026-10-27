@@ -1072,3 +1072,50 @@ class FaceplateOut(BaseModel):
 
 class FaceplateCopyIn(BaseModel):
     from_device_id: uuid.UUID
+
+
+# --- device templates -----------------------------------------------------
+
+
+class DeviceTemplateBase(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    device_type: DeviceType
+    vendor: str | None = Field(default=None, max_length=50)
+    model: str | None = Field(default=None, max_length=100)
+    port_count: int = Field(default=0, ge=0, le=96)
+    port_prefix: str = Field(default="Port", max_length=30)
+    port_speed_mbps: int = Field(default=1000, ge=10, le=400_000)
+    rack_h: int | None = Field(default=None, ge=1, le=60)
+    comment: str | None = Field(default=None, max_length=4000)
+
+
+class DeviceTemplateCreate(DeviceTemplateBase):
+    pass
+
+
+class DeviceTemplateUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    device_type: DeviceType | None = None
+    vendor: str | None = Field(default=None, max_length=50)
+    model: str | None = Field(default=None, max_length=100)
+    port_count: int | None = Field(default=None, ge=0, le=96)
+    port_prefix: str | None = Field(default=None, max_length=30)
+    port_speed_mbps: int | None = Field(default=None, ge=10, le=400_000)
+    rack_h: int | None = Field(default=None, ge=1, le=60)
+    comment: str | None = Field(default=None, max_length=4000)
+
+
+class DeviceTemplateOut(ORM, DeviceTemplateBase):
+    id: uuid.UUID
+
+
+class DeviceFromTemplate(BaseModel):
+    """Overrides for the device made from a template: the template fills the rest."""
+
+    name: str = Field(min_length=1, max_length=100)
+    floor_id: uuid.UUID | None = None
+    x: float | None = None
+    y: float | None = None
+    ip: ipaddress.IPv4Address | ipaddress.IPv6Address | None = None
+    rack_id: uuid.UUID | None = None
+    rack_u: int | None = Field(default=None, ge=1, le=60)

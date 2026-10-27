@@ -295,3 +295,22 @@ class DeviceFaceplate(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class DeviceTemplate(Base):
+    """A saved preset for adding devices: type, vendor, model and, for a switch or panel, its ports."""
+
+    __tablename__ = "device_templates"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    device_type: Mapped[str] = mapped_column(String(30))
+    vendor: Mapped[str | None] = mapped_column(String(50))
+    model: Mapped[str | None] = mapped_column(String(100))
+    # Ports a new device gets: «Gi1/0/» + 1..port_count at port_speed_mbps. Zero: no ports.
+    port_count: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    port_prefix: Mapped[str] = mapped_column(String(30), server_default=text("'Port'"))
+    port_speed_mbps: Mapped[int] = mapped_column(Integer, server_default=text("1000"))
+    rack_h: Mapped[int | None] = mapped_column(Integer)
+    comment: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
