@@ -335,7 +335,9 @@ async def diff_config(
 
 @router.get("/{device_id}/configs/{config_id}", response_model=DeviceConfigOut)
 async def get_config(device_id: uuid.UUID, config_id: uuid.UUID, session: SessionDep):
-    cfg = await session.scalar(select(DeviceConfig).where(DeviceConfig.id == config_id, DeviceConfig.device_id == device_id))
+    cfg = await session.scalar(
+        select(DeviceConfig).where(DeviceConfig.id == config_id, DeviceConfig.device_id == device_id)
+    )
     if cfg is None:
         raise not_found("stored config")
     return cfg
