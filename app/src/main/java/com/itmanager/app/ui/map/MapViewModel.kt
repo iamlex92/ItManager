@@ -23,6 +23,7 @@ import com.itmanager.app.data.model.MapLayer
 import com.itmanager.app.data.model.PlanRect
 import com.itmanager.app.data.model.PortDraft
 import com.itmanager.app.data.model.PortMode
+import com.itmanager.app.data.model.RackStyle
 import com.itmanager.app.data.model.Waypoint
 import com.itmanager.app.data.model.Zone
 import com.itmanager.app.data.model.removed
@@ -560,6 +561,21 @@ class MapViewModel @Inject constructor(
         _state.update { s -> s.copy(rack = s.rack?.copy(busy = true, error = null)) }
         viewModelScope.launch {
             repository.updateDevice(deviceId, device.toDraft().copy(rackId = rackId, rackU = u, rackH = h))
+                .onFailure { e -> _state.update { s -> s.copy(rack = s.rack?.copy(busy = false, error = e.toUserMessage())) } }
+                .onSuccess { refreshRack() }
+        }
+    }
+
+    /** The rack's own settings: name, height in units and how it is drawn. */
+    fun saveRack(rack: Device, name: String, units: Int, style: RackStyle) {
+        val draft = rack.toDraft().copy(
+            name = name.trim().ifEmpty { rack.name },
+            rackUnits = units,
+            metadata = style.writeTo(rack.metadata),
+        )
+        _state.update { s -> s.copy(rack = s.rack?.copy(busy = true, error = null)) }
+        viewModelScope.launch {
+            repository.updateDevice(rack.id, draft)
                 .onFailure { e -> _state.update { s -> s.copy(rack = s.rack?.copy(busy = false, error = e.toUserMessage())) } }
                 .onSuccess { refreshRack() }
         }

@@ -20,6 +20,7 @@ import com.itmanager.app.data.model.Waypoint
 import com.itmanager.app.data.model.parseColorHex
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -90,6 +91,7 @@ data class DeviceDto(
     @SerialName("switch_id") val switchId: String? = null,
     @SerialName("switch_port_id") val switchPortId: String? = null,
     @SerialName("switch_port_name") val switchPortName: String? = null,
+    val metadata: Map<String, JsonElement> = emptyMap(),
 ) {
     fun toDomain() = Device(
         id = id,
@@ -113,6 +115,7 @@ data class DeviceDto(
         switchId = switchId,
         switchPortId = switchPortId,
         switchPortName = switchPortName,
+        metadata = metadata,
     )
 }
 
