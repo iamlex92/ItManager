@@ -298,6 +298,13 @@ fun SettingsScreen(
                 enabled = state.hasChanges,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
             ) { Text("Сохранить") }
+            Spacer(Modifier.height(16.dp))
+            val appVersion = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() }
+            Text(
+                "Приложение ${appVersion ?: "?"}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Spacer(Modifier.height(24.dp))
         }
     }
@@ -329,7 +336,7 @@ private fun ConnectionCheckResult(check: ConnectionCheck) {
                 }
                 Text(
                     listOfNotNull(
-                        h.version?.let { "Версия $it" },
+                        h.version?.let { "Версия сервера $it" },
                         mode,
                         secrets,
                         "уведомления в Telegram включены".takeIf { h.telegramAlerts == true },
