@@ -310,6 +310,10 @@ class DeviceOut(BaseModel):
     rack_u: int | None = None
     rack_h: int | None = None
     rack_units: int | None = None
+    # The switch port this device is cabled to (through sockets and patch panels), if any.
+    switch_id: uuid.UUID | None = None
+    switch_port_id: uuid.UUID | None = None
+    switch_port_name: str | None = None
 
 
 # --- ports ----------------------------------------------------------------
@@ -1027,6 +1031,8 @@ class TopologyLinkOut(BaseModel):
     # Link state from the switch side; null when neither end is a switch.
     is_up: bool | None = None
     speed_mbps: int | None = None
+    # The cables of the chain, from end A to end B; empty for a VIRTUAL link.
+    connection_ids: list[uuid.UUID] = Field(default_factory=list)
 
 
 class TopologyOut(BaseModel):

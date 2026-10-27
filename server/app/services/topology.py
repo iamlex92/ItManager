@@ -28,10 +28,12 @@ class Graph:
         self.ports = {p.id: p for p in ports}
         self.adj: dict[uuid.UUID, list[uuid.UUID]] = {}
         self.cables: dict[frozenset[uuid.UUID], str] = {}
+        self.cable_ids: dict[frozenset[uuid.UUID], uuid.UUID] = {}
         for c in connections:
             self.adj.setdefault(c.port_a_id, []).append(c.port_b_id)
             self.adj.setdefault(c.port_b_id, []).append(c.port_a_id)
             self.cables[frozenset((c.port_a_id, c.port_b_id))] = c.cable_type
+            self.cable_ids[frozenset((c.port_a_id, c.port_b_id))] = c.id
 
     def cable_types_along(self, port_ids: list[uuid.UUID]) -> list[str]:
         """Cable types of each cable on a traced path, in order, repeats folded."""
@@ -139,6 +141,11 @@ def network_links(graph: Graph) -> list[dict]:
                 "cable_types": graph.cable_types_along([h.port_id for h in hops]),
                 "is_up": all(p.is_admin_up and p.is_oper_up for p in switch_side) if switch_side else None,
                 "speed_mbps": min(p.speed_mbps for p in switch_side) if switch_side else None,
+                "connection_ids": [
+                    graph.cable_ids[frozenset((x.port_id, y.port_id))]
+                    for x, y in zip(hops, hops[1:], strict=False)
+                    if frozenset((x.port_id, y.port_id)) in graph.cable_ids
+                ],
             }
         )
     return out

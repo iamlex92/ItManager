@@ -57,6 +57,7 @@ def test_topology_traces_through_the_cable_plant(client):
     # PC -> socket -> patch panel -> switch shows as one link to the switch
     link = pairs[frozenset(("PC-BUH-01", "SW-ACC-01"))]
     assert link["via"] and link["kind"] == "CABLE" and link["cable_types"] == ["Cat6"]
+    assert len(link["connection_ids"]) == len(link["via"]) + 1
     # Uplinks between switches
     assert frozenset(("SW-CORE-01", "SW-ACC-01")) in pairs
     up = pairs[frozenset(("SW-CORE-01", "SW-ACC-01"))]
@@ -126,3 +127,12 @@ def test_faceplate_refuses_what_is_not_svg(client):
     assert client.put(url, content=bomb).status_code == 415
     assert client.put(url, content=b'<svg xmlns="http://www.w3.org/2000/svg"/>').status_code == 415
     assert client.put(url, content=b'<svg width="100px" height="20px"/>').json()["width"] == 100
+
+
+def test_device_knows_its_switch_port(client):
+    pc = find(client, "PC-BUH-01")
+    sw = find(client, "SW-ACC-01")
+    assert pc["switch_id"] == sw["id"] and pc["switch_port_name"] == "gi1/0/1"
+    port = next(p for p in ports_of(client, sw["id"]) if p["id"] == pc["switch_port_id"])
+    assert port["name"] == "gi1/0/1"
+    assert sw["switch_port_id"] is None

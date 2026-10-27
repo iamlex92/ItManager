@@ -4,6 +4,7 @@ from .topology import Graph
 
 
 def device_out(d: Device, graph: Graph | None = None) -> DeviceOut:
+    sp = graph.switch_port_for(d.id) if graph and d.device_type != "SWITCH" else None
     return DeviceOut(
         id=d.id,
         name=d.name,
@@ -29,6 +30,9 @@ def device_out(d: Device, graph: Graph | None = None) -> DeviceOut:
         rack_u=d.rack_u,
         rack_h=d.rack_h,
         rack_units=d.rack_units,
+        switch_id=sp.device_id if sp else None,
+        switch_port_id=sp.id if sp else None,
+        switch_port_name=sp.port_name if sp else None,
     )
 
 
