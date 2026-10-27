@@ -41,3 +41,29 @@ def test_netbox_zip_has_every_file_and_the_inventory(client):
 def test_netbox_export_needs_the_token(client):
     r = client.get("/api/v1/export/netbox.zip", headers={"Authorization": "Bearer wrong"})
     assert r.status_code == 401
+
+
+def test_labels_page_has_a_qr_per_device_with_the_tag_json(client):
+    devices = client.get("/api/v1/devices").json()
+    r = client.get("/api/v1/export/labels.html")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/html")
+    assert r.text.count('class="label"') == len(devices)
+    assert r.text.count("<svg") == len(devices)
+
+    one = devices[0]
+    r = client.get("/api/v1/export/labels.html", params={"ids": one["id"]})
+    assert r.text.count('class="label"') == 1
+    assert one["name"] in r.text
+
+
+def test_tag_payload_matches_the_nfc_tag_format():
+    import json
+    import types
+    import uuid
+
+    from app.netbox.labels import tag_payload
+
+    d = types.SimpleNamespace(id=uuid.uuid4(), device_type="ACCESS_POINT", name="АП-1")
+    data = json.loads(tag_payload(d))  # type: ignore[arg-type]
+    assert data == {"app": "netadmin", "v": 1, "id": str(d.id), "type": "access_point", "name": "АП-1"}
