@@ -293,3 +293,49 @@ def test_zones_comment_and_rack(client):
     assert client.delete(f"/api/v1/devices/{rack['id']}").status_code == 204
     left = [d for d in client.get("/api/v1/devices").json() if d["name"] == "S-3"][0]
     assert left["rack_id"] is None
+
+
+def test_cable_colour_and_port_edit(client):
+    a = client.post("/api/v1/devices", json={"name": "SW-X", "type": "SWITCH", "x": 1, "y": 1}).json()
+    b = client.post("/api/v1/devices", json={"name": "PC-X", "type": "WORKSTATION", "x": 5, "y": 5}).json()
+    link = client.post(
+        "/api/v1/connections/link", json={"device_a_id": a["id"], "device_b_id": b["id"], "color": "#FF9F0A"}
+    )
+    assert link.status_code == 201 and link.json()["color"] == "#FF9F0A"
+    cid = link.json()["id"]
+    assert client.patch(f"/api/v1/connections/{cid}", json={"color": "#12ab34"}).json()["color"] == "#12ab34"
+    assert client.patch(f"/api/v1/connections/{cid}", json={"color": "red"}).status_code == 422
+    assert client.patch(f"/api/v1/connections/{cid}", json={"color": None}).json()["color"] is None
+
+    p = client.post(
+        "/api/v1/ports", json={"device_id": a["id"], "number": 30, "name": "Gi1/0/30", "tagged_vlans": [10]}
+    )
+    assert p.status_code == 201, p.text
+    pid = p.json()["id"]
+    r = client.patch(
+        f"/api/v1/ports/{pid}",
+        json={
+            "name": "Gi1/0/31",
+            "mode": "TRUNK",
+            "tagged_vlans": [10, 20],
+            "speed_mbps": 10000,
+            "poe_enabled": True,
+            "is_uplink": True,
+        },
+    )
+    assert r.status_code == 200, r.text
+    got = r.json()
+    assert (got["name"], got["mode"], got["tagged_vlans"], got["speed_mbps"], got["is_uplink"]) == (
+        "Gi1/0/31",
+        "TRUNK",
+        [10, 20],
+        10000,
+        True,
+    )
+    assert client.patch(f"/api/v1/ports/{pid}", json={"access_vlan": 4000}).status_code == 422
+    r = client.patch(f"/api/v1/ports/{pid}", json={"mode": "ACCESS", "access_vlan": 10, "tagged_vlans": []})
+    assert r.json()["access_vlan"] == 10 and r.json()["tagged_vlans"] == []
+    r = client.patch(f"/api/v1/ports/{pid}", json={"access_vlan": None})
+    assert r.json()["access_vlan"] is None
+    other = client.post("/api/v1/ports", json={"device_id": a["id"], "number": 31, "name": "Gi1/0/32"}).json()
+    assert client.patch(f"/api/v1/ports/{other['id']}", json={"number": 30}).status_code == 409

@@ -30,6 +30,18 @@ data class PortChange(
     }
 }
 
+/** A port as the inventory records it, edited by hand. Saving it never touches the switch. */
+data class PortDraft(
+    val number: Int,
+    val name: String,
+    val isUplink: Boolean,
+    val mode: PortMode,
+    val accessVlan: Int?,
+    val taggedVlans: List<Int>,
+    val speedMbps: Int,
+    val poeEnabled: Boolean,
+)
+
 data class PortChangeResult(val port: SwitchPort, val commands: List<String>)
 
 data class ConfigDiff(

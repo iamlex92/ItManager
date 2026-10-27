@@ -14,6 +14,7 @@ from ..schemas import (
     PortConfigResult,
     PortCreate,
     PortOut,
+    PortUpdate,
     PortWriteConfirmation,
     TraceHop,
     TraceOut,
@@ -91,6 +92,28 @@ async def create_port(body: PortCreate, session: SessionDep):
 @router.get("/{port_id}", response_model=PortOut)
 async def get_port(port_id: uuid.UUID, session: SessionDep):
     port = await _get(session, port_id)
+    return port_out(port, await load_graph(session))
+
+
+@router.patch("/{port_id}", response_model=PortOut)
+async def update_port(port_id: uuid.UUID, body: PortUpdate, session: SessionDep):
+    """Edits the inventory record of a port by hand. Inventory only: nothing is sent to the switch."""
+    port = await _get(session, port_id)
+    data = body.model_dump(exclude_unset=True)
+    await _check_vlans(
+        session, [v for v in [data.get("access_vlan"), *(data.get("tagged_vlans") or [])] if v is not None]
+    )
+    fields = {"number": "port_number", "name": "port_name"}
+    for k, v in data.items():
+        if k in ("number", "name", "mode", "speed_mbps", "is_uplink", "poe_enabled") and v is None:
+            continue
+        setattr(port, fields.get(k, k), v if v is not None or k == "access_vlan" else [])
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        raise conflict("port_exists", "порт с таким номером уже есть на этом устройстве") from None
+    await session.refresh(port)
     return port_out(port, await load_graph(session))
 
 
