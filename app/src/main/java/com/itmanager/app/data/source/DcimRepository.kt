@@ -14,6 +14,7 @@ import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.DeviceTemplateDraft
 import com.itmanager.app.data.model.DeviceBulkChange
 import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.DiagnosticKind
@@ -97,6 +98,11 @@ class DcimRepository @Inject constructor(
     suspend fun configDiff(switchId: String) = load { configDiff(switchId) }
     suspend fun ipam() = load { ipam() }
     suspend fun ipamCheck(ip: String) = load { ipamCheck(ip) }
+    suspend fun deviceTemplates() = load { deviceTemplates() }
+    suspend fun saveDeviceTemplate(draft: DeviceTemplateDraft) = load { saveDeviceTemplate(draft) }
+    suspend fun deleteDeviceTemplate(id: String) = load { deleteDeviceTemplate(id) }
+    suspend fun createDeviceFromTemplate(templateId: String, name: String, ip: String?): Result<Device> =
+        edit { createDeviceFromTemplate(templateId, name, ip) }
     suspend fun importConfig(switchId: String, text: String, apply: Boolean) =
         load { importConfig(switchId, text, apply) }
 

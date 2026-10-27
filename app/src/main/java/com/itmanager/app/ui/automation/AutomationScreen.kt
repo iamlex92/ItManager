@@ -62,6 +62,7 @@ fun AutomationScreen(
     onOpenScanner: () -> Unit,
     onOpenTools: () -> Unit,
     onOpenIpam: () -> Unit,
+    onOpenTemplates: () -> Unit,
     viewModel: AutomationViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -108,6 +109,14 @@ fun AutomationScreen(
                             title = "IP-адреса (IPAM)",
                             subtitle = "Заполнение подсетей, свободные адреса, дубликаты и адреса вне подсетей",
                             onClick = onOpenIpam,
+                        )
+                    }
+                    item(key = "templates") {
+                        LinkCard(
+                            icon = Icons.Outlined.Dns,
+                            title = "Шаблоны устройств",
+                            subtitle = "Типовые устройства с портами: создать коммутатор или патч-панель в одно касание",
+                            onClick = onOpenTemplates,
                         )
                     }
                     item(key = "audit") {

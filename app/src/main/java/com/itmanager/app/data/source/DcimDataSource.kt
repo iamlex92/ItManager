@@ -6,6 +6,8 @@ import com.itmanager.app.data.model.AuditKind
 import com.itmanager.app.data.model.AuthMethod
 import com.itmanager.app.data.model.ConfigDiff
 import com.itmanager.app.data.model.ConfigImportResult
+import com.itmanager.app.data.model.DeviceTemplate
+import com.itmanager.app.data.model.DeviceTemplateDraft
 import com.itmanager.app.data.model.IpamCheck
 import com.itmanager.app.data.model.IpamOverview
 import com.itmanager.app.data.model.Connection
@@ -82,6 +84,15 @@ interface DcimDataSource {
     suspend fun ipam(): IpamOverview
 
     suspend fun ipamCheck(ip: String): IpamCheck
+
+    suspend fun deviceTemplates(): List<DeviceTemplate>
+
+    suspend fun saveDeviceTemplate(draft: DeviceTemplateDraft): DeviceTemplate
+
+    suspend fun deleteDeviceTemplate(id: String)
+
+    /** Adds a device to the inventory with the template's type, vendor, model and ports. */
+    suspend fun createDeviceFromTemplate(templateId: String, name: String, ip: String?): Device
 
     suspend fun importConfig(switchId: String, text: String, apply: Boolean): ConfigImportResult
 
