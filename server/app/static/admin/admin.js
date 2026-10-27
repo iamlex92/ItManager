@@ -10,7 +10,7 @@
     ["SERVER", "Сервер", "#bf8cff"], ["VIRTUAL", "Виртуальная машина", "#8e9bff"],
     ["WORKSTATION", "Рабочее место", "#e6edf5"], ["PRINTER", "МФУ", "#5ad4b0"], ["CAMERA", "Камера", "#ff9f43"],
     ["PHONE", "IP-телефон", "#ff7eb6"], ["UPS", "ИБП", "#d4e157"], ["PATCH_PANEL", "Патч-панель", "#aeb7c4"],
-    ["SOCKET", "Розетка", "#aeb7c4"], ["UNKNOWN", "Устройство", "#8d97a5"],
+    ["SOCKET", "Розетка", "#aeb7c4"], ["RACK", "Стойка", "#c9a46c"], ["UNKNOWN", "Устройство", "#8d97a5"],
   ];
   const TYPE = Object.fromEntries(TYPES.map(([id, label, color]) => [id, { label, color }]));
   const typeOf = (d) => TYPE[d.type] || TYPE.UNKNOWN;
@@ -125,6 +125,7 @@
     for (const s of document.querySelectorAll("main > .tab")) s.hidden = s.id !== `tab-${name}`;
     if (name === "map") loadMap().catch(fail);
     if (name === "devices") loadDevices().catch(fail);
+    if (name === "vlans") loadVlans().catch(fail);
     if (name === "scan") loadLatestScan().catch(() => {});
     if (name === "scripts") loadScripts().catch(fail);
   }
@@ -143,6 +144,8 @@
     // The cable whose route is being edited, its picked bend, and a bend being dragged.
     selLink: null, selPoint: null, routeDrag: null,
     tool: "move", pen: PENS[0], linkFrom: null, cable: "Cat6",
+    // Zone being outlined (flat x, y list), and the colour for the next cable (null: the usual grey/blue).
+    zoneDraft: null, cableColor: null,
     view: { scale: 1, ox: 0, oy: 0 },
     // Until the user zooms or pans, the view keeps fitting the whole floor as the window changes.
     touched: false,
@@ -175,6 +178,7 @@
   async function loadMap() {
     const [floors, devices, links] = await Promise.all([api("GET", "floors"), api("GET", "devices"), api("GET", "connections")]);
     S.floors = floors;
+    allDevices = devices;
     const first = floors[0] || null;
     const previous = S.floor && S.floor.id;
     S.floor = floors.find((f) => f.id === S.floorId) || first;
@@ -258,6 +262,153 @@
     sel.hidden = S.floors.length === 0;
     if (S.floor) sel.value = S.floor.id;
   }
+
+  // ---------------------------------------------------------------- zones and rooms
+
+  const ZONE_COLORS = ["#0a84ff", "#30d158", "#ff9f0a", "#bf5af2", "#ff453a", "#64d2ff"];
+  const zonesOf = (floor) => (floor && floor.zones) || [];
+
+  /** Even-odd ray casting over a flat x, y list, as the app does. */
+  function inPolygon(points, x, y) {
+    const n = points.length / 2;
+    if (n < 3) return false;
+    let inside = false;
+    for (let i = 0, j = n - 1; i < n; j = i++) {
+      const xi = points[i * 2], yi = points[i * 2 + 1], xj = points[j * 2], yj = points[j * 2 + 1];
+      if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  }
+
+  function polygonArea(points) {
+    let a = 0;
+    const n = points.length / 2;
+    for (let i = 0, j = n - 1; i < n; j = i++) a += points[j * 2] * points[i * 2 + 1] - points[i * 2] * points[j * 2 + 1];
+    return Math.abs(a) / 2;
+  }
+
+  /** A point well inside the outline: the grid cell nearest the centre of its bounding box that lies inside. */
+  function innerPoint(points) {
+    const xs = points.filter((_, i) => i % 2 === 0), ys = points.filter((_, i) => i % 2 === 1);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    let best = { x: points[0], y: points[1] }, bestDist = Infinity;
+    for (let i = 0; i <= 20; i++) {
+      for (let j = 0; j <= 20; j++) {
+        const x = x0 + ((x1 - x0) * i) / 20, y = y0 + ((y1 - y0) * j) / 20;
+        const dist = Math.hypot(x - cx, y - cy);
+        if (dist < bestDist && inPolygon(points, x, y)) { best = { x, y }; bestDist = dist; }
+      }
+    }
+    return best;
+  }
+
+  /** The smallest zone (room or not) of the floor that holds the point. */
+  function zoneAtPoint(floor, x, y, roomsOnly = false) {
+    let best = null;
+    for (const z of zonesOf(floor)) {
+      if (roomsOnly && !z.is_room) continue;
+      if (inPolygon(z.points, x, y) && (!best || polygonArea(z.points) < polygonArea(best.points))) best = z;
+    }
+    return best;
+  }
+
+  const floorById = (id) => S.floors.find((f) => f.id === id) || S.floors[0] || null;
+
+  /** The room a device stands in, by its place on its floor's plan. */
+  function roomOf(d) {
+    if (d.x == null || d.y == null) return null;
+    return zoneAtPoint(floorById(d.floor_id), d.x, d.y, true);
+  }
+
+  function fitDraftButtons() {
+    const n = (S.zoneDraft || []).length / 2;
+    $("zone-finish").disabled = n < 3;
+    $("zone-undo").disabled = n < 1;
+    $("zone-cancel").disabled = n < 1;
+  }
+
+  function zoneClick(sx, sy) {
+    const [x, y] = toPlan(sx, sy);
+    if (!S.zoneDraft) {
+      const z = zoneAtPoint(S.floor, x, y);
+      if (z) { openZoneDialog(z); return; }
+      S.zoneDraft = [];
+    }
+    const n = S.zoneDraft.length;
+    if (n) {
+      const [lx, ly] = toScreen(S.zoneDraft[n - 2], S.zoneDraft[n - 1]);
+      if (Math.hypot(sx - lx, sy - ly) < 6) return;
+    }
+    S.zoneDraft.push(round1(x), round1(y));
+    fitDraftButtons();
+    hint();
+  }
+
+  function finishZone() {
+    if (!S.zoneDraft || S.zoneDraft.length < 6) { toast("Нужно хотя бы три угла.", true); return; }
+    openZoneDialog({
+      id: crypto.randomUUID(), name: "", is_room: true, points: [...S.zoneDraft],
+      color: ZONE_COLORS[zonesOf(S.floor).length % ZONE_COLORS.length],
+    }, true);
+  }
+
+  function cancelZone() {
+    S.zoneDraft = null;
+    fitDraftButtons();
+    hint();
+    draw();
+  }
+
+  async function saveZones(zones) {
+    const floor = await ensureFloor();
+    const saved = await api("PATCH", `floors/${floor.id}`, { zones });
+    S.floor = saved;
+    S.floors = S.floors.map((f) => (f.id === saved.id ? saved : f));
+    draw();
+  }
+
+  let dialogZone = null, dialogZoneNew = false;
+  function openZoneDialog(zone, isNew = false) {
+    dialogZone = zone;
+    dialogZoneNew = isNew;
+    $("zone-heading").textContent = isNew ? "Новое помещение" : zone.name;
+    $("zone-name").value = zone.name;
+    $("zone-room").checked = zone.is_room;
+    $("zone-color").value = zone.color;
+    $("zone-delete").hidden = isNew;
+    $("zone-error").hidden = true;
+    $("zone-dialog").showModal();
+    $("zone-name").focus();
+  }
+  $("zone-cancel-dialog").addEventListener("click", () => $("zone-dialog").close());
+  $("zone-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const zone = { ...dialogZone, name: $("zone-name").value.trim(), is_room: $("zone-room").checked, color: $("zone-color").value };
+    const rest = zonesOf(S.floor).filter((z) => z.id !== zone.id);
+    try {
+      await saveZones(dialogZoneNew ? [...rest, zone] : zonesOf(S.floor).map((z) => (z.id === zone.id ? zone : z)));
+      if (dialogZoneNew) { S.zoneDraft = null; fitDraftButtons(); }
+      $("zone-dialog").close();
+      hint();
+      draw();
+    } catch (e) { $("zone-error").hidden = false; $("zone-error").textContent = e.message; }
+  });
+  $("zone-delete").addEventListener("click", async () => {
+    if (!confirm(`Удалить «${dialogZone.name}» с карты? Устройства останутся на своих местах.`)) return;
+    try { await saveZones(zonesOf(S.floor).filter((z) => z.id !== dialogZone.id)); $("zone-dialog").close(); }
+    catch (e) { $("zone-error").hidden = false; $("zone-error").textContent = e.message; }
+  });
+  $("zone-finish").addEventListener("click", finishZone);
+  $("zone-cancel").addEventListener("click", cancelZone);
+  $("zone-undo").addEventListener("click", () => {
+    if (!S.zoneDraft) return;
+    S.zoneDraft.splice(-2, 2);
+    if (!S.zoneDraft.length) S.zoneDraft = null;
+    fitDraftButtons();
+    hint();
+    draw();
+  });
 
   // ---------------------------------------------------------------- pictograms
 
@@ -343,6 +494,11 @@
       case "PATCH_PANEL":
         box(-0.95, -0.38, 1.9, 0.76);
         for (const x of [-0.6, -0.2, 0.2, 0.6]) c.fillRect(x - 0.1, -0.1, 0.2, 0.2);
+        break;
+      case "RACK":
+        box(-0.7, -0.95, 1.4, 1.9);
+        for (const y of [-0.55, -0.15, 0.25, 0.65]) line(-0.7, y, 0.7, y);
+        for (const y of [-0.75, -0.35, 0.05, 0.45]) dot(0.4, y, 0.06);
         break;
       case "SOCKET":
         box(-0.75, -0.75, 1.5, 1.5);
@@ -550,6 +706,17 @@
     ctx.lineWidth = 1;
     ctx.strokeRect(fx, fy, w * k, h * k);
 
+    for (const z of zonesOf(S.floor)) drawZone(z);
+    if (S.zoneDraft && S.zoneDraft.length) {
+      polyline(S.zoneDraft, "#4c9eff", 2);
+      for (let i = 0; i + 1 < S.zoneDraft.length; i += 2) {
+        const [px, py] = toScreen(S.zoneDraft[i], S.zoneDraft[i + 1]);
+        ctx.beginPath();
+        ctx.arc(px, py, 4, 0, Math.PI * 2);
+        ctx.fillStyle = i === 0 ? "#30d158" : "#4c9eff";
+        ctx.fill();
+      }
+    }
     for (const d of (S.floor && S.floor.drawings) || []) polyline(d.points, d.color, d.width * k);
     if (S.stroke && S.stroke.length > 3) polyline(S.stroke, S.pen, 3);
 
@@ -561,12 +728,20 @@
       if (pts.length < 2) continue;
       const fiber = /^O[MS]/i.test(r.link.cable_type || "");
       const selected = r.link.id === S.selLink && S.tool === "link";
-      ctx.strokeStyle = selected ? "#4c9eff" : fiber ? "rgba(90,200,250,.8)" : "rgba(139,149,165,.8)";
-      ctx.lineWidth = selected ? 3 : fiber ? 2.5 : 1.5;
-      ctx.setLineDash(fiber || selected ? [] : [6, 4]);
-      ctx.beginPath();
-      ctx.moveTo(...pts[0]);
-      for (const p of pts.slice(1)) ctx.lineTo(...p);
+      const own = r.link.color;
+      const trace = () => { ctx.beginPath(); ctx.moveTo(...pts[0]); for (const p of pts.slice(1)) ctx.lineTo(...p); };
+      if (selected && own) {
+        // A coloured cable keeps its colour when picked; a blue halo shows the pick.
+        ctx.setLineDash([]);
+        ctx.strokeStyle = "rgba(76,158,255,.55)";
+        ctx.lineWidth = 7;
+        trace();
+        ctx.stroke();
+      }
+      ctx.strokeStyle = own || (selected ? "#4c9eff" : fiber ? "rgba(90,200,250,.8)" : "rgba(139,149,165,.8)");
+      ctx.lineWidth = selected ? 3 : own ? 2.5 : fiber ? 2.5 : 1.5;
+      ctx.setLineDash(fiber || selected || own ? [] : [6, 4]);
+      trace();
       ctx.stroke();
     }
     ctx.setLineDash([]);
@@ -668,6 +843,30 @@
     }
   }
 
+  function drawZone(z) {
+    if (z.points.length < 6) return;
+    ctx.beginPath();
+    ctx.moveTo(...toScreen(z.points[0], z.points[1]));
+    for (let i = 2; i + 1 < z.points.length; i += 2) ctx.lineTo(...toScreen(z.points[i], z.points[i + 1]));
+    ctx.closePath();
+    ctx.fillStyle = `${z.color}${z.is_room ? "2e" : "1a"}`;
+    ctx.fill();
+    ctx.strokeStyle = z.color;
+    ctx.lineWidth = z.is_room ? 2 : 1.5;
+    ctx.setLineDash(z.is_room ? [] : [8, 5]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const at = innerPoint(z.points);
+    const [lx, ly] = toScreen(at.x, at.y);
+    ctx.font = "600 12px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = z.color;
+    ctx.globalAlpha = 0.9;
+    ctx.fillText(z.name, lx, ly);
+    ctx.globalAlpha = 1;
+  }
+
   function polyline(points, color, width) {
     if (!points || points.length < 4) return;
     ctx.strokeStyle = color;
@@ -716,6 +915,9 @@
         : S.selLink
           ? "Тяните белые точки, чтобы вести кабель по трассе; «+» добавляет точку поворота. Щелчок по точке выбирает её, Delete или двойной щелчок удаляет. Esc — закончить."
           : "Щёлкните два устройства, чтобы соединить их кабелем. Щёлкните кабель, чтобы проложить его по своей трассе.",
+      zones: S.zoneDraft
+        ? "Щёлкайте по углам контура. «Готово» или двойной щелчок замыкает его, «Убрать точку» отменяет последний угол."
+        : "Щёлкните по плану, чтобы начать контур помещения или зоны; щелчок по готовому контуру открывает его для правки. Устройство считается в помещении, если стоит внутри контура.",
       draw: "Рисуйте мышью. Линии видны на карте в приложении.",
       plan: S.floor && S.floor.plan_image_url
         ? "Перетащите план мышью, чтобы совместить его с устройствами. «−» и «+» меняют размер."
@@ -724,6 +926,7 @@
     $("map-hint").textContent = texts[S.tool];
     $("link-hint").textContent = S.tool === "link" && S.linkFrom ? "выбрано первое устройство" : "";
     $("route-opts").hidden = !(S.tool === "link" && S.selLink);
+    renderCableColors();
     $("route-point-delete").disabled = S.selPoint == null;
   }
 
@@ -858,6 +1061,8 @@
         const r = planRect();
         placePlan({ x: r.x + shift.x, y: r.y + shift.y, w: r.w, h: r.h }).catch(fail);
       }
+    } else if (g.kind === "pan" && !g.moved && S.tool === "zones") {
+      zoneClick(g.sx, g.sy);
     } else if (g.kind === "pan" && !g.moved && S.tool === "link" && (S.linkFrom || S.selLink)) {
       S.linkFrom = null;
       S.selLink = null;
@@ -875,6 +1080,7 @@
       if (hd && hd.index != null) { S.selPoint = hd.index; deleteSelectedPoint(); }
       return;
     }
+    if (S.tool === "zones") { if (S.zoneDraft && S.zoneDraft.length >= 6) finishZone(); return; }
     if (S.tool !== "move" || deviceAt(ev.offsetX, ev.offsetY)) return;
     const [x, y] = toPlan(ev.offsetX, ev.offsetY);
     openDeviceDialog(null, { x, y });
@@ -893,6 +1099,7 @@
   }, { passive: false });
 
   document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && S.zoneDraft && !ev.target.closest("dialog")) cancelZone();
     if (ev.key === "Escape" && (S.linkFrom || S.selLink)) { S.linkFrom = null; S.selLink = null; S.selPoint = null; hint(); draw(); }
     const typing = ev.target.closest && ev.target.closest("input, textarea, select, dialog");
     if ((ev.key === "Delete" || ev.key === "Backspace") && !typing && S.tool === "link" && S.selLink && S.selPoint != null) {
@@ -917,7 +1124,9 @@
     S.linkFrom = null;
     hint();
     try {
-      await api("POST", "connections/link", { device_a_id: from, device_b_id: d.id, cable_type: $("cable").value });
+      await api("POST", "connections/link", {
+        device_a_id: from, device_b_id: d.id, cable_type: $("cable").value, ...(S.cableColor ? { color: S.cableColor } : {}),
+      });
       await loadMap();
     } catch (e) { fail(e); }
   }
@@ -1017,6 +1226,8 @@
     S.linkFrom = null;
     S.selLink = null;
     S.selPoint = null;
+    S.zoneDraft = null;
+    fitDraftButtons();
     for (const x of $("tools").querySelectorAll("button")) x.classList.toggle("active", x === b);
     for (const o of document.querySelectorAll(".tool-opts")) o.hidden = o.dataset.for !== S.tool;
     hint();
@@ -1067,6 +1278,42 @@
     S.linkFrom = null;
     loadMap().catch(fail);
   });
+
+  // ---------------------------------------------------------------- cable colours
+
+  const CABLE_COLORS = ["#FF453A", "#FF9F0A", "#FFD60A", "#30D158", "#0A84FF", "#BF5AF2", "#FFFFFF", "#8E8E93"];
+  const selectedLink = () => S.links.find((x) => x.id === S.selLink) || null;
+
+  function renderCableColors() {
+    const box = $("cable-colors");
+    const current = (selectedLink() ? selectedLink().color : S.cableColor) || null;
+    const swatch = (color, title) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.title = title;
+      b.className = (color ? color.toUpperCase() : null) === (current ? current.toUpperCase() : null) ? "active" : "";
+      if (color) b.style.background = color; else { b.textContent = "∅"; b.style.fontSize = "12px"; }
+      b.addEventListener("click", () => pickCableColor(color));
+      return b;
+    };
+    const custom = document.createElement("input");
+    custom.type = "color";
+    custom.title = "Свой цвет";
+    custom.value = current || "#ffffff";
+    custom.addEventListener("change", () => pickCableColor(custom.value.toUpperCase()));
+    box.replaceChildren(swatch(null, "Обычный цвет"), ...CABLE_COLORS.map((c) => swatch(c, c)), custom);
+  }
+
+  async function pickCableColor(color) {
+    const l = selectedLink();
+    if (!l) { S.cableColor = color; renderCableColors(); return; }
+    try {
+      const saved = await api("PATCH", `connections/${l.id}`, { color });
+      l.color = saved.color ?? null;
+    } catch (e) { fail(e); }
+    renderCableColors();
+    draw();
+  }
 
   // ---------------------------------------------------------------- floors
 
@@ -1173,6 +1420,7 @@
 
   // ---------------------------------------------------------------- device dialog
 
+  const DEFAULT_RACK_UNITS = 42;
   let dialogDevice = null, dialogAt = null, dialogType = "SWITCH";
   for (const [id, label] of TYPES) {
     const b = document.createElement("button");
@@ -1190,9 +1438,23 @@
   }
   const allDevicesOrMap = () => (allDevices.length ? allDevices : S.allHere);
 
+  /** The rooms of a floor, for the "Помещение" picker. */
+  function fillRooms(floorId, value) {
+    const rooms = zonesOf(floorById(floorId)).filter((z) => z.is_room);
+    $("device-room").replaceChildren(new Option("Не выбрано", ""), ...rooms.map((z) => new Option(z.name, z.id)));
+    $("device-room").value = rooms.some((z) => z.id === value) ? value : "";
+    $("device-room-label").hidden = !rooms.length;
+  }
+  const dialogFloorId = () => ($("device-floor-label").hidden ? S.floor && S.floor.id : $("device-floor").value);
+  $("device-floor").addEventListener("change", () => fillRooms(dialogFloorId(), ""));
+
   function selectType(id) {
     dialogType = id;
     $("device-host-label").hidden = id !== "VIRTUAL";
+    $("device-units-label").hidden = id !== "RACK";
+    $("device-mount").hidden = id === "RACK" || id === "VIRTUAL";
+    $("device-ports").hidden = !dialogDevice || id === "RACK" || id === "VIRTUAL";
+    $("device-rack-open").hidden = !dialogDevice || id !== "RACK";
     for (const b of $("device-types").children) b.classList.toggle("active", b.dataset.type === id);
   }
 
@@ -1215,6 +1477,15 @@
     floorSel.value = (device && device.floor_id) || (S.floor && S.floor.id) || "";
     $("device-floor-label").hidden = S.floors.length < 2;
     fillHosts($("device-host"), device && device.id, (device && device.host_id) || "", "Не указан");
+    fillRooms(floorSel.value, (device && roomOf(device) && roomOf(device).id) || "");
+    $("device-comment").value = (device && device.comment) || "";
+    $("device-units").value = (device && device.rack_units) || DEFAULT_RACK_UNITS;
+    const rackSel = $("device-rack");
+    rackSel.replaceChildren(new Option("Не в стойке", ""),
+      ...allDevicesOrMap().filter((x) => x.type === "RACK" && (!device || x.id !== device.id)).map((x) => new Option(x.name, x.id)));
+    rackSel.value = (device && device.rack_id) || "";
+    $("device-rack-u").value = (device && device.rack_u) || "";
+    $("device-rack-h").value = (device && device.rack_h) || "";
     $("device-error").hidden = true;
     selectType(device ? device.type : dialogType);
     $("device-dialog").showModal();
@@ -1231,9 +1502,27 @@
       vendor: $("device-vendor").value.trim() || null,
       model: $("device-model").value.trim() || null,
       host_id: dialogType === "VIRTUAL" ? $("device-host").value || null : null,
+      comment: $("device-comment").value.trim() || null,
     };
+    if (dialogType === "RACK") {
+      Object.assign(body, { rack_units: Number.parseInt($("device-units").value, 10) || DEFAULT_RACK_UNITS, rack_id: null });
+    } else {
+      const rackId = dialogType === "VIRTUAL" ? null : $("device-rack").value || null;
+      Object.assign(body, {
+        rack_id: rackId,
+        rack_u: rackId ? Number.parseInt($("device-rack-u").value, 10) || null : null,
+        rack_h: rackId ? Number.parseInt($("device-rack-h").value, 10) || 1 : null,
+      });
+    }
     try {
       const floorId = S.floors.length > 1 ? $("device-floor").value : null;
+      // Choosing another room carries the object into it on the plan.
+      const room = zonesOf(floorById(dialogFloorId())).find((z) => z.id === $("device-room").value);
+      const wasIn = dialogDevice && roomOf(dialogDevice);
+      let moveTo = null;
+      if (room && (!wasIn || wasIn.id !== room.id)) moveTo = innerPoint(room.points);
+      if (moveTo && dialogDevice) Object.assign(body, { x: round1(moveTo.x), y: round1(moveTo.y), floor_id: floorId || dialogFloorId() });
+      if (moveTo && !dialogDevice) dialogAt = moveTo;
       if (dialogDevice) {
         await api("PATCH", `devices/${dialogDevice.id}`, floorId ? { ...body, floor_id: floorId } : body);
       } else {
@@ -1255,6 +1544,237 @@
     catch (e) { $("device-error").hidden = false; $("device-error").textContent = e.message; }
   });
 
+  // ---------------------------------------------------------------- VLANs (inventory only)
+
+  const vlanError = (e) => { $("vlan-error").hidden = !e; $("vlan-error").textContent = e ? e.message : ""; };
+
+  async function loadVlans() {
+    const vlans = await api("GET", "vlans");
+    $("vlan-rows").replaceChildren(...vlans.map((v) => {
+      const tr = document.createElement("tr");
+      const td = (el) => { const c = document.createElement("td"); c.append(el); tr.append(c); return el; };
+      const input = (type, value) => { const el = document.createElement("input"); el.type = type; el.value = value ?? ""; return td(el); };
+      td(document.createTextNode(String(v.vlan_id)));
+      const name = input("text", v.name); name.maxLength = 50;
+      const subnet = input("text", v.subnet_cidr);
+      const color = input("color", v.color_hex);
+      const desc = input("text", v.description);
+      const actions = document.createElement("td");
+      const del = document.createElement("button");
+      del.type = "button"; del.textContent = "Удалить"; del.className = "danger";
+      actions.append(del); tr.append(actions);
+      for (const el of [name, subnet, color, desc]) {
+        el.addEventListener("change", async () => {
+          try {
+            vlanError(null);
+            await api("PATCH", `vlans/${v.vlan_id}`, {
+              name: name.value.trim() || v.name, subnet_cidr: subnet.value.trim() || v.subnet_cidr, color_hex: color.value, description: desc.value.trim() || null,
+            });
+            toast(`VLAN ${v.vlan_id} сохранён`);
+          } catch (e) { vlanError(e); }
+        });
+      }
+      del.addEventListener("click", async () => {
+        if (!confirm(`Удалить VLAN ${v.vlan_id} (${v.name}) из справочника?`)) return;
+        try { vlanError(null); await api("DELETE", `vlans/${v.vlan_id}`); await loadVlans(); } catch (e) { vlanError(e); }
+      });
+      return tr;
+    }));
+  }
+
+  $("vlan-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    try {
+      vlanError(null);
+      await api("POST", "vlans", {
+        vlan_id: Number.parseInt($("vlan-id").value, 10), name: $("vlan-name").value.trim(),
+        subnet_cidr: $("vlan-subnet").value.trim(), color_hex: $("vlan-color").value, description: $("vlan-desc").value.trim() || null,
+      });
+      $("vlan-form").reset();
+      await loadVlans();
+    } catch (e) { vlanError(e); }
+  });
+
+  // ---------------------------------------------------------------- ports (inventory only)
+
+  let portsDevice = null;
+  const portsError = (e) => { $("ports-error").hidden = !e; $("ports-error").textContent = e ? e.message : ""; };
+
+  async function openPorts(d) {
+    portsDevice = d;
+    $("ports-heading").textContent = `Порты: ${d.name}`;
+    portsError(null);
+    await renderPorts();
+    $("ports-dialog").showModal();
+  }
+
+  function parseVlans(text) {
+    const ids = text.split(/[\s,;]+/).filter(Boolean).map(Number);
+    if (ids.some((v) => !Number.isInteger(v) || v < 1 || v > 4094)) throw new Error("VLAN: числа от 1 до 4094 через запятую.");
+    return [...new Set(ids)].sort((a, b) => a - b);
+  }
+
+  async function renderPorts() {
+    const ports = (await api("GET", `devices/${portsDevice.id}/ports`)).sort((a, b) => a.number - b.number);
+    portsDevice.ports = ports;
+    $("port-count").value = 1;
+    $("port-prefix").value = ports.length ? (ports[ports.length - 1].name.replace(/\d+$/, "") || "Gi0/") : "Gi0/";
+    const rows = $("port-rows");
+    rows.replaceChildren(...ports.map((p) => {
+      const tr = document.createElement("tr");
+      const td = (el) => { const c = document.createElement("td"); c.append(el); tr.append(c); return el; };
+      const input = (type, value) => { const el = document.createElement("input"); el.type = type; el.value = value ?? ""; return td(el); };
+      td(document.createTextNode(String(p.number)));
+      const name = input("text", p.name); name.maxLength = 50;
+      const uplink = input("checkbox"); uplink.checked = p.is_uplink;
+      const mode = document.createElement("select");
+      mode.append(new Option("Access", "ACCESS"), new Option("Trunk", "TRUNK"));
+      mode.value = p.mode; td(mode);
+      const access = input("number", p.access_vlan); access.min = 1; access.max = 4094;
+      const tagged = input("text", (p.tagged_vlans || []).join(", "));
+      const speed = input("number", p.speed_mbps); speed.min = 1;
+      const poe = input("checkbox"); poe.checked = p.poe_enabled;
+      td(document.createTextNode(p.connected_device_name || "—"));
+      const actions = document.createElement("td");
+      const del = document.createElement("button");
+      del.type = "button"; del.textContent = "Удалить"; del.className = "danger";
+      actions.append(del); tr.append(actions);
+      const save = async () => {
+        try {
+          portsError(null);
+          await api("PATCH", `ports/${p.id}`, {
+            name: name.value.trim() || p.name, is_uplink: uplink.checked, mode: mode.value,
+            access_vlan: access.value ? Number.parseInt(access.value, 10) : null,
+            tagged_vlans: parseVlans(tagged.value), speed_mbps: Number.parseInt(speed.value, 10) || p.speed_mbps,
+            poe_enabled: poe.checked,
+          });
+          tr.classList.remove("picked");
+          toast(`Порт ${p.number} сохранён`);
+        } catch (e) { portsError(e); }
+      };
+      for (const el of [name, uplink, mode, access, tagged, speed, poe]) el.addEventListener("change", () => { tr.classList.add("picked"); save(); });
+      del.addEventListener("click", async () => {
+        if (!confirm(`Удалить порт ${p.number} (${p.name}) из инвентаря? Кабель на нём тоже уйдёт. Оборудование это не затрагивает.`)) return;
+        try { portsError(null); await api("DELETE", `ports/${p.id}`); await renderPorts(); } catch (e) { portsError(e); }
+      });
+      return tr;
+    }));
+    if (!ports.length) {
+      const tr = document.createElement("tr");
+      const c = cell(tr, "Портов пока нет: добавьте их ниже.");
+      c.colSpan = 10; c.className = "muted";
+      rows.append(tr);
+    }
+  }
+
+  $("port-add").addEventListener("click", async () => {
+    const count = Math.max(1, Math.min(96, Number.parseInt($("port-count").value, 10) || 1));
+    const prefix = $("port-prefix").value;
+    let n = Math.max(0, ...(portsDevice.ports || []).map((p) => p.number));
+    try {
+      portsError(null);
+      for (let i = 0; i < count; i++) {
+        n += 1;
+        await api("POST", "ports", { device_id: portsDevice.id, number: n, name: `${prefix}${n}` });
+      }
+      await renderPorts();
+    } catch (e) { portsError(e); await renderPorts().catch(() => {}); }
+  });
+  $("ports-close").addEventListener("click", () => $("ports-dialog").close());
+  $("device-ports").addEventListener("click", () => {
+    const d = dialogDevice;
+    $("device-dialog").close();
+    openPorts(d).catch(fail);
+  });
+
+  // ---------------------------------------------------------------- rack front view
+
+  let rackDevice = null;
+  const rackError = (e) => { $("rack-error").hidden = !e; $("rack-error").textContent = e ? e.message : ""; };
+
+  async function openRack(rack) {
+    rackDevice = rack;
+    $("rack-heading").textContent = rack.name;
+    rackError(null);
+    await renderRack();
+    $("rack-dialog").showModal();
+  }
+
+  async function renderRack() {
+    allDevices = await api("GET", "devices");
+    rackDevice = allDevices.find((d) => d.id === rackDevice.id) || rackDevice;
+    const units = rackDevice.rack_units || DEFAULT_RACK_UNITS;
+    const members = allDevices.filter((d) => d.rack_id === rackDevice.id && d.rack_u != null);
+    const top = new Map(members.map((d) => [d.rack_u + (d.rack_h || 1) - 1, d]));
+    const covered = new Set();
+    for (const d of members) for (let u = d.rack_u; u < d.rack_u + (d.rack_h || 1); u++) covered.add(u);
+    $("rack-form").hidden = true;
+    const rows = [];
+    for (let u = units; u >= 1; u--) {
+      const row = document.createElement("div");
+      row.className = "rack-unit";
+      const no = document.createElement("span");
+      no.className = "no";
+      no.textContent = String(u);
+      const slot = document.createElement("div");
+      slot.className = "rack-slot";
+      const d = top.get(u);
+      if (d) {
+        const h = d.rack_h || 1;
+        row.style.minHeight = `${26 * h + 2 * (h - 1)}px`;
+        slot.classList.add("busy");
+        const label = document.createElement("span");
+        label.append(glyphCanvas(d.type), ` ${d.name} · ${h} U`);
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.textContent = "Убрать";
+        remove.addEventListener("click", async () => {
+          try { rackError(null); await api("PATCH", `devices/${d.id}`, { rack_id: null }); await renderRack(); } catch (e) { rackError(e); }
+        });
+        slot.append(label, remove);
+        row.append(no, slot);
+        rows.push(row);
+        // The device spans h units: the rows it covers below get no row of their own.
+        u -= h - 1;
+        continue;
+      }
+      if (covered.has(u)) continue;
+      slot.textContent = "свободно";
+      slot.style.cursor = "pointer";
+      slot.addEventListener("click", () => offerMount(u));
+      row.append(no, slot);
+      rows.push(row);
+    }
+    $("rack-view").replaceChildren(...rows);
+  }
+
+  function offerMount(u) {
+    const free = allDevices.filter((d) => d.type !== "RACK" && d.type !== "VIRTUAL" && !d.rack_id);
+    $("rack-device").replaceChildren(...free.map((d) => new Option(`${d.name} (${typeOf(d).label})`, d.id)));
+    $("rack-u").value = u;
+    $("rack-h").value = 1;
+    $("rack-form").hidden = false;
+    rackError(free.length ? null : new Error("Все устройства уже в стойках. Добавьте новое на вкладке «Устройства»."));
+  }
+
+  $("rack-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    if (!$("rack-device").value) return;
+    try {
+      rackError(null);
+      await api("PATCH", `devices/${$("rack-device").value}`, {
+        rack_id: rackDevice.id, rack_u: Number.parseInt($("rack-u").value, 10), rack_h: Number.parseInt($("rack-h").value, 10) || 1,
+      });
+      await renderRack();
+    } catch (e) { rackError(e); }
+  });
+  $("rack-close").addEventListener("click", () => { $("rack-dialog").close(); refreshTab().catch(() => {}); });
+  $("device-rack-open").addEventListener("click", () => {
+    const d = dialogDevice;
+    $("device-dialog").close();
+    openRack(d).catch(fail);
+  });
+
   async function refreshTab() {
     if (currentTab === "map") await loadMap();
     if (currentTab === "devices") await loadDevices();
@@ -1267,7 +1787,7 @@
   const picked = new Set();
   let typeFilter = "";
   async function loadDevices() {
-    allDevices = await api("GET", "devices");
+    [allDevices, S.floors] = await Promise.all([api("GET", "devices"), api("GET", "floors")]);
     for (const id of [...picked]) if (!allDevices.some((d) => d.id === id)) picked.delete(id);
     renderDevices();
   }
@@ -1318,7 +1838,7 @@
     rows.replaceChildren();
     for (const d of allDevices) {
       const label = typeOf(d).label;
-      const hay = [d.name, d.ip, label, d.vendor, d.model].join(" ").toLowerCase();
+      const hay = [d.name, d.ip, label, d.vendor, d.model, (roomOf(d) || {}).name, d.comment].join(" ").toLowerCase();
       if (q && !hay.includes(q)) continue;
       if (typeFilter && d.type !== typeFilter) continue;
       const tr = document.createElement("tr");
@@ -1337,6 +1857,8 @@
       cell(tr, d.ip);
       cell(tr, d.vendor);
       cell(tr, d.model);
+      cell(tr, (roomOf(d) || {}).name);
+      cell(tr, d.rack_id ? `${(allDevices.find((h) => h.id === d.rack_id) || {}).name || "?"}${d.rack_u ? ` · U${d.rack_u}` : ""}` : null);
       cell(tr, d.host_id ? (allDevices.find((h) => h.id === d.host_id) || {}).name : null);
       cell(tr, d.x != null ? "да" : "нет");
       const actions = cell(tr, "");
@@ -1353,7 +1875,7 @@
     if (!rows.children.length) {
       const tr = document.createElement("tr");
       const td = cell(tr, allDevices.length ? "Ничего не найдено" : "Устройств пока нет: добавьте их здесь или найдите сканером сети.");
-      td.colSpan = 9;
+      td.colSpan = 11;
       td.className = "muted";
       rows.appendChild(tr);
     }

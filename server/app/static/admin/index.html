@@ -28,6 +28,7 @@
     <nav class="tabs" id="tabs">
       <button data-tab="map" class="active">Карта</button>
       <button data-tab="devices">Устройства</button>
+      <button data-tab="vlans">VLAN</button>
       <button data-tab="scan">Сканирование</button>
       <button data-tab="scripts">Скрипты</button>
     </nav>
@@ -46,6 +47,7 @@
         <div class="seg" id="tools">
           <button data-tool="move" class="active" title="Перетаскивайте объекты; щелчок открывает карточку">Объекты</button>
           <button data-tool="link" title="Щёлкните два устройства, чтобы соединить их кабелем">Связи</button>
+          <button data-tool="zones" title="Обведите кабинет или зону на плане">Помещения</button>
           <button data-tool="draw" title="Рисуйте линии мышью">Карандаш</button>
           <button data-tool="plan" title="Загрузите план здания и подвиньте его">Подложка</button>
         </div>
@@ -54,7 +56,14 @@
         </div>
         <div class="tool-opts" data-for="link" hidden>
           <select id="cable"><option value="Cat6">Медь Cat6</option><option value="OM3">Оптика OM3</option></select>
+          <span id="cable-colors" class="pens" title="Цвет нового кабеля, а если кабель выбран, то его цвет"></span>
           <span id="link-hint" class="muted small"></span>
+        </div>
+        <div class="tool-opts" data-for="zones" hidden>
+          <button id="zone-finish" class="primary" disabled>Готово</button>
+          <button id="zone-undo" disabled>Убрать точку</button>
+          <button id="zone-cancel" disabled>Отмена</button>
+          <span class="muted small">Щёлкайте по углам; «Готово» или двойной щелчок замыкает контур</span>
         </div>
         <div class="tool-opts" data-for="draw" hidden>
           <span id="pens" class="pens"></span>
@@ -101,9 +110,31 @@
       </div>
       <div class="table-wrap">
         <table class="grid">
-          <thead><tr><th class="pick"><input type="checkbox" id="pick-all" title="Выбрать все показанные"></th><th>Имя</th><th>Тип</th><th>IP</th><th>Производитель</th><th>Модель</th><th>Хост</th><th>На карте</th><th></th></tr></thead>
+          <thead><tr><th class="pick"><input type="checkbox" id="pick-all" title="Выбрать все показанные"></th><th>Имя</th><th>Тип</th><th>IP</th><th>Производитель</th><th>Модель</th><th>Помещение</th><th>Стойка</th><th>Хост</th><th>На карте</th><th></th></tr></thead>
           <tbody id="device-rows"></tbody>
         </table>
+      </div>
+    </section>
+
+    <section id="tab-vlans" class="tab" hidden>
+      <div class="card">
+        <h2>VLAN</h2>
+        <p class="muted small">Справочник сетей: порты коммутаторов ссылаются на эти номера. Записи инвентаря, на оборудование ничего не отправляется.</p>
+        <div class="table-wrap">
+          <table class="grid">
+            <thead><tr><th>VLAN</th><th>Название</th><th>Подсеть</th><th>Цвет</th><th>Описание</th><th></th></tr></thead>
+            <tbody id="vlan-rows"></tbody>
+          </table>
+        </div>
+        <form id="vlan-form" class="row wrap">
+          <label>VLAN<input id="vlan-id" type="number" min="1" max="4094" required></label>
+          <label>Название<input id="vlan-name" maxlength="50" required></label>
+          <label>Подсеть<input id="vlan-subnet" placeholder="10.10.20.0/24" required></label>
+          <label>Цвет<input id="vlan-color" type="color" value="#3498db"></label>
+          <label class="grow">Описание<input id="vlan-desc"></label>
+          <button type="submit" class="primary">Добавить</button>
+        </form>
+        <p id="vlan-error" class="error" hidden></p>
       </div>
     </section>
 
@@ -187,9 +218,19 @@
     </div>
     <label id="device-host-label" hidden>Хост виртуализации<select id="device-host"></select></label>
     <label id="device-floor-label">Этаж<select id="device-floor"></select></label>
+    <label id="device-room-label" hidden>Помещение <span class="muted small">(выбор переносит объект в помещение на карте)</span><select id="device-room"></select></label>
+    <label id="device-units-label" hidden>Высота стойки, U<input id="device-units" type="number" min="1" max="60" value="42"></label>
+    <div id="device-mount" class="row">
+      <label class="grow">В стойке<select id="device-rack"></select></label>
+      <label>Юнит (с низа)<input id="device-rack-u" type="number" min="1" max="60"></label>
+      <label>Высота, U<input id="device-rack-h" type="number" min="1" max="60"></label>
+    </div>
+    <label>Комментарий<textarea id="device-comment" rows="3" maxlength="4000" placeholder="Заметка для себя: что тут стоит, кто отвечает, особенности"></textarea></label>
     <p id="device-error" class="error" hidden></p>
     <div class="row">
       <button type="button" id="device-delete" class="danger">Удалить</button>
+      <button type="button" id="device-ports" title="Порты в инвентаре" hidden>Порты…</button>
+      <button type="button" id="device-rack-open" title="Вид стойки спереди" hidden>Стойка…</button>
       <div class="spacer"></div>
       <button type="button" id="device-cancel">Отмена</button>
       <button type="submit" class="primary">Сохранить</button>
@@ -229,6 +270,58 @@
       <div class="spacer"></div>
       <button type="button" id="floors-close" class="primary">Готово</button>
     </div>
+  </div>
+</dialog>
+
+<dialog id="zone-dialog">
+  <form id="zone-form" method="dialog" class="dialog">
+    <h2 id="zone-heading">Помещение</h2>
+    <label>Название<input id="zone-name" required maxlength="100" placeholder="Например, Серверная"></label>
+    <label class="check"><input id="zone-room" type="checkbox" checked> Это помещение (кабинет): устройства внутри считаются в нём. Без галочки это просто зона.</label>
+    <label>Цвет<input id="zone-color" type="color" value="#0a84ff"></label>
+    <p id="zone-error" class="error" hidden></p>
+    <div class="row">
+      <button type="button" id="zone-delete" class="danger">Удалить</button>
+      <div class="spacer"></div>
+      <button type="button" id="zone-cancel-dialog">Отмена</button>
+      <button type="submit" class="primary">Сохранить</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="ports-dialog">
+  <div class="dialog">
+    <h2 id="ports-heading">Порты</h2>
+    <p class="muted small">Это записи инвентаря: здесь меняется то, что хранит NetAdmin. На само оборудование ничего не отправляется.</p>
+    <div class="table-wrap">
+      <table class="grid">
+        <thead><tr><th>№</th><th>Имя</th><th>Аплинк</th><th>Режим</th><th>Access VLAN</th><th>Tagged VLAN</th><th>Мбит/с</th><th>PoE</th><th>Подключено</th><th></th></tr></thead>
+        <tbody id="port-rows"></tbody>
+      </table>
+    </div>
+    <div class="row wrap">
+      <label>Добавить портов<input id="port-count" type="number" min="1" max="96" value="1"></label>
+      <label>Имя (префикс)<input id="port-prefix" maxlength="40" value="Gi0/"></label>
+      <button type="button" id="port-add">Добавить</button>
+    </div>
+    <p id="ports-error" class="error" hidden></p>
+    <div class="row"><div class="spacer"></div><button type="button" id="ports-close" class="primary">Готово</button></div>
+  </div>
+</dialog>
+
+<dialog id="rack-dialog">
+  <div class="dialog">
+    <h2 id="rack-heading">Стойка</h2>
+    <p class="muted small">Вид спереди: юниты считаются снизу. Щёлкните свободный юнит, чтобы поставить устройство, или «Убрать», чтобы снять.</p>
+    <div id="rack-view" class="rack-view"></div>
+    <form id="rack-form" class="row wrap" hidden>
+      <label class="grow">Устройство<select id="rack-device"></select></label>
+      <label>Юнит<input id="rack-u" type="number" min="1" max="60" required></label>
+      <label>Высота, U<input id="rack-h" type="number" min="1" max="60" value="1" required></label>
+      <button type="submit" class="primary">Поставить</button>
+    </form>
+    <p id="rack-error" class="error" hidden></p>
+    <div class="row"><div class="spacer"></div><button type="button" id="rack-close" class="primary">Готово</button></div>
   </div>
 </dialog>
 
