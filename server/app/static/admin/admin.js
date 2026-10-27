@@ -126,6 +126,7 @@
     if (name === "map") loadMap().catch(fail);
     if (name === "devices") loadDevices().catch(fail);
     if (name === "vlans") loadVlans().catch(fail);
+    if (window.NetAdmin.tabs[name]) Promise.resolve(window.NetAdmin.tabs[name]()).catch(fail);
     if (name === "scan") loadLatestScan().catch(() => {});
     if (name === "scripts") loadScripts().catch(fail);
   }
@@ -2162,6 +2163,12 @@
       out.textContent = r.stdout + (r.stderr ? `\n\n${r.stderr}` : "");
     } catch (e) { fail(e); }
   });
+
+  // What admin-more.js (the other tabs) builds on.
+  window.NetAdmin = {
+    $, api, toast, fail, typeOf, glyphCanvas, OPERATOR, tabs: {},
+    picked, renderPorts: () => renderPorts(), portsDevice: () => portsDevice,
+  };
 
   // ---------------------------------------------------------------- go
 
