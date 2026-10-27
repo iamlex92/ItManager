@@ -125,6 +125,7 @@
     for (const s of document.querySelectorAll("main > .tab")) s.hidden = s.id !== `tab-${name}`;
     if (name === "map") loadMap().catch(fail);
     if (name === "devices") loadDevices().catch(fail);
+    if (name === "vlans") loadVlans().catch(fail);
     if (name === "scan") loadLatestScan().catch(() => {});
     if (name === "scripts") loadScripts().catch(fail);
   }
@@ -1541,6 +1542,57 @@
     if (!dialogDevice || !confirm(`Удалить ${dialogDevice.name} и его кабели из инвентаря? Само оборудование это не затрагивает.`)) return;
     try { await api("DELETE", `devices/${dialogDevice.id}`); $("device-dialog").close(); await refreshTab(); }
     catch (e) { $("device-error").hidden = false; $("device-error").textContent = e.message; }
+  });
+
+  // ---------------------------------------------------------------- VLANs (inventory only)
+
+  const vlanError = (e) => { $("vlan-error").hidden = !e; $("vlan-error").textContent = e ? e.message : ""; };
+
+  async function loadVlans() {
+    const vlans = await api("GET", "vlans");
+    $("vlan-rows").replaceChildren(...vlans.map((v) => {
+      const tr = document.createElement("tr");
+      const td = (el) => { const c = document.createElement("td"); c.append(el); tr.append(c); return el; };
+      const input = (type, value) => { const el = document.createElement("input"); el.type = type; el.value = value ?? ""; return td(el); };
+      td(document.createTextNode(String(v.vlan_id)));
+      const name = input("text", v.name); name.maxLength = 50;
+      const subnet = input("text", v.subnet_cidr);
+      const color = input("color", v.color_hex);
+      const desc = input("text", v.description);
+      const actions = document.createElement("td");
+      const del = document.createElement("button");
+      del.type = "button"; del.textContent = "Удалить"; del.className = "danger";
+      actions.append(del); tr.append(actions);
+      for (const el of [name, subnet, color, desc]) {
+        el.addEventListener("change", async () => {
+          try {
+            vlanError(null);
+            await api("PATCH", `vlans/${v.vlan_id}`, {
+              name: name.value.trim() || v.name, subnet_cidr: subnet.value.trim() || v.subnet_cidr, color_hex: color.value, description: desc.value.trim() || null,
+            });
+            toast(`VLAN ${v.vlan_id} сохранён`);
+          } catch (e) { vlanError(e); }
+        });
+      }
+      del.addEventListener("click", async () => {
+        if (!confirm(`Удалить VLAN ${v.vlan_id} (${v.name}) из справочника?`)) return;
+        try { vlanError(null); await api("DELETE", `vlans/${v.vlan_id}`); await loadVlans(); } catch (e) { vlanError(e); }
+      });
+      return tr;
+    }));
+  }
+
+  $("vlan-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    try {
+      vlanError(null);
+      await api("POST", "vlans", {
+        vlan_id: Number.parseInt($("vlan-id").value, 10), name: $("vlan-name").value.trim(),
+        subnet_cidr: $("vlan-subnet").value.trim(), color_hex: $("vlan-color").value, description: $("vlan-desc").value.trim() || null,
+      });
+      $("vlan-form").reset();
+      await loadVlans();
+    } catch (e) { vlanError(e); }
   });
 
   // ---------------------------------------------------------------- ports (inventory only)

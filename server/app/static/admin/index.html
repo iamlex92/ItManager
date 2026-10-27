@@ -28,6 +28,7 @@
     <nav class="tabs" id="tabs">
       <button data-tab="map" class="active">Карта</button>
       <button data-tab="devices">Устройства</button>
+      <button data-tab="vlans">VLAN</button>
       <button data-tab="scan">Сканирование</button>
       <button data-tab="scripts">Скрипты</button>
     </nav>
@@ -112,6 +113,28 @@
           <thead><tr><th class="pick"><input type="checkbox" id="pick-all" title="Выбрать все показанные"></th><th>Имя</th><th>Тип</th><th>IP</th><th>Производитель</th><th>Модель</th><th>Помещение</th><th>Стойка</th><th>Хост</th><th>На карте</th><th></th></tr></thead>
           <tbody id="device-rows"></tbody>
         </table>
+      </div>
+    </section>
+
+    <section id="tab-vlans" class="tab" hidden>
+      <div class="card">
+        <h2>VLAN</h2>
+        <p class="muted small">Справочник сетей: порты коммутаторов ссылаются на эти номера. Записи инвентаря, на оборудование ничего не отправляется.</p>
+        <div class="table-wrap">
+          <table class="grid">
+            <thead><tr><th>VLAN</th><th>Название</th><th>Подсеть</th><th>Цвет</th><th>Описание</th><th></th></tr></thead>
+            <tbody id="vlan-rows"></tbody>
+          </table>
+        </div>
+        <form id="vlan-form" class="row wrap">
+          <label>VLAN<input id="vlan-id" type="number" min="1" max="4094" required></label>
+          <label>Название<input id="vlan-name" maxlength="50" required></label>
+          <label>Подсеть<input id="vlan-subnet" placeholder="10.10.20.0/24" required></label>
+          <label>Цвет<input id="vlan-color" type="color" value="#3498db"></label>
+          <label class="grow">Описание<input id="vlan-desc"></label>
+          <button type="submit" class="primary">Добавить</button>
+        </form>
+        <p id="vlan-error" class="error" hidden></p>
       </div>
     </section>
 
