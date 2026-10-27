@@ -1767,17 +1767,59 @@
     $("rack-dialog").showModal();
   }
 
+  const RACK_WIDTH = { narrow: 300, normal: 440, wide: 640 };
+  const HEX = /^#[0-9a-fA-F]{6}$/;
+
+  /** How the rack is drawn, from the rack device's metadata (shared with the app); unknown values fall back to the default. */
+  function rackStyle(rack) {
+    const m = rack.metadata || {};
+    return {
+      color: HEX.test(m.rack_color) ? m.rack_color : null,
+      numbering: m.rack_numbering === "top" ? "top" : "bottom",
+      labels: ["name", "none"].includes(m.rack_labels) ? m.rack_labels : "name_model",
+      width: RACK_WIDTH[m.rack_width] ? m.rack_width : "normal",
+    };
+  }
+
+  /** Writes the style over the rack_* keys and keeps every other metadata key. */
+  async function saveRackStyle(patch) {
+    const style = { ...rackStyle(rackDevice), ...patch };
+    const metadata = { ...(rackDevice.metadata || {}) };
+    if (style.color) metadata.rack_color = style.color; else delete metadata.rack_color;
+    metadata.rack_numbering = style.numbering;
+    metadata.rack_labels = style.labels;
+    metadata.rack_width = style.width;
+    try { rackError(null); await api("PATCH", `devices/${rackDevice.id}`, { metadata }); await renderRack(); } catch (e) { rackError(e); }
+  }
+  $("rack-color").addEventListener("change", (ev) => saveRackStyle({ color: ev.target.value }));
+  $("rack-color-reset").addEventListener("click", () => saveRackStyle({ color: null }));
+  for (const [id, key] of [["rack-numbering", "numbering"], ["rack-labels", "labels"], ["rack-width", "width"]]) {
+    $(id).addEventListener("change", (ev) => saveRackStyle({ [key]: ev.target.value }));
+  }
+
   async function renderRack() {
     allDevices = await api("GET", "devices");
     rackDevice = allDevices.find((d) => d.id === rackDevice.id) || rackDevice;
     const units = rackDevice.rack_units || DEFAULT_RACK_UNITS;
+    const style = rackStyle(rackDevice);
+    $("rack-color").value = style.color || "#8b95a5";
+    $("rack-numbering").value = style.numbering;
+    $("rack-labels").value = style.labels;
+    $("rack-width").value = style.width;
+    const view = $("rack-view");
+    view.style.maxWidth = `${RACK_WIDTH[style.width]}px`;
+    view.style.borderColor = style.color || "";
+    const topFirst = style.numbering === "top";
     const members = allDevices.filter((d) => d.rack_id === rackDevice.id && d.rack_u != null);
-    const top = new Map(members.map((d) => [d.rack_u + (d.rack_h || 1) - 1, d]));
+    // The row a device starts on: its lowest unit when unit 1 is at the top, its highest when unit 1 is at the bottom.
+    const start = new Map(members.map((d) => [topFirst ? d.rack_u : d.rack_u + (d.rack_h || 1) - 1, d]));
     const covered = new Set();
     for (const d of members) for (let u = d.rack_u; u < d.rack_u + (d.rack_h || 1); u++) covered.add(u);
     $("rack-form").hidden = true;
+    const order = Array.from({ length: units }, (_, i) => (topFirst ? i + 1 : units - i));
     const rows = [];
-    for (let u = units; u >= 1; u--) {
+    for (let i = 0; i < order.length; i++) {
+      const u = order[i];
       const row = document.createElement("div");
       row.className = "rack-unit";
       const no = document.createElement("span");
@@ -1785,13 +1827,15 @@
       no.textContent = String(u);
       const slot = document.createElement("div");
       slot.className = "rack-slot";
-      const d = top.get(u);
+      if (style.color) slot.style.borderColor = style.color;
+      const d = start.get(u);
       if (d) {
         const h = d.rack_h || 1;
         row.style.minHeight = `${26 * h + 2 * (h - 1)}px`;
         slot.classList.add("busy");
+        const text = style.labels === "none" ? `${h} U` : `${d.name}${style.labels === "name_model" && d.model ? ` · ${d.model}` : ""} · ${h} U`;
         const label = document.createElement("span");
-        label.append(glyphCanvas(d.type), ` ${d.name} · ${h} U`);
+        label.append(glyphCanvas(d.type), ` ${text}`);
         const remove = document.createElement("button");
         remove.type = "button";
         remove.textContent = "Убрать";
@@ -1801,8 +1845,8 @@
         slot.append(label, remove);
         row.append(no, slot);
         rows.push(row);
-        // The device spans h units: the rows it covers below get no row of their own.
-        u -= h - 1;
+        // The device spans h rows: the ones it covers get no row of their own.
+        i += h - 1;
         continue;
       }
       if (covered.has(u)) continue;
@@ -1812,7 +1856,7 @@
       row.append(no, slot);
       rows.push(row);
     }
-    $("rack-view").replaceChildren(...rows);
+    view.replaceChildren(...rows);
   }
 
   function offerMount(u) {
