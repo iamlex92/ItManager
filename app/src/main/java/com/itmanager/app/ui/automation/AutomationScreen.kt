@@ -24,6 +24,7 @@ import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.Science
 import androidx.compose.material.icons.outlined.Construction
+import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -60,6 +61,7 @@ fun AutomationScreen(
     onOpenAudit: () -> Unit,
     onOpenScanner: () -> Unit,
     onOpenTools: () -> Unit,
+    onOpenIpam: () -> Unit,
     viewModel: AutomationViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -98,6 +100,14 @@ fun AutomationScreen(
                             title = "Сетевые утилиты",
                             subtitle = "Ping, трассировка, порты, SNMP, iperf3, Wake-on-LAN, MAC и подсети с телефона",
                             onClick = onOpenTools,
+                        )
+                    }
+                    item(key = "ipam") {
+                        LinkCard(
+                            icon = Icons.Outlined.Dns,
+                            title = "IP-адреса (IPAM)",
+                            subtitle = "Заполнение подсетей, свободные адреса, дубликаты и адреса вне подсетей",
+                            onClick = onOpenIpam,
                         )
                     }
                     item(key = "audit") {
