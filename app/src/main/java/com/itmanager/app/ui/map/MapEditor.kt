@@ -95,6 +95,7 @@ fun MapEditToolbar(
     onEditZone: () -> Unit,
     onTool: (EditTool) -> Unit,
     onAddDevice: () -> Unit,
+    onAddRack: () -> Unit,
     onCable: (String) -> Unit,
     onCancelLink: () -> Unit,
     onDeletePoint: () -> Unit,
@@ -140,10 +141,17 @@ fun MapEditToolbar(
                 modifier = Modifier.fillMaxWidth().height(44.dp),
             ) {
                 when (state.tool) {
-                    EditTool.MOVE -> FilledTonalButton(onClick = onAddDevice, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Добавить объект")
+                    EditTool.MOVE -> {
+                        FilledTonalButton(onClick = onAddDevice, modifier = Modifier.weight(1f)) {
+                            Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Объект")
+                        }
+                        FilledTonalButton(onClick = onAddRack, modifier = Modifier.weight(1f)) {
+                            Icon(DeviceType.RACK.icon, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Стойка")
+                        }
                     }
                     EditTool.LINK -> if (selectedLinkName != null) {
                         Text(
@@ -262,11 +270,13 @@ fun DeviceFormDialog(
     onDismiss: () -> Unit,
     /** Servers a virtual machine can run on. */
     hosts: List<Device> = emptyList(),
+    /** Opens the front view of a rack being edited. */
+    onOpenRack: ((String) -> Unit)? = null,
 ) {
     val device = form.device
     val key = device?.id ?: "new"
     var name by rememberSaveable(key) { mutableStateOf(device?.name.orEmpty()) }
-    var type by rememberSaveable(key) { mutableStateOf(device?.type ?: DeviceType.SWITCH) }
+    var type by rememberSaveable(key) { mutableStateOf(device?.type ?: form.presetType ?: DeviceType.SWITCH) }
     var ip by rememberSaveable(key) { mutableStateOf(device?.ip.orEmpty()) }
     var vendor by rememberSaveable(key) { mutableStateOf(device?.vendor.orEmpty()) }
     var model by rememberSaveable(key) { mutableStateOf(device?.model.orEmpty()) }
@@ -345,11 +355,16 @@ fun DeviceFormDialog(
                         value = rackUnits,
                         onValueChange = { rackUnits = it.filter(Char::isDigit).take(2) },
                         label = { Text("Высота стойки, U") },
-                        supportingText = { Text("Устройства ставятся в стойку в её виде: карточка стойки → «Открыть стойку».") },
+                        supportingText = { Text("Коммутаторы и серверы ставятся в стойку в её виде.") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    if (device != null && device.type == DeviceType.RACK && onOpenRack != null) {
+                        FilledTonalButton(onClick = { onOpenRack(device.id) }, modifier = Modifier.fillMaxWidth()) {
+                            Text("Открыть вид стойки и расставить устройства")
+                        }
+                    }
                 }
                 OutlinedTextField(
                     value = comment,

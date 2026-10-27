@@ -432,6 +432,14 @@ fun MapScreen(
                         at.y.coerceIn(0f, plan?.heightPx ?: at.y),
                     )
                 },
+                onAddRack = {
+                    val at = camera.visibleCentreOnPlan()
+                    viewModel.openNewDevice(
+                        at.x.coerceIn(0f, plan?.widthPx ?: at.x),
+                        at.y.coerceIn(0f, plan?.heightPx ?: at.y),
+                        DeviceType.RACK,
+                    )
+                },
                 onCable = viewModel::setCable,
                 onCancelLink = viewModel::cancelLink,
                 onDeletePoint = viewModel::deletePoint,
@@ -458,6 +466,10 @@ fun MapScreen(
                 onSave = viewModel::saveDevice,
                 onDelete = viewModel::deleteDevice,
                 onDismiss = viewModel::closeForm,
+                onOpenRack = { id ->
+                    viewModel.closeForm()
+                    viewModel.openRack(id)
+                },
                 hosts = content?.allDevices.orEmpty().values.filter { it.type == DeviceType.SERVER }.sortedBy { it.name },
             )
         }
