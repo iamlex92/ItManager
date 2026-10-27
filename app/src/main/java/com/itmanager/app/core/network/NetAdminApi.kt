@@ -345,7 +345,7 @@ class NetAdminApi @Inject constructor(
 
     private fun requireBase(s: ServerSettings): String {
         if (s.baseUrl.isBlank()) {
-            throw UserFacingException("Укажите адрес сервера в настройках или включите демо-данные.")
+            throw UserFacingException("Сервер не настроен: укажите его адрес и API-токен в настройках (⚙).")
         }
         return s.baseUrl
     }

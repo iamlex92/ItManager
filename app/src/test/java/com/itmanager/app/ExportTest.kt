@@ -30,7 +30,7 @@ class ExportTest {
 
     private val report = InventoryReport(
         generatedAt = Instant.parse("2026-10-25T09:30:00Z"),
-        source = "демо-данные",
+        source = "http://10.0.0.5:8000",
         devices = listOf(device("PC-1", DeviceType.WORKSTATION, online = false), device("SW-1", DeviceType.SWITCH), device("R-1", DeviceType.SOCKET, online = false)),
         vlans = emptyList(),
         switchPorts = listOf(device("SW-1", DeviceType.SWITCH) to listOf(port(2, up = true), port(1, up = false), port(3, up = false), port(25, up = true, uplink = true))),
@@ -39,7 +39,7 @@ class ExportTest {
 
     @Test
     fun `report rows`() {
-        assertEquals("25.10.2026 12:30 · демо-данные", report.subtitle)
+        assertEquals("25.10.2026 12:30 · http://10.0.0.5:8000", report.subtitle)
         assertEquals(listOf("SW-1", "PC-1", "R-1"), report.devicesTable.rows.map { it[0] })
         assertEquals(listOf("в сети", "не отвечает", "пассивное"), report.devicesTable.rows.map { it.last() })
         assertTrue("passive sockets are not counted as down", ("Не отвечают" to "1") in report.summary)

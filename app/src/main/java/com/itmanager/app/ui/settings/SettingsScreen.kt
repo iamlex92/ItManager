@@ -110,33 +110,6 @@ fun SettingsScreen(
                 .windowInsetsPadding(WindowInsets.navigationBars)
                 .padding(horizontal = 16.dp),
         ) {
-            SectionLabel("Источник данных")
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(16.dp))
-                    .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Демо-данные", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "Встроенный пример цеха. Сервер не нужен, реальное оборудование не затрагивается.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Spacer(Modifier.width(12.dp))
-                Switch(
-                    checked = state.demoMode,
-                    onCheckedChange = {
-                        haptics.performHapticFeedback(if (it) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff)
-                        viewModel.setDemoMode(it)
-                    },
-                )
-            }
-
-            Spacer(Modifier.height(24.dp))
             SectionLabel("Безопасность")
             Row(
                 verticalAlignment = Alignment.CenterVertically,

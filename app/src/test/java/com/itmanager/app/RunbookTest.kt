@@ -5,7 +5,8 @@ import com.itmanager.app.core.network.RunbookRunBody
 import com.itmanager.app.data.model.AuditKind
 import com.itmanager.app.data.model.AuthMethod
 import com.itmanager.app.data.model.RunbookParamKind
-import com.itmanager.app.data.source.DemoRunbooks
+import com.itmanager.app.data.model.Runbook
+import com.itmanager.app.data.model.RunbookParam
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -14,7 +15,13 @@ import org.junit.Test
 
 class RunbookTest {
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false; coerceInputValues = true }
-    private val snapshot = DemoRunbooks.catalog.first { it.id == "vm_snapshot" }
+    private val snapshot = Runbook(
+        "vm_snapshot", "Инфраструктура", "Снапшот виртуальной машины", "", critical = true,
+        params = listOf(
+            RunbookParam("vm", "Виртуальная машина", RunbookParamKind.CHOICE),
+            RunbookParam("name", "Имя снапшота", required = false),
+        ),
+    )
 
     @Test
     fun requiredFieldsMustBeFilled() {
@@ -27,22 +34,6 @@ class RunbookTest {
     @Test
     fun argumentsAreTrimmedAndSkipEmptyOptionalFields() {
         assertEquals(mapOf("vm" to "vm-mes"), snapshot.arguments(mapOf("vm" to " vm-mes ", "name" to " ", "junk" to "x")))
-    }
-
-    @Test
-    fun demoCatalogMatchesServer() {
-        val ids = DemoRunbooks.catalog.map { it.id }
-        assertEquals(
-            listOf(
-                "ad_reset_password", "ad_unlock_account", "ad_set_enabled", "fs_effective_access",
-                "backup_database", "vm_snapshot", "service_restart",
-            ),
-            ids,
-        )
-        DemoRunbooks.catalog.flatMap { it.params }.filter { it.kind == RunbookParamKind.CHOICE }
-            .forEach { assertTrue(it.name, it.choices.isNotEmpty()) }
-        // Only the read-only check and the unlock run without biometrics.
-        assertEquals(setOf("ad_unlock_account", "fs_effective_access"), DemoRunbooks.catalog.filterNot { it.critical }.map { it.id }.toSet())
     }
 
     @Test

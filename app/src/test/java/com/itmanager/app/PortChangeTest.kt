@@ -3,7 +3,6 @@ package com.itmanager.app
 import com.itmanager.app.data.model.PortChange
 import com.itmanager.app.data.model.PortMode
 import com.itmanager.app.data.model.SwitchPort
-import com.itmanager.app.data.source.CommandTranslator
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -31,23 +30,6 @@ class PortChangeTest {
         assertEquals(
             PortChange(mode = PortMode.TRUNK, taggedVlans = listOf(10, 20)),
             PortChange.between(port, PortMode.TRUNK, 10, listOf(20, 10), true),
-        )
-    }
-
-    @Test
-    fun eltexSyntax() {
-        assertEquals(
-            listOf("interface gigabitethernet 1/0/5", "switchport access vlan 20", "shutdown", "exit"),
-            CommandTranslator.portChange("Eltex", port, PortChange(accessVlan = 20, isAdminUp = false)),
-        )
-    }
-
-    @Test
-    fun ciscoSyntax() {
-        val cisco = port.copy(name = "Gi1/0/5")
-        assertEquals(
-            listOf("interface Gi1/0/5", "switchport mode trunk", "switchport trunk allowed vlan 10,20", "exit"),
-            CommandTranslator.portChange("Cisco", cisco, PortChange(mode = PortMode.TRUNK, taggedVlans = listOf(10, 20))),
         )
     }
 }

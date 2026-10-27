@@ -12,11 +12,8 @@ import com.itmanager.app.data.source.DcimRepository
 import com.itmanager.app.ui.components.UiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -44,10 +41,7 @@ class AutomationViewModel @Inject constructor(
     private val _session = MutableStateFlow<RunbookSession?>(null)
     val session: StateFlow<RunbookSession?> = _session.asStateFlow()
 
-    val isDemo: StateFlow<Boolean> = repository.settings.map { it.demoMode }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
-
-    /** The server's runbook mode from /health: emulator or real AD; null in demo mode or while unknown. */
+    /** The server's runbook mode from /health: emulator or real AD; null while unknown. */
     private val _serverMode = MutableStateFlow<ServerRunbooks?>(null)
     val serverMode: StateFlow<ServerRunbooks?> = _serverMode.asStateFlow()
 
@@ -55,7 +49,7 @@ class AutomationViewModel @Inject constructor(
         viewModelScope.launch {
             repository.settings.collect { settings ->
                 _serverMode.value = null
-                if (!settings.demoMode && settings.baseUrl.isNotBlank()) {
+                if (settings.baseUrl.isNotBlank()) {
                     launch {
                         runCatchingCancellable { api.health(settings.baseUrl) }.getOrNull()?.let { h ->
                             _serverMode.value = ServerRunbooks(real = h.runbookMode == "real", writes = h.runbookWritesEnabled == true)

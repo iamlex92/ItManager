@@ -96,7 +96,6 @@ fun CredentialsScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val editor by viewModel.editor.collectAsStateWithLifecycle()
-    val isDemo by viewModel.isDemo.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -159,11 +158,7 @@ fun CredentialsScreen(
                     ) {
                         item {
                             Text(
-                                if (isDemo) {
-                                    "Демо-данные: записи живут только в памяти телефона, введённый секрет нигде не сохраняется."
-                                } else {
-                                    "Секреты сервер хранит зашифрованными и обратно не отдаёт. Чтобы сменить пароль, введите новый."
-                                },
+                                "Секреты сервер хранит зашифрованными и обратно не отдаёт. Чтобы сменить пароль, введите новый.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(bottom = 4.dp),

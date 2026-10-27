@@ -35,6 +35,8 @@ class LiveSocket @Inject constructor(
     private val json: Json,
 ) {
     fun events(settings: ServerSettings, deviceId: String): Flow<LiveEvent> = channelFlow {
+        // No server yet: nothing to listen to until one is saved in the settings.
+        if (!settings.isConfigured) return@channelFlow
         var attempt = 0
         while (true) {
             try {

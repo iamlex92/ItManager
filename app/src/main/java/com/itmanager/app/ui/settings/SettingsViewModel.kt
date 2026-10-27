@@ -31,7 +31,6 @@ data class SettingsUiState(
     val loaded: Boolean = false,
     val baseUrl: String = "",
     val apiToken: String = "",
-    val demoMode: Boolean = true,
     /** Shown under the field only after the user has typed, never on an untouched form. */
     val urlError: String? = null,
     val check: ConnectionCheck = ConnectionCheck.Idle,
@@ -39,7 +38,7 @@ data class SettingsUiState(
     val appLock: Boolean = true,
 ) {
     val hasChanges: Boolean
-        get() = saved != null && (saved.baseUrl != baseUrl.trim() || saved.apiToken != apiToken.trim() || saved.demoMode != demoMode)
+        get() = saved != null && (saved.baseUrl != baseUrl.trim() || saved.apiToken != apiToken.trim())
 }
 
 @HiltViewModel
@@ -59,7 +58,6 @@ class SettingsViewModel @Inject constructor(
                 loaded = true,
                 baseUrl = current.baseUrl,
                 apiToken = current.apiToken,
-                demoMode = current.demoMode,
                 saved = current,
             )
             // Applied at once, apart from the server form and its Save button.
@@ -78,8 +76,6 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setApiToken(value: String) = _state.update { it.copy(apiToken = value) }
-
-    fun setDemoMode(value: Boolean) = _state.update { it.copy(demoMode = value) }
 
     fun checkConnection() {
         val url = when (val r = ServerUrl.check(_state.value.baseUrl)) {
@@ -105,7 +101,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * Text read from a QR code. A NetAdmin connection code fills the form and turns demo mode off;
+     * Text read from a QR code. A NetAdmin connection code fills the form;
      * the address is the first one in the code that answers. Nothing is saved until the user taps Save.
      */
     fun applyScanned(text: String) {
@@ -117,7 +113,7 @@ class SettingsViewModel @Inject constructor(
         checkJob?.cancel()
         checkJob = viewModelScope.launch {
             _state.update {
-                it.copy(baseUrl = qr.urls.first(), apiToken = qr.token, demoMode = false, urlError = null, check = ConnectionCheck.Running)
+                it.copy(baseUrl = qr.urls.first(), apiToken = qr.token, urlError = null, check = ConnectionCheck.Running)
             }
             var lastError: Throwable? = null
             for (url in qr.urls) {
@@ -160,11 +156,11 @@ class SettingsViewModel @Inject constructor(
                 is ServerUrlCheck.Valid -> r.normalized
             }
         }
-        if (!s.demoMode && url.isEmpty()) {
-            _state.update { it.copy(urlError = "Без адреса сервера работают только демо-данные") }
+        if (url.isEmpty()) {
+            _state.update { it.copy(urlError = "Укажите адрес сервера NetAdmin") }
             return false
         }
-        val new = ServerSettings(baseUrl = url, apiToken = s.apiToken.trim(), demoMode = s.demoMode)
+        val new = ServerSettings(baseUrl = url, apiToken = s.apiToken.trim())
         _state.update { it.copy(baseUrl = url, saved = new) }
         viewModelScope.launch { settings.save(new) }
         return true

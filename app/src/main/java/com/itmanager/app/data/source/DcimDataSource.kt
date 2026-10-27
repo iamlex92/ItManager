@@ -38,7 +38,7 @@ import com.itmanager.app.data.model.Vlan
 import com.itmanager.app.data.model.Waypoint
 import kotlinx.coroutines.flow.Flow
 
-/** One place the app reads DCIM data from: built-in demo data or the NetAdmin server. */
+/** One place the app reads DCIM data from: the NetAdmin server. */
 interface DcimDataSource {
     /** The map of floor [floorId]; null or an unknown id: the lowest floor. */
     suspend fun floorMap(floorId: String? = null): FloorMap

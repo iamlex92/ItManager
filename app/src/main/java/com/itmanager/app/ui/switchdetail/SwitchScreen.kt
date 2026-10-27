@@ -102,7 +102,6 @@ fun SwitchScreen(
     val vlans by viewModel.vlans.collectAsStateWithLifecycle()
     val pending by viewModel.pending.collectAsStateWithLifecycle()
     val busy by viewModel.busy.collectAsStateWithLifecycle()
-    val isDemo by viewModel.isDemo.collectAsStateWithLifecycle()
     val diagnostic by viewModel.diagnostic.collectAsStateWithLifecycle()
     val targets by viewModel.targets.collectAsStateWithLifecycle()
     val load by viewModel.load.collectAsStateWithLifecycle()
@@ -243,7 +242,6 @@ fun SwitchScreen(
                     ConfirmWriteDialog(
                         write = write,
                         switchName = device.name,
-                        isDemo = isDemo,
                         onConfirm = viewModel::confirmPending,
                         onDismiss = viewModel::dismissPending,
                     )
@@ -451,7 +449,6 @@ private fun PortEditor(
 private fun ConfirmWriteDialog(
     write: PendingWrite,
     switchName: String,
-    isDemo: Boolean,
     onConfirm: (confirmUplink: Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -502,14 +499,6 @@ private fun ConfirmWriteDialog(
                             color = StatusColors.Warning,
                         )
                     }
-                }
-                if (isDemo) {
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        "Демо-режим: изменение только на телефоне, на оборудование ничего не уходит.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                 }
             }
         },

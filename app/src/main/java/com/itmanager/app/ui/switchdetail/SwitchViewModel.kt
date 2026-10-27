@@ -25,12 +25,10 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -100,9 +98,6 @@ class SwitchViewModel @Inject constructor(
     /** Devices with an address, offered as ping targets so nobody has to type an IP on the shop floor. */
     private val _targets = MutableStateFlow<List<Device>>(emptyList())
     val targets: StateFlow<List<Device>> = _targets.asStateFlow()
-
-    val isDemo: StateFlow<Boolean> = repository.settings.map { it.demoMode }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     /** Per-port load for the "Загрузка" view, by port id; null until that view is first opened. */
     private val _load = MutableStateFlow<UiState<Map<String, PortLoad>>?>(null)

@@ -49,8 +49,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Picks the data source from the current settings on every call, so switching demo mode
- * or the server address in settings takes effect on the next load without a restart.
+ * Builds the server source from the current settings on every call, so a new server address
+ * or token takes effect on the next load without a restart.
  */
 @Singleton
 class DcimRepository @Inject constructor(
@@ -167,7 +167,7 @@ class DcimRepository @Inject constructor(
         .shareIn(CoroutineScope(SupervisorJob() + Dispatchers.Default), SharingStarted.WhileSubscribed(5_000))
 
     private fun source(settings: ServerSettings): DcimDataSource =
-        if (settings.demoMode) DemoDataSource else RemoteDataSource(api, liveSocket, settings)
+        RemoteDataSource(api, liveSocket, settings)
 
     private suspend fun <T> load(block: suspend DcimDataSource.() -> T): Result<T> {
         val source = source(settingsRepository.current())
