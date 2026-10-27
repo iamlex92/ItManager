@@ -199,8 +199,8 @@
   function showPart(name) {
     part = name;
     for (const b of $("detail-tabs").children) b.classList.toggle("active", b.dataset.part === name);
-    for (const p of ["vlan", "history", "traffic"]) $(`detail-${p}`).hidden = p !== name;
-    ({ vlan: renderVlans, history: renderHistory, traffic: renderTraffic })[name]().catch((e) => detailError(e));
+    for (const p of ["vlan", "history", "traffic", "configs"]) $(`detail-${p}`).hidden = p !== name;
+    ({ vlan: renderVlans, history: renderHistory, traffic: renderTraffic, configs: renderConfigs })[name]().catch((e) => detailError(e));
   }
   $("detail-tabs").addEventListener("click", (ev) => { const b = ev.target.closest("button[data-part]"); if (b) showPart(b.dataset.part); });
   $("detail-close").addEventListener("click", () => $("detail-dialog").close());
@@ -286,6 +286,55 @@
     c.fillStyle = "#30d158"; c.fillText("исходящий", W - 90, 16);
     if (!n) { c.fillStyle = "#8b95a5"; c.fillText("Замеров за период нет", pad, H / 2); }
   }
+
+  // Stored running-configs: take a copy, read it, compare with the live one or with another copy. Read-only.
+  let picked = null, versus = null;
+
+  async function renderConfigs() {
+    const d = window.NetAdmin.portsDevice();
+    const list = await api("GET", `devices/${d.id}/configs`);
+    $("config-output").hidden = true;
+    if (!list.some((c) => c.id === picked)) picked = list[0] ? list[0].id : null;
+    if (!list.some((c) => c.id === versus)) versus = null;
+    const body = $("config-rows");
+    if (!list.length) return empty(body, 6, "Копий пока нет: нажмите «Снять копию сейчас».");
+    body.replaceChildren(...list.map((c) => {
+      const tr = el("tr");
+      td(tr, el("input", { type: "radio", name: "cfg-base", checked: c.id === picked, onchange: () => { picked = c.id; } }));
+      td(tr, when(c.captured_at));
+      td(tr, c.triggered_by);
+      td(tr, c.config_hash.slice(0, 10));
+      td(tr, el("input", {
+        type: "checkbox", checked: c.id === versus, title: "Сравнить выбранную копию с этой",
+        onchange: (ev) => { versus = ev.target.checked ? c.id : null; for (const b of body.querySelectorAll("input[type=checkbox]")) b.checked = b === ev.target && ev.target.checked; if (versus) showDiff(); },
+      }));
+      td(tr, el("button", { textContent: "Показать", onclick: async () => {
+        const full = await api("GET", `devices/${d.id}/configs/${c.id}`).catch((e) => { detailError(e); return null; });
+        if (full) output(full.content);
+      } }));
+      return tr;
+    }));
+  }
+
+  function output(text) { const o = $("config-output"); o.hidden = false; o.textContent = text; }
+
+  async function showDiff() {
+    const d = window.NetAdmin.portsDevice();
+    if (!picked) return;
+    detailError(null);
+    try {
+      const q = new URLSearchParams({ base_id: picked });
+      if (versus) q.set("other_id", versus);
+      const r = await api("GET", `devices/${d.id}/configs/diff?${q}`);
+      output(r.changed ? r.diff : "Различий нет.");
+    } catch (e) { detailError(e); }
+  }
+
+  $("config-backup").addEventListener("click", async () => {
+    const d = window.NetAdmin.portsDevice();
+    try { detailError(null); await api("POST", `devices/${d.id}/configs/backup`); toast("Копия сохранена"); await renderConfigs(); } catch (e) { detailError(e); }
+  });
+  $("config-live").addEventListener("click", () => { versus = null; showDiff(); });
 
   $("port-refresh").addEventListener("click", async () => {
     const d = window.NetAdmin.portsDevice();
