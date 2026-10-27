@@ -134,7 +134,15 @@ data class MapEditorState(
 )
 
 /** The device form: [device] null adds a new object at [x], [y]. [floorId]: the floor it stands on. */
-data class DeviceForm(val device: Device?, val x: Float, val y: Float, val floorId: String?, val error: String? = null)
+data class DeviceForm(
+    val device: Device?,
+    val x: Float,
+    val y: Float,
+    val floorId: String?,
+    val error: String? = null,
+    /** The category a new object starts with, e.g. a rack added with its own button. */
+    val presetType: DeviceType? = null,
+)
 
 const val CABLE_COPPER = "Cat6"
 const val CABLE_FIBER = "OM3"
@@ -296,7 +304,8 @@ class MapViewModel @Inject constructor(
     fun setPenColor(color: Long) = editor { it.copy(penColor = color) }
     fun dismissError() = editor { it.copy(error = null) }
 
-    fun openNewDevice(x: Float, y: Float) = editor { it.copy(form = DeviceForm(null, x, y, currentFloorId())) }
+    fun openNewDevice(x: Float, y: Float, type: DeviceType? = null) =
+        editor { it.copy(form = DeviceForm(null, x, y, currentFloorId(), presetType = type)) }
     fun openDevice(id: String) {
         val device = content?.devicesById?.get(id) ?: return
         editor { it.copy(form = DeviceForm(device, device.x, device.y, currentFloorId())) }
