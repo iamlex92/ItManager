@@ -19,6 +19,8 @@ enum class DeviceType(val label: String) {
     PHONE("IP-телефон"),
     /** A virtual machine or other virtual device: it has no cables and is not drawn on L1. */
     VIRTUAL("Виртуальная машина"),
+    /** A 19" rack: other devices are mounted in it by unit. */
+    RACK("Стойка"),
     UNKNOWN("Устройство");
 
     companion object {
@@ -42,7 +44,23 @@ data class Device(
     val vlanId: Int?,
     /** For a virtual machine: the server it runs on. */
     val hostId: String? = null,
+    /** A note shown in the device card. */
+    val comment: String? = null,
+    /** Mounted in this rack, from unit [rackU] (1 is the bottom) and [rackH] units high. */
+    val rackId: String? = null,
+    val rackU: Int? = null,
+    val rackH: Int? = null,
+    /** For a rack: its height in units. */
+    val rackUnits: Int? = null,
 ) {
+    /** The unit number the device's top edge reaches in its rack. */
+    val rackTop: Int? get() = rackU?.let { it + (rackH ?: 1) - 1 }
+
+    fun toDraft() = DeviceDraft(
+        name = name, type = type, ip = ip, vendor = vendor, model = model, hostId = hostId,
+        comment = comment, rackId = rackId, rackU = rackU, rackH = rackH, rackUnits = rackUnits,
+    )
+
     fun matches(query: String): Boolean {
         val q = query.trim()
         if (q.isEmpty()) return true
@@ -177,6 +195,8 @@ data class FloorPlan(
     val imageRect: PlanRect? = null,
     /** Free lines drawn over the map in the editor. */
     val drawings: List<Drawing> = emptyList(),
+    /** Areas outlined on the map; the ones marked as rooms collect the devices that stand in them. */
+    val zones: List<Zone> = emptyList(),
     /** False for the placeholder floor of a server that has none yet; the editor creates one on first save. */
     val stored: Boolean = true,
 )
@@ -190,6 +210,54 @@ data class PlanRect(val x: Float, val y: Float, val width: Float, val height: Fl
 /** A free line drawn over the map: [points] are x, y pairs in map pixels. */
 data class Drawing(val colorArgb: Long, val width: Float, val points: List<Float>)
 
+/** An area outlined on the map: [points] are x, y pairs in map pixels. A room lists the devices inside it. */
+data class Zone(
+    val id: String,
+    val name: String,
+    val isRoom: Boolean,
+    val colorArgb: Long,
+    val points: List<Float>,
+) {
+    /** Even-odd ray casting: true when the point lies inside the outline. */
+    fun contains(x: Float, y: Float): Boolean {
+        val n = points.size / 2
+        if (n < 3) return false
+        var inside = false
+        var j = n - 1
+        for (i in 0 until n) {
+            val xi = points[2 * i]
+            val yi = points[2 * i + 1]
+            val xj = points[2 * j]
+            val yj = points[2 * j + 1]
+            if ((yi > y) != (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside
+            j = i
+        }
+        return inside
+    }
+
+    val area: Float
+        get() {
+            val n = points.size / 2
+            var sum = 0f
+            for (i in 0 until n) {
+                val j = (i + 1) % n
+                sum += points[2 * i] * points[2 * j + 1] - points[2 * j] * points[2 * i + 1]
+            }
+            return kotlin.math.abs(sum) / 2f
+        }
+
+    /** The middle of the bounding box, where the name is written. */
+    val centre: Pair<Float, Float>
+        get() {
+            val xs = points.filterIndexed { i, _ -> i % 2 == 0 }
+            val ys = points.filterIndexed { i, _ -> i % 2 == 1 }
+            return ((xs.minOrNull() ?: 0f) + (xs.maxOrNull() ?: 0f)) / 2f to ((ys.minOrNull() ?: 0f) + (ys.maxOrNull() ?: 0f)) / 2f
+        }
+}
+
+/** The room a point lies in; the smallest one wins when rooms are drawn inside each other. */
+fun List<Zone>.roomAt(x: Float, y: Float): Zone? = filter { it.isRoom && it.contains(x, y) }.minByOrNull { it.area }
+
 /** A plan picked on the phone, ready to upload: PNG, JPEG or SVG, with its size in pixels. */
 class PlanFile(val bytes: ByteArray, val mime: String, val width: Int, val height: Int)
 
@@ -201,6 +269,11 @@ data class DeviceDraft(
     val vendor: String?,
     val model: String?,
     val hostId: String? = null,
+    val comment: String? = null,
+    val rackId: String? = null,
+    val rackU: Int? = null,
+    val rackH: Int? = null,
+    val rackUnits: Int? = null,
 )
 
 /** One change applied to many devices at once; a null field stays as it is on each. */
@@ -262,3 +335,6 @@ fun parseColorHex(hex: String?, fallback: Long = 0xFF3498DB): Long {
         else -> fallback
     }
 }
+
+/** Height of a rack that did not say how many units it has. */
+const val DEFAULT_RACK_UNITS = 42

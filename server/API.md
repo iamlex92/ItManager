@@ -69,7 +69,7 @@ Map editor (the app's "Редактор карты"), also inventory only:
 | PUT | `/api/v1/floors/{id}/plan-image?width=&height=` | Raw PNG, JPEG or SVG body, up to 15 MB (`plan_type`, `plan_too_big`, `empty_plan`). Sets `plan_image_url`; the first upload places the plan at the floor's top-left corner. |
 | GET | `/api/v1/floors/{id}/plan-image` | The uploaded plan, with the token. |
 | DELETE | `/api/v1/floors/{id}/plan-image` | Removes the plan and its placement. |
-| PATCH | `/api/v1/floors/{id}` | `plan_x`, `plan_y`, `plan_w`, `plan_h`: where the plan lies, in map pixels. `drawings`: `[{color: "#RRGGBB", width, points: [x, y, ...]}]`, up to 500 lines. |
+| PATCH | `/api/v1/floors/{id}` | `plan_x`, `plan_y`, `plan_w`, `plan_h`: where the plan lies, in map pixels. `drawings`: `[{color: "#RRGGBB", width, points: [x, y, ...]}]`, up to 500 lines. `zones`: `[{id, name, is_room, color, points: [x, y, ...]}]`, up to 200 outlines; a device whose `x, y` lies inside a room zone belongs to that room (the app works this out). |
 | POST/PATCH | `/api/v1/floors` | `name` (optional, "" clears it) names a floor; otherwise apps show "Этаж N". `floor_number` sets the order, bottom to top, which is also the order `GET /floors` returns. |
 | DELETE | `/api/v1/floors/{id}` | Only an empty floor: with devices on it the answer is 409 `floor_not_empty`. |
 | PATCH | `/api/v1/connections/{id}` | `waypoints`: the cable's bends from end A to end B, `[{x, y, floor_id?}]`, up to 200. A bend without `floor_id` lies on end A's floor; a cable between floors lists its bends on each floor and the apps draw a riser where it leaves one. `[]` makes it straight again. |
@@ -294,3 +294,10 @@ Server sends:
 ```
 
 A bad token closes the socket with code 1008.
+
+## Comments and racks
+
+Devices have `comment` (free text, up to 4000 characters). A `RACK` device is a cabinet with `rack_units` (default 42).
+A device is mounted by `rack_id` (the rack), `rack_u` (lowest unit, 1 is the bottom) and `rack_h` (height in units, default 1).
+The server answers 422 when the rack is not a `RACK` device or the device does not fit, and 409 when the units are taken
+or a rack would become lower than its highest mounted device. Deleting a rack leaves its devices unmounted.

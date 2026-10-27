@@ -24,6 +24,11 @@ def device_out(d: Device, graph: Graph | None = None) -> DeviceOut:
         ssh_credential_id=d.ssh_credential_id,
         metadata=d.metadata_ or {},
         host_id=d.host_id,
+        comment=d.comment,
+        rack_id=d.rack_id,
+        rack_u=d.rack_u,
+        rack_h=d.rack_h,
+        rack_units=d.rack_units,
     )
 
 

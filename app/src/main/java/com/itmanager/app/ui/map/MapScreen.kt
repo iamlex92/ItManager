@@ -51,6 +51,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.CenterFocusStrong
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.EditLocationAlt
+import androidx.compose.material.icons.outlined.MeetingRoom
 import androidx.compose.material.icons.outlined.Nfc
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
@@ -107,6 +108,8 @@ import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.model.FloorMap
 import com.itmanager.app.data.model.MapLayer
+import com.itmanager.app.data.model.Zone
+import com.itmanager.app.data.model.roomAt
 import com.itmanager.app.ui.components.AlertsBell
 import com.itmanager.app.ui.components.ErrorView
 import com.itmanager.app.ui.components.LoadingView
@@ -140,6 +143,10 @@ fun MapScreen(
     var confirmClear by remember { mutableStateOf(false) }
     var confirmRemovePlan by remember { mutableStateOf(false) }
     var showFloors by remember { mutableStateOf(false) }
+    var zoneEdit by remember { mutableStateOf<ZoneEdit?>(null) }
+    var showRooms by remember { mutableStateOf(false) }
+    var commentFor by remember { mutableStateOf<Device?>(null) }
+    var commentError by remember { mutableStateOf<String?>(null) }
     var showLegend by remember { mutableStateOf(false) }
     // Kinds switched off in the legend: they and their cables leave the map until switched back on.
     var hiddenTypes by remember { mutableStateOf(emptySet<DeviceType>()) }
@@ -208,7 +215,12 @@ fun MapScreen(
                         moved = editor.moved,
                         onTapDevice = { id ->
                             haptics.performHapticFeedback(HapticFeedbackType.ContextClick)
-                            if (editor.tool == EditTool.LINK) viewModel.tapForLink(id) else viewModel.openDevice(id)
+                            when (editor.tool) {
+                                EditTool.LINK -> viewModel.tapForLink(id)
+                                // An icon in the way of a corner counts as a tap on the map under it.
+                                EditTool.ZONES -> c.data.devicesById[id]?.let { viewModel.tapZones(it.x, it.y) }
+                                else -> viewModel.openDevice(id)
+                            }
                         },
                         onMoveDevice = { id, x, y ->
                             haptics.performHapticFeedback(HapticFeedbackType.GestureEnd)
@@ -231,6 +243,12 @@ fun MapScreen(
                         },
                         onStroke = viewModel::addStroke,
                         onPlanMoved = viewModel::placePlan,
+                        zoneDraft = editor.zoneDraft,
+                        selectedZone = editor.selectedZone,
+                        onTapZones = { x, y ->
+                            haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                            viewModel.tapZones(x, y)
+                        },
                     ),
                 )
             }
@@ -288,11 +306,21 @@ fun MapScreen(
                 .padding(contentPadding)
                 .padding(16.dp),
         ) {
-            SmallFloatingActionButton(
-                onClick = camera::fit,
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            ) {
-                Icon(Icons.Outlined.CenterFocusStrong, contentDescription = "Показать весь план")
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.End) {
+                if (content?.map?.plan?.zones?.any { it.isRoom } == true) {
+                    SmallFloatingActionButton(
+                        onClick = { showRooms = true },
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    ) {
+                        Icon(Icons.Outlined.MeetingRoom, contentDescription = "Помещения и устройства в них")
+                    }
+                }
+                SmallFloatingActionButton(
+                    onClick = camera::fit,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                ) {
+                    Icon(Icons.Outlined.CenterFocusStrong, contentDescription = "Показать весь план")
+                }
             }
         }
 
@@ -339,6 +367,16 @@ fun MapScreen(
                     onBindNfc = { viewModel.bindNfc(device) },
                     onDismiss = { viewModel.select(null) },
                     hostName = device.hostId?.let { content?.allDevices?.get(it)?.name },
+                    roomName = content?.map?.plan?.zones?.roomAt(device.x, device.y)?.name,
+                    rackText = device.rackId?.let { id ->
+                        val rack = content?.allDevices?.get(id) ?: state.rack?.devices?.firstOrNull { it.id == id }
+                        "${rack?.name ?: "Стойка"} · U${device.rackU}${if ((device.rackH ?: 1) > 1) "–${device.rackTop}" else ""}"
+                    },
+                    onOpenRack = if (device.type == DeviceType.RACK) ({ viewModel.openRack(device.id) }) else null,
+                    onEditComment = {
+                        commentError = null
+                        commentFor = device
+                    },
                 )
             }
         }
@@ -365,6 +403,24 @@ fun MapScreen(
                 },
                 hasPlan = plan?.imageUrl != null,
                 hasDrawings = plan?.drawings?.isNotEmpty() == true,
+                selectedZoneName = editor.selectedZone?.let { id -> plan?.zones?.firstOrNull { it.id == id }?.name },
+                onUndoZone = viewModel::undoZoneCorner,
+                onFinishZone = {
+                    zoneEdit = ZoneEdit(
+                        Zone(
+                            id = "z" + java.util.UUID.randomUUID().toString().take(8),
+                            name = "",
+                            isRoom = true,
+                            colorArgb = ZONE_COLORS[(plan?.zones?.size ?: 0) % ZONE_COLORS.size],
+                            points = editor.zoneDraft,
+                        ),
+                        isNew = true,
+                    )
+                },
+                onCancelZone = viewModel::cancelZone,
+                onEditZone = {
+                    plan?.zones?.firstOrNull { it.id == editor.selectedZone }?.let { zoneEdit = ZoneEdit(it, isNew = false) }
+                },
                 onTool = {
                     haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
                     viewModel.setTool(it)
@@ -404,6 +460,65 @@ fun MapScreen(
                 onDismiss = viewModel::closeForm,
                 hosts = content?.allDevices.orEmpty().values.filter { it.type == DeviceType.SERVER }.sortedBy { it.name },
             )
+        }
+        zoneEdit?.let { edit ->
+            ZoneDialog(
+                edit = edit,
+                onSave = {
+                    viewModel.saveZone(it)
+                    zoneEdit = null
+                },
+                onDelete = {
+                    viewModel.deleteZone(it)
+                    zoneEdit = null
+                },
+                onDismiss = { zoneEdit = null },
+            )
+        }
+        if (showRooms && content != null) {
+            RoomsDialog(
+                zones = content.map.plan.zones,
+                devices = content.map.devices,
+                onPick = { device ->
+                    showRooms = false
+                    viewModel.select(device.id)
+                    scope.launch {
+                        repeat(2) { withFrameNanos { } }
+                        camera.focusOn(device.x, device.y)
+                    }
+                },
+                onDismiss = { showRooms = false },
+            )
+        }
+        commentFor?.let { device ->
+            CommentDialog(
+                device = device,
+                busy = state.editor.busy,
+                error = commentError,
+                onSave = { text ->
+                    commentError = null
+                    viewModel.saveComment(device, text) { error ->
+                        if (error == null) commentFor = null else commentError = error
+                    }
+                },
+                onDismiss = { commentFor = null },
+            )
+        }
+        state.rack?.let { rackState ->
+            val rack = rackState.devices.firstOrNull { it.id == rackState.rackId } ?: content?.allDevices?.get(rackState.rackId)
+            if (rack != null) {
+                RackDialog(
+                    rack = rack,
+                    state = rackState,
+                    onMount = { id, u, h -> viewModel.mount(id, rack.id, u, h) },
+                    onRemove = { id -> viewModel.mount(id, null, null, null) },
+                    onOpenSwitch = { id ->
+                        viewModel.closeRack()
+                        onOpenSwitch(id)
+                    },
+                    onDismiss = viewModel::closeRack,
+                )
+            }
         }
         linkToDelete?.let { link ->
             val names = content?.allDevices.orEmpty().let {
@@ -747,6 +862,10 @@ private fun DeviceCard(
     onBindNfc: () -> Unit,
     onDismiss: () -> Unit,
     hostName: String? = null,
+    roomName: String? = null,
+    rackText: String? = null,
+    onOpenRack: (() -> Unit)? = null,
+    onEditComment: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val drag = remember { Animatable(0f) }
@@ -823,6 +942,29 @@ private fun DeviceCard(
                 Spacer(Modifier.height(10.dp))
                 Text("Работает на хосте $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
             }
+            roomName?.let {
+                Spacer(Modifier.height(10.dp))
+                Text("Помещение: $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            }
+            rackText?.let {
+                Spacer(Modifier.height(6.dp))
+                Text("В стойке: $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth().clickable(onClick = onEditComment).padding(end = 12.dp)) {
+                Icon(
+                    Icons.Outlined.Edit, contentDescription = "Изменить комментарий",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp).padding(top = 2.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    device.comment ?: "Добавить комментарий",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (device.comment == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             if (tracePath.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))
                 Text(
@@ -836,6 +978,14 @@ private fun DeviceCard(
                 Spacer(Modifier.height(14.dp))
                 FilledTonalButton(onClick = onOpenSwitch, modifier = Modifier.padding(end = 12.dp).fillMaxWidth()) {
                     Text("Открыть панель портов")
+                    Spacer(Modifier.width(8.dp))
+                    Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
+                }
+            }
+            if (onOpenRack != null) {
+                Spacer(Modifier.height(14.dp))
+                FilledTonalButton(onClick = onOpenRack, modifier = Modifier.padding(end = 12.dp).fillMaxWidth()) {
+                    Text("Открыть стойку")
                     Spacer(Modifier.width(8.dp))
                     Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
                 }

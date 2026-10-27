@@ -72,6 +72,7 @@ import com.itmanager.app.data.model.MapLayer
 import com.itmanager.app.data.model.PlanRect
 import com.itmanager.app.data.model.Vlan
 import com.itmanager.app.data.model.Waypoint
+import com.itmanager.app.data.model.Zone
 import com.itmanager.app.data.model.inserted
 import com.itmanager.app.data.model.moved
 import com.itmanager.app.ui.components.icon
@@ -118,6 +119,10 @@ class MapEditing(
     /** A finished pen line: x, y pairs and its width, in map pixels. */
     val onStroke: (List<Float>, Float) -> Unit,
     val onPlanMoved: (PlanRect) -> Unit,
+    /** Zone tool: corners placed so far, the zone picked for editing, and a tap on the map in map pixels. */
+    val zoneDraft: List<Float> = emptyList(),
+    val selectedZone: String? = null,
+    val onTapZones: (Float, Float) -> Unit = { _, _ -> },
 )
 
 /**
@@ -192,6 +197,7 @@ fun FloorPlanView(
                         when {
                             e == null -> currentOnSelect(null)
                             e.tool == EditTool.LINK -> e.onTapLink(linkAt(currentRoutes, camera, at, 16.dp.toPx()))
+                            e.tool == EditTool.ZONES -> camera.toPlan(at).let { e.onTapZones(it.x, it.y) }
                         }
                     },
                     onDoubleTap = { camera.toggleZoom(it) },
@@ -201,6 +207,7 @@ fun FloorPlanView(
         val penColor = editor?.penColor ?: Color.Transparent
         Canvas(Modifier.fillMaxSize()) {
             drawPlan(content, planPicture, planRect, editor?.tool == EditTool.PLAN, camera, labelStyle, textMeasurer)
+            drawZones(plan.zones, editor?.selectedZone, editor?.zoneDraft.orEmpty(), camera, textMeasurer, labelStyle)
             drawDrawings(plan.drawings, camera)
             if (stroke.size > 1) drawPolyline(stroke.map { camera.toScreen(it.x, it.y) }, penColor, PEN_WIDTH.toPx())
             if (layer == MapLayer.L3) drawSubnets(content, vlans, vlanFilter, camera, textMeasurer, labelStyle)
@@ -461,6 +468,51 @@ private fun DrawScope.drawPolyline(points: List<Offset>, color: Color, width: Fl
     path.moveTo(points[0].x, points[0].y)
     for (i in 1 until points.size) path.lineTo(points[i].x, points[i].y)
     drawPath(path, color, style = Stroke(width, cap = StrokeCap.Round, join = StrokeJoin.Round))
+}
+
+/**
+ * Zones as tinted outlines with their name in the middle; the zone picked for editing is drawn bolder, and the
+ * corners of a zone being outlined are joined with a line that shows where the outline would close.
+ */
+private fun DrawScope.drawZones(
+    zones: List<Zone>,
+    selectedId: String?,
+    draft: List<Float>,
+    camera: MapCamera,
+    textMeasurer: TextMeasurer,
+    labelStyle: TextStyle,
+) {
+    for (z in zones) {
+        val n = z.points.size / 2
+        if (n < 3) continue
+        val path = Path()
+        for (i in 0 until n) {
+            val p = camera.toScreen(z.points[2 * i], z.points[2 * i + 1])
+            if (i == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
+        }
+        path.close()
+        val color = Color(z.colorArgb)
+        val selected = z.id == selectedId
+        drawPath(path, color.copy(alpha = if (selected) 0.28f else 0.14f))
+        drawPath(path, color.copy(alpha = 0.85f), style = Stroke(if (selected) 3.dp.toPx() else 1.5.dp.toPx(), join = StrokeJoin.Round))
+        if (z.name.isNotBlank()) {
+            val (cx, cy) = z.centre
+            val at = camera.toScreen(cx, cy)
+            val width = textMeasurer.measure(z.name, labelStyle).size.width
+            drawLabel(textMeasurer, z.name, Offset(at.x - width / 2f, at.y - 6.dp.toPx()), labelStyle.copy(color = color))
+        }
+    }
+    if (draft.isNotEmpty()) {
+        val points = (0 until draft.size / 2).map { camera.toScreen(draft[2 * it], draft[2 * it + 1]) }
+        if (points.size > 1) drawPolyline(points, Accent, 2.dp.toPx())
+        if (points.size > 2) {
+            drawLine(
+                Accent.copy(alpha = 0.5f), points.last(), points.first(), 1.5.dp.toPx(),
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(8.dp.toPx(), 5.dp.toPx())),
+            )
+        }
+        points.forEachIndexed { i, p -> drawCircle(Accent, if (i == 0) 7.dp.toPx() else 4.5.dp.toPx(), p) }
+    }
 }
 
 /** Pen lines keep their width in map pixels, so they scale with the plan like walls do. */

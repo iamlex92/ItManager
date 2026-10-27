@@ -24,7 +24,7 @@ _TRANSLIT = dict(
 ROLE_NAMES = {
     "SWITCH": "Switch", "WORKSTATION": "Workstation", "SERVER": "Server", "PRINTER": "Printer", "CAMERA": "Camera",
     "ACCESS_POINT": "Access point", "ROUTER": "Router", "FIREWALL": "Firewall", "UPS": "UPS", "PHONE": "Phone",
-    "VIRTUAL": "Virtual machine", "UNKNOWN": "Unknown",
+    "VIRTUAL": "Virtual machine", "RACK": "Rack", "UNKNOWN": "Unknown",
 }  # fmt: skip
 
 CABLE_TYPES = {"cat5e": "cat5e", "cat6": "cat6", "cat6a": "cat6a", "cat7": "cat7"}

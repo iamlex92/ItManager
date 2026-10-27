@@ -16,6 +16,7 @@ import com.itmanager.app.data.model.DeviceHistoryEntry
 import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.DiagnosticResult
 import com.itmanager.app.data.model.Drawing
+import com.itmanager.app.data.model.Zone
 import com.itmanager.app.data.model.FloorDraft
 import com.itmanager.app.data.model.FloorInfo
 import com.itmanager.app.data.model.FloorMap
@@ -142,6 +143,7 @@ interface DcimDataSource {
     suspend fun removePlan(plan: FloorPlan): FloorPlan
     suspend fun placePlan(plan: FloorPlan, rect: PlanRect): FloorPlan
     suspend fun saveDrawings(plan: FloorPlan, drawings: List<Drawing>): FloorPlan
+    suspend fun saveZones(plan: FloorPlan, zones: List<Zone>): FloorPlan
 
     /** Live port and device status for one switch, or for every device with [com.itmanager.app.data.model.ALL_DEVICES]. */
     fun live(deviceId: String): Flow<LiveEvent>

@@ -35,7 +35,7 @@ enum class DeviceFilter(val label: String, val types: Set<DeviceType>?) {
     PRINTERS("МФУ", setOf(DeviceType.PRINTER)),
     CAMERAS("Камеры", setOf(DeviceType.CAMERA, DeviceType.ACCESS_POINT)),
     PASSIVE("Кабельное", setOf(DeviceType.SOCKET, DeviceType.PATCH_PANEL)),
-    OTHER("Прочее", setOf(DeviceType.UPS, DeviceType.PHONE, DeviceType.UNKNOWN)),
+    OTHER("Прочее", setOf(DeviceType.UPS, DeviceType.PHONE, DeviceType.RACK, DeviceType.UNKNOWN)),
 }
 
 data class DevicesUiState(

@@ -3,6 +3,8 @@ package com.itmanager.app.core.network
 import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.Drawing
 import com.itmanager.app.data.model.PlanRect
+import com.itmanager.app.data.model.parseColorHex
+import com.itmanager.app.data.model.Zone
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNull
@@ -26,6 +28,21 @@ data class DrawingDto(
 
         private fun parseColor(hex: String): Long =
             hex.removePrefix("#").toLongOrNull(16)?.let { 0xFF000000 or it } ?: 0xFFFFD60A
+    }
+}
+
+@Serializable
+data class ZoneDto(
+    val id: String,
+    val name: String = "",
+    @SerialName("is_room") val isRoom: Boolean = true,
+    val color: String = "#0A84FF",
+    val points: List<Float> = emptyList(),
+) {
+    fun toDomain() = Zone(id, name, isRoom, parseColorHex(color, 0xFF0A84FF), points)
+
+    companion object {
+        fun of(z: Zone) = ZoneDto(z.id, z.name, z.isRoom, "#%06X".format(z.colorArgb and 0xFFFFFF), z.points)
     }
 }
 
@@ -58,6 +75,7 @@ data class FloorPatch(
     @SerialName("width_px") val widthPx: Int? = null,
     @SerialName("height_px") val heightPx: Int? = null,
     val drawings: List<DrawingDto>? = null,
+    val zones: List<ZoneDto>? = null,
 ) {
     companion object {
         /** The plan's place on the map; the floor grows to keep it inside. */
@@ -67,6 +85,8 @@ data class FloorPatch(
         )
 
         fun drawings(list: List<Drawing>) = FloorPatch(drawings = list.map(DrawingDto::of))
+
+        fun zones(list: List<Zone>) = FloorPatch(zones = list.map(ZoneDto::of))
     }
 }
 
@@ -81,6 +101,11 @@ data class DeviceBody(
     val vendor: String?,
     val model: String?,
     @SerialName("host_id") val hostId: String? = null,
+    val comment: String? = null,
+    @SerialName("rack_id") val rackId: String? = null,
+    @SerialName("rack_u") val rackU: Int? = null,
+    @SerialName("rack_h") val rackH: Int? = null,
+    @SerialName("rack_units") val rackUnits: Int? = null,
 )
 
 @Serializable
@@ -94,6 +119,11 @@ fun DeviceDraft.toPatch(): JsonObject = buildJsonObject {
     put("vendor", vendor?.let { JsonPrimitive(it) } ?: JsonNull)
     put("model", model?.let { JsonPrimitive(it) } ?: JsonNull)
     put("host_id", hostId?.let { JsonPrimitive(it) } ?: JsonNull)
+    put("comment", comment?.let { JsonPrimitive(it) } ?: JsonNull)
+    put("rack_id", rackId?.let { JsonPrimitive(it) } ?: JsonNull)
+    put("rack_u", rackU?.let { JsonPrimitive(it) } ?: JsonNull)
+    put("rack_h", rackH?.let { JsonPrimitive(it) } ?: JsonNull)
+    put("rack_units", rackUnits?.let { JsonPrimitive(it) } ?: JsonNull)
 }
 
 @Serializable

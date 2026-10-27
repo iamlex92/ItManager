@@ -59,6 +59,7 @@ import com.itmanager.app.data.model.SwitchPort
 import com.itmanager.app.data.model.TrafficSeries
 import com.itmanager.app.data.model.Vlan
 import com.itmanager.app.data.model.Waypoint
+import com.itmanager.app.data.model.Zone
 import io.ktor.client.plugins.ResponseException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -241,7 +242,10 @@ class RemoteDataSource(
         knowingTypes(draft.type) {
             api.createDevice(
                 settings,
-                DeviceBody(draft.name, draft.type.name, floorId, x, y, draft.ip, draft.vendor, draft.model, draft.hostId),
+                DeviceBody(
+                    draft.name, draft.type.name, floorId, x, y, draft.ip, draft.vendor, draft.model, draft.hostId,
+                    draft.comment, draft.rackId, draft.rackU, draft.rackH, draft.rackUnits,
+                ),
             ).toDomain()
         }
 
@@ -311,6 +315,9 @@ class RemoteDataSource(
     override suspend fun saveDrawings(plan: FloorPlan, drawings: List<Drawing>): FloorPlan =
         api.patchFloor(settings, plan.id, FloorPatch.drawings(drawings)).toPlan(plan)
 
+    override suspend fun saveZones(plan: FloorPlan, zones: List<Zone>): FloorPlan =
+        api.patchFloor(settings, plan.id, FloorPatch.zones(zones)).toPlan(plan)
+
     override fun live(deviceId: String): Flow<LiveEvent> = liveSocket.events(settings, deviceId)
 
     private companion object {
@@ -326,4 +333,4 @@ internal const val PING_COUNT = 5
 internal fun notFound(what: String): Nothing = throw UserFacingException("$what не найдено")
 
 /** Categories added after the first server release: an older server does not accept them. */
-private val NEWER_TYPES = setOf(DeviceType.ROUTER, DeviceType.FIREWALL, DeviceType.UPS, DeviceType.PHONE, DeviceType.VIRTUAL)
+private val NEWER_TYPES = setOf(DeviceType.ROUTER, DeviceType.FIREWALL, DeviceType.UPS, DeviceType.PHONE, DeviceType.VIRTUAL, DeviceType.RACK)

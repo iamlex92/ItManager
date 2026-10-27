@@ -57,6 +57,7 @@ data class FloorDto(
     @SerialName("plan_w") val planW: Float? = null,
     @SerialName("plan_h") val planH: Float? = null,
     val drawings: List<DrawingDto> = emptyList(),
+    val zones: List<ZoneDto> = emptyList(),
 ) {
     fun info() = FloorInfo(id, buildingName, floorNumber, name)
 }
@@ -76,6 +77,11 @@ data class DeviceDto(
     @SerialName("is_online") val isOnline: Boolean = false,
     @SerialName("vlan_id") val vlanId: Int? = null,
     @SerialName("host_id") val hostId: String? = null,
+    val comment: String? = null,
+    @SerialName("rack_id") val rackId: String? = null,
+    @SerialName("rack_u") val rackU: Int? = null,
+    @SerialName("rack_h") val rackH: Int? = null,
+    @SerialName("rack_units") val rackUnits: Int? = null,
 ) {
     fun toDomain() = Device(
         id = id,
@@ -91,6 +97,11 @@ data class DeviceDto(
         isOnline = isOnline,
         vlanId = vlanId,
         hostId = hostId,
+        comment = comment?.takeIf { it.isNotBlank() },
+        rackId = rackId,
+        rackU = rackU,
+        rackH = rackH,
+        rackUnits = rackUnits,
     )
 }
 
@@ -247,4 +258,5 @@ fun FloorDto.toDomain(baseUrl: String, fallbackWidth: Float, fallbackHeight: Flo
     },
     imageRect = if (planW != null && planH != null) PlanRect(planX ?: 0f, planY ?: 0f, planW, planH) else null,
     drawings = drawings.map { it.toDomain() },
+    zones = zones.map { it.toDomain() },
 )

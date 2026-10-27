@@ -11,6 +11,7 @@ import androidx.compose.material.icons.outlined.Lan
 import androidx.compose.material.icons.outlined.Print
 import androidx.compose.material.icons.outlined.Router
 import androidx.compose.material.icons.outlined.Security
+import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.SettingsInputComponent
 import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material.icons.outlined.ViewModule
@@ -35,6 +36,7 @@ val DeviceType.icon: ImageVector
         DeviceType.UPS -> Icons.Outlined.BatteryChargingFull
         DeviceType.PHONE -> Icons.Outlined.Call
         DeviceType.VIRTUAL -> Icons.Outlined.CloudQueue
+        DeviceType.RACK -> Icons.Outlined.Storage
         DeviceType.UNKNOWN -> Icons.Outlined.DeviceUnknown
     }
 
@@ -55,6 +57,7 @@ val DeviceType.tint: Color
         DeviceType.UPS -> Color(0xFFD4E157)
         DeviceType.PHONE -> Color(0xFFFF7EB6)
         DeviceType.VIRTUAL -> Color(0xFF8E9BFF)
+        DeviceType.RACK -> Color(0xFFFFB86B)
         DeviceType.SOCKET, DeviceType.PATCH_PANEL -> Color(0xFFAEB7C4)
         DeviceType.UNKNOWN -> Color(0xFF8D97A5)
     }
@@ -62,6 +65,6 @@ val DeviceType.tint: Color
 /** Types in the order pickers and the legend list them: network first, cabling and the unknown last. */
 val DEVICE_TYPES_IN_ORDER = listOf(
     DeviceType.SWITCH, DeviceType.ROUTER, DeviceType.FIREWALL, DeviceType.ACCESS_POINT, DeviceType.SERVER,
-    DeviceType.VIRTUAL, DeviceType.WORKSTATION, DeviceType.PRINTER, DeviceType.CAMERA, DeviceType.PHONE, DeviceType.UPS,
+    DeviceType.VIRTUAL, DeviceType.RACK, DeviceType.WORKSTATION, DeviceType.PRINTER, DeviceType.CAMERA, DeviceType.PHONE, DeviceType.UPS,
     DeviceType.PATCH_PANEL, DeviceType.SOCKET, DeviceType.UNKNOWN,
 )
