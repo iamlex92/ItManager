@@ -432,7 +432,14 @@
 <dialog id="rack-dialog">
   <div class="dialog">
     <h2 id="rack-heading">Стойка</h2>
-    <p class="muted small">Вид спереди: юниты считаются снизу. Щёлкните свободный юнит, чтобы поставить устройство, или «Убрать», чтобы снять.</p>
+    <p class="muted small">Вид спереди; нумерацию юнитов, цвет, подписи и ширину можно менять ниже (то же видно в приложении). Щёлкните свободный юнит, чтобы поставить устройство, или «Убрать», чтобы снять.</p>
+    <div class="row wrap" id="rack-style">
+      <label>Цвет рамки<input id="rack-color" type="color" value="#8b95a5"></label>
+      <button type="button" id="rack-color-reset" title="Цвет по умолчанию">Сбросить цвет</button>
+      <label>Нумерация<select id="rack-numbering"><option value="bottom">Снизу вверх</option><option value="top">Сверху вниз</option></select></label>
+      <label>Подписи<select id="rack-labels"><option value="name_model">Имя и модель</option><option value="name">Имя</option><option value="none">Без подписей</option></select></label>
+      <label>Ширина<select id="rack-width"><option value="narrow">Узкая</option><option value="normal">Обычная</option><option value="wide">Широкая</option></select></label>
+    </div>
     <div id="rack-view" class="rack-view"></div>
     <form id="rack-form" class="row wrap" hidden>
       <label class="grow">Устройство<select id="rack-device"></select></label>
