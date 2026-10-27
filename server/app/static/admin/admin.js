@@ -9,7 +9,7 @@
     ["FIREWALL", "Межсетевой экран", "#ff8a80"], ["ACCESS_POINT", "Точка доступа", "#ffd60a"],
     ["SERVER", "Сервер", "#bf8cff"], ["VIRTUAL", "Виртуальная машина", "#8e9bff"],
     ["WORKSTATION", "Рабочее место", "#e6edf5"], ["PRINTER", "МФУ", "#5ad4b0"], ["CAMERA", "Камера", "#ff9f43"],
-    ["PHONE", "IP-телефон", "#ff7eb6"], ["UPS", "ИБП", "#d4e157"], ["PATCH_PANEL", "Патч-панель", "#aeb7c4"],
+    ["PHONE", "IP-телефон", "#ff7eb6"], ["UPS", "ИБП", "#d4e157"], ["RACK", "Стойка", "#ffb86b"], ["PATCH_PANEL", "Патч-панель", "#aeb7c4"],
     ["SOCKET", "Розетка", "#aeb7c4"], ["UNKNOWN", "Устройство", "#8d97a5"],
   ];
   const TYPE = Object.fromEntries(TYPES.map(([id, label, color]) => [id, { label, color }]));

@@ -137,7 +137,7 @@ fun TopologyScreen(
 
     // A new layout (first load, end devices on or off): show it all. A reload of the same keeps the view.
     val layout = state.layout
-    LaunchedEffect(state.showEndDevices, layout != null, viewSize) {
+    LaunchedEffect(state.showEndDevices, layout != null, viewSize.width > 0) {
         layout?.let(::fit)
     }
 
