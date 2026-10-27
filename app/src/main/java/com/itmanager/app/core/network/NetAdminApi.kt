@@ -193,6 +193,29 @@ class NetAdminApi @Inject constructor(
 
     suspend fun vlans(s: ServerSettings): List<VlanDto> = fetch(s, "vlans")
 
+    // The VLAN list is the server's own dictionary: names, subnets, colours. Nothing reaches a switch.
+
+    suspend fun createVlan(s: ServerSettings, body: JsonObject): VlanDto = vlanCall { post(s, "vlans", body) }
+
+    suspend fun patchVlan(s: ServerSettings, id: Int, body: JsonObject): VlanDto = vlanCall { patch(s, "vlans/$id", body) }
+
+    suspend fun deleteVlan(s: ServerSettings, id: Int) {
+        vlanCall { guarded { client.delete("${requireBase(s)}/api/v1/vlans/$id") { auth(s) } } }
+    }
+
+    private suspend inline fun <T> vlanCall(block: () -> T): T = try {
+        block()
+    } catch (e: UserFacingException) {
+        val response = (e.cause as? ResponseException)?.response ?: throw e
+        val code = runCatching { json.decodeFromString(ErrorDto.serializer(), response.bodyAsText()).detail?.code }.getOrNull()
+        throw when (code) {
+            "vlan_exists" -> UserFacingException("VLAN с таким номером уже есть.", e)
+            "vlan_in_use" -> UserFacingException("VLAN назначен портам: сначала переведите их в другой VLAN.", e)
+            "not_found" -> UserFacingException("Этого VLAN уже нет на сервере. Обновите список.", e)
+            else -> e
+        }
+    }
+
     suspend fun connections(s: ServerSettings): List<ConnectionDto> = fetch(s, "connections")
 
     suspend fun printers(s: ServerSettings): List<PrinterDto> = fetch(s, "printers")

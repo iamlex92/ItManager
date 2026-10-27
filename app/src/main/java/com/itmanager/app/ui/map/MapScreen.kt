@@ -18,6 +18,8 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import com.itmanager.app.data.model.FloorInfo
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
@@ -37,12 +39,14 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -54,6 +58,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.EditLocationAlt
 import androidx.compose.material.icons.outlined.MeetingRoom
 import androidx.compose.material.icons.outlined.Keyboard
+import androidx.compose.material.icons.outlined.Lan
 import androidx.compose.material.icons.outlined.Nfc
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
@@ -138,6 +143,7 @@ fun MapScreen(
     onOpenSwitch: (String) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenScanner: () -> Unit,
+    onOpenVlans: () -> Unit,
     viewModel: MapViewModel = hiltViewModel(),
     peripherals: PeripheralsViewModel = hiltViewModel(),
     faceplates: FaceplateViewModel = hiltViewModel(),
@@ -148,6 +154,8 @@ fun MapScreen(
     val peripheralEditor by peripherals.editor.collectAsStateWithLifecycle()
     val allPeripherals = (peripheralState as? UiState.Content)?.data.orEmpty()
     var peripheralsFor by remember { mutableStateOf<Device?>(null) }
+    var vlanFor by remember { mutableStateOf<Device?>(null) }
+    var vlanError by remember { mutableStateOf<String?>(null) }
     val rackPlates by faceplates.rackPlates.collectAsStateWithLifecycle()
     val faceplateEditor by faceplates.editor.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -302,6 +310,7 @@ fun MapScreen(
             onVlanFilter = viewModel::setVlanFilter,
             onOpenSettings = onOpenSettings,
             devices = content?.map?.devices.orEmpty(),
+            onManageVlans = onOpenVlans,
             onSearchResult = { device ->
                 haptics.performHapticFeedback(HapticFeedbackType.ContextClick)
                 viewModel.select(device.id)
@@ -404,6 +413,14 @@ fun MapScreen(
                         null
                     },
                     onOpenPeripherals = { peripheralsFor = device },
+                    onEdit = { viewModel.openDevice(device.id) },
+                    portText = device.switchPortId?.let {
+                        val switchName = device.switchId?.let { id -> content?.allDevices?.get(id)?.name } ?: "коммутатор"
+                        val vlan = device.vlanId?.let { id -> content?.map?.vlans?.firstOrNull { it.id == id } }
+                        "Порт $switchName ${device.switchPortName.orEmpty()} · " +
+                            (vlan?.let { "VLAN ${it.id} ${it.name}" } ?: device.vlanId?.let { "VLAN $it" } ?: "VLAN не задан")
+                    },
+                    onChangeVlan = { vlanFor = device },
                 )
             }
         }
@@ -529,6 +546,26 @@ fun MapScreen(
                     }
                 },
                 onDismiss = { showRooms = false },
+            )
+        }
+        vlanFor?.let { device ->
+            PortVlanDialog(
+                device = device,
+                vlans = content?.map?.vlans.orEmpty(),
+                busy = state.editor.busy,
+                error = vlanError,
+                onPick = { vlanId ->
+                    vlanError = null
+                    viewModel.setPortVlan(device, vlanId) { error -> if (error == null) vlanFor = null else vlanError = error }
+                },
+                onManageVlans = {
+                    vlanFor = null
+                    onOpenVlans()
+                },
+                onDismiss = {
+                    vlanFor = null
+                    vlanError = null
+                },
             )
         }
         peripheralsFor?.let { device ->
@@ -667,6 +704,7 @@ private fun MapTopPanel(
     onVlanFilter: (Int?) -> Unit,
     onOpenSettings: () -> Unit,
     devices: List<Device>,
+    onManageVlans: () -> Unit,
     onSearchResult: (Device) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -796,7 +834,7 @@ private fun MapTopPanel(
             }
         }
         AnimatedVisibility(
-            visible = layer != MapLayer.L1 && vlans.isNotEmpty(),
+            visible = layer != MapLayer.L1,
             enter = expandVertically(Motion.smooth(Motion.RESPONSE_SHEET)) + fadeIn(),
             exit = shrinkVertically(Motion.smooth(Motion.RESPONSE_SHEET)) + fadeOut(),
         ) {
@@ -805,8 +843,18 @@ private fun MapTopPanel(
                 contentPadding = PaddingValues(end = 12.dp),
                 modifier = Modifier.padding(top = 8.dp),
             ) {
+                // Always there on L2 and L3, also when no VLAN exists yet: that is where they are made.
                 item {
-                    FilterChip(selected = vlanFilter == null, onClick = { onVlanFilter(null) }, label = { Text("Все VLAN") })
+                    AssistChip(
+                        onClick = onManageVlans,
+                        label = { Text(if (vlans.isEmpty()) "Добавить VLAN и подсети" else "VLAN и подсети") },
+                        leadingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                    )
+                }
+                if (vlans.isNotEmpty()) {
+                    item {
+                        FilterChip(selected = vlanFilter == null, onClick = { onVlanFilter(null) }, label = { Text("Все VLAN") })
+                    }
                 }
                 items(vlans, key = { it.first }) { (id, info) ->
                     val (name, color) = info
@@ -932,6 +980,10 @@ private fun DeviceCard(
     /** The device's peripherals in a line, or «add» when it has none; null for a device that takes none. */
     peripheralText: String? = null,
     onOpenPeripherals: () -> Unit = {},
+    onEdit: () -> Unit = {},
+    /** The switch port the device is cabled to and its VLAN; null when it is cabled to no switch. */
+    portText: String? = null,
+    onChangeVlan: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val drag = remember { Animatable(0f) }
@@ -988,6 +1040,7 @@ private fun DeviceCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+                IconButton(onClick = onEdit) { Icon(Icons.Outlined.Edit, contentDescription = "Изменить устройство") }
                 IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, contentDescription = "Закрыть") }
             }
             Spacer(Modifier.height(12.dp))
@@ -1030,6 +1083,23 @@ private fun DeviceCard(
                     maxLines = 4,
                     overflow = TextOverflow.Ellipsis,
                 )
+            }
+            portText?.let { text ->
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth().clickable(onClick = onChangeVlan).padding(end = 12.dp)) {
+                    Icon(
+                        Icons.Outlined.Lan, contentDescription = "Порт и VLAN",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp).padding(top = 2.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "$text · изменить VLAN",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             peripheralText?.let { text ->
                 Spacer(Modifier.height(8.dp))
@@ -1119,4 +1189,59 @@ private fun EmptyMapView(
             TextButton(onClick = onOpenSettings) { Text("Настройки") }
         }
     }
+}
+
+/** The VLAN of the switch port a device is cabled to. Inventory only: the switch itself is not changed. */
+@Composable
+private fun PortVlanDialog(
+    device: Device,
+    vlans: List<com.itmanager.app.data.model.Vlan>,
+    busy: Boolean,
+    error: String?,
+    onPick: (Int) -> Unit,
+    onManageVlans: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("VLAN порта ${device.switchPortName.orEmpty()}") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    "Порт коммутатора, к которому подключено ${device.name}, станет access в выбранном VLAN. " +
+                        "Меняется учёт; на коммутатор настройка отправляется с панели портов.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (vlans.isEmpty()) {
+                    Text("VLAN ещё нет.", style = MaterialTheme.typography.bodyMedium)
+                }
+                LazyColumn(Modifier.heightIn(max = 320.dp)) {
+                    items(vlans, key = { it.id }) { v ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    if (v.id == device.vlanId) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                                    RoundedCornerShape(10.dp),
+                                )
+                                .clickable(enabled = !busy) { onPick(v.id) }
+                                .padding(horizontal = 8.dp, vertical = 10.dp),
+                        ) {
+                            StatusDot(Color(v.colorArgb), size = 12.dp)
+                            Spacer(Modifier.width(10.dp))
+                            Text("${v.id} · ${v.name}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                            Text(v.subnet, style = MonoStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                TextButton(onClick = onManageVlans) { Text("Добавить или изменить VLAN…") }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Закрыть") } },
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+    )
 }

@@ -146,12 +146,15 @@ class PeripheralsTopologyTest {
             TopologyDto.serializer(),
             """{"nodes":[{"id":"a","name":"SW","type":"SWITCH","is_online":true,"degree":1},{"id":"b","name":"PC","type":"WORKSTATION"}],
                "links":[{"a_id":"b","b_id":"a","kind":"CABLE","a_port":"eth0","b_port":"gi1/0/1","via":["R-1.01","PP-1"],
-                         "cable_types":["Cat6"],"is_up":false,"speed_mbps":1000}]}""",
+                         "cable_types":["Cat6"],"is_up":false,"speed_mbps":1000,"connection_ids":["c1","c2","c3"]}]}""",
         ).toDomain()
         val link = t.links.single()
         assertEquals("gi1/0/1", link.portOf("a"))
         assertEquals("a", link.other("b"))
         assertEquals(false, link.isUp)
+        // Unplugging the PC removes its patch cord; unplugging at the switch, the switch-side cable.
+        assertEquals("c1", link.cableAt("b"))
+        assertEquals("c3", link.cableAt("a"))
         assertEquals(DeviceType.WORKSTATION, t.nodes[1].type)
     }
 }

@@ -67,6 +67,7 @@ import com.itmanager.app.data.model.RunbookRun
 import com.itmanager.app.data.model.SwitchPort
 import com.itmanager.app.data.model.TrafficSeries
 import com.itmanager.app.data.model.Vlan
+import com.itmanager.app.data.model.VlanDraft
 import com.itmanager.app.data.model.Waypoint
 import com.itmanager.app.data.model.Zone
 import io.ktor.client.plugins.ResponseException
@@ -131,6 +132,15 @@ class RemoteDataSource(
     override suspend fun printers(): List<Printer> = api.printers(settings).map { it.toDomain() }
 
     override suspend fun vlans(): List<Vlan> = api.vlans(settings).map { it.toDomain() }
+
+    override suspend fun saveVlan(isNew: Boolean, draft: VlanDraft): Vlan =
+        if (isNew) {
+            api.createVlan(settings, draft.toBody(withId = true)).toDomain()
+        } else {
+            api.patchVlan(settings, draft.id, draft.toBody(withId = false)).toDomain()
+        }
+
+    override suspend fun deleteVlan(id: Int) = api.deleteVlan(settings, id)
 
     override suspend fun previewPortChange(switchId: String, portId: String, change: PortChange): List<String> =
         api.previewPortConfig(settings, portId, change).commands
@@ -253,7 +263,7 @@ class RemoteDataSource(
                 settings,
                 DeviceBody(
                     draft.name, draft.type.name, floorId, x, y, draft.ip, draft.vendor, draft.model, draft.hostId,
-                    draft.comment, draft.rackId, draft.rackU, draft.rackH, draft.rackUnits,
+                    draft.comment, draft.rackId, draft.rackU, draft.rackH, draft.rackUnits, draft.mac?.trim()?.ifEmpty { null },
                 ),
             ).toDomain()
         }

@@ -39,6 +39,7 @@ import com.itmanager.app.data.model.Runbook
 import com.itmanager.app.data.model.RunbookRun
 import com.itmanager.app.data.model.SwitchPort
 import com.itmanager.app.data.model.Vlan
+import com.itmanager.app.data.model.VlanDraft
 import com.itmanager.app.data.model.Waypoint
 import com.itmanager.app.data.model.Zone
 import kotlinx.coroutines.CoroutineScope
@@ -83,6 +84,8 @@ class DcimRepository @Inject constructor(
     suspend fun printers(): Result<List<Printer>> = load { printers() }
 
     suspend fun vlans(): Result<List<Vlan>> = load { vlans() }
+    suspend fun saveVlan(isNew: Boolean, draft: VlanDraft): Result<Vlan> = edit { saveVlan(isNew, draft) }
+    suspend fun deleteVlan(id: Int): Result<Unit> = edit { deleteVlan(id) }
     suspend fun previewPortChange(switchId: String, portId: String, change: PortChange) =
         load { previewPortChange(switchId, portId, change) }
     suspend fun applyPortChange(switchId: String, portId: String, change: PortChange, confirmUplink: Boolean) =

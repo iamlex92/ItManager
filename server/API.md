@@ -342,3 +342,13 @@ A drawing of a device's front panel (SVG) and where its ports are on it, as frac
 
 Errors: 415 `bad_svg`, 413 `svg_too_big`, 422 `bad_port` / `duplicate_port`.
 
+## Config import
+
+`POST /api/v1/devices/{id}/config-import` `{text, apply}` reads a pasted running-config (Cisco IOS, Eltex MES) or
+`show vlan brief` into the inventory. Response: `{kind, hostname, applied, ports: [{port, matched, changes}],
+new_ports, new_vlans, changed_ports}`. `matched: false` is a port that will be (or was) added. On apply, VLANs from
+the text the server does not have are added (name, subnet from the VLAN interface's address), then the ports.
+A placeholder port `portN` drawn on the map takes the real name of the N-th interface. Nothing is sent to the switch.
+`GET /api/v1/devices` also returns `switch_id`, `switch_port_id`, `switch_port_name`: the switch port a device is
+cabled to. A VLAN's `subnet_cidr` may be null.
+

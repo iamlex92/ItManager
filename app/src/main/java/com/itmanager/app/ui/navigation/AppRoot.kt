@@ -72,6 +72,7 @@ import com.itmanager.app.ui.map.MapScreen
 import com.itmanager.app.ui.nfc.BindTagSheet
 import com.itmanager.app.ui.peripherals.PeripheralsScreen
 import com.itmanager.app.ui.topology.TopologyScreen
+import com.itmanager.app.ui.vlans.VlansScreen
 import com.itmanager.app.ui.printers.PrintersScreen
 import com.itmanager.app.ui.scanner.ScannerScreen
 import com.itmanager.app.ui.security.AppLockOverlay
@@ -270,7 +271,16 @@ private fun AppNavHost(
                 onOpenSwitch = { navController.navigate(SwitchRoute(it)) },
                 onOpenSettings = openSettings,
                 onOpenScanner = openScanner,
+                onOpenVlans = { navController.navigate(VlansRoute) { launchSingleTop = true } },
             )
+        }
+        composable<VlansRoute>(
+            enterTransition = { slideInHorizontally(push) { it } },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { slideOutHorizontally(push) { it } },
+        ) {
+            VlansScreen(onBack = { navController.popBackStack() }, onOpenSettings = openSettings)
         }
         composable<DevicesRoute> {
             DevicesScreen(
