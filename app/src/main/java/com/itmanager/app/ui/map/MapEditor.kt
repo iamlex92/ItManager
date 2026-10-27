@@ -65,6 +65,7 @@ import com.itmanager.app.data.model.DEFAULT_RACK_UNITS
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.DeviceType
+import com.itmanager.app.data.model.isMac
 import com.itmanager.app.data.model.FloorInfo
 import com.itmanager.app.ui.components.DEVICE_TYPES_IN_ORDER
 import com.itmanager.app.ui.components.icon
@@ -298,6 +299,7 @@ fun DeviceFormDialog(
     var name by rememberSaveable(key) { mutableStateOf(device?.name.orEmpty()) }
     var type by rememberSaveable(key) { mutableStateOf(device?.type ?: form.presetType ?: DeviceType.SWITCH) }
     var ip by rememberSaveable(key) { mutableStateOf(device?.ip.orEmpty()) }
+    var mac by rememberSaveable(key) { mutableStateOf(device?.mac.orEmpty()) }
     var vendor by rememberSaveable(key) { mutableStateOf(device?.vendor.orEmpty()) }
     var model by rememberSaveable(key) { mutableStateOf(device?.model.orEmpty()) }
     var hostId by rememberSaveable(key) { mutableStateOf(device?.hostId) }
@@ -305,6 +307,7 @@ fun DeviceFormDialog(
     var rackUnits by rememberSaveable(key) { mutableStateOf((device?.rackUnits ?: DEFAULT_RACK_UNITS).toString()) }
     var confirmDelete by rememberSaveable(key) { mutableStateOf(false) }
     val ipError = ip.isNotBlank() && !IPV4.matches(ip.trim())
+    val macError = mac.isNotBlank() && !isMac(mac)
 
     if (confirmDelete && device != null) {
         AlertDialog(
@@ -352,6 +355,16 @@ fun DeviceFormDialog(
                     supportingText = { if (ipError) Text("Нужен адрес вида 10.0.0.1") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = mac,
+                    onValueChange = { mac = it.take(17) },
+                    label = { Text("MAC-адрес, если есть") },
+                    placeholder = { Text("aa:bb:cc:dd:ee:ff") },
+                    isError = macError,
+                    supportingText = { if (macError) Text("Нужен адрес вида aa:bb:cc:dd:ee:ff") },
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -430,6 +443,7 @@ fun DeviceFormDialog(
                             name = name.trim(),
                             type = type,
                             ip = ip.trim().ifEmpty { null },
+                            mac = mac.trim().ifEmpty { null },
                             vendor = vendor.trim().ifEmpty { null },
                             model = model.trim().ifEmpty { null },
                             hostId = hostId.takeIf { type == DeviceType.VIRTUAL },
@@ -442,7 +456,7 @@ fun DeviceFormDialog(
                         ),
                     )
                 },
-                enabled = !busy && name.isNotBlank() && !ipError,
+                enabled = !busy && name.isNotBlank() && !ipError && !macError,
             ) { Text("Сохранить") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },

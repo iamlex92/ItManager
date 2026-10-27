@@ -1635,7 +1635,7 @@
           try {
             vlanError(null);
             await api("PATCH", `vlans/${v.vlan_id}`, {
-              name: name.value.trim() || v.name, subnet_cidr: subnet.value.trim() || v.subnet_cidr, color_hex: color.value, description: desc.value.trim() || null,
+              name: name.value.trim() || v.name, subnet_cidr: subnet.value.trim() || null, color_hex: color.value, description: desc.value.trim() || null,
             });
             toast(`VLAN ${v.vlan_id} сохранён`);
           } catch (e) { vlanError(e); }
@@ -1655,7 +1655,7 @@
       vlanError(null);
       await api("POST", "vlans", {
         vlan_id: Number.parseInt($("vlan-id").value, 10), name: $("vlan-name").value.trim(),
-        subnet_cidr: $("vlan-subnet").value.trim(), color_hex: $("vlan-color").value, description: $("vlan-desc").value.trim() || null,
+        subnet_cidr: $("vlan-subnet").value.trim() || null, color_hex: $("vlan-color").value, description: $("vlan-desc").value.trim() || null,
       });
       $("vlan-form").reset();
       await loadVlans();

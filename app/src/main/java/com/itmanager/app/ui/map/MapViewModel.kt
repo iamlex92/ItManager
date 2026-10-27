@@ -21,6 +21,8 @@ import com.itmanager.app.data.model.FloorPlan
 import com.itmanager.app.data.model.LiveEvent
 import com.itmanager.app.data.model.MapLayer
 import com.itmanager.app.data.model.PlanRect
+import com.itmanager.app.data.model.PortDraft
+import com.itmanager.app.data.model.PortMode
 import com.itmanager.app.data.model.Waypoint
 import com.itmanager.app.data.model.Zone
 import com.itmanager.app.data.model.removed
@@ -511,6 +513,28 @@ class MapViewModel @Inject constructor(
     /** The card's comment: saved on its own, outside the editor. [done] gets null on success or the error text. */
     fun saveComment(device: Device, text: String, done: (String?) -> Unit) = write {
         repository.updateDevice(device.id, device.toDraft().copy(comment = text.trim().ifEmpty { null }))
+            .onSuccess { done(null) }
+            .onFailure { done(it.toUserMessage()) }
+    }
+
+    /**
+     * Puts the switch port [device] is cabled to into access [vlanId]. The inventory record only, like the
+     * config import: nothing is sent to the switch.
+     */
+    fun setPortVlan(device: Device, vlanId: Int, done: (String?) -> Unit) = write {
+        val switchId = device.switchId
+        val portId = device.switchPortId
+        if (switchId == null || portId == null) {
+            done("Устройство не подключено кабелем к коммутатору")
+            return@write
+        }
+        val port = repository.ports(switchId).getOrElse { done(it.toUserMessage()); return@write }.firstOrNull { it.id == portId }
+            ?: run { done("Порт не найден на сервере: обновите карту"); return@write }
+        val draft = PortDraft(
+            number = port.number, name = port.name, isUplink = port.isUplink, mode = PortMode.ACCESS,
+            accessVlan = vlanId, taggedVlans = emptyList(), speedMbps = port.speedMbps, poeEnabled = port.poeEnabled,
+        )
+        repository.updatePortRecord(portId, draft)
             .onSuccess { done(null) }
             .onFailure { done(it.toUserMessage()) }
     }

@@ -76,7 +76,8 @@ class Vlan(Base):
 
     vlan_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
     name: Mapped[str] = mapped_column(String(50))
-    subnet_cidr: Mapped[Any] = mapped_column(CIDR)
+    # Empty for a VLAN taken from a switch config that has no address in it.
+    subnet_cidr: Mapped[Any | None] = mapped_column(CIDR)
     color_hex: Mapped[str] = mapped_column(String(7), server_default=text("'#3498db'"))
     description: Mapped[str | None] = mapped_column(Text)
 

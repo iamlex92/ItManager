@@ -41,6 +41,7 @@ import com.itmanager.app.data.model.RunbookRun
 import com.itmanager.app.data.model.SwitchPort
 import com.itmanager.app.data.model.TrafficSeries
 import com.itmanager.app.data.model.Vlan
+import com.itmanager.app.data.model.VlanDraft
 import com.itmanager.app.data.model.Waypoint
 import kotlinx.coroutines.flow.Flow
 
@@ -54,6 +55,10 @@ interface DcimDataSource {
     suspend fun printers(): List<Printer>
 
     suspend fun vlans(): List<Vlan>
+    /** Adds a VLAN when [isNew], otherwise changes the one with the draft's number. */
+    suspend fun saveVlan(isNew: Boolean, draft: VlanDraft): Vlan
+    /** Refused while ports are in the VLAN. */
+    suspend fun deleteVlan(id: Int)
 
     // Ports as the inventory records them. Never sent to the switch.
 

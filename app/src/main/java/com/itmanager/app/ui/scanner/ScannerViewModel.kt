@@ -49,7 +49,7 @@ class ScannerViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            repository.vlans().onSuccess { vlans -> _state.update { it.copy(suggestions = vlans.sortedBy { v -> v.id }) } }
+            repository.vlans().onSuccess { vlans -> _state.update { it.copy(suggestions = vlans.filter { v -> v.subnet.isNotBlank() }.sortedBy { v -> v.id }) } }
         }
         // Shows the last scan again when the screen is reopened, and resumes following one still running.
         viewModelScope.launch {

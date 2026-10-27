@@ -98,11 +98,11 @@ def build_zip(
         ),
         "vlans.csv": _csv(
             ["vid", "name", "status", "description"],
-            [(v.vlan_id, v.name, "active", f"{v.subnet_cidr} {v.description or ''}".strip()) for v in vlans],
+            [(v.vlan_id, v.name, "active", f"{v.subnet_cidr or ''} {v.description or ''}".strip()) for v in vlans],
         ),
         "prefixes.csv": _csv(
             ["prefix", "status", "description"],
-            [(str(v.subnet_cidr), "active", f"VLAN {v.vlan_id} {v.name}") for v in vlans],
+            [(str(v.subnet_cidr), "active", f"VLAN {v.vlan_id} {v.name}") for v in vlans if v.subnet_cidr],
         ),
         "devices.csv": _csv(
             ["name", "role", "manufacturer", "device_type", "status", "site", "comments"],

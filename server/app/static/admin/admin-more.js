@@ -348,6 +348,10 @@
   // ---------------------------------------------------------------- config import
 
   let previewed = false;
+  const IMPORT_FIELDS = {
+    port_name: "имя", mode: "режим", access_vlan: "VLAN", tagged_vlans: "VLAN trunk", is_admin_up: "включён",
+    speed_mbps: "скорость", is_uplink: "аплинк",
+  };
   const importError = (e) => { $("import-error").hidden = !e; $("import-error").textContent = e ? e.message : ""; };
 
   $("port-import").addEventListener("click", () => {
@@ -367,17 +371,24 @@
     importError(null);
     try {
       const r = await api("POST", `devices/${d.id}/config-import`, { text: $("import-text").value, apply });
-      const lines = [`${r.kind}${r.hostname ? ` · ${r.hostname}` : ""}`, `Портов с изменениями: ${r.changed_ports}`];
-      for (const p of r.ports.filter((x) => x.matched && Object.keys(x.changes).length)) {
-        lines.push(`${p.port}: ${Object.entries(p.changes).map(([k, [a, b]]) => `${k} ${a ?? "—"} → ${b ?? "—"}`).join(", ")}`);
+      const newPorts = r.new_ports || [];
+      const newVlans = Object.entries(r.new_vlans || {});
+      const lines = [
+        `${r.kind}${r.hostname ? ` · ${r.hostname}` : ""}`,
+        `Портов с изменениями: ${r.changed_ports} (новых ${newPorts.length}), новых VLAN: ${newVlans.length}`,
+      ];
+      if (newVlans.length) lines.push(`${apply ? "Добавлены" : "Будут добавлены"} VLAN: ${newVlans.map(([id, n]) => `${id} ${n}`).join(", ")}`);
+      const shown = (v) => (v === true ? "да" : v === false ? "нет" : Array.isArray(v) ? v.join(",") || "—" : v ?? "—");
+      for (const p of r.ports.filter((x) => Object.keys(x.changes).length)) {
+        const fields = Object.entries(p.changes).filter(([k]) => p.matched || k !== "port_name");
+        const text = fields.map(([k, [a, b]]) => (p.matched ? `${IMPORT_FIELDS[k] || k} ${shown(a)} → ${shown(b)}` : `${IMPORT_FIELDS[k] || k} ${shown(b)}`));
+        lines.push(`${p.port}${p.matched ? "" : " (новый порт)"}: ${text.join(", ")}`);
       }
-      if (r.unmatched_interfaces.length) lines.push(`Нет такого порта в инвентаре: ${r.unmatched_interfaces.join(", ")}`);
-      const unknown = Object.keys(r.unknown_vlans);
-      if (unknown.length) lines.push(`VLAN не заведены (вкладка VLAN): ${unknown.join(", ")}`);
+      if (r.unmatched_interfaces.length) lines.push(`Не распознаны: ${r.unmatched_interfaces.join(", ")}`);
       $("import-result").hidden = false;
       $("import-result").textContent = (apply ? "Применено к инвентарю.\n" : "") + lines.join("\n");
       previewed = !apply;
-      $("import-apply").disabled = apply || !r.changed_ports;
+      $("import-apply").disabled = apply || !(r.changed_ports || newVlans.length);
     } catch (e) { importError(e); }
   }
   $("import-preview").addEventListener("click", () => runImport(false));

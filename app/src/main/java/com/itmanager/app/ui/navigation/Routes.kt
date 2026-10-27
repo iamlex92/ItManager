@@ -18,6 +18,7 @@ import kotlinx.serialization.Serializable
 @Serializable data object DevicesRoute
 @Serializable data object TopologyRoute
 @Serializable data object PeripheralsRoute
+@Serializable data object VlansRoute
 @Serializable data object PrintersRoute
 @Serializable data object AutomationRoute
 @Serializable data object SettingsRoute

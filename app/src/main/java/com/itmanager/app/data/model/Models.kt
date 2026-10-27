@@ -52,13 +52,17 @@ data class Device(
     val rackH: Int? = null,
     /** For a rack: its height in units. */
     val rackUnits: Int? = null,
+    /** The switch and port this device is cabled to, through sockets and patch panels. */
+    val switchId: String? = null,
+    val switchPortId: String? = null,
+    val switchPortName: String? = null,
 ) {
     /** The unit number the device's top edge reaches in its rack. */
     val rackTop: Int? get() = rackU?.let { it + (rackH ?: 1) - 1 }
 
     fun toDraft() = DeviceDraft(
         name = name, type = type, ip = ip, vendor = vendor, model = model, hostId = hostId,
-        comment = comment, rackId = rackId, rackU = rackU, rackH = rackH, rackUnits = rackUnits,
+        comment = comment, rackId = rackId, rackU = rackU, rackH = rackH, rackUnits = rackUnits, mac = mac,
     )
 
     fun matches(query: String): Boolean {
@@ -74,8 +78,37 @@ data class Device(
 data class Vlan(
     val id: Int,
     val name: String,
+    /** "10.10.20.0/24", or empty for a VLAN without an IP subnet. */
     val subnet: String,
     val colorArgb: Long,
+    val description: String? = null,
+)
+
+/** What the VLAN form sends; [subnet] blank clears it. */
+data class VlanDraft(
+    val id: Int,
+    val name: String,
+    val subnet: String,
+    val colorArgb: Long,
+    val description: String?,
+) {
+    /** Why the form cannot be saved, or null. */
+    fun problem(): String? = when {
+        id !in 1..4094 -> "Номер VLAN от 1 до 4094"
+        name.isBlank() -> "Укажите название"
+        subnet.isNotBlank() && !isCidr(subnet.trim()) -> "Подсеть пишется так: 10.10.20.0/24"
+        else -> null
+    }
+}
+
+private val CIDR = Regex("""^((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)/(3[0-2]|[12]?\d)$""")
+
+/** An IPv4 network with its prefix length: 10.10.20.0/24. */
+fun isCidr(text: String): Boolean = CIDR.matches(text)
+
+/** Colours offered for VLANs: distinct on the dark map. */
+val VLAN_COLORS = listOf(
+    0xFF3498DB, 0xFFE67E22, 0xFF9B59B6, 0xFFE74C3C, 0xFF2ECC71, 0xFF1ABC9C, 0xFFF1C40F, 0xFF34495E, 0xFFFF7EB6, 0xFF95A5A6,
 )
 
 /** A physical cable between two devices (L1). */
@@ -276,7 +309,14 @@ data class DeviceDraft(
     val rackU: Int? = null,
     val rackH: Int? = null,
     val rackUnits: Int? = null,
+    /** aa:bb:cc:dd:ee:ff; null clears it. */
+    val mac: String? = null,
 )
+
+private val MAC = Regex("^[0-9a-fA-F]{2}([:-]?[0-9a-fA-F]{2}){5}$")
+
+/** A MAC address the server accepts: aa:bb:cc:dd:ee:ff, with dashes or without separators. */
+fun isMac(text: String): Boolean = MAC.matches(text.trim())
 
 /** One change applied to many devices at once; a null field stays as it is on each. */
 data class DeviceBulkChange(

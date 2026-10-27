@@ -27,7 +27,12 @@ data class TopologyLink(
     /** From the switch side; null when neither end is a switch. */
     val isUp: Boolean?,
     val speedMbps: Int?,
+    /** The cables of the chain from end A to end B; empty for a VIRTUAL link. */
+    val connectionIds: List<String> = emptyList(),
 ) {
+    /** The cable plugged into [deviceId]'s port: the one to remove to unplug that device. */
+    fun cableAt(deviceId: String): String? = if (deviceId == aId) connectionIds.firstOrNull() else connectionIds.lastOrNull()
+
     fun other(id: String): String = if (id == aId) bId else aId
     fun portOf(id: String): String? = if (id == aId) aPort else bPort
 }

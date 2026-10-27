@@ -92,11 +92,12 @@ data class TopologyLinkDto(
     @SerialName("cable_types") val cableTypes: List<String> = emptyList(),
     @SerialName("is_up") val isUp: Boolean? = null,
     @SerialName("speed_mbps") val speedMbps: Int? = null,
+    @SerialName("connection_ids") val connectionIds: List<String> = emptyList(),
 ) {
     fun toDomain() = TopologyLink(
         aId, bId,
         if (kind.equals("VIRTUAL", ignoreCase = true)) TopologyLinkKind.VIRTUAL else TopologyLinkKind.CABLE,
-        aPort, bPort, via, cableTypes, isUp, speedMbps,
+        aPort, bPort, via, cableTypes, isUp, speedMbps, connectionIds,
     )
 }
 

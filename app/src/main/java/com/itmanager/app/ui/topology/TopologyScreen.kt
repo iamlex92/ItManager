@@ -1,6 +1,16 @@
 package com.itmanager.app.ui.topology
 
+import android.widget.Toast
 import androidx.compose.foundation.Canvas
+import com.itmanager.app.ui.map.DeviceFormDialog
+import com.itmanager.app.ui.map.DeviceForm
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.outlined.LinkOff
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -118,6 +128,12 @@ fun TopologyScreen(
     var query by rememberSaveable { mutableStateOf("") }
     var searchMiss by remember { mutableStateOf(false) }
     val density = LocalDensity.current
+    var connectFrom by remember { mutableStateOf<TopologyNode?>(null) }
+    var disconnect by remember { mutableStateOf<Pair<String, TopologyLink>?>(null) }
+    val context = LocalContext.current
+    LaunchedEffect(viewModel) {
+        viewModel.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
+    }
     val cellW = with(density) { CELL_W.toPx() }
     val cellH = with(density) { CELL_H.toPx() }
 
@@ -227,6 +243,9 @@ fun TopologyScreen(
                             viewModel.showOnMap(node.id)
                             onShowOnMap()
                         },
+                        onEdit = { viewModel.openEdit(node.id) },
+                        onConnect = { connectFrom = node },
+                        onDisconnect = { link -> disconnect = node.id to link },
                         onPick = { id ->
                             viewModel.select(id)
                             l?.places?.get(id)?.let { p -> centre(Offset(p.x * cellW, p.y * cellH + cellH * 0.3f)) }
@@ -239,6 +258,51 @@ fun TopologyScreen(
                 }
             }
         }
+    }
+
+    connectFrom?.let { from ->
+        ConnectDialog(
+            from = from,
+            nodes = topology?.nodes.orEmpty(),
+            onConnect = { to, cable ->
+                connectFrom = null
+                viewModel.connect(from.id, to, cable)
+            },
+            onDismiss = { connectFrom = null },
+        )
+    }
+    disconnect?.let { (selfId, link) ->
+        val names = topology?.nodes.orEmpty().associate { it.id to it.name }
+        AlertDialog(
+            onDismissRequest = { disconnect = null },
+            title = { Text("Отключить ${names[selfId] ?: ""}?") },
+            text = {
+                Text(
+                    "Из учёта удалится кабель у порта ${link.portOf(selfId) ?: "?"} (${names[selfId]} → ${names[link.other(selfId)]}). " +
+                        "Розетки и патч-панели на пути остаются. Само оборудование это не затрагивает.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    disconnect = null
+                    viewModel.disconnect(link, selfId)
+                }) { Text("Отключить", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { disconnect = null }) { Text("Отмена") } },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        )
+    }
+    state.form?.let { f ->
+        DeviceFormDialog(
+            form = DeviceForm(f.device, f.device.x, f.device.y, f.device.floorId, error = f.error),
+            busy = state.busy,
+            floors = emptyList(),
+            onFloor = {},
+            onSave = viewModel::saveDevice,
+            onDelete = viewModel::deleteDevice,
+            onDismiss = viewModel::closeEdit,
+            hosts = f.hosts,
+        )
     }
 }
 
@@ -365,6 +429,9 @@ private fun NodeCard(
     onOpenSwitch: () -> Unit,
     onShowOnMap: () -> Unit,
     onPick: (String) -> Unit,
+    onEdit: () -> Unit,
+    onConnect: () -> Unit,
+    onDisconnect: (TopologyLink) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val names = remember(topology) { topology.nodes.associate { it.id to it.name } }
@@ -390,6 +457,7 @@ private fun NodeCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+                IconButton(onClick = onEdit) { Icon(Icons.Outlined.Edit, contentDescription = "Изменить устройство") }
                 IconButton(onClick = onClose) { Icon(Icons.Outlined.Close, contentDescription = "Закрыть") }
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 6.dp)) {
@@ -403,7 +471,7 @@ private fun NodeCard(
                 if (links.isEmpty()) {
                     Text("Кабелем ни с чем не соединено", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                links.forEach { link -> LinkLine(node.id, link, names, onPick) }
+                links.forEach { link -> LinkLine(node.id, link, names, onPick, onDisconnect) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp, end = 12.dp)) {
                 if (node.type == DeviceType.SWITCH) {
@@ -413,14 +481,23 @@ private fun NodeCard(
                         Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
                     }
                 }
-                if (node.type != DeviceType.VIRTUAL) TextButton(onClick = onShowOnMap) { Text("На карте") }
+                if (node.type != DeviceType.VIRTUAL) {
+                    TextButton(onClick = onConnect) { Text("Соединить…") }
+                    TextButton(onClick = onShowOnMap) { Text("На карте") }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun LinkLine(selfId: String, link: TopologyLink, names: Map<String, String>, onPick: (String) -> Unit) {
+private fun LinkLine(
+    selfId: String,
+    link: TopologyLink,
+    names: Map<String, String>,
+    onPick: (String) -> Unit,
+    onDisconnect: (TopologyLink) -> Unit,
+) {
     val other = link.other(selfId)
     val text = buildString {
         if (link.kind == TopologyLinkKind.VIRTUAL) {
@@ -451,6 +528,70 @@ private fun LinkLine(selfId: String, link: TopologyLink, names: Map<String, Stri
             },
         )
         Spacer(Modifier.width(8.dp))
-        Text(text, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(text, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        if (link.kind == TopologyLinkKind.CABLE && link.cableAt(selfId) != null) {
+            IconButton(onClick = { onDisconnect(link) }, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Outlined.LinkOff, contentDescription = "Отключить", modifier = Modifier.size(18.dp))
+            }
+        }
     }
+}
+
+/** Joins the selected device to another one with a new cable; the server takes a free port on each. */
+@Composable
+private fun ConnectDialog(
+    from: TopologyNode,
+    nodes: List<TopologyNode>,
+    onConnect: (String, String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var query by remember { mutableStateOf("") }
+    var cable by remember { mutableStateOf("Cat6") }
+    val shown = nodes.filter { it.id != from.id && it.type != DeviceType.VIRTUAL }
+        .filter { query.isBlank() || it.name.contains(query, true) || it.ip?.contains(query.trim()) == true }
+        .sortedWith(compareBy({ it.type !in setOf(DeviceType.SWITCH, DeviceType.ROUTER, DeviceType.FIREWALL) }, { it.name }))
+        .take(200)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Соединить ${from.name} с…") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = cable == "Cat6", onClick = { cable = "Cat6" }, label = { Text("Медь Cat6") })
+                    FilterChip(selected = cable == "OM3", onClick = { cable = "OM3" }, label = { Text("Оптика OM3") })
+                }
+                TextField(
+                    value = query,
+                    onValueChange = { query = it.take(60) },
+                    singleLine = true,
+                    placeholder = { Text("Имя или IP") },
+                    leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    "Кабель запишется в учёт: сервер займёт свободный порт на каждом устройстве. На карте он появится сам.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                LazyColumn(Modifier.heightIn(max = 320.dp)) {
+                    items(shown, key = { it.id }) { n ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().clickable { onConnect(n.id, cable) }.padding(vertical = 8.dp),
+                        ) {
+                            Icon(n.type.icon, contentDescription = null, tint = n.type.tint, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(n.name, style = MaterialTheme.typography.bodyMedium)
+                                Text(listOfNotNull(n.type.label, n.ip).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+    )
 }

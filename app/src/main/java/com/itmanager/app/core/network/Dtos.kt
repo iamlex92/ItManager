@@ -15,10 +15,15 @@ import com.itmanager.app.data.model.Printer
 import com.itmanager.app.data.model.ServerHealth
 import com.itmanager.app.data.model.SwitchPort
 import com.itmanager.app.data.model.Vlan
+import com.itmanager.app.data.model.VlanDraft
 import com.itmanager.app.data.model.Waypoint
 import com.itmanager.app.data.model.parseColorHex
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
@@ -82,6 +87,9 @@ data class DeviceDto(
     @SerialName("rack_u") val rackU: Int? = null,
     @SerialName("rack_h") val rackH: Int? = null,
     @SerialName("rack_units") val rackUnits: Int? = null,
+    @SerialName("switch_id") val switchId: String? = null,
+    @SerialName("switch_port_id") val switchPortId: String? = null,
+    @SerialName("switch_port_name") val switchPortName: String? = null,
 ) {
     fun toDomain() = Device(
         id = id,
@@ -102,6 +110,9 @@ data class DeviceDto(
         rackU = rackU,
         rackH = rackH,
         rackUnits = rackUnits,
+        switchId = switchId,
+        switchPortId = switchPortId,
+        switchPortName = switchPortName,
     )
 }
 
@@ -142,9 +153,26 @@ data class VlanDto(
     val name: String,
     @SerialName("subnet_cidr") val subnetCidr: String = "",
     @SerialName("color_hex") val colorHex: String? = null,
+    val description: String? = null,
 ) {
-    fun toDomain() = Vlan(vlanId, name, subnetCidr, parseColorHex(colorHex))
+    fun toDomain() = Vlan(vlanId, name, subnetCidr, parseColorHex(colorHex), description?.takeIf { it.isNotBlank() })
 }
+
+/** The VLAN form, nulls included: a cleared subnet or description is cleared on the server too. */
+fun VlanDraft.toBody(withId: Boolean): JsonObject =
+    buildJsonObject {
+        if (withId) put("vlan_id", JsonPrimitive(id))
+        put("name", JsonPrimitive(name.trim()))
+        put(
+            "subnet_cidr",
+            subnet.trim().takeIf { it.isNotEmpty() }?.let { JsonPrimitive(it) } ?: JsonNull,
+        )
+        put("color_hex", JsonPrimitive("#%06X".format(colorArgb and 0xFFFFFF)))
+        put(
+            "description",
+            description?.trim()?.takeIf { it.isNotEmpty() }?.let { JsonPrimitive(it) } ?: JsonNull,
+        )
+    }
 
 @Serializable
 data class ConnectionDto(
