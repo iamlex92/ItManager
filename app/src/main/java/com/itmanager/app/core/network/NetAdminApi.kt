@@ -478,6 +478,18 @@ class NetAdminApi @Inject constructor(
         }.body()
     }
 
+    suspend fun deviceTemplates(s: ServerSettings): List<DeviceTemplateDto> = guarded { fetch<List<DeviceTemplateDto>>(s, "device-templates") }
+
+    suspend fun createDeviceTemplate(s: ServerSettings, body: DeviceTemplateBody): DeviceTemplateDto =
+        post(s, "device-templates", body)
+
+    suspend fun deleteDeviceTemplate(s: ServerSettings, id: String) {
+        guarded { client.delete("${requireBase(s)}/api/v1/device-templates/${id.encodeURLPathPart()}") { auth(s) } }
+    }
+
+    suspend fun createDeviceFromTemplate(s: ServerSettings, id: String, body: DeviceFromTemplateBody): DeviceDto =
+        post(s, "device-templates/${id.encodeURLPathPart()}/create-device", body)
+
     /** A file the server builds (NetBox archive, label page). Reads only. */
     suspend fun download(s: ServerSettings, path: String): ByteArray =
         guarded { client.get("${requireBase(s)}/api/v1/$path") { auth(s) }.body() }

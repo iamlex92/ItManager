@@ -7,6 +7,8 @@ import com.itmanager.app.core.network.BulkDeleteBody
 import com.itmanager.app.core.network.BulkSetBody
 import com.itmanager.app.core.network.BulkUpdateBody
 import com.itmanager.app.core.network.DeviceBody
+import com.itmanager.app.core.network.DeviceFromTemplateBody
+import com.itmanager.app.core.network.DeviceTemplateBody
 import com.itmanager.app.core.network.DeviceMove
 import com.itmanager.app.core.network.FloorCreateBody
 import com.itmanager.app.core.network.FloorDto
@@ -33,6 +35,8 @@ import com.itmanager.app.data.model.AuditKind
 import com.itmanager.app.data.model.AuthMethod
 import com.itmanager.app.data.model.ConfigDiff
 import com.itmanager.app.data.model.ConfigImportResult
+import com.itmanager.app.data.model.DeviceTemplate
+import com.itmanager.app.data.model.DeviceTemplateDraft
 import com.itmanager.app.data.model.IpamCheck
 import com.itmanager.app.data.model.IpamOverview
 import com.itmanager.app.data.model.Connection
@@ -162,6 +166,21 @@ class RemoteDataSource(
     override suspend fun ipam(): IpamOverview = api.ipam(settings).toDomain()
 
     override suspend fun ipamCheck(ip: String): IpamCheck = api.ipamCheck(settings, ip).toDomain()
+
+    override suspend fun deviceTemplates(): List<DeviceTemplate> = api.deviceTemplates(settings).map { it.toDomain() }
+
+    override suspend fun saveDeviceTemplate(draft: DeviceTemplateDraft): DeviceTemplate = api.createDeviceTemplate(
+        settings,
+        DeviceTemplateBody(
+            draft.name.trim(), draft.type.name, draft.vendor.trim().ifEmpty { null }, draft.model.trim().ifEmpty { null },
+            draft.portCount, draft.portPrefix.trim().ifEmpty { "Port" }, draft.rackH,
+        ),
+    ).toDomain()
+
+    override suspend fun deleteDeviceTemplate(id: String) = api.deleteDeviceTemplate(settings, id)
+
+    override suspend fun createDeviceFromTemplate(templateId: String, name: String, ip: String?): Device =
+        api.createDeviceFromTemplate(settings, templateId, DeviceFromTemplateBody(name.trim(), ip?.trim()?.ifEmpty { null })).toDomain()
 
     override suspend fun importConfig(switchId: String, text: String, apply: Boolean): ConfigImportResult =
         api.importConfig(settings, switchId, text, apply).toDomain()

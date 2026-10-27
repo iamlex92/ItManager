@@ -28,6 +28,7 @@ import kotlinx.serialization.Serializable
 @Serializable data object CredentialsRoute
 @Serializable data object ToolsRoute
 @Serializable data object IpamRoute
+@Serializable data object TemplatesRoute
 @Serializable data class ToolRoute(val kind: String)
 @Serializable data class SwitchRoute(val deviceId: String)
 @Serializable data class HistoryRoute(val deviceId: String, val switchName: String)
