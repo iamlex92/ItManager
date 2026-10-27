@@ -18,6 +18,11 @@ import com.itmanager.app.data.model.DeviceBulkChange
 import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.Drawing
+import com.itmanager.app.data.model.Faceplate
+import com.itmanager.app.data.model.FaceplatePort
+import com.itmanager.app.data.model.Peripheral
+import com.itmanager.app.data.model.PeripheralDraft
+import com.itmanager.app.data.model.Topology
 import com.itmanager.app.data.model.FloorDraft
 import com.itmanager.app.data.model.FloorInfo
 import com.itmanager.app.data.model.FloorMap
@@ -63,6 +68,12 @@ class DcimRepository @Inject constructor(
 
     /** Screens reload when this emits: on new settings, and after the inventory changed. */
     val settings: Flow<ServerSettings> = combine(settingsRepository.settings, inventoryVersion) { s, _ -> s }
+
+    /** Bumped when a peripheral is added, changed or moved from this phone. */
+    private val peripheralVersion = MutableStateFlow(0)
+
+    /** Peripheral lists reload when this emits: with [settings], and after a peripheral changed here. */
+    val peripheralChanges: Flow<ServerSettings> = combine(settings, peripheralVersion) { s, _ -> s }
 
     suspend fun floorMap(floorId: String? = null): Result<FloorMap> = load { floorMap(floorId) }
     suspend fun devices(): Result<List<Device>> = load { devices() }
@@ -141,6 +152,25 @@ class DcimRepository @Inject constructor(
     suspend fun saveDrawings(plan: FloorPlan, drawings: List<Drawing>): Result<FloorPlan> =
         load { saveDrawings(plan, drawings) }
     suspend fun saveZones(plan: FloorPlan, zones: List<Zone>): Result<FloorPlan> = load { saveZones(plan, zones) }
+
+    // Peripherals change only their own list; the map and the device list stay as they are.
+    suspend fun peripherals(): Result<List<Peripheral>> = load { peripherals() }
+    suspend fun savePeripheral(id: String?, draft: PeripheralDraft): Result<Peripheral> =
+        load { savePeripheral(id, draft) }.onSuccess { peripheralVersion.value++ }
+    suspend fun attachPeripheral(id: String, deviceId: String?): Result<Peripheral> =
+        load { attachPeripheral(id, deviceId) }.onSuccess { peripheralVersion.value++ }
+    suspend fun deletePeripheral(id: String): Result<Unit> = load { deletePeripheral(id) }.onSuccess { peripheralVersion.value++ }
+
+    suspend fun topology(): Result<Topology> = load { topology() }
+
+    suspend fun faceplate(deviceId: String): Result<Faceplate?> = load { faceplate(deviceId) }
+    suspend fun faceplateSvg(deviceId: String): Result<ByteArray> = load { faceplateSvg(deviceId) }
+    suspend fun uploadFaceplate(deviceId: String, svg: ByteArray): Result<Faceplate> = load { uploadFaceplate(deviceId, svg) }
+    suspend fun saveFaceplatePorts(deviceId: String, marks: Collection<FaceplatePort>): Result<Faceplate> =
+        load { saveFaceplatePorts(deviceId, marks) }
+    suspend fun copyFaceplate(deviceId: String, fromDeviceId: String): Result<Faceplate> =
+        load { copyFaceplate(deviceId, fromDeviceId) }
+    suspend fun deleteFaceplate(deviceId: String): Result<Unit> = load { deleteFaceplate(deviceId) }
 
     /** The server says the inventory changed elsewhere (the web console, another phone). */
     fun inventoryChanged() {

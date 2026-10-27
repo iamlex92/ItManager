@@ -16,6 +16,11 @@ import com.itmanager.app.data.model.DeviceHistoryEntry
 import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.DiagnosticResult
 import com.itmanager.app.data.model.Drawing
+import com.itmanager.app.data.model.Faceplate
+import com.itmanager.app.data.model.FaceplatePort
+import com.itmanager.app.data.model.Peripheral
+import com.itmanager.app.data.model.PeripheralDraft
+import com.itmanager.app.data.model.Topology
 import com.itmanager.app.data.model.Zone
 import com.itmanager.app.data.model.FloorDraft
 import com.itmanager.app.data.model.FloorInfo
@@ -144,6 +149,29 @@ interface DcimDataSource {
     suspend fun placePlan(plan: FloorPlan, rect: PlanRect): FloorPlan
     suspend fun saveDrawings(plan: FloorPlan, drawings: List<Drawing>): FloorPlan
     suspend fun saveZones(plan: FloorPlan, zones: List<Zone>): FloorPlan
+
+    // Peripherals: equipment without a network port attached to devices. Inventory only.
+
+    suspend fun peripherals(): List<Peripheral>
+    /** Creates a peripheral when [id] is null; otherwise replaces its fields with the draft's. */
+    suspend fun savePeripheral(id: String?, draft: PeripheralDraft): Peripheral
+    /** Attaches the peripheral to [deviceId], or puts it back in stock with null. */
+    suspend fun attachPeripheral(id: String, deviceId: String?): Peripheral
+    suspend fun deletePeripheral(id: String)
+
+    /** Active devices and the cables between them, traced through sockets and patch panels. */
+    suspend fun topology(): Topology
+
+    // Front panel drawings in the rack view.
+
+    /** The device's panel drawing with its port marks, or null when it has none. */
+    suspend fun faceplate(deviceId: String): Faceplate?
+    suspend fun faceplateSvg(deviceId: String): ByteArray
+    suspend fun uploadFaceplate(deviceId: String, svg: ByteArray): Faceplate
+    suspend fun saveFaceplatePorts(deviceId: String, marks: Collection<FaceplatePort>): Faceplate
+    /** Takes the drawing and marks of [fromDeviceId]; ports are matched by name, then number. */
+    suspend fun copyFaceplate(deviceId: String, fromDeviceId: String): Faceplate
+    suspend fun deleteFaceplate(deviceId: String)
 
     /** Live port and device status for one switch, or for every device with [com.itmanager.app.data.model.ALL_DEVICES]. */
     fun live(deviceId: String): Flow<LiveEvent>

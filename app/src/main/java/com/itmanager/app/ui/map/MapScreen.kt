@@ -1,5 +1,6 @@
 package com.itmanager.app.ui.map
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -52,6 +53,7 @@ import androidx.compose.material.icons.outlined.CenterFocusStrong
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.EditLocationAlt
 import androidx.compose.material.icons.outlined.MeetingRoom
+import androidx.compose.material.icons.outlined.Keyboard
 import androidx.compose.material.icons.outlined.Nfc
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
@@ -93,6 +95,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -121,6 +124,11 @@ import com.itmanager.app.ui.theme.Ink950
 import com.itmanager.app.ui.theme.MonoStyle
 import com.itmanager.app.ui.theme.Motion
 import com.itmanager.app.ui.theme.StatusColors
+import com.itmanager.app.data.model.takesPeripherals
+import com.itmanager.app.ui.peripherals.DevicePeripheralsDialog
+import com.itmanager.app.ui.peripherals.PeripheralEditorDialog
+import com.itmanager.app.ui.peripherals.PeripheralsViewModel
+import com.itmanager.app.ui.peripherals.peripheralSummary
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -131,8 +139,21 @@ fun MapScreen(
     onOpenSettings: () -> Unit,
     onOpenScanner: () -> Unit,
     viewModel: MapViewModel = hiltViewModel(),
+    peripherals: PeripheralsViewModel = hiltViewModel(),
+    faceplates: FaceplateViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val peripheralState by peripherals.state.collectAsStateWithLifecycle()
+    val peripheralDevices by peripherals.devices.collectAsStateWithLifecycle()
+    val peripheralEditor by peripherals.editor.collectAsStateWithLifecycle()
+    val allPeripherals = (peripheralState as? UiState.Content)?.data.orEmpty()
+    var peripheralsFor by remember { mutableStateOf<Device?>(null) }
+    val rackPlates by faceplates.rackPlates.collectAsStateWithLifecycle()
+    val faceplateEditor by faceplates.editor.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    LaunchedEffect(peripherals) {
+        peripherals.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
+    }
     val focusRequest by viewModel.focusRequest.collectAsStateWithLifecycle()
     val camera = rememberMapCamera()
     val haptics = LocalHapticFeedback.current
@@ -377,6 +398,12 @@ fun MapScreen(
                         commentError = null
                         commentFor = device
                     },
+                    peripheralText = if (device.type.takesPeripherals) {
+                        peripheralSummary(allPeripherals.filter { it.deviceId == device.id }) ?: "Добавить периферию"
+                    } else {
+                        null
+                    },
+                    onOpenPeripherals = { peripheralsFor = device },
                 )
             }
         }
@@ -502,6 +529,19 @@ fun MapScreen(
                 onDismiss = { showRooms = false },
             )
         }
+        peripheralsFor?.let { device ->
+            DevicePeripheralsDialog(device, peripherals, allPeripherals, onDismiss = { peripheralsFor = null })
+        }
+        peripheralEditor?.let { e ->
+            PeripheralEditorDialog(
+                editor = e,
+                devices = peripheralDevices,
+                onChange = peripherals::updateDraft,
+                onSave = peripherals::save,
+                onDelete = peripherals::delete,
+                onDismiss = peripherals::closeEditor,
+            )
+        }
         commentFor?.let { device ->
             CommentDialog(
                 device = device,
@@ -516,10 +556,17 @@ fun MapScreen(
                 onDismiss = { commentFor = null },
             )
         }
+        // The panel drawings follow the devices mounted in the open rack.
+        val rackMembers = state.rack?.let { r -> r.devices.filter { it.rackId == r.rackId } }
+        LaunchedEffect(rackMembers) {
+            if (rackMembers == null) faceplates.closeRack() else faceplates.showRack(rackMembers)
+        }
         state.rack?.let { rackState ->
             val rack = rackState.devices.firstOrNull { it.id == rackState.rackId } ?: content?.allDevices?.get(rackState.rackId)
             if (rack != null) {
                 RackDialog(
+                    plates = rackPlates,
+                    onEditFaceplate = { d -> faceplates.openEditor(d, rackState.devices) },
                     rack = rack,
                     state = rackState,
                     onMount = { id, u, h -> viewModel.mount(id, rack.id, u, h) },
@@ -532,6 +579,8 @@ fun MapScreen(
                 )
             }
         }
+        // Over the rack view it was opened from.
+        faceplateEditor?.let { e -> FaceplateEditorDialog(e, faceplates) }
         linkToDelete?.let { link ->
             val names = content?.allDevices.orEmpty().let {
                 (it[link.deviceAId]?.name ?: "?") to (it[link.deviceBId]?.name ?: "?")
@@ -878,6 +927,9 @@ private fun DeviceCard(
     rackText: String? = null,
     onOpenRack: (() -> Unit)? = null,
     onEditComment: () -> Unit = {},
+    /** The device's peripherals in a line, or «add» when it has none; null for a device that takes none. */
+    peripheralText: String? = null,
+    onOpenPeripherals: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val drag = remember { Animatable(0f) }
@@ -976,6 +1028,23 @@ private fun DeviceCard(
                     maxLines = 4,
                     overflow = TextOverflow.Ellipsis,
                 )
+            }
+            peripheralText?.let { text ->
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenPeripherals).padding(end = 12.dp)) {
+                    Icon(
+                        Icons.Outlined.Keyboard, contentDescription = "Периферия",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp).padding(top = 2.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             if (tracePath.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))

@@ -53,6 +53,7 @@ import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Keyboard
 import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -92,6 +93,7 @@ fun DevicesScreen(
     onShowOnMap: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenScanner: () -> Unit,
+    onOpenPeripherals: () -> Unit,
     viewModel: DevicesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -163,6 +165,9 @@ fun DevicesScreen(
                 subtitle = if (state.offlineCount > 0) "Не отвечают: ${state.offlineCount}" else "Долгое нажатие: выбрать несколько",
                 onOpenSettings = onOpenSettings,
                 actions = {
+                    IconButton(onClick = onOpenPeripherals) {
+                        Icon(Icons.Outlined.Keyboard, contentDescription = "Периферия")
+                    }
                     IconButton(onClick = onOpenScanner) {
                         Icon(Icons.Outlined.TravelExplore, contentDescription = "Сканер сети")
                     }

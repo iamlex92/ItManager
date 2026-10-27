@@ -14,7 +14,9 @@ import com.itmanager.app.core.network.FloorPatch
 import com.itmanager.app.core.network.FloorRename
 import com.itmanager.app.core.network.RouteBody
 import com.itmanager.app.core.network.WaypointDto
+import com.itmanager.app.core.network.FaceplatePortsBody
 import com.itmanager.app.core.network.ImportBody
+import com.itmanager.app.core.network.attachBody
 import com.itmanager.app.core.network.LinkBody
 import com.itmanager.app.core.network.RunbookRunBody
 import com.itmanager.app.core.network.ScanBody
@@ -41,6 +43,11 @@ import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.model.DiagnosticKind
 import com.itmanager.app.data.model.DiagnosticResult
 import com.itmanager.app.data.model.Drawing
+import com.itmanager.app.data.model.Faceplate
+import com.itmanager.app.data.model.FaceplatePort
+import com.itmanager.app.data.model.Peripheral
+import com.itmanager.app.data.model.PeripheralDraft
+import com.itmanager.app.data.model.Topology
 import com.itmanager.app.data.model.FloorDraft
 import com.itmanager.app.data.model.FloorInfo
 import com.itmanager.app.data.model.FloorMap
@@ -317,6 +324,37 @@ class RemoteDataSource(
 
     override suspend fun saveZones(plan: FloorPlan, zones: List<Zone>): FloorPlan =
         api.patchFloor(settings, plan.id, FloorPatch.zones(zones)).toPlan(plan)
+
+    override suspend fun peripherals(): List<Peripheral> = api.peripherals(settings).map { it.toDomain() }
+
+    override suspend fun savePeripheral(id: String?, draft: PeripheralDraft): Peripheral =
+        if (id == null) {
+            api.createPeripheral(settings, draft.toBody()).toDomain()
+        } else {
+            api.patchPeripheral(settings, id, draft.toBody()).toDomain()
+        }
+
+    override suspend fun attachPeripheral(id: String, deviceId: String?): Peripheral =
+        api.patchPeripheral(settings, id, attachBody(deviceId)).toDomain()
+
+    override suspend fun deletePeripheral(id: String) = api.deletePeripheral(settings, id)
+
+    override suspend fun topology(): Topology = api.topology(settings).toDomain()
+
+    override suspend fun faceplate(deviceId: String): Faceplate? = api.faceplate(settings, deviceId)?.toDomain()
+
+    override suspend fun faceplateSvg(deviceId: String): ByteArray = api.faceplateSvg(settings, deviceId)
+
+    override suspend fun uploadFaceplate(deviceId: String, svg: ByteArray): Faceplate =
+        api.uploadFaceplate(settings, deviceId, svg).toDomain()
+
+    override suspend fun saveFaceplatePorts(deviceId: String, marks: Collection<FaceplatePort>): Faceplate =
+        api.setFaceplatePorts(settings, deviceId, FaceplatePortsBody.of(marks)).toDomain()
+
+    override suspend fun copyFaceplate(deviceId: String, fromDeviceId: String): Faceplate =
+        api.copyFaceplate(settings, deviceId, fromDeviceId).toDomain()
+
+    override suspend fun deleteFaceplate(deviceId: String) = api.deleteFaceplate(settings, deviceId)
 
     override fun live(deviceId: String): Flow<LiveEvent> = liveSocket.events(settings, deviceId)
 
