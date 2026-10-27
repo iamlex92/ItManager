@@ -21,6 +21,7 @@ import com.itmanager.app.data.model.FaceplatePort
 import com.itmanager.app.data.model.Peripheral
 import com.itmanager.app.data.model.PeripheralDraft
 import com.itmanager.app.data.model.Topology
+import com.itmanager.app.data.model.PortDraft
 import com.itmanager.app.data.model.Zone
 import com.itmanager.app.data.model.FloorDraft
 import com.itmanager.app.data.model.FloorInfo
@@ -53,6 +54,12 @@ interface DcimDataSource {
     suspend fun printers(): List<Printer>
 
     suspend fun vlans(): List<Vlan>
+
+    // Ports as the inventory records them. Never sent to the switch.
+
+    suspend fun createPort(deviceId: String, draft: PortDraft): SwitchPort
+    suspend fun updatePortRecord(portId: String, draft: PortDraft): SwitchPort
+    suspend fun deletePort(portId: String)
 
     // Switch writes. The caller shows the commands from preview and gets explicit confirmation first.
 
@@ -135,6 +142,8 @@ interface DcimDataSource {
     /** A cable between two devices; the server picks or adds free ports on each. */
     suspend fun linkDevices(deviceAId: String, deviceBId: String, cableType: String): Connection
     suspend fun deleteConnection(id: String)
+    /** The cable's colour on the map; null gives the automatic colour back. */
+    suspend fun recolorConnection(id: String, colorArgb: Long?): Connection
     /** The cable's bends on the map, all floors at once. */
     suspend fun routeConnection(id: String, waypoints: List<Waypoint>): Connection
 

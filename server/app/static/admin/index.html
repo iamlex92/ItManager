@@ -6,6 +6,7 @@
 <title>NetAdmin · веб-консоль</title>
 <link rel="stylesheet" href="/static/admin/admin.css?v={{version}}">
 <script src="/static/admin/admin.js?v={{version}}" defer></script>
+<script src="/static/admin/admin-more.js?v={{version}}" defer></script>
 </head>
 <body>
 <div id="login" class="login" hidden>
@@ -30,6 +31,12 @@
       <button data-tab="devices">Устройства</button>
       <button data-tab="peripherals">Периферия</button>
       <button data-tab="topology">Топология</button>
+      <button data-tab="vlans">VLAN</button>
+      <button data-tab="alerts">Оповещения</button>
+      <button data-tab="audit">Журнал</button>
+      <button data-tab="runbooks">Автоматизация</button>
+      <button data-tab="printers">Принтеры</button>
+      <button data-tab="creds">Доступ</button>
       <button data-tab="scan">Сканирование</button>
       <button data-tab="scripts">Скрипты</button>
     </nav>
@@ -48,6 +55,7 @@
         <div class="seg" id="tools">
           <button data-tool="move" class="active" title="Перетаскивайте объекты; щелчок открывает карточку">Объекты</button>
           <button data-tool="link" title="Щёлкните два устройства, чтобы соединить их кабелем">Связи</button>
+          <button data-tool="zones" title="Обведите кабинет или зону на плане">Помещения</button>
           <button data-tool="draw" title="Рисуйте линии мышью">Карандаш</button>
           <button data-tool="plan" title="Загрузите план здания и подвиньте его">Подложка</button>
         </div>
@@ -56,7 +64,14 @@
         </div>
         <div class="tool-opts" data-for="link" hidden>
           <select id="cable"><option value="Cat6">Медь Cat6</option><option value="OM3">Оптика OM3</option></select>
+          <span id="cable-colors" class="pens" title="Цвет нового кабеля, а если кабель выбран, то его цвет"></span>
           <span id="link-hint" class="muted small"></span>
+        </div>
+        <div class="tool-opts" data-for="zones" hidden>
+          <button id="zone-finish" class="primary" disabled>Готово</button>
+          <button id="zone-undo" disabled>Убрать точку</button>
+          <button id="zone-cancel" disabled>Отмена</button>
+          <span class="muted small">Щёлкайте по углам; «Готово» или двойной щелчок замыкает контур</span>
         </div>
         <div class="tool-opts" data-for="draw" hidden>
           <span id="pens" class="pens"></span>
@@ -103,9 +118,104 @@
       </div>
       <div class="table-wrap">
         <table class="grid">
-          <thead><tr><th class="pick"><input type="checkbox" id="pick-all" title="Выбрать все показанные"></th><th>Имя</th><th>Тип</th><th>IP</th><th>Производитель</th><th>Модель</th><th>Хост</th><th>На карте</th><th></th></tr></thead>
+          <thead><tr><th class="pick"><input type="checkbox" id="pick-all" title="Выбрать все показанные"></th><th>Имя</th><th>Тип</th><th>IP</th><th>Производитель</th><th>Модель</th><th>Помещение</th><th>Стойка</th><th>Хост</th><th>На карте</th><th></th></tr></thead>
           <tbody id="device-rows"></tbody>
         </table>
+      </div>
+    </section>
+
+    <section id="tab-vlans" class="tab" hidden>
+      <div class="card">
+        <h2>VLAN</h2>
+        <p class="muted small">Справочник сетей: порты коммутаторов ссылаются на эти номера. Записи инвентаря, на оборудование ничего не отправляется.</p>
+        <div class="table-wrap">
+          <table class="grid">
+            <thead><tr><th>VLAN</th><th>Название</th><th>Подсеть</th><th>Цвет</th><th>Описание</th><th></th></tr></thead>
+            <tbody id="vlan-rows"></tbody>
+          </table>
+        </div>
+        <form id="vlan-form" class="row wrap">
+          <label>VLAN<input id="vlan-id" type="number" min="1" max="4094" required></label>
+          <label>Название<input id="vlan-name" maxlength="50" required></label>
+          <label>Подсеть<input id="vlan-subnet" placeholder="10.10.20.0/24" required></label>
+          <label>Цвет<input id="vlan-color" type="color" value="#3498db"></label>
+          <label class="grow">Описание<input id="vlan-desc"></label>
+          <button type="submit" class="primary">Добавить</button>
+        </form>
+        <p id="vlan-error" class="error" hidden></p>
+      </div>
+    </section>
+
+    <section id="tab-alerts" class="tab" hidden>
+      <div class="toolbar">
+        <select id="alert-state"><option value="false">Активные</option><option value="">Все</option><option value="true">Закрытые</option></select>
+        <select id="alert-severity"><option value="">Любая важность</option><option value="CRITICAL">Критичные</option><option value="WARNING">Предупреждения</option><option value="INFO">Информация</option></select>
+        <div class="spacer"></div>
+        <button id="alert-reload">Обновить</button>
+      </div>
+      <div class="table-wrap"><table class="grid">
+        <thead><tr><th>Время</th><th>Важность</th><th>Устройство</th><th>Что случилось</th><th></th></tr></thead>
+        <tbody id="alert-rows"></tbody>
+      </table></div>
+    </section>
+
+    <section id="tab-audit" class="tab" hidden>
+      <div class="toolbar">
+        <select id="audit-kind">
+          <option value="all">Всё</option><option value="runbook">Runbooks</option><option value="switch">Коммутаторы</option>
+          <option value="network">Сеть</option><option value="security">Безопасность</option>
+        </select>
+        <div class="spacer"></div>
+        <button id="audit-reload">Обновить</button>
+      </div>
+      <div class="table-wrap"><table class="grid">
+        <thead><tr><th>Время</th><th>Тип</th><th>Действие</th><th>Кто</th><th>Итог</th></tr></thead>
+        <tbody id="audit-rows"></tbody>
+      </table></div>
+    </section>
+
+    <section id="tab-runbooks" class="tab" hidden>
+      <div class="columns">
+        <div class="card narrow">
+          <h2>Автоматизация</h2>
+          <p id="runbook-mode" class="muted small"></p>
+          <div id="runbook-list"></div>
+        </div>
+        <form id="runbook-form" class="card grow" hidden>
+          <h2 id="runbook-title"></h2>
+          <p id="runbook-desc" class="muted"></p>
+          <div id="runbook-params" class="stack"></div>
+          <div class="row"><button type="submit" class="primary" id="runbook-run">Запустить</button><span id="runbook-msg" class="muted small"></span></div>
+          <pre id="runbook-output" class="output" hidden></pre>
+        </form>
+      </div>
+    </section>
+
+    <section id="tab-printers" class="tab" hidden>
+      <div class="toolbar"><div class="spacer"></div><button id="printer-reload">Обновить</button></div>
+      <div id="printer-cards" class="cards"></div>
+    </section>
+
+    <section id="tab-creds" class="tab" hidden>
+      <div class="columns">
+        <div class="card grow">
+          <h2>Учётные данные</h2>
+          <p class="muted small">Пароли хранятся на сервере в зашифрованном виде и обратно не показываются. Они нужны для входа на устройства и серверы.</p>
+          <div class="table-wrap"><table class="grid">
+            <thead><tr><th>Название</th><th>Тип</th><th>Пользователь</th><th>Пароль</th><th>Устройств</th><th></th></tr></thead>
+            <tbody id="cred-rows"></tbody>
+          </table></div>
+        </div>
+        <form id="cred-form" class="card narrow">
+          <h2>Новая запись</h2>
+          <label>Название<input id="cred-name" required maxlength="100"></label>
+          <label>Тип<select id="cred-kind"><option value="ssh">SSH</option><option value="snmp_v3">SNMP v3</option><option value="winrm">WinRM</option><option value="other">Другое</option></select></label>
+          <label>Пользователь<input id="cred-user" maxlength="100" autocomplete="off"></label>
+          <label>Пароль или ключ<input id="cred-secret" type="password" autocomplete="new-password"></label>
+          <label>Заметка<input id="cred-notes" maxlength="2000"></label>
+          <button type="submit" class="primary">Сохранить</button>
+          <p id="cred-error" class="error" hidden></p>
+        </form>
       </div>
     </section>
 
@@ -222,9 +332,19 @@
     </div>
     <label id="device-host-label" hidden>Хост виртуализации<select id="device-host"></select></label>
     <label id="device-floor-label">Этаж<select id="device-floor"></select></label>
+    <label id="device-room-label" hidden>Помещение <span class="muted small">(выбор переносит объект в помещение на карте)</span><select id="device-room"></select></label>
+    <label id="device-units-label" hidden>Высота стойки, U<input id="device-units" type="number" min="1" max="60" value="42"></label>
+    <div id="device-mount" class="row">
+      <label class="grow">В стойке<select id="device-rack"></select></label>
+      <label>Юнит (с низа)<input id="device-rack-u" type="number" min="1" max="60"></label>
+      <label>Высота, U<input id="device-rack-h" type="number" min="1" max="60"></label>
+    </div>
+    <label>Комментарий<textarea id="device-comment" rows="3" maxlength="4000" placeholder="Заметка для себя: что тут стоит, кто отвечает, особенности"></textarea></label>
     <p id="device-error" class="error" hidden></p>
     <div class="row">
       <button type="button" id="device-delete" class="danger">Удалить</button>
+      <button type="button" id="device-ports" title="Порты в инвентаре" hidden>Порты…</button>
+      <button type="button" id="device-rack-open" title="Вид стойки спереди" hidden>Стойка…</button>
       <div class="spacer"></div>
       <button type="button" id="device-cancel">Отмена</button>
       <button type="submit" class="primary">Сохранить</button>
@@ -240,6 +360,7 @@
     <label id="bulk-host-label" hidden>Хост виртуализации<select id="bulk-host"></select></label>
     <label id="bulk-floor-label">Этаж<select id="bulk-floor"></select></label>
     <label>Производитель<input id="bulk-vendor" maxlength="50" placeholder="Пусто: не менять"></label>
+    <label id="bulk-room-label" hidden>Помещение <span class="muted small">(устройства раскладываются внутри контура)</span><select id="bulk-room"></select></label>
     <p id="bulk-error" class="error" hidden></p>
     <div class="row">
       <div class="spacer"></div>
@@ -263,6 +384,115 @@
       <button type="button" id="floor-add">+ Этаж</button>
       <div class="spacer"></div>
       <button type="button" id="floors-close" class="primary">Готово</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="zone-dialog">
+  <form id="zone-form" method="dialog" class="dialog">
+    <h2 id="zone-heading">Помещение</h2>
+    <label>Название<input id="zone-name" required maxlength="100" placeholder="Например, Серверная"></label>
+    <label class="check"><input id="zone-room" type="checkbox" checked> Это помещение (кабинет): устройства внутри считаются в нём. Без галочки это просто зона.</label>
+    <label>Цвет<input id="zone-color" type="color" value="#0a84ff"></label>
+    <p id="zone-error" class="error" hidden></p>
+    <div class="row">
+      <button type="button" id="zone-delete" class="danger">Удалить</button>
+      <div class="spacer"></div>
+      <button type="button" id="zone-cancel-dialog">Отмена</button>
+      <button type="submit" class="primary">Сохранить</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="ports-dialog">
+  <div class="dialog">
+    <h2 id="ports-heading">Порты</h2>
+    <p class="muted small">Это записи инвентаря: здесь меняется то, что хранит NetAdmin. На само оборудование ничего не отправляется.</p>
+    <div class="table-wrap">
+      <table class="grid">
+        <thead><tr><th>№</th><th>Имя</th><th>Аплинк</th><th>Режим</th><th>Access VLAN</th><th>Tagged VLAN</th><th>Мбит/с</th><th>PoE</th><th>Подключено</th><th></th></tr></thead>
+        <tbody id="port-rows"></tbody>
+      </table>
+    </div>
+    <div class="row wrap">
+      <button type="button" id="port-details">История, трафик, VLAN…</button>
+      <button type="button" id="port-import" title="Вставить running-config или show vlan brief">Импорт конфига…</button>
+      <button type="button" id="port-refresh" title="Прочитать текущее состояние портов (только чтение)">Обновить с коммутатора</button>
+    </div>
+    <div class="row wrap">
+      <label>Добавить портов<input id="port-count" type="number" min="1" max="96" value="1"></label>
+      <label>Имя (префикс)<input id="port-prefix" maxlength="40" value="Gi0/"></label>
+      <button type="button" id="port-add">Добавить</button>
+    </div>
+    <p id="ports-error" class="error" hidden></p>
+    <div class="row"><div class="spacer"></div><button type="button" id="ports-close" class="primary">Готово</button></div>
+  </div>
+</dialog>
+
+<dialog id="rack-dialog">
+  <div class="dialog">
+    <h2 id="rack-heading">Стойка</h2>
+    <p class="muted small">Вид спереди: юниты считаются снизу. Щёлкните свободный юнит, чтобы поставить устройство, или «Убрать», чтобы снять.</p>
+    <div id="rack-view" class="rack-view"></div>
+    <form id="rack-form" class="row wrap" hidden>
+      <label class="grow">Устройство<select id="rack-device"></select></label>
+      <label>Юнит<input id="rack-u" type="number" min="1" max="60" required></label>
+      <label>Высота, U<input id="rack-h" type="number" min="1" max="60" value="1" required></label>
+      <button type="submit" class="primary">Поставить</button>
+    </form>
+    <p id="rack-error" class="error" hidden></p>
+    <div class="row"><div class="spacer"></div><button type="button" id="rack-close" class="primary">Готово</button></div>
+  </div>
+</dialog>
+
+<dialog id="detail-dialog">
+  <div class="dialog">
+    <h2 id="detail-heading">Коммутатор</h2>
+    <div class="seg" id="detail-tabs">
+      <button data-part="vlan" class="active">По VLAN</button>
+      <button data-part="history">История</button>
+      <button data-part="traffic">Трафик</button>
+      <button data-part="configs">Конфигурация</button>
+    </div>
+    <div id="detail-vlan"></div>
+    <div id="detail-history" hidden></div>
+    <div id="detail-traffic" hidden>
+      <div class="row"><label>За период<select id="traffic-hours"><option value="1">1 час</option><option value="24" selected>сутки</option><option value="168">неделю</option></select></label>
+        <span class="muted small">Щёлкните порт, чтобы увидеть график</span></div>
+      <div class="table-wrap"><table class="grid">
+        <thead><tr><th>Порт</th><th>Сейчас вх/исх</th><th>Среднее вх/исх</th><th>Пик, % канала</th></tr></thead>
+        <tbody id="traffic-rows"></tbody>
+      </table></div>
+      <canvas id="traffic-chart" class="chart" width="900" height="220" hidden></canvas>
+    </div>
+    <div id="detail-configs" hidden>
+      <div class="row wrap">
+        <button type="button" id="config-backup" title="Прочитать running-config с коммутатора и сохранить копию (только чтение)">Снять копию сейчас</button>
+        <button type="button" id="config-live" title="Сравнить выбранную копию с текущей конфигурацией на коммутаторе">Сравнить с коммутатором</button>
+        <span class="muted small">Выберите копию; для сравнения двух копий отметьте вторую «со»</span>
+      </div>
+      <div class="table-wrap"><table class="grid">
+        <thead><tr><th></th><th>Снята</th><th>Кем</th><th>Хэш</th><th>со</th><th></th></tr></thead>
+        <tbody id="config-rows"></tbody>
+      </table></div>
+      <pre id="config-output" class="output" hidden></pre>
+    </div>
+    <p id="detail-error" class="error" hidden></p>
+    <div class="row"><div class="spacer"></div><button type="button" id="detail-close" class="primary">Готово</button></div>
+  </div>
+</dialog>
+
+<dialog id="import-dialog">
+  <div class="dialog">
+    <h2>Импорт конфигурации</h2>
+    <p class="muted small">Вставьте running-config (Cisco, Eltex) или вывод <code>show vlan brief</code>. Сначала покажем, что изменится в инвентаре; на коммутатор ничего не отправляется.</p>
+    <textarea id="import-text" rows="10" class="mono"></textarea>
+    <pre id="import-result" class="output" hidden></pre>
+    <p id="import-error" class="error" hidden></p>
+    <div class="row">
+      <button type="button" id="import-cancel">Закрыть</button><div class="spacer"></div>
+      <button type="button" id="import-preview">Показать изменения</button>
+      <button type="button" id="import-apply" class="primary" disabled>Применить к инвентарю</button>
     </div>
   </div>
 </dialog>

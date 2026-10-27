@@ -3,6 +3,7 @@ package com.itmanager.app
 import com.itmanager.app.core.network.DeviceDto
 import com.itmanager.app.core.network.FloorPatch
 import com.itmanager.app.core.network.ZoneDto
+import com.itmanager.app.core.network.toPatch
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.model.Zone
@@ -72,5 +73,25 @@ class RoomsAndRacksTest {
         assertEquals("r1", draft.rackId)
         assertEquals(20, draft.rackU)
         assertNull(Device("x", "x", DeviceType.SERVER, null, null, null, null, null, 0f, 0f, true, null).rackTop)
+    }
+
+    @Test
+    fun cableColourAndPortRecordGoToTheServerWithNullsKept() {
+        val json = Json { ignoreUnknownKeys = true }
+        val link = json.decodeFromString(
+            com.itmanager.app.core.network.ConnectionDto.serializer(),
+            """{"id": "c", "device_a_id": "a", "device_b_id": "b", "color": "#FF9F0A"}""",
+        ).toDomain()
+        assertEquals(0xFFFF9F0AL, link?.colorArgb)
+        assertEquals("#FF9F0A", com.itmanager.app.core.network.cableColorPatch(0xFFFF9F0AL)["color"].toString().trim('"'))
+        assertEquals("null", com.itmanager.app.core.network.cableColorPatch(null)["color"].toString())
+
+        val draft = com.itmanager.app.data.model.PortDraft(
+            5, "Gi1/0/5", false, com.itmanager.app.data.model.PortMode.ACCESS, null, emptyList(), 1000, true,
+        )
+        val body = draft.toPatch("dev")
+        assertEquals("null", body["access_vlan"].toString())
+        assertEquals("\"dev\"", body["device_id"].toString())
+        assertEquals("\"ACCESS\"", body["mode"].toString())
     }
 }

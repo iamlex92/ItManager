@@ -154,11 +154,12 @@ data class ConnectionDto(
     @SerialName("cable_type") val cableType: String = "Cat5e",
     val label: String? = null,
     val waypoints: List<WaypointDto> = emptyList(),
+    val color: String? = null,
 ) {
     fun toDomain(): Connection? {
         val a = deviceAId ?: return null
         val b = deviceBId ?: return null
-        return Connection(id, a, b, cableType, label, waypoints.map { it.toDomain() })
+        return Connection(id, a, b, cableType, label, waypoints.map { it.toDomain() }, color?.let { parseColorHex(it) })
     }
 }
 

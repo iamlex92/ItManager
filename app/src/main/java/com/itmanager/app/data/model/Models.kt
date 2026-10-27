@@ -87,6 +87,8 @@ data class Connection(
     val label: String?,
     /** Bends of the cable on the map, from end A towards end B; empty: a straight line. */
     val waypoints: List<Waypoint> = emptyList(),
+    /** The colour picked for the cable on the map; null: the map colours it by type and layer. */
+    val colorArgb: Long? = null,
 )
 
 /** A bend of a cable, in map pixels of its floor; [floorId] null: the floor of end A. */

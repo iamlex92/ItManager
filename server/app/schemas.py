@@ -334,6 +334,19 @@ class PortCreate(BaseModel):
         return _norm_mac(v)
 
 
+class PortUpdate(BaseModel):
+    """A port as recorded in the inventory. Nothing here is sent to the switch."""
+
+    number: int | None = Field(default=None, ge=0)
+    name: str | None = Field(default=None, min_length=1, max_length=50)
+    is_uplink: bool | None = None
+    mode: PortMode | None = None
+    access_vlan: int | None = None
+    tagged_vlans: list[int] | None = None
+    speed_mbps: int | None = Field(default=None, ge=10, le=400_000)
+    poe_enabled: bool | None = None
+
+
 class PortOut(BaseModel):
     id: uuid.UUID
     device_id: uuid.UUID
@@ -449,6 +462,7 @@ class ConnectionCreate(BaseModel):
     length_meters: float | None = None
     label: str | None = Field(default=None, max_length=50)
     notes: str | None = None
+    color: str | None = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")
 
 
 class LinkCreate(BaseModel):
@@ -458,6 +472,7 @@ class LinkCreate(BaseModel):
     device_b_id: uuid.UUID
     cable_type: str = Field(default="Cat6", max_length=20)
     label: str | None = Field(default=None, max_length=50)
+    color: str | None = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")
 
 
 class ConnectionUpdate(BaseModel):
@@ -466,6 +481,8 @@ class ConnectionUpdate(BaseModel):
     label: str | None = Field(default=None, max_length=50)
     notes: str | None = None
     waypoints: list[Waypoint] | None = Field(default=None, max_length=MAX_WAYPOINTS)
+    # null clears it: the map picks the colour again.
+    color: str | None = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")
 
 
 class ConnectionOut(BaseModel):
@@ -479,6 +496,7 @@ class ConnectionOut(BaseModel):
     label: str | None
     notes: str | None
     waypoints: list[Waypoint] = []
+    color: str | None = None
 
 
 # --- alerts ---------------------------------------------------------------

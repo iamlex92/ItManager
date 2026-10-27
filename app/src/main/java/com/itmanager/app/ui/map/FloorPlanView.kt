@@ -655,8 +655,11 @@ private fun DrawScope.drawCables(
         val isFiber = link.cableType.startsWith("OM", ignoreCase = true) || link.cableType.startsWith("OS", ignoreCase = true)
         val vlan = content.linkVlan[link.id]
 
-        when (layer) {
-            MapLayer.L1 -> drawRoute(
+        val picked = link.colorArgb?.let { Color(it) }
+        when {
+            // A colour chosen by hand wins on every layer.
+            picked != null -> drawRoute(pts, picked.copy(alpha = 0.95f), thick * 0.8f)
+            layer == MapLayer.L1 -> drawRoute(
                 pts,
                 color = if (isFiber) Color(0xFF5AC8FA).copy(alpha = 0.7f) else Ink400.copy(alpha = 0.7f),
                 width = if (isFiber) thick * 0.75f else thin,

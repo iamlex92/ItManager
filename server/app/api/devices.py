@@ -291,12 +291,13 @@ async def diff_config(
     session: SessionDep,
     driver: DriverDep,
     base_id: uuid.UUID | None = Query(default=None, description="Stored config to compare with; latest if omitted"),
+    other_id: uuid.UUID | None = Query(default=None, description="Another stored config instead of the live one"),
 ):
-    """Compare a stored config with the live running-config. Read-only on the device."""
+    """Compare a stored config with the live running-config, or with another stored one.
+    Read-only on the device (a stored-to-stored comparison does not touch it at all)."""
     device = await switches.load_switch(session, device_id)
     if device is None:
         raise not_found("device")
-    require_managed_switch(device)
     stmt = select(DeviceConfig).where(DeviceConfig.device_id == device_id)
     stmt = (
         stmt.where(DeviceConfig.id == base_id) if base_id else stmt.order_by(DeviceConfig.captured_at.desc()).limit(1)
@@ -304,14 +305,23 @@ async def diff_config(
     base = await session.scalar(stmt)
     if base is None:
         raise not_found("stored config")
-    current = await driver.get_running_config(switches.device_target(device))
+    if other_id:
+        other = await session.scalar(
+            select(DeviceConfig).where(DeviceConfig.id == other_id, DeviceConfig.device_id == device_id)
+        )
+        if other is None:
+            raise not_found("stored config")
+        current, to_name = other.content, f"stored {other.captured_at.isoformat()}"
+    else:
+        require_managed_switch(device)
+        current, to_name = await driver.get_running_config(switches.device_target(device)), "running (live)"
     current_hash = hashlib.sha256(current.encode()).hexdigest()
     diff = "".join(
         difflib.unified_diff(
             base.content.splitlines(keepends=True),
             current.splitlines(keepends=True),
             fromfile=f"stored {base.captured_at.isoformat()}",
-            tofile="running (live)",
+            tofile=to_name,
         )
     )
     return ConfigDiffOut(
@@ -321,6 +331,16 @@ async def diff_config(
         changed=current_hash != base.config_hash,
         diff=diff,
     )
+
+
+@router.get("/{device_id}/configs/{config_id}", response_model=DeviceConfigOut)
+async def get_config(device_id: uuid.UUID, config_id: uuid.UUID, session: SessionDep):
+    cfg = await session.scalar(
+        select(DeviceConfig).where(DeviceConfig.id == config_id, DeviceConfig.device_id == device_id)
+    )
+    if cfg is None:
+        raise not_found("stored config")
+    return cfg
 
 
 @router.post("/{device_id}/write-memory", response_model=CommandsOut)

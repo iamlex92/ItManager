@@ -473,6 +473,8 @@ fun MapScreen(
                 onStraighten = viewModel::straighten,
                 onDeleteLink = { linkToDelete = editor.selectedLink?.let { id -> content?.map?.connections?.firstOrNull { it.id == id } } },
                 onDoneLink = { viewModel.selectLink(null) },
+                selectedLinkColor = editor.selectedLink?.let { id -> content?.map?.connections?.firstOrNull { it.id == id }?.colorArgb },
+                onCableColor = viewModel::recolorLink,
                 onPenColor = viewModel::setPenColor,
                 onUndo = viewModel::undoStroke,
                 onClearDrawings = { confirmClear = true },

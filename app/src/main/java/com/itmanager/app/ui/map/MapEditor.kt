@@ -102,6 +102,9 @@ fun MapEditToolbar(
     onStraighten: () -> Unit,
     onDeleteLink: () -> Unit,
     onDoneLink: () -> Unit,
+    /** The colour of the selected cable (null: automatic) and a pick from the swatches. */
+    selectedLinkColor: Long?,
+    onCableColor: (Long?) -> Unit,
     onPenColor: (Long) -> Unit,
     onUndo: () -> Unit,
     onClearDrawings: () -> Unit,
@@ -236,10 +239,27 @@ fun MapEditToolbar(
                     }
                 }
             }
+            if (state.tool == EditTool.LINK && selectedLinkName != null) {
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Цвет", style = MaterialTheme.typography.labelLarge)
+                    FilterChip(selected = selectedLinkColor == null, onClick = { onCableColor(null) }, label = { Text("Авто") })
+                    CABLE_COLORS.forEach { color ->
+                        Box(
+                            Modifier
+                                .size(30.dp)
+                                .border(2.dp, if (color == selectedLinkColor) MaterialTheme.colorScheme.onSurface else Color.Transparent, CircleShape)
+                                .padding(4.dp)
+                                .background(Color(color), CircleShape)
+                                .clickable { onCableColor(color) },
+                        )
+                    }
+                }
+            }
             Spacer(Modifier.height(6.dp))
             val error = state.error
             Text(
-                error ?: if (selectedLinkName != null) ROUTE_HINT else state.tool.hint,
+                error ?: if (selectedLinkName != null) ROUTE_HINT else "${state.tool.label}: ${state.tool.hint}",
                 style = MaterialTheme.typography.bodySmall,
                 color = if (error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier

@@ -171,6 +171,8 @@ class Connection(Base):
     # The route drawn on the map between the two ends: [{"x": 1.0, "y": 2.0, "floor_id": "..."}].
     # A point without floor_id lies on the floor of end A. Empty: a straight line.
     waypoints: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
+    # The colour of the cable on the map, "#RRGGBB". Null: the map picks one by cable type and layer.
+    color: Mapped[str | None] = mapped_column(String(7))
 
 
 class DeviceConfig(Base):

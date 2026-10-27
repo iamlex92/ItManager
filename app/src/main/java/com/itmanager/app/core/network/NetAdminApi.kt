@@ -56,6 +56,17 @@ class NetAdminApi @Inject constructor(
         guarded { client.delete("${requireBase(s)}/api/v1/floors/$id") { auth(s) } }
     }
 
+    suspend fun patchConnection(s: ServerSettings, id: String, body: JsonObject): ConnectionDto =
+        patch(s, "connections/$id", body)
+
+    suspend fun createPort(s: ServerSettings, body: JsonObject): PortDto = post(s, "ports", body)
+
+    suspend fun patchPort(s: ServerSettings, id: String, body: JsonObject): PortDto = patch(s, "ports/$id", body)
+
+    suspend fun deletePort(s: ServerSettings, id: String) {
+        guarded { client.delete("${requireBase(s)}/api/v1/ports/$id") { auth(s) } }
+    }
+
     suspend fun routeConnection(s: ServerSettings, id: String, body: RouteBody): ConnectionDto =
         patch(s, "connections/$id", body)
 

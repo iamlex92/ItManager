@@ -24,7 +24,13 @@ def test_console_page_needs_no_token_but_locks_itself_down(seeded):
         csp = r.headers["content-security-policy"]
         assert "script-src 'self'" in csp and "frame-ancestors 'none'" in csp
         assert r.headers["x-frame-options"] == "DENY"
-        assert c.get("/static/admin/admin.js").status_code == 200
+        js = c.get("/static/admin/admin.js")
+        assert js.status_code == 200
+        # The console knows every device category the app has, and draws racks and room zones.
+        assert '"RACK"' in js.text and "zones" in js.text and "rack_units" in js.text
+        assert "admin-more.js" in r.text and c.get("/static/admin/admin-more.js").status_code == 200
+        for tab in ("vlans", "devices", "map", "alerts", "audit", "runbooks", "printers", "creds"):
+            assert f'data-tab="{tab}"' in r.text
         assert c.get("/", follow_redirects=False).headers["location"] == "/admin"
         # The page itself carries no data; everything behind it still needs the token.
         assert c.get("/api/v1/scripts").status_code == 401
