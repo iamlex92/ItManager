@@ -57,6 +57,8 @@ class InventoryExporter @Inject constructor(
                 when (format) {
                     ExportFormat.XLSX -> XlsxWriter.write(report.tables, out, report.summary)
                     ExportFormat.PDF -> InventoryPdf.write(report, out)
+                    // Built by the server and returned before this point.
+                    ExportFormat.NETBOX, ExportFormat.LABELS -> error("server-built format")
                 }
             }
             ExportedFile(FileProvider.getUriForFile(context, "${context.packageName}.exports", file), format.mime, name)
