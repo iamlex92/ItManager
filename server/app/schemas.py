@@ -156,13 +156,14 @@ class FloorOut(ORM, FloorBase):
 
 class VlanBase(BaseModel):
     name: str = Field(max_length=50)
-    subnet_cidr: ipaddress.IPv4Network | ipaddress.IPv6Network
+    # Empty for a VLAN taken from a switch config without an address on it.
+    subnet_cidr: ipaddress.IPv4Network | ipaddress.IPv6Network | None = None
     color_hex: str = Field(default="#3498db", pattern=r"^#[0-9a-fA-F]{6}$")
     description: str | None = None
 
     @field_serializer("subnet_cidr")
-    def _ser_cidr(self, v: Any) -> str:
-        return str(v)
+    def _ser_cidr(self, v: Any) -> str | None:
+        return str(v) if v is not None else None
 
 
 class VlanCreate(VlanBase):
@@ -934,8 +935,12 @@ class ConfigImportOut(BaseModel):
     ports: list[ConfigImportPort]
     unmatched_interfaces: list[str]
     unknown_vlans: dict[int, str] = Field(
-        default_factory=dict, description="VLANs in the text that the server does not know"
+        default_factory=dict, description="kept for older apps; VLANs missing from the inventory are in new_vlans"
     )
+    new_vlans: dict[int, str] = Field(
+        default_factory=dict, description="VLANs from the text the inventory does not have: added on apply"
+    )
+    new_ports: list[str] = Field(default_factory=list, description="interfaces with no port yet: added on apply")
     changed_ports: int
 
 

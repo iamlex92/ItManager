@@ -34,6 +34,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itmanager.app.data.model.ConfigImportResult
+import com.itmanager.app.data.model.importFieldLabel
+import com.itmanager.app.data.model.importValueLabel
 import com.itmanager.app.ui.theme.MonoStyle
 import com.itmanager.app.ui.theme.StatusColors
 
@@ -74,8 +76,8 @@ fun ConfigImportScreen(
         ) {
             Text(
                 "Вставьте вывод show running-config или show vlan brief (Cisco, Eltex). " +
-                    "Приложение сверит интерфейсы с портами в базе и обновит описание, режим, VLAN и состояние. " +
-                    "На сам коммутатор ничего не отправляется.",
+                    "Приложение сверит интерфейсы с портами в базе и обновит режим, VLAN, состояние и скорость. " +
+                    "Портов и VLAN, которых нет в базе, приложение добавит. На сам коммутатор ничего не отправляется.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -97,7 +99,7 @@ fun ConfigImportScreen(
                 val r = state.result
                 Button(
                     onClick = viewModel::apply,
-                    enabled = r != null && !r.applied && r.changedPorts > 0 && !state.busy,
+                    enabled = r != null && !r.applied && r.hasChanges && !state.busy,
                 ) { Text("Применить в базу") }
                 if (state.busy) CircularProgressIndicator(Modifier.padding(start = 4.dp).height(32.dp))
             }
@@ -112,7 +114,7 @@ fun ConfigImportScreen(
 @Composable
 private fun ResultView(r: ConfigImportResult) {
     Column(Modifier.padding(top = 16.dp)) {
-        val kind = if (r.kind == "vlan_brief") "show vlan brief" else "running-config"
+        val kind = if (r.kind == "vlan-brief" || r.kind == "vlan_brief") "show vlan brief" else "running-config"
         val title = buildString {
             append(kind)
             r.hostname?.let { append(" · ").append(it) }
@@ -120,19 +122,27 @@ private fun ResultView(r: ConfigImportResult) {
         Text(title, style = MaterialTheme.typography.titleMedium)
         Text(
             when {
-                r.applied -> "Сохранено в базу: портов изменено ${r.changedPorts}."
-                r.changedPorts == 0 -> "Изменений нет: база уже совпадает с текстом."
-                else -> "Будет изменено портов: ${r.changedPorts}. Пока ничего не записано."
+                r.applied && r.hasChanges -> "Сохранено в базу: портов ${r.changedPorts} (новых ${r.newPorts.size}), новых VLAN ${r.newVlans.size}."
+                !r.hasChanges -> "Изменений нет: база уже совпадает с текстом."
+                else -> "Будет изменено портов: ${r.changedPorts} (из них новых ${r.newPorts.size}), новых VLAN: ${r.newVlans.size}. Пока ничего не записано."
             },
             style = MaterialTheme.typography.bodyMedium,
             color = if (r.applied) StatusColors.Online else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
         )
+        if (r.newVlans.isNotEmpty()) {
+            Text(if (r.applied) "Добавлены VLAN:" else "Будут добавлены VLAN:", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
+            Text(r.newVlans.entries.joinToString { "${it.key} ${it.value}".trim() }, style = MaterialTheme.typography.bodySmall)
+        }
         r.ports.filter { it.changes.isNotEmpty() }.forEach { p ->
-            Text(p.port, style = MonoStyle, modifier = Modifier.padding(top = 8.dp))
-            p.changes.forEach { c ->
+            Text(if (p.matched) p.port else "${p.port} · новый порт", style = MonoStyle, modifier = Modifier.padding(top = 8.dp))
+            p.changes.filter { it.field != "port_name" || p.matched }.forEach { c ->
                 Text(
-                    "${c.field}: ${c.current} → ${c.imported}",
+                    if (p.matched) {
+                        "${importFieldLabel(c.field)}: ${importValueLabel(c.current)} → ${importValueLabel(c.imported)}"
+                    } else {
+                        "${importFieldLabel(c.field)}: ${importValueLabel(c.imported)}"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 12.dp),

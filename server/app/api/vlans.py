@@ -44,7 +44,7 @@ async def create_vlan(body: VlanCreate, request: Request, session: SessionDep):
     if await session.get(Vlan, body.vlan_id):
         raise conflict("vlan_exists", f"VLAN {body.vlan_id} already exists")
     vlan = Vlan(**body.model_dump())
-    vlan.subnet_cidr = str(body.subnet_cidr)
+    vlan.subnet_cidr = str(body.subnet_cidr) if body.subnet_cidr is not None else None
     session.add(vlan)
     session.add(_audit(request, "vlan_create", vlan))
     await session.commit()
@@ -67,7 +67,7 @@ async def update_vlan(vlan_id: int, body: VlanUpdate, request: Request, session:
         raise not_found("vlan")
     changed = {}
     for k, v in body.model_dump(exclude_unset=True).items():
-        new = str(v) if k == "subnet_cidr" else v
+        new = str(v) if k == "subnet_cidr" and v is not None else v
         old = getattr(vlan, k)
         if (str(old) if k == "subnet_cidr" and old is not None else old) != new:
             changed[k] = [str(old) if k == "subnet_cidr" and old is not None else old, new]

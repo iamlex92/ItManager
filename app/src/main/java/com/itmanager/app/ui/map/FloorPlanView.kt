@@ -778,7 +778,7 @@ private fun DrawScope.drawSubnets(
                 style = Stroke(1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))),
             )
             drawLabel(
-                textMeasurer, "VLAN ${vlan.id} · ${vlan.subnet}",
+                textMeasurer, "VLAN ${vlan.id} · " + vlan.subnet.ifBlank { vlan.name },
                 Offset(left + 6.dp.toPx(), top - 16.dp.toPx()),
                 labelStyle.copy(color = vlan.color.copy(alpha = alpha), fontSize = 10.sp),
             )

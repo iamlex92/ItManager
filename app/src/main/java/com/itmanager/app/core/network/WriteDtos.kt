@@ -72,6 +72,8 @@ data class ConfigImportDto(
     @SerialName("unmatched_interfaces") val unmatchedInterfaces: List<String> = emptyList(),
     @SerialName("unknown_vlans") val unknownVlans: Map<Int, String> = emptyMap(),
     @SerialName("changed_ports") val changedPorts: Int = 0,
+    @SerialName("new_vlans") val newVlans: Map<Int, String> = emptyMap(),
+    @SerialName("new_ports") val newPorts: List<String> = emptyList(),
 ) {
     fun toDomain() = ConfigImportResult(
         kind, hostname, applied,
@@ -81,7 +83,7 @@ data class ConfigImportDto(
                 p.changes.map { (field, v) -> ConfigImportChange(field, v.getOrNull(0).shown(), v.getOrNull(1).shown()) },
             )
         },
-        unmatchedInterfaces, unknownVlans, changedPorts,
+        unmatchedInterfaces, unknownVlans, changedPorts, newVlans, newPorts,
     )
 
     private fun JsonElement?.shown(): String = when (this) {
