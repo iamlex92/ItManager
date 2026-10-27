@@ -127,6 +127,8 @@
     if (name === "devices") loadDevices().catch(fail);
     if (name === "scan") loadLatestScan().catch(() => {});
     if (name === "scripts") loadScripts().catch(fail);
+    if (name === "peripherals") loadPeripherals().catch(fail);
+    if (name === "topology") loadTopology().catch(fail);
   }
 
   function start() {
@@ -1258,6 +1260,8 @@
   async function refreshTab() {
     if (currentTab === "map") await loadMap();
     if (currentTab === "devices") await loadDevices();
+    if (currentTab === "peripherals") await loadPeripherals();
+    if (currentTab === "topology") await loadTopology();
   }
 
   // ---------------------------------------------------------------- devices tab
@@ -1348,6 +1352,20 @@
       show.textContent = "На карте";
       show.addEventListener("click", () => showOnMap(d.id));
       actions.append(edit, " ", show);
+      if (!NO_PERIPHERALS.has(d.type)) {
+        const per = document.createElement("button");
+        per.textContent = "Периферия";
+        per.title = "Добавить монитор, клавиатуру и другое к этому устройству";
+        per.addEventListener("click", () => openPeripheral(null, d.id));
+        actions.append(" ", per);
+      }
+      if (d.type !== "RACK" && d.type !== "SOCKET") {
+        const plate = document.createElement("button");
+        plate.textContent = "Схема";
+        plate.title = "Схема лицевой панели (SVG) и места портов на ней";
+        plate.addEventListener("click", () => openFaceplate(d));
+        actions.append(" ", plate);
+      }
       rows.appendChild(tr);
     }
     if (!rows.children.length) {
@@ -1640,6 +1658,573 @@
       out.textContent = r.stdout + (r.stderr ? `\n\n${r.stderr}` : "");
     } catch (e) { fail(e); }
   });
+
+  // ---------------------------------------------------------------- peripherals
+
+  // Monitors, keyboards and the like: attached to a device or kept in stock. Inventory only.
+  const KINDS = [
+    ["MONITOR", "Монитор"], ["KEYBOARD", "Клавиатура"], ["MOUSE", "Мышь"], ["DOCK", "Док-станция"],
+    ["HEADSET", "Гарнитура"], ["WEBCAM", "Веб-камера"], ["SPEAKERS", "Колонки"], ["SCANNER", "Сканер"],
+    ["PRINTER", "Принтер (USB)"], ["PROJECTOR", "Проектор"], ["UPS", "ИБП"], ["OTHER", "Другое"],
+  ];
+  const KIND = Object.fromEntries(KINDS);
+  const NO_PERIPHERALS = new Set(["RACK", "SOCKET", "PATCH_PANEL"]);
+  let peripherals = [];
+  let perEditing = null;
+  let perKind = "MONITOR";
+
+  {
+    const sel = $("per-kind-filter");
+    sel.append(new Option("Все виды", ""));
+    for (const [id, label] of KINDS) sel.append(new Option(label, id));
+    for (const [id, label] of KINDS) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = label;
+      b.dataset.kind = id;
+      b.addEventListener("click", () => selectKind(id));
+      $("per-kinds").appendChild(b);
+    }
+    for (const id of ["per-filter", "per-kind-filter", "per-place-filter"]) $(id).addEventListener("input", renderPeripherals);
+  }
+
+  function selectKind(id) {
+    perKind = id;
+    for (const b of $("per-kinds").children) b.classList.toggle("active", b.dataset.kind === id);
+  }
+
+  async function loadPeripherals() {
+    [peripherals, allDevices] = await Promise.all([api("GET", "peripherals"), api("GET", "devices")]);
+    renderPeripherals();
+  }
+
+  function renderPeripherals() {
+    const q = $("per-filter").value.trim().toLowerCase();
+    const kind = $("per-kind-filter").value;
+    const place = $("per-place-filter").value;
+    const rows = $("per-rows");
+    rows.replaceChildren();
+    const shown = peripherals.filter((p) => {
+      if (kind && p.kind !== kind) return false;
+      if (place === "attached" && !p.device_id) return false;
+      if (place === "stock" && p.device_id) return false;
+      const hay = [KIND[p.kind], p.vendor, p.model, p.specs, p.serial_number, p.inventory_number, p.comment, p.device_name].join(" ").toLowerCase();
+      return !q || hay.includes(q);
+    });
+    shown.sort((a, b) => (a.device_name || "￿").localeCompare(b.device_name || "￿") || a.kind.localeCompare(b.kind));
+    for (const p of shown) {
+      const tr = document.createElement("tr");
+      cell(tr, KIND[p.kind] || p.kind);
+      cell(tr, p.vendor);
+      cell(tr, p.model);
+      cell(tr, p.specs);
+      cell(tr, p.serial_number);
+      cell(tr, p.inventory_number);
+      cell(tr, p.device_name || "на складе");
+      const actions = cell(tr, "");
+      actions.className = "actions";
+      const edit = document.createElement("button");
+      edit.textContent = "Изменить";
+      edit.addEventListener("click", () => openPeripheral(p));
+      actions.append(edit);
+      rows.appendChild(tr);
+    }
+    if (!shown.length) {
+      const tr = document.createElement("tr");
+      const td = cell(tr, peripherals.length ? "Ничего не найдено" : "Периферии пока нет: добавьте мониторы, клавиатуры, док-станции.");
+      td.colSpan = 8;
+      td.className = "muted";
+      rows.appendChild(tr);
+    }
+  }
+
+  function openPeripheral(p, deviceId) {
+    perEditing = p;
+    $("per-heading").textContent = p ? `${KIND[p.kind]} ${[p.vendor, p.model].filter(Boolean).join(" ")}` : "Новая периферия";
+    $("per-vendor").value = (p && p.vendor) || "";
+    $("per-model").value = (p && p.model) || "";
+    $("per-specs").value = (p && p.specs) || "";
+    $("per-serial").value = (p && p.serial_number) || "";
+    $("per-inventory").value = (p && p.inventory_number) || "";
+    $("per-comment").value = (p && p.comment) || "";
+    const sel = $("per-device");
+    sel.replaceChildren(new Option("На складе", ""));
+    for (const d of [...allDevices].filter((d) => !NO_PERIPHERALS.has(d.type)).sort((a, b) => a.name.localeCompare(b.name))) {
+      sel.append(new Option(`${d.name}${d.ip ? ` · ${d.ip}` : ""}`, d.id));
+    }
+    sel.value = (p ? p.device_id : deviceId) || "";
+    selectKind(p ? p.kind : perKind);
+    $("per-delete").hidden = !p;
+    $("per-error").hidden = true;
+    $("per-dialog").showModal();
+  }
+
+  $("per-new").addEventListener("click", () => openPeripheral(null));
+  $("per-cancel").addEventListener("click", () => $("per-dialog").close());
+  $("per-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const val = (id) => $(id).value.trim() || null;
+    const body = {
+      kind: perKind, vendor: val("per-vendor"), model: val("per-model"), specs: val("per-specs"),
+      serial_number: val("per-serial"), inventory_number: val("per-inventory"), comment: val("per-comment"),
+      device_id: $("per-device").value || null,
+    };
+    try {
+      if (perEditing) await api("PATCH", `peripherals/${perEditing.id}`, body);
+      else await api("POST", "peripherals", body);
+      $("per-dialog").close();
+      await loadPeripherals();
+    } catch (e) {
+      $("per-error").hidden = false;
+      $("per-error").textContent = e.message;
+    }
+  });
+  $("per-delete").addEventListener("click", async () => {
+    if (!perEditing || !confirm("Удалить запись из учёта? Если вещь просто убрали, лучше выберите «На складе».")) return;
+    try { await api("DELETE", `peripherals/${perEditing.id}`); $("per-dialog").close(); await loadPeripherals(); }
+    catch (e) { $("per-error").hidden = false; $("per-error").textContent = e.message; }
+  });
+
+  // ---------------------------------------------------------------- topology
+
+  // The network as a tree from the top: routers and firewalls, switches under them, end devices in a grid
+  // under their switch. Same rules as the phone (TopologyLayouter.kt).
+  const INFRA = new Set(["ROUTER", "FIREWALL", "SWITCH"]);
+  const CELL_W = 120, CELL_H = 96, NODE_R = 18, GRID = 6;
+  const topoCanvas = $("topo");
+  const T = { data: null, layout: null, scale: 1, ox: 0, oy: 0, selected: null, drag: null, touched: false };
+
+  function layoutTopology(data, all) {
+    const nodes = data.nodes.filter((n) => all || INFRA.has(n.type));
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    const links = data.links.filter((l) => byId.has(l.a_id) && byId.has(l.b_id) && l.a_id !== l.b_id);
+    const adj = new Map();
+    const link = (a, b) => { if (!adj.has(a)) adj.set(a, []); adj.get(a).push(b); };
+    for (const l of links) { link(l.a_id, l.b_id); link(l.b_id, l.a_id); }
+    const infraIds = new Set(nodes.filter((n) => INFRA.has(n.type)).map((n) => n.id));
+    const rootRank = (t) => (t === "FIREWALL" ? 3 : t === "ROUTER" ? 2 : 0);
+    const infraDeg = (id) => (adj.get(id) || []).filter((x) => infraIds.has(x)).length;
+    const parent = new Map(), children = new Map(), roots = [];
+    const ordered = nodes.filter((n) => infraIds.has(n.id))
+      .sort((a, b) => rootRank(b.type) - rootRank(a.type) || infraDeg(b.id) - infraDeg(a.id) || a.name.localeCompare(b.name));
+    for (const root of ordered) {
+      if (parent.has(root.id)) continue;
+      parent.set(root.id, null);
+      roots.push(root.id);
+      const queue = [root.id];
+      while (queue.length) {
+        const id = queue.shift();
+        const next = (adj.get(id) || []).filter((x) => infraIds.has(x) && !parent.has(x)).sort((a, b) => byId.get(a).name.localeCompare(byId.get(b).name));
+        for (const n of next) {
+          if (parent.has(n)) continue;
+          parent.set(n, id);
+          if (!children.has(id)) children.set(id, []);
+          children.get(id).push(n);
+          queue.push(n);
+        }
+      }
+    }
+    const leaves = new Map();
+    const addLeaf = (owner, id) => { if (!leaves.has(owner)) leaves.set(owner, []); leaves.get(owner).push(id); };
+    const ends = nodes.filter((n) => !infraIds.has(n.id)).sort((a, b) => a.name.localeCompare(b.name));
+    const placedLeaf = new Set();
+    for (const n of ends.filter((n) => n.type !== "VIRTUAL")) {
+      const owner = (adj.get(n.id) || []).find((x) => infraIds.has(x));
+      if (owner) { addLeaf(owner, n.id); placedLeaf.add(n.id); }
+    }
+    const loose = ends.filter((n) => !placedLeaf.has(n.id) && n.type !== "VIRTUAL").map((n) => n.id);
+    for (const vm of ends.filter((n) => n.type === "VIRTUAL")) {
+      const host = vm.host_id && byId.has(vm.host_id) ? vm.host_id : null;
+      if (host && (placedLeaf.has(host) || loose.includes(host) || infraIds.has(host))) addLeaf(host, vm.id);
+      else loose.push(vm.id);
+    }
+    const places = new Map();
+    const rows = (n) => Math.ceil(n / GRID);
+    const flat = (id) => (leaves.get(id) || []).flatMap((x) => [x, ...(leaves.get(x) || [])]);
+    const width = (id) => Math.max(1, Math.min(flat(id).length, GRID), (children.get(id) || []).reduce((s, k) => s + width(k), 0));
+    const place = (id, left, top) => {
+      const w = width(id);
+      places.set(id, { x: left + w / 2, y: top });
+      const f = flat(id);
+      const gw = Math.min(f.length, GRID);
+      f.forEach((leaf, i) => places.set(leaf, { x: left + (w - gw) / 2 + (i % GRID) + 0.5, y: top + 1.6 + Math.floor(i / GRID) }));
+      const childTop = top + 1.6 + rows(f.length) + (f.length ? 0.6 : 0);
+      const kids = children.get(id) || [];
+      const kidsW = kids.reduce((s, k) => s + width(k), 0);
+      let x = left + (w - kidsW) / 2;
+      let bottom = top + (f.length ? 1.6 + rows(f.length) : 1);
+      for (const k of kids) { bottom = Math.max(bottom, place(k, x, childTop)); x += width(k); }
+      return bottom;
+    };
+    let left = 0, bottom = 0;
+    for (const r of roots) { bottom = Math.max(bottom, place(r, left, 0)); left += width(r) + 1; }
+    const flatLoose = [...new Set(loose.flatMap((id) => [id, ...(leaves.get(id) || [])]))];
+    const cols = Math.max(GRID, Math.floor(left - 1) || 1);
+    const looseTop = roots.length ? bottom + 0.8 : 0;
+    flatLoose.forEach((id, i) => { if (!places.has(id)) places.set(id, { x: (i % cols) + 0.5, y: looseTop + Math.floor(i / cols) }); });
+    let maxX = 0, maxY = 0;
+    for (const p of places.values()) { maxX = Math.max(maxX, p.x + 0.5); maxY = Math.max(maxY, p.y + 1); }
+    return { places, links, nodes: nodes.filter((n) => places.has(n.id)), width: maxX, height: maxY, byId };
+  }
+
+  const centreOf = (id) => {
+    const p = T.layout && T.layout.places.get(id);
+    return p ? { x: p.x * CELL_W, y: p.y * CELL_H + NODE_R + 8 } : null;
+  };
+
+  async function loadTopology() {
+    T.data = await api("GET", "topology");
+    relayout(!T.layout);
+    const down = T.data.nodes.filter((n) => !n.is_online && n.type !== "VIRTUAL").length;
+    $("topo-stats").textContent = `${T.data.nodes.length} устр. · ${T.data.links.filter((l) => l.kind === "CABLE").length} связей` + (down ? ` · не в сети: ${down}` : "");
+  }
+
+  function relayout(refit) {
+    if (!T.data) return;
+    T.layout = layoutTopology(T.data, $("topo-all").checked);
+    if (T.selected && !T.layout.places.has(T.selected)) T.selected = null;
+    if (refit || !T.touched) topoFit();
+    renderTopoCard();
+    drawTopology();
+  }
+
+  function topoFit() {
+    if (!T.layout) return;
+    const r = topoCanvas.getBoundingClientRect();
+    const w = T.layout.width * CELL_W, h = T.layout.height * CELL_H;
+    T.scale = Math.max(0.2, Math.min(1.2, (r.width - 48) / Math.max(w, 1), (r.height - 48) / Math.max(h, 1)));
+    T.ox = (r.width - w * T.scale) / 2;
+    T.oy = 24;
+    T.touched = false;
+  }
+
+  function drawTopology() {
+    const k = window.devicePixelRatio || 1;
+    const r = topoCanvas.getBoundingClientRect();
+    if (!r.width) return;
+    topoCanvas.width = Math.round(r.width * k);
+    topoCanvas.height = Math.round(r.height * k);
+    const c = topoCanvas.getContext("2d");
+    c.setTransform(k, 0, 0, k, 0, 0);
+    c.clearRect(0, 0, r.width, r.height);
+    if (!T.layout) return;
+    c.translate(T.ox, T.oy);
+    c.scale(T.scale, T.scale);
+    const sel = T.selected;
+    const mine = (l) => sel && (l.a_id === sel || l.b_id === sel);
+    for (const l of [...T.layout.links].sort((a, b) => (mine(a) ? 1 : 0) - (mine(b) ? 1 : 0))) {
+      const a = centreOf(l.a_id), b = centreOf(l.b_id);
+      if (!a || !b) continue;
+      const both = INFRA.has(T.layout.byId.get(l.a_id).type) && INFRA.has(T.layout.byId.get(l.b_id).type);
+      c.strokeStyle = mine(l) ? "#4c9eff" : l.kind === "VIRTUAL" ? "rgba(142,155,255,.6)" : l.is_up ? `rgba(50,215,75,${both ? 0.85 : 0.45})` : "#3a4350";
+      c.lineWidth = mine(l) || both ? 2.5 : 1;
+      c.setLineDash(l.kind === "VIRTUAL" || l.is_up === false ? [6, 5] : []);
+      c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
+    }
+    c.setLineDash([]);
+    c.textAlign = "center";
+    c.textBaseline = "top";
+    for (const n of T.layout.nodes) {
+      const p = centreOf(n.id);
+      const color = typeOf(n).color;
+      c.fillStyle = "#1c222c";
+      c.beginPath(); c.arc(p.x, p.y, NODE_R, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = n.id === sel ? "#4c9eff" : color;
+      c.lineWidth = n.id === sel ? 3.5 : 1.5;
+      c.stroke();
+      drawGlyph(c, n.type, p.x, p.y, NODE_R * 1.1, color);
+      if (n.type !== "VIRTUAL") {
+        c.fillStyle = n.is_online ? "#30d158" : "#ff453a";
+        c.beginPath(); c.arc(p.x + NODE_R * 0.72, p.y - NODE_R * 0.72, 4.5, 0, Math.PI * 2); c.fill();
+      }
+      if (T.scale >= 0.45) {
+        c.fillStyle = "#e6edf5";
+        c.font = "11px system-ui, sans-serif";
+        c.fillText(clip(c, n.name, CELL_W - 8), p.x, p.y + NODE_R + 4);
+        if (n.ip) {
+          c.fillStyle = "#8b95a5";
+          c.font = "10px ui-monospace, monospace";
+          c.fillText(n.ip, p.x, p.y + NODE_R + 18);
+        }
+      }
+    }
+  }
+
+  function clip(c, text, max) {
+    if (c.measureText(text).width <= max) return text;
+    let t = text;
+    while (t.length > 1 && c.measureText(`${t}…`).width > max) t = t.slice(0, -1);
+    return `${t}…`;
+  }
+
+  function renderTopoCard() {
+    const card = $("topo-card");
+    const n = T.selected && T.data && T.data.nodes.find((x) => x.id === T.selected);
+    card.hidden = !n;
+    if (!n) return;
+    const names = new Map(T.data.nodes.map((x) => [x.id, x.name]));
+    card.replaceChildren();
+    const head = document.createElement("div");
+    head.className = "row";
+    const title = document.createElement("strong");
+    title.textContent = n.name;
+    const close = document.createElement("button");
+    close.textContent = "×";
+    close.className = "ghost";
+    close.addEventListener("click", () => { T.selected = null; renderTopoCard(); drawTopology(); });
+    const spacer = document.createElement("div");
+    spacer.className = "spacer";
+    head.append(glyphCanvas(n.type), title, spacer, close);
+    const sub = document.createElement("div");
+    sub.className = "muted small";
+    sub.textContent = [typeOf(n).label, n.vendor, n.model, n.ip, n.type === "VIRTUAL" ? null : n.is_online ? "в сети" : "не отвечает"].filter(Boolean).join(" · ");
+    card.append(head, sub);
+    const mineLinks = T.data.links.filter((l) => l.a_id === n.id || l.b_id === n.id);
+    if (!mineLinks.length) {
+      const none = document.createElement("div");
+      none.className = "muted small";
+      none.textContent = "Кабелем ни с чем не соединено";
+      card.append(none);
+    }
+    for (const l of mineLinks) {
+      const self = l.a_id === n.id;
+      const other = self ? l.b_id : l.a_id;
+      const row = document.createElement("div");
+      row.className = "link";
+      const dot = document.createElement("span");
+      dot.className = "dot";
+      dot.style.background = l.is_up ? "#30d158" : l.is_up === false ? "#3a4350" : "#8b95a5";
+      let text;
+      if (l.kind === "VIRTUAL") text = `${self ? "ВМ" : "Хост"} ${names.get(other) || "?"}`;
+      else {
+        text = `${(self ? l.a_port : l.b_port) || "?"} → ${names.get(other) || "?"} ${(self ? l.b_port : l.a_port) || ""}`;
+        if (l.via.length) text += ` через ${l.via.join(", ")}`;
+        if (l.is_up && l.speed_mbps) text += ` · ${l.speed_mbps >= 1000 ? `${l.speed_mbps / 1000} Гбит/с` : `${l.speed_mbps} Мбит/с`}`;
+      }
+      row.append(dot, text);
+      row.addEventListener("click", () => selectNode(other, true));
+      card.append(row);
+    }
+  }
+
+  function selectNode(id, centre) {
+    T.selected = id;
+    if (centre) {
+      const p = centreOf(id);
+      const r = topoCanvas.getBoundingClientRect();
+      if (p) { T.ox = r.width / 2 - p.x * T.scale; T.oy = r.height / 3 - p.y * T.scale; T.touched = true; }
+    }
+    renderTopoCard();
+    drawTopology();
+  }
+
+  function topoNodeAt(sx, sy) {
+    if (!T.layout) return null;
+    const wx = (sx - T.ox) / T.scale, wy = (sy - T.oy) / T.scale;
+    let best = null, bestD = (NODE_R * 1.6) ** 2;
+    for (const n of T.layout.nodes) {
+      const p = centreOf(n.id);
+      const d = (p.x - wx) ** 2 + (p.y - wy) ** 2;
+      if (d < bestD) { best = n; bestD = d; }
+    }
+    return best;
+  }
+
+  topoCanvas.addEventListener("wheel", (ev) => {
+    ev.preventDefault();
+    const r = topoCanvas.getBoundingClientRect();
+    const sx = ev.clientX - r.left, sy = ev.clientY - r.top;
+    const scale = Math.max(0.15, Math.min(3, T.scale * Math.exp(-ev.deltaY * 0.0015)));
+    T.ox = sx - (sx - T.ox) * (scale / T.scale);
+    T.oy = sy - (sy - T.oy) * (scale / T.scale);
+    T.scale = scale;
+    T.touched = true;
+    drawTopology();
+  }, { passive: false });
+  topoCanvas.addEventListener("pointerdown", (ev) => {
+    topoCanvas.setPointerCapture(ev.pointerId);
+    T.drag = { x: ev.clientX, y: ev.clientY, ox: T.ox, oy: T.oy, moved: false };
+  });
+  topoCanvas.addEventListener("pointermove", (ev) => {
+    if (!T.drag) return;
+    const dx = ev.clientX - T.drag.x, dy = ev.clientY - T.drag.y;
+    if (Math.abs(dx) + Math.abs(dy) > 3) T.drag.moved = true;
+    T.ox = T.drag.ox + dx;
+    T.oy = T.drag.oy + dy;
+    if (T.drag.moved) { T.touched = true; drawTopology(); }
+  });
+  topoCanvas.addEventListener("pointerup", (ev) => {
+    const d = T.drag;
+    T.drag = null;
+    if (!d || d.moved) return;
+    const r = topoCanvas.getBoundingClientRect();
+    const n = topoNodeAt(ev.clientX - r.left, ev.clientY - r.top);
+    T.selected = n ? n.id : null;
+    renderTopoCard();
+    drawTopology();
+  });
+  $("topo-all").addEventListener("change", () => relayout(true));
+  $("topo-fit").addEventListener("click", () => { topoFit(); drawTopology(); });
+  $("topo-reload").addEventListener("click", () => loadTopology().catch(fail));
+  $("topo-find").addEventListener("keydown", (ev) => {
+    if (ev.key !== "Enter" || !T.layout) return;
+    const q = ev.target.value.trim().toLowerCase();
+    if (!q) return;
+    const n = T.layout.nodes.find((x) => x.name.toLowerCase() === q || x.ip === q)
+      || T.layout.nodes.find((x) => x.name.toLowerCase().includes(q) || (x.ip || "").includes(q));
+    if (n) selectNode(n.id, true); else toast("Не найдено", true);
+  });
+  new ResizeObserver(() => { if (!T.touched) topoFit(); drawTopology(); }).observe(topoCanvas);
+
+  // ---------------------------------------------------------------- faceplates
+
+  // A drawing of a device's front panel with its ports marked, as fractions of the drawing.
+  const P = { device: null, ports: [], marks: new Map(), selected: null, w: 0.022, h: 0.28, url: null, has: false };
+
+  async function openFaceplate(device) {
+    P.device = device;
+    P.marks = new Map();
+    P.selected = null;
+    $("plate-heading").textContent = `Схема панели · ${device.name}`;
+    $("plate-error").hidden = true;
+    const sources = allDevices.filter((d) => d.id !== device.id && d.type === device.type)
+      .sort((a, b) => (a.model === device.model ? 0 : 1) - (b.model === device.model ? 0 : 1) || a.name.localeCompare(b.name));
+    $("plate-copy").replaceChildren(new Option("Скопировать с…", ""), ...sources.map((d) => new Option(`${d.name}${d.model ? ` · ${d.model}` : ""}`, d.id)));
+    try {
+      P.ports = (await api("GET", `devices/${device.id}/ports`)).sort((a, b) => a.number - b.number);
+      await loadPlate();
+    } catch (e) { fail(e); return; }
+    $("plate-dialog").showModal();
+  }
+
+  async function loadPlate() {
+    let plate = null;
+    try { plate = await api("GET", `devices/${P.device.id}/faceplate`); }
+    catch (e) { if (e.status !== 404) throw e; }
+    P.has = !!plate;
+    if (P.url) URL.revokeObjectURL(P.url);
+    P.url = null;
+    P.marks = new Map((plate ? plate.ports : []).map((m) => [m.port_id, m]));
+    if (plate) {
+      P.url = URL.createObjectURL(await api("GET", `devices/${P.device.id}/faceplate/svg`));
+      const last = plate.ports[plate.ports.length - 1];
+      if (last) { P.w = last.w; P.h = last.h; }
+    }
+    $("plate-img").src = P.url || "";
+    $("plate-stage").hidden = !plate;
+    P.selected = (P.ports.find((p) => !P.marks.has(p.id)) || P.ports[0] || {}).id || null;
+    $("plate-w").value = P.w;
+    $("plate-h").value = P.h;
+    renderPlate();
+  }
+
+  function plateStep() { return $("plate-step2").checked ? 2 : 1; }
+
+  function plateSequence(fromId) {
+    const i = P.ports.findIndex((p) => p.id === fromId);
+    if (i < 0) return [];
+    return P.ports.slice(i).filter((_, k) => k % plateStep() === 0);
+  }
+
+  function markAt(port, fx, fy) {
+    const x = Math.min(Math.max(fx - P.w / 2, 0), 1 - P.w), y = Math.min(Math.max(fy - P.h / 2, 0), 1 - P.h);
+    return { port_id: port.id, port_name: port.name, port_number: port.number, x, y, w: P.w, h: P.h };
+  }
+
+  function renderPlate() {
+    const box = $("plate-marks");
+    box.replaceChildren();
+    for (const m of P.marks.values()) {
+      const el = document.createElement("div");
+      el.className = "plate-mark" + (m.port_id === P.selected ? " sel" : "");
+      Object.assign(el.style, { left: `${m.x * 100}%`, top: `${m.y * 100}%`, width: `${m.w * 100}%`, height: `${m.h * 100}%` });
+      el.textContent = m.port_number;
+      el.title = m.port_name;
+      box.appendChild(el);
+    }
+    const chips = $("plate-ports");
+    chips.replaceChildren();
+    for (const p of P.ports) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = p.name;
+      b.classList.toggle("marked", P.marks.has(p.id));
+      b.classList.toggle("active", p.id === P.selected);
+      b.addEventListener("click", () => { P.selected = p.id; renderPlate(); });
+      chips.appendChild(b);
+    }
+    $("plate-count").textContent = P.has ? `Отмечено ${P.marks.size} из ${P.ports.length}` : "Схемы ещё нет: загрузите SVG";
+    for (const id of ["plate-delete", "plate-row", "plate-unmark", "plate-save"]) $(id).disabled = !P.has;
+  }
+
+  $("plate-stage").addEventListener("click", (ev) => {
+    const r = $("plate-img").getBoundingClientRect();
+    const fx = (ev.clientX - r.left) / r.width, fy = (ev.clientY - r.top) / r.height;
+    if (fx < 0 || fx > 1 || fy < 0 || fy > 1) return;
+    const hit = [...P.marks.values()].find((m) => fx >= m.x && fx <= m.x + m.w && fy >= m.y && fy <= m.y + m.h);
+    if (hit && hit.port_id !== P.selected) { P.selected = hit.port_id; renderPlate(); return; }
+    const port = P.ports.find((p) => p.id === P.selected);
+    if (!port) return;
+    P.marks.set(port.id, markAt(port, fx, fy));
+    const next = plateSequence(port.id).slice(1).find((p) => !P.marks.has(p.id));
+    if (next) P.selected = next.id;
+    renderPlate();
+  });
+  $("plate-row").addEventListener("click", () => {
+    const i = P.ports.findIndex((p) => p.id === P.selected);
+    const s = plateStep();
+    const a = i - 2 * s >= 0 && P.marks.get(P.ports[i - 2 * s].id);
+    const b = i - s >= 0 && P.marks.get(P.ports[i - s].id);
+    if (!a || !b) { toast("Сначала отметьте два порта перед выбранным (с тем же шагом)", true); return; }
+    const dx = b.x - a.x, dy = b.y - a.y;
+    let last = b;
+    for (const p of plateSequence(P.selected)) {
+      const x = last.x + dx, y = last.y + dy;
+      if (x < -0.001 || y < -0.001 || x + b.w > 1.001 || y + b.h > 1.001) break;
+      last = { port_id: p.id, port_name: p.name, port_number: p.number, x: Math.min(Math.max(x, 0), 1 - b.w), y: Math.min(Math.max(y, 0), 1 - b.h), w: b.w, h: b.h };
+      P.marks.set(p.id, last);
+    }
+    renderPlate();
+  });
+  $("plate-unmark").addEventListener("click", () => { P.marks.delete(P.selected); renderPlate(); });
+  for (const id of ["plate-w", "plate-h"]) {
+    $(id).addEventListener("input", () => {
+      P.w = Number($("plate-w").value);
+      P.h = Number($("plate-h").value);
+      const m = P.marks.get(P.selected);
+      const port = P.ports.find((p) => p.id === P.selected);
+      if (m && port) P.marks.set(port.id, markAt(port, m.x + m.w / 2, m.y + m.h / 2));
+      renderPlate();
+    });
+  }
+  $("plate-save").addEventListener("click", async () => {
+    const ports = [...P.marks.values()].map(({ port_id, x, y, w, h }) => ({ port_id, x, y, w, h }));
+    try { await api("PUT", `devices/${P.device.id}/faceplate/ports`, { ports }); toast("Метки сохранены"); }
+    catch (e) { $("plate-error").hidden = false; $("plate-error").textContent = e.message; }
+  });
+  $("plate-file").addEventListener("change", async (ev) => {
+    const file = ev.target.files[0];
+    ev.target.value = "";
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { toast("SVG больше 2 МБ", true); return; }
+    try {
+      await api("PUT", `devices/${P.device.id}/faceplate`, undefined, { body: file, type: "image/svg+xml" });
+      await loadPlate();
+    } catch (e) { $("plate-error").hidden = false; $("plate-error").textContent = e.message; }
+  });
+  $("plate-copy").addEventListener("change", async (ev) => {
+    const from = ev.target.value;
+    ev.target.value = "";
+    if (!from) return;
+    try { await api("POST", `devices/${P.device.id}/faceplate/copy`, { from_device_id: from }); await loadPlate(); }
+    catch (e) { $("plate-error").hidden = false; $("plate-error").textContent = e.message; }
+  });
+  $("plate-delete").addEventListener("click", async () => {
+    if (!confirm("Удалить схему панели и все метки портов?")) return;
+    try { await api("DELETE", `devices/${P.device.id}/faceplate`); await loadPlate(); }
+    catch (e) { fail(e); }
+  });
+  $("plate-close").addEventListener("click", () => $("plate-dialog").close());
 
   // ---------------------------------------------------------------- go
 

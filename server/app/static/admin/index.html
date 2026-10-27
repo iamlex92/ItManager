@@ -28,6 +28,8 @@
     <nav class="tabs" id="tabs">
       <button data-tab="map" class="active">Карта</button>
       <button data-tab="devices">Устройства</button>
+      <button data-tab="peripherals">Периферия</button>
+      <button data-tab="topology">Топология</button>
       <button data-tab="scan">Сканирование</button>
       <button data-tab="scripts">Скрипты</button>
     </nav>
@@ -141,6 +143,39 @@
       </div>
     </section>
 
+    <section id="tab-peripherals" class="tab" hidden>
+      <div class="toolbar">
+        <input id="per-filter" type="search" placeholder="Модель, S/N, инв. номер, компьютер">
+        <select id="per-kind-filter" title="Вид"></select>
+        <select id="per-place-filter" title="Где">
+          <option value="">Все</option><option value="attached">Подключённые</option><option value="stock">На складе</option>
+        </select>
+        <div class="spacer"></div>
+        <button id="per-new" class="primary">+ Добавить</button>
+      </div>
+      <div class="table-wrap">
+        <table class="grid">
+          <thead><tr><th>Вид</th><th>Производитель</th><th>Модель</th><th>Характеристики</th><th>S/N</th><th>Инв. №</th><th>Подключено к</th><th></th></tr></thead>
+          <tbody id="per-rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="tab-topology" class="tab" hidden>
+      <div class="toolbar">
+        <label class="check"><input id="topo-all" type="checkbox" checked> Все устройства</label>
+        <input id="topo-find" type="search" placeholder="Найти: имя или IP">
+        <button id="topo-fit">Показать всё</button>
+        <button id="topo-reload">Обновить</button>
+        <span id="topo-stats" class="muted small"></span>
+      </div>
+      <div class="map-wrap">
+        <canvas id="topo"></canvas>
+        <div id="topo-card" class="topo-card" hidden></div>
+        <div class="map-hint">Колесо мыши: масштаб, перетаскивание: сдвиг, щелчок по устройству: его связи. Зелёная линия: линк есть, пунктир: нет линка или ВМ.</div>
+      </div>
+    </section>
+
     <section id="tab-scripts" class="tab" hidden>
       <div class="columns">
         <div class="card narrow">
@@ -228,6 +263,57 @@
       <button type="button" id="floor-add">+ Этаж</button>
       <div class="spacer"></div>
       <button type="button" id="floors-close" class="primary">Готово</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="per-dialog">
+  <form id="per-form" method="dialog" class="dialog">
+    <h2 id="per-heading">Периферия</h2>
+    <div id="per-kinds" class="chips"></div>
+    <div class="row">
+      <label class="grow">Производитель<input id="per-vendor" maxlength="50" placeholder="Dell"></label>
+      <label class="grow">Модель<input id="per-model" maxlength="100" placeholder="P2422H"></label>
+    </div>
+    <label>Характеристики<input id="per-specs" maxlength="200" placeholder="24&quot;, 1920×1080, DP/HDMI"></label>
+    <div class="row">
+      <label class="grow">Серийный номер<input id="per-serial" maxlength="100"></label>
+      <label class="grow">Инвентарный номер<input id="per-inventory" maxlength="100"></label>
+    </div>
+    <label>Подключено к<select id="per-device"></select></label>
+    <label>Комментарий<textarea id="per-comment" rows="2" maxlength="4000"></textarea></label>
+    <p id="per-error" class="error" hidden></p>
+    <div class="row">
+      <button type="button" id="per-delete" class="danger">Удалить</button>
+      <div class="spacer"></div>
+      <button type="button" id="per-cancel">Отмена</button>
+      <button type="submit" class="primary">Сохранить</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="plate-dialog">
+  <div class="dialog">
+    <div class="row"><h2 id="plate-heading">Схема панели</h2><div class="spacer"></div><button type="button" id="plate-close">Закрыть</button></div>
+    <p class="muted small">Загрузите SVG лицевой панели, выберите порт в списке и щёлкните по его месту на схеме: следующий порт выберется сам.
+      «Продолжить ряд» расставит остальные порты ряда с тем же шагом, что у двух предыдущих.</p>
+    <div class="row wrap">
+      <label class="button">Загрузить SVG<input id="plate-file" type="file" accept="image/svg+xml,.svg" hidden></label>
+      <select id="plate-copy" title="Взять схему и метки у другого устройства"></select>
+      <label class="check"><input id="plate-step2" type="checkbox"> Через один (нечётные сверху)</label>
+      <label>Ширина метки <input id="plate-w" type="range" min="0.004" max="0.12" step="0.001"></label>
+      <label>Высота метки <input id="plate-h" type="range" min="0.04" max="1" step="0.01"></label>
+    </div>
+    <div class="plate-wrap"><div id="plate-stage" class="plate-stage"><img id="plate-img" alt=""><div id="plate-marks"></div></div></div>
+    <div id="plate-ports" class="chips"></div>
+    <p id="plate-error" class="error" hidden></p>
+    <div class="row">
+      <button type="button" id="plate-delete" class="danger">Удалить схему</button>
+      <button type="button" id="plate-row">Продолжить ряд</button>
+      <button type="button" id="plate-unmark">Убрать метку</button>
+      <div class="spacer"></div>
+      <span id="plate-count" class="muted small"></span>
+      <button type="button" id="plate-save" class="primary">Сохранить метки</button>
     </div>
   </div>
 </dialog>
