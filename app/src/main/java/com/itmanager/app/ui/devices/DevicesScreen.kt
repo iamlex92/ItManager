@@ -17,7 +17,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import com.itmanager.app.ui.components.tint
+import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.IosShare
+import androidx.compose.material.icons.outlined.QrCode2
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.TableChart
 import androidx.compose.material3.CircularProgressIndicator
@@ -239,9 +241,26 @@ private fun ExportButton(exporting: ExportFormat?, onExport: (ExportFormat) -> U
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             ExportFormat.entries.forEach { f ->
                 DropdownMenuItem(
-                    text = { Text(if (f == ExportFormat.XLSX) "Таблица Excel (.xlsx)" else "Документ PDF") },
+                    text = {
+                        Text(
+                            when (f) {
+                                ExportFormat.XLSX -> "Таблица Excel (.xlsx)"
+                                ExportFormat.PDF -> "Документ PDF"
+                                ExportFormat.NETBOX -> "Архив для NetBox (.zip)"
+                                ExportFormat.LABELS -> "Наклейки с QR (печать)"
+                            },
+                        )
+                    },
                     leadingIcon = {
-                        Icon(if (f == ExportFormat.XLSX) Icons.Outlined.TableChart else Icons.Outlined.PictureAsPdf, contentDescription = null)
+                        Icon(
+                            when (f) {
+                                ExportFormat.XLSX -> Icons.Outlined.TableChart
+                                ExportFormat.PDF -> Icons.Outlined.PictureAsPdf
+                                ExportFormat.NETBOX -> Icons.Outlined.Dns
+                                ExportFormat.LABELS -> Icons.Outlined.QrCode2
+                            },
+                            contentDescription = null,
+                        )
                     },
                     onClick = {
                         open = false

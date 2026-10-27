@@ -468,6 +468,10 @@ class NetAdminApi @Inject constructor(
         if (s.apiToken.isNotBlank()) bearerAuth(s.apiToken)
     }
 
+    /** A file the server builds (NetBox archive, label page). Reads only. */
+    suspend fun download(s: ServerSettings, path: String): ByteArray =
+        guarded { client.get("${requireBase(s)}/api/v1/$path") { auth(s) }.body() }
+
     private suspend inline fun <reified T> fetch(s: ServerSettings, path: String): T {
         return client.get("${requireBase(s)}/api/v1/$path") { auth(s) }.body()
     }

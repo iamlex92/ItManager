@@ -3,6 +3,7 @@ package com.itmanager.app.data.export
 import android.content.Context
 import android.net.Uri
 import androidx.core.content.FileProvider
+import com.itmanager.app.core.network.NetAdminApi
 import com.itmanager.app.core.settings.SettingsRepository
 import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.source.DcimRepository
@@ -19,9 +20,12 @@ import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
 
-enum class ExportFormat(val label: String, val extension: String, val mime: String) {
+/** [serverPath] set: the file is built by the server (NetBox CSV archive, printable QR labels) and only fetched here. */
+enum class ExportFormat(val label: String, val extension: String, val mime: String, val serverPath: String? = null) {
     XLSX("Excel", "xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
     PDF("PDF", "pdf", "application/pdf"),
+    NETBOX("NetBox", "zip", "application/zip", "export/netbox.zip"),
+    LABELS("Наклейки", "html", "text/html", "export/labels.html"),
 }
 
 data class ExportedFile(val uri: Uri, val mime: String, val name: String)
@@ -35,10 +39,13 @@ class InventoryExporter @Inject constructor(
     @ApplicationContext private val context: Context,
     private val repository: DcimRepository,
     private val settings: SettingsRepository,
+    private val api: NetAdminApi,
 ) {
     private val fileStamp = DateTimeFormatter.ofPattern("yyyyMMdd-HHmm").withZone(ZoneId.systemDefault())
 
     suspend fun export(format: ExportFormat): Result<ExportedFile> = runCatching {
+        val serverPath = format.serverPath
+        if (serverPath != null) return@runCatching exportFromServer(format, serverPath)
         val report = collect()
         withContext(Dispatchers.IO) {
             val dir = File(context.cacheDir, "exports").apply { mkdirs() }
@@ -50,8 +57,21 @@ class InventoryExporter @Inject constructor(
                 when (format) {
                     ExportFormat.XLSX -> XlsxWriter.write(report.tables, out, report.summary)
                     ExportFormat.PDF -> InventoryPdf.write(report, out)
+                    // Built by the server and returned before this point.
+                    ExportFormat.NETBOX, ExportFormat.LABELS -> error("server-built format")
                 }
             }
+            ExportedFile(FileProvider.getUriForFile(context, "${context.packageName}.exports", file), format.mime, name)
+        }
+    }
+
+    private suspend fun exportFromServer(format: ExportFormat, path: String): ExportedFile {
+        val bytes = api.download(settings.current(), path)
+        return withContext(Dispatchers.IO) {
+            val dir = File(context.cacheDir, "exports").apply { mkdirs() }
+            dir.listFiles()?.forEach { it.delete() }
+            val name = "itmanager-${format.name.lowercase()}-${fileStamp.format(Instant.now())}.${format.extension}"
+            val file = File(dir, name).apply { writeBytes(bytes) }
             ExportedFile(FileProvider.getUriForFile(context, "${context.packageName}.exports", file), format.mime, name)
         }
     }
