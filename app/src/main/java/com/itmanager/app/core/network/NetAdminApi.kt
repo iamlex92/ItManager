@@ -468,6 +468,16 @@ class NetAdminApi @Inject constructor(
         if (s.apiToken.isNotBlank()) bearerAuth(s.apiToken)
     }
 
+    /** Subnet usage and address conflicts from the inventory. Reads only. */
+    suspend fun ipam(s: ServerSettings): IpamDto = guarded { fetch<IpamDto>(s, "ipam") }
+
+    suspend fun ipamCheck(s: ServerSettings, ip: String): IpamCheckDto = guarded {
+        client.get("${requireBase(s)}/api/v1/ipam/check") {
+            auth(s)
+            parameter("ip", ip)
+        }.body()
+    }
+
     /** A file the server builds (NetBox archive, label page). Reads only. */
     suspend fun download(s: ServerSettings, path: String): ByteArray =
         guarded { client.get("${requireBase(s)}/api/v1/$path") { auth(s) }.body() }

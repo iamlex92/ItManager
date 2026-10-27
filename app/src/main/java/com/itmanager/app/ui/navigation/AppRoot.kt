@@ -65,6 +65,7 @@ import com.itmanager.app.ui.components.AlertsBellState
 import com.itmanager.app.ui.components.LocalAlertsBell
 import com.itmanager.app.ui.configdiff.ConfigDiffScreen
 import com.itmanager.app.ui.configimport.ConfigImportScreen
+import com.itmanager.app.ui.ipam.IpamScreen
 import com.itmanager.app.ui.credentials.CredentialsScreen
 import com.itmanager.app.ui.devices.DevicesScreen
 import com.itmanager.app.ui.history.HistoryScreen
@@ -318,6 +319,7 @@ private fun AppNavHost(
                 onOpenAudit = { navController.navigate(AuditRoute) { launchSingleTop = true } },
                 onOpenScanner = openScanner,
                 onOpenTools = { navController.navigate(ToolsRoute) { launchSingleTop = true } },
+                onOpenIpam = { navController.navigate(IpamRoute) { launchSingleTop = true } },
             )
         }
         composable<ScannerRoute>(
@@ -404,6 +406,14 @@ private fun AppNavHost(
                 onBack = { navController.popBackStack() },
                 onOpenCredentials = { navController.navigate(CredentialsRoute) { launchSingleTop = true } },
             )
+        }
+        composable<IpamRoute>(
+            enterTransition = { slideInHorizontally(push) { it } },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { slideOutHorizontally(push) { it } },
+        ) {
+            IpamScreen(onBack = { navController.popBackStack() }, onOpenSettings = openSettings)
         }
         composable<ToolsRoute>(
             enterTransition = { slideInHorizontally(push) { it } },

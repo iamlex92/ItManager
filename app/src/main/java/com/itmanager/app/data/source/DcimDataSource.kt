@@ -6,6 +6,8 @@ import com.itmanager.app.data.model.AuditKind
 import com.itmanager.app.data.model.AuthMethod
 import com.itmanager.app.data.model.ConfigDiff
 import com.itmanager.app.data.model.ConfigImportResult
+import com.itmanager.app.data.model.IpamCheck
+import com.itmanager.app.data.model.IpamOverview
 import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
@@ -76,6 +78,11 @@ interface DcimDataSource {
     suspend fun configDiff(switchId: String): ConfigDiff
 
     /** Reads pasted config text into the inventory (apply=false only previews). Never writes to the switch. */
+    /** Subnet usage and IP conflicts; reads the inventory only. */
+    suspend fun ipam(): IpamOverview
+
+    suspend fun ipamCheck(ip: String): IpamCheck
+
     suspend fun importConfig(switchId: String, text: String, apply: Boolean): ConfigImportResult
 
     /** What changed on the switch: port writes (applied, blocked or failed), config saves and copies. */
