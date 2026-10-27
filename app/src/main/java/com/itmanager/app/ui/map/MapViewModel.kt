@@ -22,6 +22,7 @@ import com.itmanager.app.data.model.LiveEvent
 import com.itmanager.app.data.model.MapLayer
 import com.itmanager.app.data.model.PlanRect
 import com.itmanager.app.data.model.Waypoint
+import com.itmanager.app.data.model.Zone
 import com.itmanager.app.data.model.removed
 import com.itmanager.app.data.model.routeOn
 import com.itmanager.app.data.model.traceToSwitch
@@ -90,12 +91,23 @@ data class MapUiState(
     /** The map editor is open: markers can be dragged, cables drawn, the plan placed. */
     val editing: Boolean = false,
     val editor: MapEditorState = MapEditorState(),
+    /** The rack whose front view is open. */
+    val rack: RackViewState? = null,
+)
+
+/** The open rack view: every device of the inventory, so unmounted ones can be picked for a free unit. */
+data class RackViewState(
+    val rackId: String,
+    val devices: List<Device> = emptyList(),
+    val busy: Boolean = true,
+    val error: String? = null,
 )
 
 enum class EditTool(val label: String, val hint: String) {
     MOVE("Объекты", "Перетащите устройство или коснитесь его, чтобы изменить. «+» добавляет новое."),
     LINK("Связи", "Коснитесь двух устройств, чтобы соединить их. Коснитесь кабеля, чтобы проложить его по своей трассе."),
     DRAW("Карандаш", "Рисуйте одним пальцем, двумя двигайте карту."),
+    ZONES("Помещения", "Коснитесь карты, чтобы поставить углы зоны. Коснитесь готовой зоны, чтобы изменить её."),
     PLAN("Подложка", "Загрузите план здания и подвиньте его пальцем под устройства."),
 }
 
@@ -113,6 +125,9 @@ data class MapEditorState(
     /** Routes already changed on the map while the server saves them, by cable id. */
     val routes: Map<String, List<Waypoint>> = emptyMap(),
     val form: DeviceForm? = null,
+    /** Zone tool: corners placed so far (x, y pairs, map pixels) and the zone picked for editing. */
+    val zoneDraft: List<Float> = emptyList(),
+    val selectedZone: String? = null,
     val busy: Boolean = false,
     /** An error from the last change; the tool hint shows when there is none. */
     val error: String? = null,
@@ -128,6 +143,10 @@ val PEN_COLORS = listOf(0xFFFFD60AL, 0xFFFF453AL, 0xFF30D158L, 0xFF0A84FFL, 0xFF
 /** Server limits on drawings: lines per floor and x, y pairs per line. */
 const val MAX_DRAWINGS = 500
 const val MAX_STROKE_POINTS = 3_900
+
+/** Server limits on zones: zones per floor and corners per zone. */
+const val MAX_ZONES = 200
+const val MAX_ZONE_CORNERS = 900
 
 @HiltViewModel
 class MapViewModel @Inject constructor(
@@ -269,7 +288,9 @@ class MapViewModel @Inject constructor(
         _state.update { it.copy(editing = on, editor = MapEditorState(tool = it.editor.tool, cable = it.editor.cable, penColor = it.editor.penColor)) }
     }
 
-    fun setTool(tool: EditTool) = editor { it.copy(tool = tool, linkFrom = null, error = null, selectedLink = null, selectedPoint = null) }
+    fun setTool(tool: EditTool) = editor {
+        it.copy(tool = tool, linkFrom = null, error = null, selectedLink = null, selectedPoint = null, zoneDraft = emptyList(), selectedZone = null)
+    }
     fun setCable(cable: String) = editor { it.copy(cable = cable) }
     fun cancelLink() = editor { it.copy(linkFrom = null) }
     fun setPenColor(color: Long) = editor { it.copy(penColor = color) }
@@ -422,6 +443,87 @@ class MapViewModel @Inject constructor(
     }
 
     fun clearDrawings() = saveDrawings(emptyList())
+
+    /** Zone tool, a tap at [x], [y]: adds a corner to the zone being outlined, picks a zone, or starts a new outline. */
+    fun tapZones(x: Float, y: Float) {
+        val e = _state.value.editor
+        val plan = content?.map?.plan ?: return
+        when {
+            e.zoneDraft.isNotEmpty() -> {
+                if (e.zoneDraft.size / 2 >= MAX_ZONE_CORNERS) editor { it.copy(error = "В зоне уже $MAX_ZONE_CORNERS углов: завершите её.") }
+                else editor { it.copy(zoneDraft = it.zoneDraft + listOf(x, y), error = null) }
+            }
+            else -> {
+                val hit = plan.zones.filter { it.contains(x, y) }.minByOrNull { it.area }
+                if (hit != null) {
+                    editor { it.copy(selectedZone = hit.id, error = null) }
+                } else if (plan.zones.size >= MAX_ZONES) {
+                    editor { it.copy(error = "На этаже уже $MAX_ZONES зон: удалите лишние.") }
+                } else {
+                    editor { it.copy(zoneDraft = listOf(x, y), selectedZone = null, error = null) }
+                }
+            }
+        }
+    }
+
+    fun undoZoneCorner() = editor { it.copy(zoneDraft = it.zoneDraft.dropLast(2)) }
+    fun cancelZone() = editor { it.copy(zoneDraft = emptyList(), selectedZone = null) }
+
+    /** Saves a new zone or the changes to one, matched by id. */
+    fun saveZone(zone: Zone) {
+        val plan = content?.map?.plan ?: return
+        val zones = if (plan.zones.any { it.id == zone.id }) plan.zones.map { if (it.id == zone.id) zone else it } else plan.zones + zone
+        editor { it.copy(zoneDraft = emptyList(), selectedZone = zone.id) }
+        saveZones(zones)
+    }
+
+    fun deleteZone(id: String) {
+        val plan = content?.map?.plan ?: return
+        editor { it.copy(selectedZone = null) }
+        saveZones(plan.zones.filter { it.id != id })
+    }
+
+    private fun saveZones(zones: List<Zone>) {
+        updatePlan { it.copy(zones = zones) }
+        write {
+            val floor = floor() ?: return@write
+            val latest = content?.map?.plan?.zones ?: zones
+            repository.saveZones(floor, latest).onFailure { failAndReload(it) }
+        }
+    }
+
+    /** The card's comment: saved on its own, outside the editor. [done] gets null on success or the error text. */
+    fun saveComment(device: Device, text: String, done: (String?) -> Unit) = write {
+        repository.updateDevice(device.id, device.toDraft().copy(comment = text.trim().ifEmpty { null }))
+            .onSuccess { done(null) }
+            .onFailure { done(it.toUserMessage()) }
+    }
+
+    // --- Rack view ---
+
+    fun openRack(id: String) {
+        _state.update { it.copy(rack = RackViewState(id)) }
+        viewModelScope.launch { refreshRack() }
+    }
+
+    fun closeRack() = _state.update { it.copy(rack = null) }
+
+    private suspend fun refreshRack() {
+        repository.devices()
+            .onSuccess { list -> _state.update { s -> s.copy(rack = s.rack?.copy(devices = list, busy = false)) } }
+            .onFailure { e -> _state.update { s -> s.copy(rack = s.rack?.copy(busy = false, error = e.toUserMessage())) } }
+    }
+
+    /** Mounts [deviceId] from unit [u], [h] units high; null [rackId] takes it out of its rack. */
+    fun mount(deviceId: String, rackId: String?, u: Int?, h: Int?) {
+        val device = _state.value.rack?.devices?.firstOrNull { it.id == deviceId } ?: return
+        _state.update { s -> s.copy(rack = s.rack?.copy(busy = true, error = null)) }
+        viewModelScope.launch {
+            repository.updateDevice(deviceId, device.toDraft().copy(rackId = rackId, rackU = u, rackH = h))
+                .onFailure { e -> _state.update { s -> s.copy(rack = s.rack?.copy(busy = false, error = e.toUserMessage())) } }
+                .onSuccess { refreshRack() }
+        }
+    }
 
     private fun saveDrawings(drawings: List<Drawing>) {
         updatePlan { it.copy(drawings = drawings) }

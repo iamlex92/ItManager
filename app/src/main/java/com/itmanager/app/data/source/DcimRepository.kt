@@ -34,6 +34,7 @@ import com.itmanager.app.data.model.RunbookRun
 import com.itmanager.app.data.model.SwitchPort
 import com.itmanager.app.data.model.Vlan
 import com.itmanager.app.data.model.Waypoint
+import com.itmanager.app.data.model.Zone
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -139,6 +140,7 @@ class DcimRepository @Inject constructor(
     suspend fun placePlan(plan: FloorPlan, rect: PlanRect): Result<FloorPlan> = load { placePlan(plan, rect) }
     suspend fun saveDrawings(plan: FloorPlan, drawings: List<Drawing>): Result<FloorPlan> =
         load { saveDrawings(plan, drawings) }
+    suspend fun saveZones(plan: FloorPlan, zones: List<Zone>): Result<FloorPlan> = load { saveZones(plan, zones) }
 
     /** The server says the inventory changed elsewhere (the web console, another phone). */
     fun inventoryChanged() {

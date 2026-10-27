@@ -230,3 +230,66 @@ def test_virtual_machine_is_bound_to_its_host(client):
     # Removing the host leaves the machine without one.
     client.delete(f"/api/v1/devices/{host['id']}")
     assert client.get(f"/api/v1/devices/{vm['id']}").json()["host_id"] is None
+
+
+def test_zones_comment_and_rack(client):
+    floor = new_floor(client)
+    zone = {
+        "id": "z1",
+        "name": "Серверная",
+        "is_room": True,
+        "color": "#0A84FF",
+        "points": [0, 0, 100, 0, 100, 80, 0, 80],
+    }
+    r = client.patch(f"/api/v1/floors/{floor['id']}", json={"zones": [zone]})
+    assert r.status_code == 200 and r.json()["zones"] == [zone]
+    assert client.get(f"/api/v1/floors/{floor['id']}").json()["zones"][0]["name"] == "Серверная"
+    bad = {**zone, "points": [0, 0, 1, 1]}
+    assert client.patch(f"/api/v1/floors/{floor['id']}", json={"zones": [bad]}).status_code == 422
+
+    rack = client.post("/api/v1/devices", json={"name": "Стойка 1", "type": "RACK", "x": 5, "y": 5}).json()
+    assert rack["rack_units"] == 42
+    sw = client.post(
+        "/api/v1/devices",
+        json={
+            "name": "SW-A",
+            "type": "SWITCH",
+            "comment": "Порт 24 — аплинк",
+            "rack_id": rack["id"],
+            "rack_u": 40,
+            "rack_h": 2,
+        },
+    ).json()
+    assert sw["comment"] == "Порт 24 — аплинк" and (sw["rack_id"], sw["rack_u"], sw["rack_h"]) == (rack["id"], 40, 2)
+
+    def mount(name: str, u: int, h: int = 1):
+        return client.post(
+            "/api/v1/devices",
+            json={"name": name, "type": "SERVER", "rack_id": rack["id"], "rack_u": u, "rack_h": h},
+        )
+
+    assert mount("S-1", 41).status_code == 409  # unit 41 belongs to SW-A (40-41)
+    assert mount("S-2", 42, 2).status_code == 422  # sticks out of a 42 U rack
+    assert mount("S-3", 42).status_code == 201
+    assert (
+        client.post(
+            "/api/v1/devices", json={"name": "S-4", "type": "SERVER", "rack_id": sw["id"], "rack_u": 1}
+        ).status_code
+        == 422
+    )
+    assert (
+        client.post("/api/v1/devices", json={"name": "S-5", "type": "SERVER", "rack_id": rack["id"]}).status_code == 422
+    )
+
+    # Moving a device inside the rack, then taking it out.
+    r = client.patch(f"/api/v1/devices/{sw['id']}", json={"rack_u": 10})
+    assert r.status_code == 200 and r.json()["rack_u"] == 10
+    r = client.patch(f"/api/v1/devices/{sw['id']}", json={"rack_id": None})
+    assert r.status_code == 200 and r.json()["rack_id"] is None and r.json()["rack_u"] is None
+    # The rack cannot shrink below a mounted device.
+    assert client.patch(f"/api/v1/devices/{rack['id']}", json={"rack_units": 20}).status_code == 409
+    assert client.patch(f"/api/v1/devices/{rack['id']}", json={"rack_units": 48}).status_code == 200
+    # Deleting a rack leaves its devices unmounted.
+    assert client.delete(f"/api/v1/devices/{rack['id']}").status_code == 204
+    left = [d for d in client.get("/api/v1/devices").json() if d["name"] == "S-3"][0]
+    assert left["rack_id"] is None

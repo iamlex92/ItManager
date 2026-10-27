@@ -29,6 +29,7 @@ import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Draw
 import androidx.compose.material.icons.outlined.FitScreen
 import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.MeetingRoom
 import androidx.compose.material.icons.outlined.OpenWith
 import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material.icons.outlined.RemoveCircleOutline
@@ -60,6 +61,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.itmanager.app.data.model.Connection
+import com.itmanager.app.data.model.DEFAULT_RACK_UNITS
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.DeviceType
@@ -72,6 +74,7 @@ private val EditTool.icon: ImageVector
         EditTool.MOVE -> Icons.Outlined.OpenWith
         EditTool.LINK -> Icons.Outlined.Cable
         EditTool.DRAW -> Icons.Outlined.Draw
+        EditTool.ZONES -> Icons.Outlined.MeetingRoom
         EditTool.PLAN -> Icons.Outlined.Image
     }
 
@@ -84,6 +87,12 @@ fun MapEditToolbar(
     selectedLinkName: String?,
     hasPlan: Boolean,
     hasDrawings: Boolean,
+    /** The zone being edited: its name, and what to do with the outline in progress. */
+    selectedZoneName: String?,
+    onUndoZone: () -> Unit,
+    onFinishZone: () -> Unit,
+    onCancelZone: () -> Unit,
+    onEditZone: () -> Unit,
     onTool: (EditTool) -> Unit,
     onAddDevice: () -> Unit,
     onCable: (String) -> Unit,
@@ -183,6 +192,26 @@ fun MapEditToolbar(
                             Icon(Icons.Outlined.DeleteOutline, contentDescription = "Стереть все линии")
                         }
                     }
+                    EditTool.ZONES -> when {
+                        state.zoneDraft.isNotEmpty() -> {
+                            Text("Углов: ${state.zoneDraft.size / 2}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                            IconButton(onClick = onUndoZone) { Icon(Icons.AutoMirrored.Outlined.Undo, contentDescription = "Убрать последний угол") }
+                            IconButton(onClick = onCancelZone) { Icon(Icons.Outlined.Close, contentDescription = "Отменить зону") }
+                            FilledTonalButton(onClick = onFinishZone, enabled = state.zoneDraft.size >= 6) { Text("Готово") }
+                        }
+                        selectedZoneName != null -> {
+                            Text(
+                                selectedZoneName.ifBlank { "Без названия" },
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(onClick = onEditZone) { Text("Изменить") }
+                            IconButton(onClick = onCancelZone) { Icon(Icons.Outlined.Close, contentDescription = "Снять выбор") }
+                        }
+                        else -> Text("Касайтесь углов по очереди, затем «Готово»", style = MaterialTheme.typography.bodyMedium)
+                    }
                     EditTool.PLAN -> if (!hasPlan) {
                         FilledTonalButton(onClick = onPickPlan, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
                             Icon(Icons.Outlined.UploadFile, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -242,6 +271,8 @@ fun DeviceFormDialog(
     var vendor by rememberSaveable(key) { mutableStateOf(device?.vendor.orEmpty()) }
     var model by rememberSaveable(key) { mutableStateOf(device?.model.orEmpty()) }
     var hostId by rememberSaveable(key) { mutableStateOf(device?.hostId) }
+    var comment by rememberSaveable(key) { mutableStateOf(device?.comment.orEmpty()) }
+    var rackUnits by rememberSaveable(key) { mutableStateOf((device?.rackUnits ?: DEFAULT_RACK_UNITS).toString()) }
     var confirmDelete by rememberSaveable(key) { mutableStateOf(false) }
     val ipError = ip.isNotBlank() && !IPV4.matches(ip.trim())
 
@@ -309,6 +340,25 @@ fun DeviceFormDialog(
                         modifier = Modifier.weight(1f),
                     )
                 }
+                if (type == DeviceType.RACK) {
+                    OutlinedTextField(
+                        value = rackUnits,
+                        onValueChange = { rackUnits = it.filter(Char::isDigit).take(2) },
+                        label = { Text("Высота стойки, U") },
+                        supportingText = { Text("Устройства ставятся в стойку в её виде: карточка стойки → «Открыть стойку».") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                OutlinedTextField(
+                    value = comment,
+                    onValueChange = { comment = it.take(4000) },
+                    label = { Text("Комментарий") },
+                    minLines = 2,
+                    maxLines = 5,
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 val hostChoices = hosts.filter { it.id != device?.id }
                 if (type == DeviceType.VIRTUAL && hostChoices.isNotEmpty()) {
                     Text("Хост виртуализации", style = MaterialTheme.typography.labelLarge)
@@ -348,6 +398,12 @@ fun DeviceFormDialog(
                             vendor = vendor.trim().ifEmpty { null },
                             model = model.trim().ifEmpty { null },
                             hostId = hostId.takeIf { type == DeviceType.VIRTUAL },
+                            comment = comment.trim().ifEmpty { null },
+                            rackUnits = if (type == DeviceType.RACK) rackUnits.toIntOrNull()?.coerceIn(1, 60) ?: DEFAULT_RACK_UNITS else null,
+                            // Where it stands in a rack is set in the rack view; editing the form keeps it.
+                            rackId = device?.rackId.takeIf { type != DeviceType.RACK },
+                            rackU = device?.rackU.takeIf { type != DeviceType.RACK },
+                            rackH = device?.rackH.takeIf { type != DeviceType.RACK },
                         ),
                     )
                 },

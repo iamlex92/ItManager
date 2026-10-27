@@ -25,6 +25,7 @@ DeviceType = Literal[
     "UPS",
     "PHONE",
     "VIRTUAL",
+    "RACK",
     "UNKNOWN",
 ]
 PortMode = Literal["ACCESS", "TRUNK"]
@@ -77,6 +78,26 @@ class Drawing(BaseModel):
 MAX_DRAWINGS = 500
 
 
+class Zone(BaseModel):
+    """An area outlined on the map; with is_room set it is a room and lists the devices standing in it."""
+
+    id: str = Field(min_length=1, max_length=40)
+    name: str = Field(max_length=100)
+    is_room: bool = True
+    color: str = Field(default="#0A84FF", pattern=r"^#[0-9a-fA-F]{6}$")
+    points: list[float] = Field(min_length=6, max_length=2000)
+
+    @field_validator("points")
+    @classmethod
+    def _pairs(cls, v: list[float]) -> list[float]:
+        if len(v) % 2:
+            raise ValueError("points are x, y pairs")
+        return [round(p, 1) for p in v]
+
+
+MAX_ZONES = 200
+
+
 class FloorBase(BaseModel):
     building_name: str = Field(max_length=100)
     floor_number: int
@@ -90,6 +111,7 @@ class FloorBase(BaseModel):
     plan_w: float | None = Field(default=None, gt=0)
     plan_h: float | None = Field(default=None, gt=0)
     drawings: list[Drawing] = Field(default_factory=list, max_length=MAX_DRAWINGS)
+    zones: list[Zone] = Field(default_factory=list, max_length=MAX_ZONES)
 
     @field_validator("name")
     @classmethod
@@ -115,6 +137,7 @@ class FloorUpdate(BaseModel):
     plan_w: float | None = Field(default=None, gt=0)
     plan_h: float | None = Field(default=None, gt=0)
     drawings: list[Drawing] | None = Field(default=None, max_length=MAX_DRAWINGS)
+    zones: list[Zone] | None = Field(default=None, max_length=MAX_ZONES)
 
     @field_validator("name")
     @classmethod
@@ -176,6 +199,12 @@ class DeviceBase(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
     # A virtual machine's host server.
     host_id: uuid.UUID | None = None
+    comment: str | None = Field(default=None, max_length=4000)
+    # Mounted in a rack: the rack, its lowest unit and the height in units; a rack itself has rack_units.
+    rack_id: uuid.UUID | None = None
+    rack_u: int | None = Field(default=None, ge=1, le=60)
+    rack_h: int | None = Field(default=None, ge=1, le=60)
+    rack_units: int | None = Field(default=None, ge=1, le=60)
 
     @field_validator("mac")
     @classmethod
@@ -237,6 +266,11 @@ class DeviceUpdate(BaseModel):
     is_active: bool | None = None
     metadata: dict[str, Any] | None = None
     host_id: uuid.UUID | None = None
+    comment: str | None = Field(default=None, max_length=4000)
+    rack_id: uuid.UUID | None = None
+    rack_u: int | None = Field(default=None, ge=1, le=60)
+    rack_h: int | None = Field(default=None, ge=1, le=60)
+    rack_units: int | None = Field(default=None, ge=1, le=60)
 
     @field_validator("mac")
     @classmethod
@@ -270,6 +304,11 @@ class DeviceOut(BaseModel):
     ssh_credential_id: uuid.UUID | None = None
     metadata: dict[str, Any]
     host_id: uuid.UUID | None = None
+    comment: str | None = None
+    rack_id: uuid.UUID | None = None
+    rack_u: int | None = None
+    rack_h: int | None = None
+    rack_units: int | None = None
 
 
 # --- ports ----------------------------------------------------------------

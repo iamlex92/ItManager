@@ -19,6 +19,7 @@ import com.itmanager.app.data.model.Consumable
 import com.itmanager.app.data.model.ConsumableKind
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceBulkChange
+import com.itmanager.app.data.model.DEFAULT_RACK_UNITS
 import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.DeviceHistoryEntry
 import com.itmanager.app.data.model.Drawing
@@ -53,6 +54,7 @@ import com.itmanager.app.data.model.SwitchPort
 import com.itmanager.app.data.model.TrafficSeries
 import com.itmanager.app.data.model.Vlan
 import com.itmanager.app.data.model.Waypoint
+import com.itmanager.app.data.model.Zone
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -97,6 +99,10 @@ object DemoDataSource : DcimDataSource {
                 Room("Склад", 1120f, 40f, 1560f, 300f),
                 Room("Цех №1", 40f, 340f, 1560f, 960f),
             ),
+            zones = listOf(
+                Zone("z-srv", "Серверная", true, 0xFFFF9F0A, listOf(40f, 40f, 360f, 40f, 360f, 300f, 40f, 300f)),
+                Zone("z-it", "ИТ-отдел", true, 0xFF30D158, listOf(380f, 40f, 700f, 40f, 700f, 300f, 380f, 300f)),
+            ),
         ),
         FLOOR_2_ID to FloorPlan(
             id = FLOOR_2_ID,
@@ -126,8 +132,12 @@ object DemoDataSource : DcimDataSource {
 
     // Vars: devices found by the demo network scan can be added to the inventory.
     @Volatile private var devices = listOf(
-        d("sw-core-01", "SW-CORE-01", DeviceType.SWITCH, "Cisco", "C9300-24P", "10.99.0.1", 120f, 110f, vlan = 99),
-        d("srv-01", "SRV-01", DeviceType.SERVER, "HPE", "ProLiant DL380 Gen11", "10.50.0.10", 140f, 230f, vlan = 50),
+        d("rack-a1", "Стойка A1", DeviceType.RACK, null, "19\" 24U", null, 230f, 200f, units = 24, comment = "Шкаф у окна, ключ у охраны."),
+        d(
+            "sw-core-01", "SW-CORE-01", DeviceType.SWITCH, "Cisco", "C9300-24P", "10.99.0.1", 120f, 110f, vlan = 99,
+            rack = "rack-a1", ru = 22, rh = 1, comment = "Аплинк на порт Gi1/0/24, прошивка 17.9.",
+        ),
+        d("srv-01", "SRV-01", DeviceType.SERVER, "HPE", "ProLiant DL380 Gen11", "10.50.0.10", 140f, 230f, vlan = 50, rack = "rack-a1", ru = 18, rh = 2),
         // Virtual machines on SRV-01: on L2 and L3 next to their host, never on L1.
         d("vm-1c", "VM-1C", DeviceType.VIRTUAL, "VMware", "1С:Предприятие", "10.50.0.21", 90f, 300f, vlan = 50, host = "srv-01"),
         d("vm-dc", "VM-DC-01", DeviceType.VIRTUAL, "VMware", "Контроллер домена", "10.50.0.22", 190f, 300f, vlan = 50, host = "srv-01"),
@@ -478,10 +488,11 @@ object DemoDataSource : DcimDataSource {
             val device = Device(
                 id = "new-${++createdDevices}", name = draft.name.trim(), type = draft.type, vendor = draft.vendor,
                 model = draft.model, ip = draft.ip, mac = null, floorId = floorOrFirst(floorId), x = x, y = y,
-                isOnline = draft.type == DeviceType.SOCKET || draft.type == DeviceType.PATCH_PANEL,
+                isOnline = draft.type == DeviceType.SOCKET || draft.type == DeviceType.PATCH_PANEL || draft.type == DeviceType.RACK,
                 vlanId = draft.ip?.let { ip -> vlans.firstOrNull { ScanRanges.contains(it.subnet, ip) }?.id },
-                hostId = draft.hostId,
-            )
+                hostId = draft.hostId, comment = draft.comment,
+                rackUnits = if (draft.type == DeviceType.RACK) draft.rackUnits ?: DEFAULT_RACK_UNITS else null,
+            ).withRack(draft)
             setDevices(devices + device)
             device
         }
@@ -494,8 +505,9 @@ object DemoDataSource : DcimDataSource {
             checkName(draft.name, id)
             val updated = current.copy(
                 name = draft.name.trim(), type = draft.type, ip = draft.ip, vendor = draft.vendor, model = draft.model,
-                hostId = draft.hostId,
-            )
+                hostId = draft.hostId, comment = draft.comment,
+                rackUnits = if (draft.type == DeviceType.RACK) draft.rackUnits ?: current.rackUnits ?: DEFAULT_RACK_UNITS else null,
+            ).withRack(draft)
             setDevices(devices.map { if (it.id == id) updated else it })
             updated
         }
@@ -512,7 +524,7 @@ object DemoDataSource : DcimDataSource {
         simulateNetwork()
         inventoryLock.withLock {
             if (id !in byId) notFound("Устройство")
-            setDevices(devices.filter { it.id != id })
+            setDevices(devices.filter { it.id != id }.map { if (it.rackId == id) it.copy(rackId = null, rackU = null, rackH = null) else it })
             connections = connections.filter { it.deviceAId != id && it.deviceBId != id }
         }
     }
@@ -640,6 +652,27 @@ object DemoDataSource : DcimDataSource {
 
     override suspend fun saveDrawings(plan: FloorPlan, drawings: List<Drawing>): FloorPlan = inventoryLock.withLock {
         setPlan(planOf(plan).copy(drawings = drawings))
+    }
+
+    override suspend fun saveZones(plan: FloorPlan, zones: List<Zone>): FloorPlan = inventoryLock.withLock {
+        setPlan(planOf(plan).copy(zones = zones))
+    }
+
+    /** Mounts the device in the rack of [draft] like the server does: the rack must exist, the units fit and are free. */
+    private fun Device.withRack(draft: DeviceDraft): Device {
+        val rack = draft.rackId?.takeIf { type != DeviceType.RACK }?.let { byId[it] }
+        if (draft.rackId == null || rack == null) {
+            if (draft.rackId != null && type != DeviceType.RACK) throw UserFacingException("Стойка не найдена.")
+            return copy(rackId = null, rackU = null, rackH = null)
+        }
+        if (rack.type != DeviceType.RACK) throw UserFacingException("Нужно устройство типа «Стойка».")
+        val u = draft.rackU ?: throw UserFacingException("Укажите юнит стойки.")
+        val h = draft.rackH ?: 1
+        val size = rack.rackUnits ?: DEFAULT_RACK_UNITS
+        if (u < 1 || u + h - 1 > size) throw UserFacingException("В стойке $size U: устройство не помещается.")
+        val busy = devices.firstOrNull { it.id != id && it.rackId == rack.id && u <= it.rackTop!! && it.rackU!! <= u + h - 1 }
+        if (busy != null) throw UserFacingException("Юниты ${busy.rackU}–${busy.rackTop} заняты: ${busy.name}.")
+        return copy(rackId = rack.id, rackU = u, rackH = h)
     }
 
     private fun setDevices(list: List<Device>) {
@@ -1038,12 +1071,14 @@ object DemoDataSource : DcimDataSource {
     private fun d(
         id: String, name: String, type: DeviceType, vendor: String?, model: String?, ip: String?,
         x: Float, y: Float, vlan: Int? = null, online: Boolean = true, floor: String = FLOOR_ID, host: String? = null,
+        comment: String? = null, rack: String? = null, ru: Int? = null, rh: Int? = null, units: Int? = null,
     ) = Device(
         id = id, name = name, type = type, vendor = vendor, model = model, ip = ip,
         mac = ip?.let { fakeMac(id) }, floorId = floor, x = x, y = y,
-        isOnline = online || type == DeviceType.SOCKET || type == DeviceType.PATCH_PANEL,
+        isOnline = online || type == DeviceType.SOCKET || type == DeviceType.PATCH_PANEL || type == DeviceType.RACK,
         vlanId = vlan,
         hostId = host,
+        comment = comment, rackId = rack, rackU = ru, rackH = rh, rackUnits = units,
     )
 
     private fun c(a: String, b: String, cable: String = "Cat5e", label: String? = null, route: List<Waypoint> = emptyList()) =

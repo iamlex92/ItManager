@@ -4,7 +4,7 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
-from sqlalchemy import String, cast, delete, or_, select
+from sqlalchemy import String, cast, delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 
 from ..models import Device, DeviceConfig, Floor
@@ -70,6 +70,56 @@ async def _check_host(session, host_id: uuid.UUID | None, own: set[uuid.UUID]) -
         raise not_found("host device")
 
 
+DEFAULT_RACK_UNITS = 42
+
+
+async def _check_rack(session, device: Device) -> None:
+    """A device mounted in a rack needs a rack that exists, units inside it and no neighbour on them."""
+    if device.device_type != "RACK" and device.rack_units is not None:
+        device.rack_units = None
+    if device.device_type == "RACK":
+        device.rack_id = None
+        # A cabinet has nothing to ping: it is always «in the network», like a patch panel.
+        device.is_online = True
+        if device.rack_units is None:
+            device.rack_units = DEFAULT_RACK_UNITS
+        if device.id is not None:
+            top = await session.scalar(
+                select(func.max(Device.rack_u + func.coalesce(Device.rack_h, 1) - 1)).where(Device.rack_id == device.id)
+            )
+            if top and top > device.rack_units:
+                raise conflict("rack_too_small", f"в стойке заняты юниты до {top}: она не может быть ниже")
+    if device.rack_id is None:
+        device.rack_u = device.rack_h = None
+        return
+    if device.rack_id == device.id:
+        raise HTTPException(422, detail={"code": "bad_rack", "message": "Устройство не может стоять само в себе"})
+    rack = await session.get(Device, device.rack_id)
+    if rack is None or rack.device_type != "RACK":
+        raise HTTPException(
+            422, detail={"code": "bad_rack", "message": "Стойка не найдена: нужно устройство типа «Стойка»"}
+        )
+    if device.device_type == "RACK":
+        raise HTTPException(422, detail={"code": "bad_rack", "message": "Стойка не ставится в стойку"})
+    if device.rack_u is None:
+        raise HTTPException(422, detail={"code": "rack_unit_required", "message": "Укажите юнит стойки"})
+    device.rack_h = device.rack_h or 1
+    last = device.rack_u + device.rack_h - 1
+    size = rack.rack_units or DEFAULT_RACK_UNITS
+    if last > size:
+        raise HTTPException(
+            422, detail={"code": "rack_overflow", "message": f"В стойке {size} U: устройство не помещается"}
+        )
+    stmt = select(Device).where(Device.rack_id == rack.id)
+    if device.id is not None:
+        stmt = stmt.where(Device.id != device.id)
+    others = await session.scalars(stmt)
+    for other in others:
+        o_last = (other.rack_u or 1) + (other.rack_h or 1) - 1
+        if device.rack_u <= o_last and (other.rack_u or 1) <= last:
+            raise conflict("rack_unit_busy", f"Юниты {other.rack_u}–{o_last} в стойке заняты: {other.name}")
+
+
 async def _get(session, device_id: uuid.UUID) -> Device:
     device = await session.get(Device, device_id)
     if device is None:
@@ -111,6 +161,7 @@ async def create_device(body: DeviceCreate, session: SessionDep):
     await _check_host(session, body.host_id, set())
     device = Device()
     _apply(device, body.model_dump())
+    await _check_rack(session, device)
     session.add(device)
     await _commit_device(session, device)
     await session.refresh(device)
@@ -166,6 +217,7 @@ async def update_device(device_id: uuid.UUID, body: DeviceUpdate, session: Sessi
     device = await _get(session, device_id)
     await _check_host(session, body.host_id, {device_id})
     _apply(device, body.model_dump(exclude_unset=True))
+    await _check_rack(session, device)
     await _commit_device(session, device)
     await session.refresh(device)
     return device_out(device, await load_graph(session))

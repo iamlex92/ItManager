@@ -52,6 +52,9 @@ class Floor(Base):
     plan_h: Mapped[float | None] = mapped_column(Float)
     # Free lines drawn over the map in the app: [{"color": "#RRGGBB", "width": 4, "points": [x, y, ...]}].
     drawings: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
+    # Zones outlined on the map: [{"id": "z1", "name": "Серверная", "is_room": true, "points": [x, y, ...]}].
+    # A device whose icon lies inside a room zone belongs to that room.
+    zones: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -95,6 +98,14 @@ class Device(Base):
     ssh_credential_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("credentials.id", ondelete="SET NULL"))
     # For a virtual machine: the server it runs on. Not a cable, so it never shows on L1.
     host_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("devices.id", ondelete="SET NULL"))
+    # Free-text note shown in the device card.
+    comment: Mapped[str | None] = mapped_column(Text)
+    # For a device mounted in a rack: the rack (a device of type RACK), its lowest unit (1 is the bottom)
+    # and how many units it takes. For the rack itself: rack_units is its height.
+    rack_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("devices.id", ondelete="SET NULL"))
+    rack_u: Mapped[int | None] = mapped_column(Integer)
+    rack_h: Mapped[int | None] = mapped_column(Integer)
+    rack_units: Mapped[int | None] = mapped_column(Integer)
     # Encrypted at rest when SECRET_KEY is set. The Python-side default goes through the
     # encryption; the server default only covers rows inserted outside the app.
     snmp_community: Mapped[str | None] = mapped_column(EncryptedText, default="public", server_default=text("'public'"))
