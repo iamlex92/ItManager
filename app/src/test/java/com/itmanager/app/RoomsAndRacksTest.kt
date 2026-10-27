@@ -94,4 +94,25 @@ class RoomsAndRacksTest {
         assertEquals("\"dev\"", body["device_id"].toString())
         assertEquals("\"ACCESS\"", body["mode"].toString())
     }
+
+    @Test
+    fun rackStyleLivesInMetadataAndKeepsOtherKeys() {
+        val json = Json { ignoreUnknownKeys = true }
+        val dto = json.decodeFromString(
+            DeviceDto.serializer(),
+            """{"id": "r", "name": "A1", "type": "RACK", "metadata": {"owner": "it", "rack_color": "#FF9F0A", "rack_numbering": "top", "rack_width": "huge"}}""",
+        ).toDomain()
+        val style = com.itmanager.app.data.model.RackStyle.from(dto.metadata)
+        assertEquals("#FF9F0A", style.color)
+        assertEquals(com.itmanager.app.data.model.RackNumbering.TOP, style.numbering)
+        assertEquals(com.itmanager.app.data.model.RackWidth.NORMAL, style.width)
+        assertEquals(com.itmanager.app.data.model.RackLabels.NAME_MODEL, style.labels)
+
+        val written = style.copy(color = null, labels = com.itmanager.app.data.model.RackLabels.NONE).writeTo(dto.metadata)
+        assertTrue("owner" in written)
+        assertFalse("rack_color" in written)
+        assertEquals("\"none\"", written["rack_labels"].toString())
+        assertTrue("metadata" in dto.toDraft().copy(metadata = written).toPatch())
+        assertFalse("metadata" in dto.toDraft().copy(metadata = null).toPatch())
+    }
 }

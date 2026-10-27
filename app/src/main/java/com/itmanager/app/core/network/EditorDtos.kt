@@ -8,6 +8,7 @@ import com.itmanager.app.data.model.parseColorHex
 import com.itmanager.app.data.model.Zone
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -127,6 +128,7 @@ fun DeviceDraft.toPatch(): JsonObject = buildJsonObject {
     put("rack_h", rackH?.let { JsonPrimitive(it) } ?: JsonNull)
     put("rack_units", rackUnits?.let { JsonPrimitive(it) } ?: JsonNull)
     put("mac", mac?.trim()?.takeIf { it.isNotEmpty() }?.let { JsonPrimitive(it) } ?: JsonNull)
+    metadata?.let { put("metadata", JsonObject(it)) }
 }
 
 @Serializable

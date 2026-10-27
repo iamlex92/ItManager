@@ -24,11 +24,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -42,6 +45,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -50,6 +54,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -58,6 +63,10 @@ import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.model.FaceplatePort
 import com.itmanager.app.data.model.PortMode
+import com.itmanager.app.data.model.RackLabels
+import com.itmanager.app.data.model.RackNumbering
+import com.itmanager.app.data.model.RackStyle
+import com.itmanager.app.data.model.RackWidth
 import com.itmanager.app.ui.components.StatusDot
 import com.itmanager.app.ui.components.icon
 import com.itmanager.app.ui.components.tint
@@ -67,7 +76,8 @@ private val UNIT_HEIGHT = 30.dp
 private val RAIL_WIDTH = 30.dp
 
 /**
- * The front of a 19" rack: units numbered from the bottom, each device drawn over the units it occupies.
+ * The front of a 19" rack, each device drawn over the units it occupies. Units are numbered from the bottom
+ * unless the rack's style says otherwise; the gear opens its name, height and look.
  * A tap on a free unit offers the devices that stand in no rack yet; a tap on a device offers to take it out.
  */
 @Composable
@@ -81,8 +91,12 @@ fun RackDialog(
     /** Front panel drawings of the mounted devices, by device id. */
     plates: Map<String, FaceplateView> = emptyMap(),
     onEditFaceplate: (Device) -> Unit = {},
+    onSaveRack: (name: String, units: Int, style: RackStyle) -> Unit = { _, _, _ -> },
 ) {
     val units = rack.rackUnits ?: DEFAULT_RACK_UNITS
+    val style = remember(rack.metadata) { RackStyle.from(rack.metadata) }
+    val frame = style.color?.let { hexColor(it) } ?: MaterialTheme.colorScheme.outline
+    var settings by remember { mutableStateOf(false) }
     val members = state.devices.filter { it.rackId == rack.id && it.rackU != null }.sortedBy { it.rackU }
     val occupied = HashSet<Int>()
     members.forEach { m -> for (u in m.rackU!!..m.rackTop!!) occupied += u }
@@ -101,6 +115,7 @@ fun RackDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                    IconButton(onClick = { settings = true }) { Icon(Icons.Outlined.Settings, contentDescription = "Настройки стойки") }
                     IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, contentDescription = "Закрыть") }
                 }
                 Box(Modifier.fillMaxWidth().height(2.dp)) { if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth()) }
@@ -119,21 +134,39 @@ fun RackDialog(
                 ) {
                     Box(
                         Modifier
-                            .widthIn(max = 440.dp)
+                            .widthIn(max = style.width.maxDp.dp)
                             .fillMaxWidth()
-                            .border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
+                            .border(2.dp, frame, RoundedCornerShape(8.dp))
                             .background(MaterialTheme.colorScheme.surfaceContainerLowest, RoundedCornerShape(8.dp)),
                     ) {
                         Column {
-                            for (u in units downTo 1) UnitRow(u, free = u !in occupied) { slot = u }
+                            val order = if (style.numbering == RackNumbering.TOP) (1..units) else (units downTo 1)
+                            for (u in order) UnitRow(u, free = u !in occupied, rail = frame) { slot = u }
                         }
-                        members.forEach { device -> DeviceBlock(device, units, plates[device.id]) { picked = device } }
+                        members.forEach { device ->
+                            val top = device.rackTop ?: return@forEach
+                            // Rows run from the top of the box: from the highest unit, or from unit 1 when numbered downwards.
+                            val row = if (style.numbering == RackNumbering.TOP) device.rackU!! - 1 else units - top
+                            DeviceBlock(device, UNIT_HEIGHT * row, style.labels, plates[device.id]) { picked = device }
+                        }
                     }
                 }
             }
         }
     }
 
+    if (settings) {
+        RackSettingsDialog(
+            rack = rack,
+            style = style,
+            lowestFree = members.maxOfOrNull { it.rackTop ?: 0 } ?: 1,
+            onSave = { name, u, st ->
+                settings = false
+                onSaveRack(name, u, st)
+            },
+            onDismiss = { settings = false },
+        )
+    }
     slot?.let { u ->
         SlotDialog(
             unit = u,
@@ -204,7 +237,7 @@ fun RackDialog(
 }
 
 @Composable
-private fun UnitRow(unit: Int, free: Boolean, onClick: () -> Unit) {
+private fun UnitRow(unit: Int, free: Boolean, rail: Color, onClick: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -213,16 +246,15 @@ private fun UnitRow(unit: Int, free: Boolean, onClick: () -> Unit) {
             .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
             .then(if (free) Modifier.clickable(onClick = onClick) else Modifier),
     ) {
-        Box(Modifier.width(RAIL_WIDTH), contentAlignment = Alignment.Center) {
+        Box(Modifier.width(RAIL_WIDTH).fillMaxHeight().background(rail.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
             Text("$unit", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
 
-/** One device over its units, counted from the bottom of a rack that is [units] high. With [plate], its panel drawing. */
+/** One device over its units, [offset] down from the top of the rack box. With [plate], its panel drawing. */
 @Composable
-private fun DeviceBlock(device: Device, units: Int, plate: FaceplateView?, onClick: () -> Unit) {
-    val top = device.rackTop ?: return
+private fun DeviceBlock(device: Device, offset: Dp, labels: RackLabels, plate: FaceplateView?, onClick: () -> Unit) {
     val height = device.rackH ?: 1
     val tint = device.type.tint
     Surface(
@@ -231,7 +263,7 @@ private fun DeviceBlock(device: Device, units: Int, plate: FaceplateView?, onCli
         border = BorderStroke(1.dp, tint.copy(alpha = 0.7f)),
         modifier = Modifier
             .padding(start = RAIL_WIDTH, end = 3.dp, top = 2.dp, bottom = 2.dp)
-            .offset(y = UNIT_HEIGHT * (units - top))
+            .offset(y = offset)
             .fillMaxWidth()
             .height(UNIT_HEIGHT * height - 4.dp)
             .clickable(onClick = onClick),
@@ -240,8 +272,10 @@ private fun DeviceBlock(device: Device, units: Int, plate: FaceplateView?, onCli
             Icon(device.type.icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
-                Text(device.name, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (height > 1) {
+                if (labels != RackLabels.NONE) {
+                    Text(device.name, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                if (height > 1 && labels == RackLabels.NAME_MODEL) {
                     Text(
                         listOfNotNull(device.vendor, device.model).joinToString(" "),
                         style = MaterialTheme.typography.labelSmall,
@@ -344,3 +378,85 @@ private fun SlotDialog(
 
 private const val MAX_DEVICE_UNITS = 6
 private const val MAX_CANDIDATES = 200
+
+private val RACK_COLORS = listOf("#8E8E93", "#0A84FF", "#30D158", "#FF9F0A", "#BF5AF2", "#FF453A", "#64D2FF")
+
+private fun hexColor(hex: String) = Color(android.graphics.Color.parseColor(hex))
+
+/** Name, height in units, colour, numbering direction, block labels and width of one rack. */
+@Composable
+private fun RackSettingsDialog(
+    rack: Device,
+    style: RackStyle,
+    /** The highest unit a device already occupies; the rack cannot be made lower than that. */
+    lowestFree: Int,
+    onSave: (name: String, units: Int, style: RackStyle) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var name by rememberSaveable(rack.id) { mutableStateOf(rack.name) }
+    var units by rememberSaveable(rack.id) { mutableStateOf((rack.rackUnits ?: DEFAULT_RACK_UNITS).toString()) }
+    var color by rememberSaveable(rack.id) { mutableStateOf(style.color) }
+    var numbering by rememberSaveable(rack.id) { mutableStateOf(style.numbering) }
+    var labels by rememberSaveable(rack.id) { mutableStateOf(style.labels) }
+    var width by rememberSaveable(rack.id) { mutableStateOf(style.width) }
+    val height = units.toIntOrNull()
+    val tooLow = height != null && height < lowestFree
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Настройки стойки") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it.take(80) },
+                    label = { Text("Название") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = units,
+                    onValueChange = { units = it.filter(Char::isDigit).take(2) },
+                    label = { Text("Высота, U") },
+                    supportingText = { if (tooLow) Text("Заняты юниты до $lowestFree: сначала уберите устройства") },
+                    isError = tooLow,
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text("Цвет рамки", style = MaterialTheme.typography.labelLarge)
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    (listOf<String?>(null) + RACK_COLORS).forEach { c ->
+                        val fill = c?.let { hexColor(it) } ?: MaterialTheme.colorScheme.outline
+                        Box(
+                            Modifier
+                                .size(30.dp)
+                                .border(2.dp, if (c == color) MaterialTheme.colorScheme.onSurface else Color.Transparent, CircleShape)
+                                .padding(4.dp)
+                                .background(fill, CircleShape)
+                                .clickable { color = c },
+                        )
+                    }
+                }
+                Text("Нумерация юнитов", style = MaterialTheme.typography.labelLarge)
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    RackNumbering.entries.forEach { n -> FilterChip(selected = n == numbering, onClick = { numbering = n }, label = { Text(n.label) }) }
+                }
+                Text("Подписи на устройствах", style = MaterialTheme.typography.labelLarge)
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    RackLabels.entries.forEach { l -> FilterChip(selected = l == labels, onClick = { labels = l }, label = { Text(l.label) }) }
+                }
+                Text("Ширина на экране", style = MaterialTheme.typography.labelLarge)
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    RackWidth.entries.forEach { w -> FilterChip(selected = w == width, onClick = { width = w }, label = { Text(w.label) }) }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = height != null && height in 1..60 && !tooLow && name.isNotBlank(),
+                onClick = { onSave(name, height!!, RackStyle(color, numbering, labels, width)) },
+            ) { Text("Сохранить") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+    )
+}

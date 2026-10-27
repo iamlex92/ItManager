@@ -614,6 +614,7 @@ fun MapScreen(
                         viewModel.closeRack()
                         onOpenSwitch(id)
                     },
+                    onSaveRack = { name, units, style -> viewModel.saveRack(rack, name, units, style) },
                     onDismiss = viewModel::closeRack,
                 )
             }

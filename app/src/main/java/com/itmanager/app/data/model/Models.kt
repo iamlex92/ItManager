@@ -1,6 +1,7 @@
 package com.itmanager.app.data.model
 
 import java.time.Instant
+import kotlinx.serialization.json.JsonElement
 
 /** Domain models shared by all screens. Colors are ARGB longs so the data layer stays free of Compose. */
 
@@ -56,6 +57,8 @@ data class Device(
     val switchId: String? = null,
     val switchPortId: String? = null,
     val switchPortName: String? = null,
+    /** Free-form server-side attributes; a rack keeps its look here (see [RackStyle]). */
+    val metadata: Map<String, JsonElement> = emptyMap(),
 ) {
     /** The unit number the device's top edge reaches in its rack. */
     val rackTop: Int? get() = rackU?.let { it + (rackH ?: 1) - 1 }
@@ -63,6 +66,7 @@ data class Device(
     fun toDraft() = DeviceDraft(
         name = name, type = type, ip = ip, vendor = vendor, model = model, hostId = hostId,
         comment = comment, rackId = rackId, rackU = rackU, rackH = rackH, rackUnits = rackUnits, mac = mac,
+        metadata = metadata,
     )
 
     fun matches(query: String): Boolean {
@@ -311,6 +315,8 @@ data class DeviceDraft(
     val rackUnits: Int? = null,
     /** aa:bb:cc:dd:ee:ff; null clears it. */
     val mac: String? = null,
+    /** Sent whole: the server replaces the dictionary, so keep what the device already has. */
+    val metadata: Map<String, JsonElement>? = null,
 )
 
 private val MAC = Regex("^[0-9a-fA-F]{2}([:-]?[0-9a-fA-F]{2}){5}$")
