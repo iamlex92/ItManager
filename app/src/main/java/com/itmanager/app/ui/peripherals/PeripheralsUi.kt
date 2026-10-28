@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -136,10 +137,6 @@ fun PeripheralRow(item: Peripheral, showDevice: Boolean, onClick: () -> Unit, mo
  */
 @Composable
 fun DevicePeripheralsDialog(device: Device, viewModel: PeripheralsViewModel, all: List<Peripheral>, onDismiss: () -> Unit) {
-    val own = all.filter { it.deviceId == device.id }
-    val stock = all.filter { it.deviceId == null }
-    var pickStock by remember { mutableStateOf(false) }
-
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(Modifier.systemBarsPadding()) {
@@ -152,35 +149,50 @@ fun DevicePeripheralsDialog(device: Device, viewModel: PeripheralsViewModel, all
                     }
                     IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, contentDescription = "Закрыть") }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    FilledTonalButton(onClick = { viewModel.openNew(PeripheralDraft(PeripheralKind.MONITOR, deviceId = device.id)) }) {
-                        Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Добавить")
-                    }
-                    OutlinedButton(onClick = { pickStock = true }, enabled = stock.isNotEmpty()) {
-                        Icon(Icons.Outlined.Inventory2, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(if (stock.isEmpty()) "Склад пуст" else "Со склада (${stock.size})")
-                    }
-                }
-                if (own.isEmpty()) {
-                    Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                        Text(
-                            "К ${device.name} ничего не подключено. Добавьте монитор, клавиатуру, мышь, док-станцию или возьмите со склада.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 16.dp),
-                ) {
-                    items(own, key = { it.id }) { item ->
-                        PeripheralRow(item, showDevice = false, onClick = { viewModel.openEdit(item) })
-                    }
-                }
+                DevicePeripheralsContent(device, viewModel, all, Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+/**
+ * The peripherals of one device: add a new one, take one from stock, tap one to change, move or detach it.
+ * Used in the device card's tab and in the map's dialog.
+ */
+@Composable
+fun DevicePeripheralsContent(device: Device, viewModel: PeripheralsViewModel, all: List<Peripheral>, modifier: Modifier = Modifier) {
+    val own = all.filter { it.deviceId == device.id }
+    val stock = all.filter { it.deviceId == null }
+    var pickStock by remember { mutableStateOf(false) }
+    Column(modifier) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            FilledTonalButton(onClick = { viewModel.openNew(PeripheralDraft(PeripheralKind.MONITOR, deviceId = device.id)) }) {
+                Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Добавить")
+            }
+            OutlinedButton(onClick = { pickStock = true }, enabled = stock.isNotEmpty()) {
+                Icon(Icons.Outlined.Inventory2, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(if (stock.isEmpty()) "Склад пуст" else "Со склада (${stock.size})")
+            }
+        }
+        if (own.isEmpty()) {
+            Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                Text(
+                    "К ${device.name} ничего не подключено. Добавьте монитор, клавиатуру, мышь, док-станцию или возьмите со склада.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(bottom = 24.dp),
+            modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 16.dp),
+        ) {
+            items(own, key = { it.id }) { item ->
+                PeripheralRow(item, showDevice = false, onClick = { viewModel.openEdit(item) })
             }
         }
     }
@@ -197,7 +209,6 @@ fun DevicePeripheralsDialog(device: Device, viewModel: PeripheralsViewModel, all
     }
 }
 
-/** Peripherals in stock, to attach one to a device. */
 @Composable
 fun StockPickerDialog(stock: List<Peripheral>, onPick: (Peripheral) -> Unit, onDismiss: () -> Unit) {
     var query by remember { mutableStateOf("") }

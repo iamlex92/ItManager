@@ -9,7 +9,6 @@ import com.itmanager.app.core.security.AppLock
 import com.itmanager.app.data.alerts.AlertCenter
 import com.itmanager.app.data.model.Alert
 import com.itmanager.app.data.model.Device
-import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.source.DcimRepository
 import com.itmanager.app.ui.components.UiState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -27,8 +26,8 @@ import javax.inject.Inject
 
 /** Where something outside the current screen (a tag, an alert) wants to take the user. */
 sealed interface AppNavigation {
-    data class OpenSwitch(val deviceId: String) : AppNavigation
-    data object ShowOnMap : AppNavigation
+    /** The device card: from an alert, an NFC tag or its banner. */
+    data class OpenDevice(val deviceId: String) : AppNavigation
 }
 
 /** An alert that just arrived, with the device name resolved for the banner. */
@@ -40,7 +39,6 @@ class AppViewModel @Inject constructor(
     private val repository: DcimRepository,
     private val nfc: NfcController,
     private val alertCenter: AlertCenter,
-    private val mapFocus: MapFocus,
     private val appLock: AppLock,
 ) : ViewModel() {
 
@@ -83,25 +81,12 @@ class AppViewModel @Inject constructor(
         openDevice(notice.alert.deviceId)
     }
 
-    /** Switches open on their port panel; everything else is shown on the map. */
+    /** Every device opens on its card, whatever it is and wherever it was tapped. */
     fun openDevice(deviceId: String) {
-        val device = alertCenter.devices.value[deviceId]
-        if (device == null) {
-            // A printer known only to the SNMP poller, or a device list that has not loaded yet.
-            _messages.tryEmit("Этого устройства нет на карте")
-            return
-        }
-        open(device)
+        _navigation.tryEmit(AppNavigation.OpenDevice(deviceId))
     }
 
-    private fun open(device: Device) {
-        if (device.type == DeviceType.SWITCH) {
-            _navigation.tryEmit(AppNavigation.OpenSwitch(device.id))
-        } else {
-            mapFocus.request(device.id)
-            _navigation.tryEmit(AppNavigation.ShowOnMap)
-        }
-    }
+    private fun open(device: Device) = openDevice(device.id)
 
     private suspend fun openTag(scan: TagScan) {
         repository.deviceForTag(scan.payload?.id, scan.uid)

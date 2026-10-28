@@ -116,7 +116,7 @@ private class Viewport {
 @Composable
 fun TopologyScreen(
     contentPadding: PaddingValues,
-    onOpenSwitch: (String) -> Unit,
+    onOpenDevice: (String) -> Unit,
     onShowOnMap: () -> Unit,
     onOpenSettings: () -> Unit,
     viewModel: TopologyViewModel = hiltViewModel(),
@@ -164,7 +164,6 @@ fun TopologyScreen(
                 val down = t.nodes.count { !it.isOnline && it.type != DeviceType.VIRTUAL }
                 "${t.nodes.size} устр. · ${t.links.count { it.kind == TopologyLinkKind.CABLE }} связей" + if (down > 0) " · не в сети: $down" else ""
             },
-            onOpenSettings = onOpenSettings,
             actions = {
                 IconButton(onClick = { layout?.let(::fit) }) { Icon(Icons.Outlined.CenterFocusStrong, contentDescription = "Показать всё") }
                 IconButton(onClick = viewModel::retry) { Icon(Icons.Outlined.Refresh, contentDescription = "Обновить") }
@@ -238,7 +237,7 @@ fun TopologyScreen(
                         node = node,
                         topology = t.data,
                         onClose = { viewModel.select(null) },
-                        onOpenSwitch = { onOpenSwitch(node.id) },
+                        onOpenSwitch = { onOpenDevice(node.id) },
                         onShowOnMap = {
                             viewModel.showOnMap(node.id)
                             onShowOnMap()
@@ -474,12 +473,10 @@ private fun NodeCard(
                 links.forEach { link -> LinkLine(node.id, link, names, onPick, onDisconnect) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp, end = 12.dp)) {
-                if (node.type == DeviceType.SWITCH) {
-                    FilledTonalButton(onClick = onOpenSwitch) {
-                        Text("Панель портов")
-                        Spacer(Modifier.width(6.dp))
-                        Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
-                    }
+                FilledTonalButton(onClick = onOpenSwitch) {
+                    Text("Карточка")
+                    Spacer(Modifier.width(6.dp))
+                    Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
                 }
                 if (node.type != DeviceType.VIRTUAL) {
                     TextButton(onClick = onConnect) { Text("Соединить…") }

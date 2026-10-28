@@ -59,7 +59,6 @@ import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Keyboard
 import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -96,11 +95,10 @@ import com.itmanager.app.ui.theme.StatusColors
 @Composable
 fun DevicesScreen(
     contentPadding: PaddingValues,
-    onOpenSwitch: (String) -> Unit,
+    onOpenDevice: (String) -> Unit,
     onShowOnMap: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenScanner: () -> Unit,
-    onOpenPeripherals: () -> Unit,
     viewModel: DevicesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -121,16 +119,9 @@ fun DevicesScreen(
             )
         }
     }
-    val showOnMapLater = rememberUpdatedState(onShowOnMap)
+    val openDeviceLater = rememberUpdatedState(onOpenDevice)
     LaunchedEffect(viewModel) {
-        viewModel.scanned.collect { device ->
-            if (device.type == DeviceType.SWITCH) {
-                onOpenSwitch(device.id)
-            } else {
-                viewModel.showOnMap(device.id)
-                showOnMapLater.value()
-            }
-        }
+        viewModel.scanned.collect { device -> openDeviceLater.value(device.id) }
     }
     LaunchedEffect(viewModel) {
         viewModel.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
@@ -181,11 +172,7 @@ fun DevicesScreen(
             TabTopBar(
                 title = "Устройства",
                 subtitle = if (state.offlineCount > 0) "Не отвечают: ${state.offlineCount}" else "Долгое нажатие: выбрать несколько",
-                onOpenSettings = onOpenSettings,
                 actions = {
-                    IconButton(onClick = onOpenPeripherals) {
-                        Icon(Icons.Outlined.Keyboard, contentDescription = "Периферия")
-                    }
                     IconButton(
                         onClick = {
                             val options = GmsBarcodeScannerOptions.Builder()
@@ -243,8 +230,7 @@ fun DevicesScreen(
                         onClick = {
                             when {
                                 selecting -> viewModel.toggle(device.id)
-                                device.type == DeviceType.SWITCH -> onOpenSwitch(device.id)
-                                else -> showOnMap(device.id)
+                                else -> onOpenDevice(device.id)
                             }
                         },
                         onLongClick = { viewModel.toggle(device.id) },
@@ -421,7 +407,7 @@ private fun DeviceRow(
                 Icon(Icons.Outlined.Place, contentDescription = "Показать на карте")
             }
         }
-        if (device.type == DeviceType.SWITCH && !selecting) {
+        if (!selecting) {
             Icon(
                 Icons.AutoMirrored.Outlined.KeyboardArrowRight,
                 contentDescription = null,

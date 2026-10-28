@@ -16,8 +16,12 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -29,7 +33,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -61,8 +64,6 @@ import com.itmanager.app.ui.alerts.AlertNoticeBanner
 import com.itmanager.app.ui.alerts.AlertsScreen
 import com.itmanager.app.ui.automation.AuditScreen
 import com.itmanager.app.ui.automation.AutomationScreen
-import com.itmanager.app.ui.components.AlertsBellState
-import com.itmanager.app.ui.components.LocalAlertsBell
 import com.itmanager.app.ui.configdiff.ConfigDiffScreen
 import com.itmanager.app.ui.configimport.ConfigImportScreen
 import com.itmanager.app.ui.ipam.IpamScreen
@@ -71,6 +72,9 @@ import com.itmanager.app.ui.credentials.CredentialsScreen
 import com.itmanager.app.ui.devices.DevicesScreen
 import com.itmanager.app.ui.history.HistoryScreen
 import com.itmanager.app.ui.map.MapScreen
+import com.itmanager.app.ui.device.DeviceScreen
+import com.itmanager.app.ui.more.MoreItem
+import com.itmanager.app.ui.more.MoreScreen
 import com.itmanager.app.ui.nfc.BindTagSheet
 import com.itmanager.app.ui.peripherals.PeripheralsScreen
 import com.itmanager.app.ui.topology.TopologyScreen
@@ -112,12 +116,7 @@ fun AppRoot(appViewModel: AppViewModel = hiltViewModel()) {
     LaunchedEffect(appViewModel) {
         appViewModel.navigation.collect { target ->
             when (target) {
-                is AppNavigation.OpenSwitch -> navController.navigate(SwitchRoute(target.deviceId)) { launchSingleTop = true }
-                AppNavigation.ShowOnMap -> navController.navigate(MapRoute) {
-                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                    launchSingleTop = true
-                    restoreState = true
-                }
+                is AppNavigation.OpenDevice -> navController.navigate(DeviceRoute(target.deviceId)) { launchSingleTop = true }
             }
         }
     }
@@ -133,50 +132,47 @@ fun AppRoot(appViewModel: AppViewModel = hiltViewModel()) {
         appViewModel.dismissNotice()
     }
 
-    val bell = AlertsBellState(openAlertCount) { navController.navigate(AlertsRoute) { launchSingleTop = true } }
-    CompositionLocalProvider(LocalAlertsBell provides bell) {
-        Scaffold(
-            containerColor = MaterialTheme.colorScheme.background,
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            snackbarHost = { SnackbarHost(snackbar) },
-            bottomBar = {
-                // Enters and leaves along the same path: down off the screen and back up.
-                AnimatedVisibility(
-                    visible = isTopLevel,
-                    enter = slideInVertically(Motion.smooth(Motion.RESPONSE_SHEET, IntOffset.VisibilityThreshold)) { it },
-                    exit = slideOutVertically(Motion.smooth(Motion.RESPONSE_SHEET, IntOffset.VisibilityThreshold)) { it },
-                ) {
-                    BottomBar(navController, hazeState)
-                }
-            },
-        ) { padding ->
-            // Content runs under the translucent bar; screens pad their scrollable content instead.
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .hazeSource(hazeState),
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        snackbarHost = { SnackbarHost(snackbar) },
+        bottomBar = {
+            // Enters and leaves along the same path: down off the screen and back up.
+            AnimatedVisibility(
+                visible = isTopLevel,
+                enter = slideInVertically(Motion.smooth(Motion.RESPONSE_SHEET, IntOffset.VisibilityThreshold)) { it },
+                exit = slideOutVertically(Motion.smooth(Motion.RESPONSE_SHEET, IntOffset.VisibilityThreshold)) { it },
             ) {
-                AppNavHost(
-                    navController,
-                    contentPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
-                    onOpenDevice = appViewModel::openDevice,
-                )
+                BottomBar(navController, hazeState, openAlertCount)
+            }
+        },
+    ) { padding ->
+        // Content runs under the translucent bar; screens pad their scrollable content instead.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .hazeSource(hazeState),
+        ) {
+            AppNavHost(
+                navController,
+                contentPadding = PaddingValues(bottom = padding.calculateBottomPadding()),
+                onOpenDevice = appViewModel::openDevice,
+            )
 
-                // The last notice stays composed while it slides away.
-                var lastNotice by remember { mutableStateOf<AlertNotice?>(null) }
-                if (notice != null) lastNotice = notice
-                AnimatedVisibility(
-                    visible = notice != null,
-                    enter = slideInVertically(Motion.smooth(Motion.RESPONSE_SHEET, IntOffset.VisibilityThreshold)) { -it } + fadeIn(),
-                    exit = slideOutVertically(Motion.smooth(Motion.RESPONSE_SHEET, IntOffset.VisibilityThreshold)) { -it } + fadeOut(),
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .windowInsetsPadding(WindowInsets.statusBars)
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                ) {
-                    lastNotice?.let {
-                        AlertNoticeBanner(it, onOpen = appViewModel::openNotice, onDismiss = appViewModel::dismissNotice)
-                    }
+            // The last notice stays composed while it slides away.
+            var lastNotice by remember { mutableStateOf<AlertNotice?>(null) }
+            if (notice != null) lastNotice = notice
+            AnimatedVisibility(
+                visible = notice != null,
+                enter = slideInVertically(Motion.smooth(Motion.RESPONSE_SHEET, IntOffset.VisibilityThreshold)) { -it } + fadeIn(),
+                exit = slideOutVertically(Motion.smooth(Motion.RESPONSE_SHEET, IntOffset.VisibilityThreshold)) { -it } + fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+            ) {
+                lastNotice?.let {
+                    AlertNoticeBanner(it, onOpen = appViewModel::openNotice, onDismiss = appViewModel::dismissNotice)
                 }
             }
         }
@@ -196,7 +192,7 @@ fun AppRoot(appViewModel: AppViewModel = hiltViewModel()) {
 }
 
 @Composable
-private fun BottomBar(navController: NavHostController, hazeState: HazeState) {
+private fun BottomBar(navController: NavHostController, hazeState: HazeState, openAlerts: Int) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val haptics = LocalHapticFeedback.current
     val material = HazeStyle(
@@ -219,7 +215,16 @@ private fun BottomBar(navController: NavHostController, hazeState: HazeState) {
                             restoreState = true
                         }
                     },
-                    icon = { Icon(if (selected) tab.selectedIcon else tab.icon, contentDescription = null) },
+                    icon = {
+                        val image = if (selected) tab.selectedIcon else tab.icon
+                        if (tab == TopLevelDestination.EVENTS && openAlerts > 0) {
+                            BadgedBox(badge = { Badge { Text(if (openAlerts > 99) "99+" else "$openAlerts") } }) {
+                                Icon(image, contentDescription = null)
+                            }
+                        } else {
+                            Icon(image, contentDescription = null)
+                        }
+                    },
                     label = { Text(tab.label, maxLines = 1) },
                     colors = NavigationBarItemDefaults.colors(
                         indicatorColor = MaterialTheme.colorScheme.primaryContainer,
@@ -248,6 +253,10 @@ private fun AppNavHost(
 ) {
     val openSettings = { navController.navigate(SettingsRoute) { launchSingleTop = true } }
     val openScanner = { navController.navigate(ScannerRoute) { launchSingleTop = true } }
+    val openVlans = { navController.navigate(VlansRoute) { launchSingleTop = true } }
+    val openDevice = { id: String -> navController.navigate(DeviceRoute(id)) { launchSingleTop = true } }
+    val openSwitch = { id: String -> navController.navigate(SwitchRoute(id)) { launchSingleTop = true } }
+    val back: () -> Unit = { navController.popBackStack() }
     val openMapTab = {
         navController.navigate(MapRoute) {
             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
@@ -267,40 +276,86 @@ private fun AppNavHost(
         popEnterTransition = { fadeIn(tabFade) },
         popExitTransition = { fadeOut(tabFade) },
     ) {
+        // --- tabs ---
         composable<MapRoute> {
             MapScreen(
                 contentPadding = contentPadding,
-                onOpenSwitch = { navController.navigate(SwitchRoute(it)) },
+                onOpenSwitch = openSwitch,
+                onOpenDevice = openDevice,
                 onOpenSettings = openSettings,
                 onOpenScanner = openScanner,
-                onOpenVlans = { navController.navigate(VlansRoute) { launchSingleTop = true } },
+                onOpenVlans = openVlans,
             )
         }
+        composable<DevicesRoute> {
+            DevicesScreen(
+                contentPadding = contentPadding,
+                onOpenDevice = openDevice,
+                onShowOnMap = openMapTab,
+                onOpenSettings = openSettings,
+                onOpenScanner = openScanner,
+            )
+        }
+        composable<TopologyRoute> {
+            TopologyScreen(
+                contentPadding = contentPadding,
+                onOpenDevice = openDevice,
+                onShowOnMap = openMapTab,
+                onOpenSettings = openSettings,
+            )
+        }
+        composable<AlertsRoute> {
+            AlertsScreen(onOpenDevice = onOpenDevice, onOpenSettings = openSettings, contentPadding = contentPadding)
+        }
+        composable<MoreRoute> {
+            MoreScreen(
+                contentPadding = contentPadding,
+                onOpen = { item ->
+                    val route: Any = when (item) {
+                        MoreItem.VLANS -> VlansRoute
+                        MoreItem.IPAM -> IpamRoute
+                        MoreItem.TEMPLATES -> TemplatesRoute
+                        MoreItem.PERIPHERALS -> PeripheralsRoute
+                        MoreItem.PRINTERS -> PrintersRoute
+                        MoreItem.SCANNER -> ScannerRoute
+                        MoreItem.TOOLS -> ToolsRoute
+                        MoreItem.RUNBOOKS -> AutomationRoute
+                        MoreItem.AUDIT -> AuditRoute
+                        MoreItem.SETTINGS -> SettingsRoute
+                        MoreItem.CREDENTIALS -> CredentialsRoute
+                    }
+                    navController.navigate(route) { launchSingleTop = true }
+                },
+            )
+        }
+        // --- the device card, opened the same way from everywhere ---
+        composable<DeviceRoute>(
+            enterTransition = { slideInHorizontally(push) { it } },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { slideOutHorizontally(push) { it } },
+        ) {
+            DeviceScreen(
+                onBack = back,
+                onOpenSettings = openSettings,
+                onOpenDevice = openDevice,
+                onOpenPorts = openSwitch,
+                onShowOnMap = openMapTab,
+                onOpenHistory = { id, name -> navController.navigate(HistoryRoute(id, name)) },
+                onOpenDiff = { id, name -> navController.navigate(ConfigDiffRoute(id, name)) },
+                onOpenImport = { id, name -> navController.navigate(ConfigImportRoute(id, name)) },
+                onOpenTool = { kind, host -> navController.navigate(ToolRoute(kind, host)) },
+                onOpenVlans = openVlans,
+            )
+        }
+        // --- screens from «Ещё» and from cards ---
         composable<VlansRoute>(
             enterTransition = { slideInHorizontally(push) { it } },
             exitTransition = { ExitTransition.None },
             popEnterTransition = { EnterTransition.None },
             popExitTransition = { slideOutHorizontally(push) { it } },
         ) {
-            VlansScreen(onBack = { navController.popBackStack() }, onOpenSettings = openSettings)
-        }
-        composable<DevicesRoute> {
-            DevicesScreen(
-                contentPadding = contentPadding,
-                onOpenSwitch = { navController.navigate(SwitchRoute(it)) },
-                onShowOnMap = openMapTab,
-                onOpenSettings = openSettings,
-                onOpenScanner = openScanner,
-                onOpenPeripherals = { navController.navigate(PeripheralsRoute) { launchSingleTop = true } },
-            )
-        }
-        composable<TopologyRoute> {
-            TopologyScreen(
-                contentPadding = contentPadding,
-                onOpenSwitch = { navController.navigate(SwitchRoute(it)) },
-                onShowOnMap = openMapTab,
-                onOpenSettings = openSettings,
-            )
+            VlansScreen(onBack = back, onOpenSettings = openSettings)
         }
         composable<PeripheralsRoute>(
             enterTransition = { slideInHorizontally(push) { it } },
@@ -308,21 +363,23 @@ private fun AppNavHost(
             popEnterTransition = { EnterTransition.None },
             popExitTransition = { slideOutHorizontally(push) { it } },
         ) {
-            PeripheralsScreen(onBack = { navController.popBackStack() }, onOpenSettings = openSettings)
+            PeripheralsScreen(onBack = back, onOpenSettings = openSettings)
         }
-        composable<PrintersRoute> {
-            PrintersScreen(contentPadding = contentPadding, onOpenSettings = openSettings)
+        composable<PrintersRoute>(
+            enterTransition = { slideInHorizontally(push) { it } },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { slideOutHorizontally(push) { it } },
+        ) {
+            PrintersScreen(onBack = back, onOpenSettings = openSettings, contentPadding = WindowInsets.navigationBars.asPaddingValues())
         }
-        composable<AutomationRoute> {
-            AutomationScreen(
-                contentPadding = contentPadding,
-                onOpenSettings = openSettings,
-                onOpenAudit = { navController.navigate(AuditRoute) { launchSingleTop = true } },
-                onOpenScanner = openScanner,
-                onOpenTools = { navController.navigate(ToolsRoute) { launchSingleTop = true } },
-                onOpenIpam = { navController.navigate(IpamRoute) { launchSingleTop = true } },
-                onOpenTemplates = { navController.navigate(TemplatesRoute) { launchSingleTop = true } },
-            )
+        composable<AutomationRoute>(
+            enterTransition = { slideInHorizontally(push) { it } },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { slideOutHorizontally(push) { it } },
+        ) {
+            AutomationScreen(onBack = back, onOpenSettings = openSettings, contentPadding = WindowInsets.navigationBars.asPaddingValues())
         }
         composable<ScannerRoute>(
             enterTransition = { slideInHorizontally(push) { it } },
@@ -330,7 +387,7 @@ private fun AppNavHost(
             popEnterTransition = { EnterTransition.None },
             popExitTransition = { slideOutHorizontally(push) { it } },
         ) {
-            ScannerScreen(onBack = { navController.popBackStack() }, onOpenMap = openMapTab)
+            ScannerScreen(onBack = back, onOpenMap = openMapTab)
         }
         composable<AuditRoute>(
             enterTransition = { slideInHorizontally(push) { it } },
@@ -338,7 +395,7 @@ private fun AppNavHost(
             popEnterTransition = { EnterTransition.None },
             popExitTransition = { slideOutHorizontally(push) { it } },
         ) {
-            AuditScreen(onBack = { navController.popBackStack() }, onOpenSettings = openSettings)
+            AuditScreen(onBack = back, onOpenSettings = openSettings)
         }
         composable<SwitchRoute>(
             enterTransition = { slideInHorizontally(push) { it } },
@@ -349,7 +406,7 @@ private fun AppNavHost(
             val deviceId = entry.toRoute<SwitchRoute>().deviceId
             SwitchScreen(
                 deviceId = deviceId,
-                onBack = { navController.popBackStack() },
+                onBack = back,
                 onOpenSettings = openSettings,
                 onOpenDiff = { name -> navController.navigate(ConfigDiffRoute(deviceId, name)) },
                 onOpenHistory = { name -> navController.navigate(HistoryRoute(deviceId, name)) },
@@ -362,7 +419,7 @@ private fun AppNavHost(
             popEnterTransition = { EnterTransition.None },
             popExitTransition = { slideOutHorizontally(push) { it } },
         ) {
-            HistoryScreen(onBack = { navController.popBackStack() }, onOpenSettings = openSettings)
+            HistoryScreen(onBack = back, onOpenSettings = openSettings)
         }
         composable<ConfigDiffRoute>(
             enterTransition = { slideInHorizontally(push) { it } },
@@ -370,10 +427,7 @@ private fun AppNavHost(
             popEnterTransition = { EnterTransition.None },
             popExitTransition = { slideOutHorizontally(push) { it } },
         ) { entry ->
-            ConfigDiffScreen(
-                switchName = entry.toRoute<ConfigDiffRoute>().switchName,
-                onBack = { navController.popBackStack() },
-            )
+            ConfigDiffScreen(switchName = entry.toRoute<ConfigDiffRoute>().switchName, onBack = back)
         }
         composable<ConfigImportRoute>(
             enterTransition = { slideInHorizontally(push) { it } },
@@ -381,22 +435,7 @@ private fun AppNavHost(
             popEnterTransition = { EnterTransition.None },
             popExitTransition = { slideOutHorizontally(push) { it } },
         ) { entry ->
-            ConfigImportScreen(
-                switchName = entry.toRoute<ConfigImportRoute>().switchName,
-                onBack = { navController.popBackStack() },
-            )
-        }
-        composable<AlertsRoute>(
-            enterTransition = { slideInHorizontally(push) { it } },
-            exitTransition = { ExitTransition.None },
-            popEnterTransition = { EnterTransition.None },
-            popExitTransition = { slideOutHorizontally(push) { it } },
-        ) {
-            AlertsScreen(
-                onBack = { navController.popBackStack() },
-                onOpenDevice = onOpenDevice,
-                onOpenSettings = openSettings,
-            )
+            ConfigImportScreen(switchName = entry.toRoute<ConfigImportRoute>().switchName, onBack = back)
         }
         composable<SettingsRoute>(
             enterTransition = { slideInHorizontally(push) { it } },
@@ -405,7 +444,7 @@ private fun AppNavHost(
             popExitTransition = { slideOutHorizontally(push) { it } },
         ) {
             SettingsScreen(
-                onBack = { navController.popBackStack() },
+                onBack = back,
                 onOpenCredentials = { navController.navigate(CredentialsRoute) { launchSingleTop = true } },
             )
         }
@@ -415,7 +454,7 @@ private fun AppNavHost(
             popEnterTransition = { EnterTransition.None },
             popExitTransition = { slideOutHorizontally(push) { it } },
         ) {
-            IpamScreen(onBack = { navController.popBackStack() }, onOpenSettings = openSettings)
+            IpamScreen(onBack = back, onOpenSettings = openSettings)
         }
         composable<TemplatesRoute>(
             enterTransition = { slideInHorizontally(push) { it } },
@@ -423,7 +462,7 @@ private fun AppNavHost(
             popEnterTransition = { EnterTransition.None },
             popExitTransition = { slideOutHorizontally(push) { it } },
         ) {
-            TemplatesScreen(onBack = { navController.popBackStack() }, onOpenSettings = openSettings)
+            TemplatesScreen(onBack = back, onOpenSettings = openSettings)
         }
         composable<ToolsRoute>(
             enterTransition = { slideInHorizontally(push) { it } },
@@ -432,7 +471,7 @@ private fun AppNavHost(
             popExitTransition = { slideOutHorizontally(push) { it } },
         ) {
             ToolsHubScreen(
-                onBack = { navController.popBackStack() },
+                onBack = back,
                 onOpen = { kind -> navController.navigate(ToolRoute(kind)) { launchSingleTop = true } },
             )
         }
@@ -442,11 +481,8 @@ private fun AppNavHost(
             popEnterTransition = { EnterTransition.None },
             popExitTransition = { slideOutHorizontally(push) { it } },
         ) { entry ->
-            com.itmanager.app.ui.tools.ToolRoute(
-                kind = entry.toRoute<ToolRoute>().kind,
-                host = "",
-                onBack = { navController.popBackStack() },
-            )
+            val route = entry.toRoute<ToolRoute>()
+            com.itmanager.app.ui.tools.ToolRoute(kind = route.kind, host = route.host, onBack = back)
         }
         composable<CredentialsRoute>(
             enterTransition = { slideInHorizontally(push) { it } },
@@ -454,7 +490,7 @@ private fun AppNavHost(
             popEnterTransition = { EnterTransition.None },
             popExitTransition = { slideOutHorizontally(push) { it } },
         ) {
-            CredentialsScreen(onBack = { navController.popBackStack() })
+            CredentialsScreen(onBack = back)
         }
     }
 }
