@@ -33,6 +33,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -122,6 +123,15 @@ fun AppRoot(appViewModel: AppViewModel = hiltViewModel()) {
     }
     LaunchedEffect(appViewModel) {
         appViewModel.messages.collect { snackbar.showSnackbar(it) }
+    }
+    // A fresh install has nothing to show until a server is connected: start there, once per launch.
+    val serverConfigured by appViewModel.serverConfigured.collectAsStateWithLifecycle()
+    var welcomed by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(serverConfigured) {
+        if (serverConfigured == false && !welcomed) {
+            welcomed = true
+            navController.navigate(ConnectRoute) { launchSingleTop = true }
+        }
     }
     LaunchedEffect(notice) {
         val current = notice ?: return@LaunchedEffect
@@ -285,6 +295,7 @@ private fun AppNavHost(
                 onOpenSettings = openSettings,
                 onOpenScanner = openScanner,
                 onOpenVlans = openVlans,
+                onOpenTemplates = { navController.navigate(TemplatesRoute) { launchSingleTop = true } },
             )
         }
         composable<DevicesRoute> {
@@ -436,6 +447,14 @@ private fun AppNavHost(
             popExitTransition = { slideOutHorizontally(push) { it } },
         ) { entry ->
             ConfigImportScreen(switchName = entry.toRoute<ConfigImportRoute>().switchName, onBack = back)
+        }
+        composable<ConnectRoute>(
+            enterTransition = { fadeIn(tabFade) },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { slideOutHorizontally(push) { it } },
+        ) {
+            SettingsScreen(onBack = back, onOpenCredentials = {}, welcome = true)
         }
         composable<SettingsRoute>(
             enterTransition = { slideInHorizontally(push) { it } },

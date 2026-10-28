@@ -76,8 +76,8 @@ fun ConfigImportScreen(
         ) {
             Text(
                 "Вставьте вывод show running-config или show vlan brief (Cisco, Eltex). " +
-                    "Приложение сверит интерфейсы с портами в базе и обновит режим, VLAN, состояние и скорость. " +
-                    "Портов и VLAN, которых нет в базе, приложение добавит. На сам коммутатор ничего не отправляется.",
+                    "Приложение сверит интерфейсы с портами в учёте и обновит режим, VLAN, состояние и скорость. " +
+                    "Портов и VLAN, которых нет в учёте, приложение добавит. На сам коммутатор ничего не отправляется.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -100,7 +100,7 @@ fun ConfigImportScreen(
                 Button(
                     onClick = viewModel::apply,
                     enabled = r != null && !r.applied && r.hasChanges && !state.busy,
-                ) { Text("Применить в базу") }
+                ) { Text("Применить в учёт") }
                 if (state.busy) CircularProgressIndicator(Modifier.padding(start = 4.dp).height(32.dp))
             }
             state.error?.let {
@@ -122,7 +122,7 @@ private fun ResultView(r: ConfigImportResult) {
         Text(title, style = MaterialTheme.typography.titleMedium)
         Text(
             when {
-                r.applied && r.hasChanges -> "Сохранено в базу: портов ${r.changedPorts} (новых ${r.newPorts.size}), новых VLAN ${r.newVlans.size}."
+                r.applied && r.hasChanges -> "Сохранено в учёт: портов ${r.changedPorts} (новых ${r.newPorts.size}), новых VLAN ${r.newVlans.size}."
                 !r.hasChanges -> "Изменений нет: база уже совпадает с текстом."
                 else -> "Будет изменено портов: ${r.changedPorts} (из них новых ${r.newPorts.size}), новых VLAN: ${r.newVlans.size}. Пока ничего не записано."
             },
@@ -151,7 +151,7 @@ private fun ResultView(r: ConfigImportResult) {
         }
         if (r.unknownVlans.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
-            Text("VLAN, которых нет в базе (не созданы):", style = MaterialTheme.typography.titleSmall, color = StatusColors.Warning)
+            Text("VLAN, которых нет в учёте (не созданы):", style = MaterialTheme.typography.titleSmall, color = StatusColors.Warning)
             Text(
                 r.unknownVlans.entries.joinToString { "${it.key} ${it.value}".trim() },
                 style = MaterialTheme.typography.bodySmall,
@@ -159,7 +159,7 @@ private fun ResultView(r: ConfigImportResult) {
         }
         if (r.unmatchedInterfaces.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
-            Text("Интерфейсы без порта в базе:", style = MaterialTheme.typography.titleSmall, color = StatusColors.Warning)
+            Text("Интерфейсы без порта в учёте:", style = MaterialTheme.typography.titleSmall, color = StatusColors.Warning)
             Text(r.unmatchedInterfaces.joinToString(", "), style = MonoStyle)
         }
     }

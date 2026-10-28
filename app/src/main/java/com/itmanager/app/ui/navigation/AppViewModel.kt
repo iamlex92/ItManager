@@ -52,6 +52,11 @@ class AppViewModel @Inject constructor(
         .map { s -> (s as? UiState.Content)?.data?.count { !it.isResolved } ?: 0 }
         .stateIn(viewModelScope, SharingStarted.Eagerly, 0)
 
+    /** Null until the stored settings are read; false on a fresh install with no server yet. */
+    val serverConfigured: StateFlow<Boolean?> = repository.settings
+        .map { it.isConfigured }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     private val _notice = MutableStateFlow<AlertNotice?>(null)
     val notice: StateFlow<AlertNotice?> = _notice.asStateFlow()
 

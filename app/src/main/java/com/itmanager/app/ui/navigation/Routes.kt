@@ -22,6 +22,8 @@ import kotlinx.serialization.Serializable
 @Serializable data object PrintersRoute
 @Serializable data object AutomationRoute
 @Serializable data object SettingsRoute
+/** First launch: settings opened as a welcome, server first. */
+@Serializable data object ConnectRoute
 @Serializable data object AlertsRoute
 @Serializable data object AuditRoute
 @Serializable data object ScannerRoute

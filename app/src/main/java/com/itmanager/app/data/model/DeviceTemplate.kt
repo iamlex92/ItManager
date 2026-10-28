@@ -23,3 +23,6 @@ data class DeviceTemplateDraft(
     val portPrefix: String,
     val rackH: Int?,
 )
+
+/** A place on a floor plan, in map pixels: where a new device is put. */
+data class MapPoint(val floorId: String, val x: Float, val y: Float)

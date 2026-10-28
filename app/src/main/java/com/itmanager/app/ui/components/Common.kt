@@ -80,10 +80,23 @@ fun ErrorView(
     }
 }
 
+/** Nothing to show: says why, and when there is an obvious next step, offers it as a button. */
 @Composable
-fun EmptyView(text: String, modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) {
-        Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+fun EmptyView(text: String, modifier: Modifier = Modifier, action: String? = null, onAction: (() -> Unit)? = null) {
+    Column(
+        modifier.fillMaxWidth().padding(vertical = 48.dp, horizontal = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        if (action != null && onAction != null) {
+            Spacer(Modifier.height(16.dp))
+            FilledTonalButton(onClick = onAction) { Text(action) }
+        }
     }
 }
 

@@ -97,12 +97,12 @@ data class VlanDraft(
     val description: String?,
 ) {
     /** Why the form cannot be saved, or null. */
-    fun problem(): String? = when {
-        id !in 1..4094 -> "Номер VLAN от 1 до 4094"
-        name.isBlank() -> "Укажите название"
-        subnet.isNotBlank() && !isCidr(subnet.trim()) -> "Подсеть пишется так: 10.10.20.0/24"
-        else -> null
-    }
+    fun problem(): String? = idProblem() ?: nameProblem() ?: subnetProblem()
+
+    // One per field, shown under that field.
+    fun idProblem(): String? = "Номер VLAN от 1 до 4094".takeIf { id !in 1..4094 }
+    fun nameProblem(): String? = "Укажите название".takeIf { name.isBlank() }
+    fun subnetProblem(): String? = "Подсеть пишется так: 10.10.20.0/24".takeIf { subnet.isNotBlank() && !isCidr(subnet.trim()) }
 }
 
 private val CIDR = Regex("""^((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)/(3[0-2]|[12]?\d)$""")
@@ -368,7 +368,7 @@ data class DeviceBulkChange(
 enum class MapLayer(val short: String, val title: String) {
     L1("L1", "Кабели"),
     L2("L2", "VLAN"),
-    L3("L3", "IP-подсети"),
+    L3("L3", "Подсети"),
 }
 
 /** Everything the map screen needs for one floor. */

@@ -2,6 +2,7 @@ package com.itmanager.app.data.source
 
 import com.itmanager.app.data.model.Alert
 import com.itmanager.app.data.model.Annotation
+import com.itmanager.app.data.model.MapPoint
 import com.itmanager.app.data.model.AuditEntry
 import com.itmanager.app.data.model.AuditKind
 import com.itmanager.app.data.model.AuthMethod
@@ -92,8 +93,8 @@ interface DcimDataSource {
 
     suspend fun deleteDeviceTemplate(id: String)
 
-    /** Adds a device to the inventory with the template's type, vendor, model and ports. */
-    suspend fun createDeviceFromTemplate(templateId: String, name: String, ip: String?): Device
+    /** Adds a device to the inventory with the template's type, vendor, model and ports; [at] puts it on a floor. */
+    suspend fun createDeviceFromTemplate(templateId: String, name: String, ip: String?, at: MapPoint? = null): Device
 
     suspend fun importConfig(switchId: String, text: String, apply: Boolean): ConfigImportResult
 

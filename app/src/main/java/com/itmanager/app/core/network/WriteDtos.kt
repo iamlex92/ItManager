@@ -117,7 +117,7 @@ internal fun writeErrorMessage(code: String?, status: Int): String = when (code)
         "Сервер работает с реальным оборудованием и изменения на нём выключены (ALLOW_DEVICE_WRITES). Ничего не изменено."
     "uplink_port_protected" -> "Это аплинк. Подтвердите изменение аплинка явно."
     "confirmation_required" -> "Сервер ждёт подтверждения изменения."
-    "unknown_vlan" -> "Такого VLAN нет в базе сервера."
+    "unknown_vlan" -> "Такого VLAN нет в учёте на сервере."
     "empty_change" -> "Изменений нет: порт уже настроен так."
     "not_a_managed_switch" -> "Это устройство не управляется: нужен коммутатор Cisco или Eltex."
     "not_implemented" -> "Для реального оборудования эта операция на сервере ещё не написана."

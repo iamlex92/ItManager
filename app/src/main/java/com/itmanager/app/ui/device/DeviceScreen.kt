@@ -667,7 +667,7 @@ private fun VlanPickerDialog(
                     Text("Добавить или изменить VLAN…")
                 }
                 Text(
-                    "Меняется запись в инвентаре; на сам коммутатор команда не отправляется.",
+                    "Меняется запись в учёте; на сам коммутатор команда не отправляется.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

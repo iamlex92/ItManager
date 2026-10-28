@@ -164,7 +164,7 @@ fun CredentialsScreen(
                                 modifier = Modifier.padding(bottom = 4.dp),
                             )
                         }
-                        if (s.data.isEmpty()) item { EmptyView("Учётных данных пока нет") }
+                        if (s.data.isEmpty()) item { EmptyView("Учётных данных пока нет. Они нужны для SSH, SNMPv3 и WinRM.", action = "Добавить", onAction = viewModel::openNew) }
                         items(s.data, key = { it.id }) { c ->
                             CredentialCard(
                                 credential = c,

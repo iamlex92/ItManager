@@ -7,14 +7,15 @@ import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itmanager.app.core.network.toUserMessage
-import com.itmanager.app.core.nfc.NfcController
 import com.itmanager.app.data.model.ALL_DEVICES
 import com.itmanager.app.data.model.Annotation
 import com.itmanager.app.data.model.AnnotationKind
 import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceDraft
+import com.itmanager.app.data.model.DeviceTemplate
 import com.itmanager.app.data.model.DeviceType
+import com.itmanager.app.data.model.MapPoint
 import com.itmanager.app.data.model.Drawing
 import com.itmanager.app.data.model.CableRoute
 import com.itmanager.app.data.model.FloorDraft
@@ -23,8 +24,6 @@ import com.itmanager.app.data.model.FloorPlan
 import com.itmanager.app.data.model.LiveEvent
 import com.itmanager.app.data.model.MapLayer
 import com.itmanager.app.data.model.PlanRect
-import com.itmanager.app.data.model.PortDraft
-import com.itmanager.app.data.model.PortMode
 import com.itmanager.app.data.model.RackStyle
 import com.itmanager.app.data.model.Waypoint
 import com.itmanager.app.data.model.Zone
@@ -108,13 +107,14 @@ data class RackViewState(
     val error: String? = null,
 )
 
-enum class EditTool(val label: String, val hint: String) {
-    MOVE("Объекты", "Перетащите устройство или коснитесь его, чтобы изменить. «+» добавляет новое."),
-    LINK("Связи", "Коснитесь двух устройств, чтобы соединить их. Коснитесь кабеля, чтобы проложить его по своей трассе."),
-    DRAW("Карандаш", "Рисуйте одним пальцем, двумя двигайте карту."),
-    ZONES("Помещения", "Коснитесь карты, чтобы поставить углы зоны. Коснитесь готовой зоны, чтобы изменить её."),
-    MARKS("Метки", "Коснитесь карты, чтобы поставить метку; стрелку ставят двумя касаниями: откуда и куда. Метку можно перетащить."),
-    PLAN("Подложка", "Загрузите план здания и подвиньте его пальцем под устройства."),
+/** [short]: the caption under the tool's icon in the editor bar. */
+enum class EditTool(val label: String, val short: String, val hint: String) {
+    MOVE("Объекты", "Объекты", "Перетащите устройство или коснитесь его, чтобы изменить. «+» добавляет новое."),
+    LINK("Связи", "Кабели", "Коснитесь двух устройств, чтобы соединить их. Коснитесь кабеля, чтобы проложить его по своей трассе."),
+    DRAW("Карандаш", "Рисунок", "Рисуйте одним пальцем, двумя двигайте карту."),
+    ZONES("Помещения", "Комнаты", "Коснитесь карты, чтобы поставить углы зоны. Коснитесь готовой зоны, чтобы изменить её."),
+    MARKS("Метки", "Метки", "Коснитесь карты, чтобы поставить метку; стрелку ставят двумя касаниями: откуда и куда. Метку можно перетащить."),
+    PLAN("Подложка", "План", "Загрузите план здания и подвиньте его пальцем под устройства."),
 }
 
 /** The mark form: a new mark (not yet on the floor) or one picked on the map. */
@@ -177,7 +177,6 @@ const val MAX_ZONE_CORNERS = 900
 class MapViewModel @Inject constructor(
     private val repository: DcimRepository,
     private val mapFocus: MapFocus,
-    private val nfc: NfcController,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -206,9 +205,6 @@ class MapViewModel @Inject constructor(
             }
         }
     }
-
-    /** Opens the binding sheet; the next tag held to the phone gets bound to [device]. */
-    fun bindNfc(device: Device) = nfc.startBinding(device)
 
     private fun applyDeviceStatus(deviceId: String, isOnline: Boolean) = _state.update { s ->
         val content = (s.content as? UiState.Content)?.data ?: return@update s
@@ -347,6 +343,24 @@ class MapViewModel @Inject constructor(
         result
             .onSuccess { editor { it.copy(form = null) } }
             .onFailure { e -> editor { s -> s.copy(form = s.form?.copy(error = e.toUserMessage())) } }
+    }
+
+    private val _templates = MutableStateFlow<List<DeviceTemplate>>(emptyList())
+    /** Device templates for «+ Из шаблона»; loaded when the picker opens. */
+    val templates: StateFlow<List<DeviceTemplate>> = _templates.asStateFlow()
+
+    fun loadTemplates() {
+        viewModelScope.launch {
+            repository.deviceTemplates().onSuccess { list -> _templates.value = list.sortedBy { it.name.lowercase() } }
+        }
+    }
+
+    /** A device made from [template] and put on this floor at [x], [y]. [done] gets null on success or the error. */
+    fun createFromTemplate(template: DeviceTemplate, name: String, ip: String?, x: Float, y: Float, done: (String?) -> Unit) = write {
+        val floor = floor() ?: return@write
+        repository.createDeviceFromTemplate(template.id, name, ip, MapPoint(floor.id, x, y))
+            .onSuccess { done(null) }
+            .onFailure { done(it.toUserMessage()) }
     }
 
     fun deleteDevice(id: String) = write {
@@ -509,6 +523,13 @@ class MapViewModel @Inject constructor(
         }
     }
 
+    /** «+ Метка» from the add menu: the marks tool, with a new room number at [x], [y]. */
+    fun addMarkAt(x: Float, y: Float) {
+        setTool(EditTool.MARKS)
+        editor { it.copy(markKind = AnnotationKind.BADGE, arrowStart = null) }
+        tapMarks(null, x, y)
+    }
+
     /** Saves a new mark or the changes to one, matched by id. */
     fun saveMark(annotation: Annotation) {
         val plan = content?.map?.plan ?: return
@@ -588,35 +609,6 @@ class MapViewModel @Inject constructor(
             val latest = content?.map?.plan?.zones ?: zones
             repository.saveZones(floor, latest).onFailure { failAndReload(it) }
         }
-    }
-
-    /** The card's comment: saved on its own, outside the editor. [done] gets null on success or the error text. */
-    fun saveComment(device: Device, text: String, done: (String?) -> Unit) = write {
-        repository.updateDevice(device.id, device.toDraft().copy(comment = text.trim().ifEmpty { null }))
-            .onSuccess { done(null) }
-            .onFailure { done(it.toUserMessage()) }
-    }
-
-    /**
-     * Puts the switch port [device] is cabled to into access [vlanId]. The inventory record only, like the
-     * config import: nothing is sent to the switch.
-     */
-    fun setPortVlan(device: Device, vlanId: Int, done: (String?) -> Unit) = write {
-        val switchId = device.switchId
-        val portId = device.switchPortId
-        if (switchId == null || portId == null) {
-            done("Устройство не подключено кабелем к коммутатору")
-            return@write
-        }
-        val port = repository.ports(switchId).getOrElse { done(it.toUserMessage()); return@write }.firstOrNull { it.id == portId }
-            ?: run { done("Порт не найден на сервере: обновите карту"); return@write }
-        val draft = PortDraft(
-            number = port.number, name = port.name, isUplink = port.isUplink, mode = PortMode.ACCESS,
-            accessVlan = vlanId, taggedVlans = emptyList(), speedMbps = port.speedMbps, poeEnabled = port.poeEnabled,
-        )
-        repository.updatePortRecord(portId, draft)
-            .onSuccess { done(null) }
-            .onFailure { done(it.toUserMessage()) }
     }
 
     // --- Rack view ---

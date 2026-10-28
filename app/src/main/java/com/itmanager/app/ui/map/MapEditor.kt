@@ -37,6 +37,10 @@ import androidx.compose.material.icons.outlined.RemoveCircleOutline
 import androidx.compose.material.icons.outlined.UploadFile
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material.icons.outlined.Dashboard
+import androidx.compose.runtime.remember
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -71,6 +75,8 @@ import com.itmanager.app.data.model.isMac
 import com.itmanager.app.data.model.FloorInfo
 import com.itmanager.app.ui.components.DEVICE_TYPES_IN_ORDER
 import com.itmanager.app.ui.components.icon
+import com.itmanager.app.ui.components.FormSection
+import com.itmanager.app.ui.components.FormSheet
 
 private val EditTool.icon: ImageVector
     get() = when (this) {
@@ -100,6 +106,8 @@ fun MapEditToolbar(
     onTool: (EditTool) -> Unit,
     onAddDevice: () -> Unit,
     onAddRack: () -> Unit,
+    onAddFromTemplate: () -> Unit,
+    onAddMark: () -> Unit,
     onCable: (String) -> Unit,
     onCancelLink: () -> Unit,
     onDeletePoint: () -> Unit,
@@ -133,15 +141,35 @@ fun MapEditToolbar(
                 if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             }
             Spacer(Modifier.height(6.dp))
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                EditTool.entries.forEachIndexed { index, tool ->
-                    SegmentedButton(
-                        selected = tool == state.tool,
-                        onClick = { onTool(tool) },
-                        shape = SegmentedButtonDefaults.itemShape(index, EditTool.entries.size),
-                        icon = {},
-                        label = { Icon(tool.icon, contentDescription = tool.label, modifier = Modifier.size(20.dp)) },
-                    )
+            // Icons with captions: what each tool is for is readable without guessing.
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                EditTool.entries.forEach { tool ->
+                    val selected = tool == state.tool
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(
+                                if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+                                RoundedCornerShape(12.dp),
+                            )
+                            .clickable(onClickLabel = tool.label) { onTool(tool) }
+                            .padding(vertical = 6.dp),
+                    ) {
+                        Icon(
+                            tool.icon,
+                            contentDescription = null,
+                            tint = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Text(
+                            tool.short,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            softWrap = false,
+                        )
+                    }
                 }
             }
             Spacer(Modifier.height(10.dp))
@@ -152,15 +180,35 @@ fun MapEditToolbar(
             ) {
                 when (state.tool) {
                     EditTool.MOVE -> {
-                        FilledTonalButton(onClick = onAddDevice, modifier = Modifier.weight(1f)) {
-                            Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("Объект")
-                        }
-                        FilledTonalButton(onClick = onAddRack, modifier = Modifier.weight(1f)) {
-                            Icon(DeviceType.RACK.icon, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("Стойка")
+                        var addMenu by remember { mutableStateOf(false) }
+                        Box(Modifier.weight(1f)) {
+                            FilledTonalButton(onClick = { addMenu = true }, modifier = Modifier.fillMaxWidth()) {
+                                Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("Добавить в центр экрана")
+                            }
+                            DropdownMenu(expanded = addMenu, onDismissRequest = { addMenu = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("Устройство") },
+                                    leadingIcon = { Icon(DeviceType.WORKSTATION.icon, contentDescription = null) },
+                                    onClick = { addMenu = false; onAddDevice() },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Из шаблона…") },
+                                    leadingIcon = { Icon(Icons.Outlined.Dashboard, contentDescription = null) },
+                                    onClick = { addMenu = false; onAddFromTemplate() },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Стойка") },
+                                    leadingIcon = { Icon(DeviceType.RACK.icon, contentDescription = null) },
+                                    onClick = { addMenu = false; onAddRack() },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Метка: номер кабинета") },
+                                    leadingIcon = { Icon(Icons.Outlined.PushPin, contentDescription = null) },
+                                    onClick = { addMenu = false; onAddMark() },
+                                )
+                            }
                         }
                     }
                     EditTool.LINK -> if (selectedLinkName != null) {
@@ -336,54 +384,89 @@ fun DeviceFormDialog(
     var hostId by rememberSaveable(key) { mutableStateOf(device?.hostId) }
     var comment by rememberSaveable(key) { mutableStateOf(device?.comment.orEmpty()) }
     var rackUnits by rememberSaveable(key) { mutableStateOf((device?.rackUnits ?: DEFAULT_RACK_UNITS).toString()) }
-    var confirmDelete by rememberSaveable(key) { mutableStateOf(false) }
     val ipError = ip.isNotBlank() && !IPV4.matches(ip.trim())
     val macError = mac.isNotBlank() && !isMac(mac)
+    var triedSave by rememberSaveable(key) { mutableStateOf(false) }
+    val nameError = triedSave && name.isBlank()
 
-    if (confirmDelete && device != null) {
-        AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            title = { Text("Удалить ${device.name}?") },
-            text = { Text("Устройство и его кабели пропадут из инвентаря и с карты. Само оборудование это не затрагивает.") },
-            confirmButton = {
-                TextButton(onClick = { onDelete(device.id) }, enabled = !busy) {
-                    Text("Удалить", color = MaterialTheme.colorScheme.error)
+    FormSheet(
+        title = if (device == null) "Новое устройство" else device.name,
+        onDismiss = onDismiss,
+        onSave = {
+            triedSave = true
+            if (name.isBlank() || ipError || macError) return@FormSheet
+            onSave(
+                DeviceDraft(
+                    name = name.trim(),
+                    type = type,
+                    ip = ip.trim().ifEmpty { null },
+                    mac = mac.trim().ifEmpty { null },
+                    vendor = vendor.trim().ifEmpty { null },
+                    model = model.trim().ifEmpty { null },
+                    hostId = hostId.takeIf { type == DeviceType.VIRTUAL },
+                    comment = comment.trim().ifEmpty { null },
+                    rackUnits = if (type == DeviceType.RACK) rackUnits.toIntOrNull()?.coerceIn(1, 60) ?: DEFAULT_RACK_UNITS else null,
+                    // Where it stands in a rack is set in the rack view; editing the form keeps it.
+                    rackId = device?.rackId.takeIf { type != DeviceType.RACK },
+                    rackU = device?.rackU.takeIf { type != DeviceType.RACK },
+                    rackH = device?.rackH.takeIf { type != DeviceType.RACK },
+                ),
+            )
+        },
+        busy = busy,
+        error = form.error,
+        deleteLabel = device?.let { "Удалить из учёта" },
+        deleteQuestion = device?.let {
+            "Удалить ${it.name}?" to "Устройство, его порты и кабели пропадут из учёта и с карты. Само оборудование это не затрагивает."
+        },
+        onDelete = device?.let { d -> { onDelete(d.id) } },
+    ) {
+        FormSection("Что это") {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FORM_TYPES.forEach { t ->
+                    FilterChip(
+                        selected = t == type,
+                        onClick = { type = t },
+                        label = { Text(t.label) },
+                        leadingIcon = { Icon(t.icon, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                    )
                 }
-            },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Отмена") } },
-        )
-        return
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (device == null) "Новый объект" else "Объект на карте") },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FORM_TYPES.forEach { t ->
-                        FilterChip(
-                            selected = t == type,
-                            onClick = { type = t },
-                            label = { Text(t.label) },
-                            leadingIcon = { Icon(t.icon, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                        )
-                    }
-                }
+            }
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it.take(100) },
+                label = { Text("Имя") },
+                placeholder = { Text("Например, SW-ACC-04") },
+                isError = nameError,
+                supportingText = if (nameError) ({ Text("Укажите имя") }) else null,
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it.take(100) },
-                    label = { Text("Имя") },
-                    placeholder = { Text("Например, SW-ACC-04") },
+                    value = vendor,
+                    onValueChange = { vendor = it.take(50) },
+                    label = { Text("Производитель") },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.weight(1f),
                 )
+                OutlinedTextField(
+                    value = model,
+                    onValueChange = { model = it.take(100) },
+                    label = { Text("Модель") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+        if (type != DeviceType.RACK && type != DeviceType.SOCKET && type != DeviceType.PATCH_PANEL) {
+            FormSection("Сеть") {
                 OutlinedTextField(
                     value = ip,
                     onValueChange = { ip = it.take(15) },
                     label = { Text("IP-адрес, если есть") },
                     isError = ipError,
-                    supportingText = { if (ipError) Text("Нужен адрес вида 10.0.0.1") },
+                    supportingText = if (ipError) ({ Text("Нужен адрес вида 10.0.0.1") }) else null,
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
@@ -394,105 +477,68 @@ fun DeviceFormDialog(
                     label = { Text("MAC-адрес, если есть") },
                     placeholder = { Text("aa:bb:cc:dd:ee:ff") },
                     isError = macError,
-                    supportingText = { if (macError) Text("Нужен адрес вида aa:bb:cc:dd:ee:ff") },
+                    supportingText = if (macError) ({ Text("Нужен адрес вида aa:bb:cc:dd:ee:ff") }) else null,
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = vendor,
-                        onValueChange = { vendor = it.take(50) },
-                        label = { Text("Производитель") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                    OutlinedTextField(
-                        value = model,
-                        onValueChange = { model = it.take(100) },
-                        label = { Text("Модель") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                if (type == DeviceType.RACK) {
-                    OutlinedTextField(
-                        value = rackUnits,
-                        onValueChange = { rackUnits = it.filter(Char::isDigit).take(2) },
-                        label = { Text("Высота стойки, U") },
-                        supportingText = { Text("Коммутаторы и серверы ставятся в стойку в её виде.") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    if (device != null && device.type == DeviceType.RACK && onOpenRack != null) {
-                        FilledTonalButton(onClick = { onOpenRack(device.id) }, modifier = Modifier.fillMaxWidth()) {
-                            Text("Открыть вид стойки и расставить устройства")
-                        }
-                    }
-                }
+            }
+        }
+        val hostChoices = hosts.filter { it.id != device?.id }
+        FormSection("Где стоит") {
+            if (type == DeviceType.RACK) {
                 OutlinedTextField(
-                    value = comment,
-                    onValueChange = { comment = it.take(4000) },
-                    label = { Text("Комментарий") },
-                    minLines = 2,
-                    maxLines = 5,
+                    value = rackUnits,
+                    onValueChange = { rackUnits = it.filter(Char::isDigit).take(2) },
+                    label = { Text("Высота стойки, U") },
+                    supportingText = { Text("Коммутаторы и серверы ставятся в стойку в её виде.") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                 )
-                val hostChoices = hosts.filter { it.id != device?.id }
-                if (type == DeviceType.VIRTUAL && hostChoices.isNotEmpty()) {
-                    Text("Хост виртуализации", style = MaterialTheme.typography.labelLarge)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        FilterChip(selected = hostId == null, onClick = { hostId = null }, label = { Text("Не указан") })
-                        hostChoices.forEach { h ->
-                            FilterChip(selected = h.id == hostId, onClick = { hostId = h.id }, label = { Text(h.name) })
-                        }
-                    }
-                }
-                if (floors.size > 1) {
-                    Text("Этаж", style = MaterialTheme.typography.labelLarge)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        floors.forEach { f ->
-                            FilterChip(selected = f.id == form.floorId, onClick = { onFloor(f.id) }, label = { Text(f.title) })
-                        }
-                    }
-                }
-                form.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-                if (device != null) {
-                    TextButton(onClick = { confirmDelete = true }, enabled = !busy) {
-                        Icon(Icons.Outlined.DeleteOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Удалить с карты и из инвентаря", color = MaterialTheme.colorScheme.error)
+                if (device != null && device.type == DeviceType.RACK && onOpenRack != null) {
+                    FilledTonalButton(onClick = { onOpenRack(device.id) }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Открыть вид стойки и расставить устройства")
                     }
                 }
             }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    onSave(
-                        DeviceDraft(
-                            name = name.trim(),
-                            type = type,
-                            ip = ip.trim().ifEmpty { null },
-                            mac = mac.trim().ifEmpty { null },
-                            vendor = vendor.trim().ifEmpty { null },
-                            model = model.trim().ifEmpty { null },
-                            hostId = hostId.takeIf { type == DeviceType.VIRTUAL },
-                            comment = comment.trim().ifEmpty { null },
-                            rackUnits = if (type == DeviceType.RACK) rackUnits.toIntOrNull()?.coerceIn(1, 60) ?: DEFAULT_RACK_UNITS else null,
-                            // Where it stands in a rack is set in the rack view; editing the form keeps it.
-                            rackId = device?.rackId.takeIf { type != DeviceType.RACK },
-                            rackU = device?.rackU.takeIf { type != DeviceType.RACK },
-                            rackH = device?.rackH.takeIf { type != DeviceType.RACK },
-                        ),
-                    )
-                },
-                enabled = !busy && name.isNotBlank() && !ipError && !macError,
-            ) { Text("Сохранить") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-    )
+            if (type == DeviceType.VIRTUAL) {
+                Text("Хост виртуализации", style = MaterialTheme.typography.labelLarge)
+                if (hostChoices.isEmpty()) {
+                    Text("В учёте нет серверов.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterChip(selected = hostId == null, onClick = { hostId = null }, label = { Text("Не указан") })
+                    hostChoices.forEach { h ->
+                        FilterChip(selected = h.id == hostId, onClick = { hostId = h.id }, label = { Text(h.name) })
+                    }
+                }
+            }
+            if (floors.size > 1) {
+                Text("Этаж", style = MaterialTheme.typography.labelLarge)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    floors.forEach { f ->
+                        FilterChip(selected = f.id == form.floorId, onClick = { onFloor(f.id) }, label = { Text(f.title) })
+                    }
+                }
+            } else if (type != DeviceType.RACK && type != DeviceType.VIRTUAL) {
+                Text(
+                    "Место на плане задаётся перетаскиванием на карте в режиме «Правка».",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        FormSection("Заметки") {
+            OutlinedTextField(
+                value = comment,
+                onValueChange = { comment = it.take(4000) },
+                label = { Text("Комментарий") },
+                minLines = 2,
+                maxLines = 6,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
 }
 
 /** Asks before a cable leaves the inventory. */

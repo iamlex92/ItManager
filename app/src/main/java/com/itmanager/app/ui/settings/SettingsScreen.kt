@@ -82,6 +82,8 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(
     onBack: () -> Unit,
     onOpenCredentials: () -> Unit,
+    /** First launch: a welcome, the server first, and nothing else to distract. */
+    welcome: Boolean = false,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -93,9 +95,11 @@ fun SettingsScreen(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text("Настройки") },
+                title = { Text(if (welcome) "Подключение к серверу" else "Сервер и безопасность") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Назад") }
+                    if (!welcome) {
+                        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Назад") }
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
@@ -111,69 +115,80 @@ fun SettingsScreen(
                 .windowInsetsPadding(WindowInsets.navigationBars)
                 .padding(horizontal = 16.dp),
         ) {
-            SectionLabel("Безопасность")
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(16.dp))
-                    .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Вход по биометрии", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "Отпечаток, Face Unlock или PIN при запуске и после 5 минут в фоне.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Spacer(Modifier.width(12.dp))
-                Switch(
-                    checked = state.appLock,
-                    onCheckedChange = { on ->
-                        if (on) {
-                            haptics.performHapticFeedback(HapticFeedbackType.ToggleOn)
-                            viewModel.setAppLock(true)
-                            return@Switch
-                        }
-                        // Whoever holds the unlocked phone should not switch the protection off unnoticed.
-                        val activity = context.findFragmentActivity() ?: return@Switch
-                        if (BiometricGate.unavailableReason(context) != null) {
-                            viewModel.setAppLock(false)
-                            return@Switch
-                        }
-                        scope.launch {
-                            val r = BiometricGate.confirm(activity, "Выключить вход по биометрии", "Подтвердите, что это вы")
-                            if (r is GateResult.Confirmed) {
-                                haptics.performHapticFeedback(HapticFeedbackType.ToggleOff)
-                                viewModel.setAppLock(false)
-                            }
-                        }
-                    },
+            if (welcome) {
+                Text("Добро пожаловать в ItManager", style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Все данные (карта, устройства, сеть, события) хранятся на сервере NetAdmin вашего предприятия. " +
+                        "Отсканируйте его QR-код или введите адрес и ключ — это нужно один раз.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            }
-            Spacer(Modifier.height(8.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainer)
-                    .clickable(role = Role.Button, onClick = onOpenCredentials)
-                    .padding(start = 16.dp, end = 12.dp, top = 14.dp, bottom = 14.dp),
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Учётные данные", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "Логины SSH, SNMPv3 и WinRM. Секреты хранятся на сервере зашифрованными и в приложение не возвращаются.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+            } else {
+                SectionLabel("Безопасность")
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(16.dp))
+                        .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Вход по биометрии", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Отпечаток, Face Unlock или PIN при запуске и после 5 минут в фоне.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Switch(
+                        checked = state.appLock,
+                        onCheckedChange = { on ->
+                            if (on) {
+                                haptics.performHapticFeedback(HapticFeedbackType.ToggleOn)
+                                viewModel.setAppLock(true)
+                                return@Switch
+                            }
+                            // Whoever holds the unlocked phone should not switch the protection off unnoticed.
+                            val activity = context.findFragmentActivity() ?: return@Switch
+                            if (BiometricGate.unavailableReason(context) != null) {
+                                viewModel.setAppLock(false)
+                                return@Switch
+                            }
+                            scope.launch {
+                                val r = BiometricGate.confirm(activity, "Выключить вход по биометрии", "Подтвердите, что это вы")
+                                if (r is GateResult.Confirmed) {
+                                    haptics.performHapticFeedback(HapticFeedbackType.ToggleOff)
+                                    viewModel.setAppLock(false)
+                                }
+                            }
+                        },
                     )
                 }
-                Spacer(Modifier.width(12.dp))
-                Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null)
-            }
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainer)
+                        .clickable(role = Role.Button, onClick = onOpenCredentials)
+                        .padding(start = 16.dp, end = 12.dp, top = 14.dp, bottom = 14.dp),
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Учётные данные", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Логины SSH, SNMPv3 и WinRM. Секреты хранятся на сервере зашифрованными и в приложение не возвращаются.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null)
+                }
 
+            }
             Spacer(Modifier.height(24.dp))
             SectionLabel("Сервер NetAdmin")
             OutlinedButton(

@@ -39,6 +39,8 @@ import com.itmanager.app.data.model.PortDraft
 import com.itmanager.app.data.model.PortMode
 import com.itmanager.app.data.model.SwitchPort
 import com.itmanager.app.data.model.Vlan
+import com.itmanager.app.ui.components.FormSection
+import com.itmanager.app.ui.components.FormSheet
 import com.itmanager.app.ui.components.StatusDot
 
 /** The port being edited in the inventory form; [port] null adds a new one numbered [nextNumber]. */
@@ -70,128 +72,114 @@ fun PortRecordDialog(
     var tagged by rememberSaveable(key) { mutableStateOf(port?.taggedVlans.orEmpty().joinToString(",")) }
     var speed by rememberSaveable(key) { mutableStateOf(port?.speedMbps ?: 1000) }
     var poe by rememberSaveable(key) { mutableStateOf(port?.poeEnabled ?: false) }
-    var confirmDelete by rememberSaveable(key) { mutableStateOf(false) }
+    var triedSave by rememberSaveable(key) { mutableStateOf(false) }
     val taggedIds = tagged.split(",").mapNotNull { it.trim().toIntOrNull() }.distinct().sorted()
+    val numberError = triedSave && (number.toIntOrNull() ?: 0) < 1
+    val nameError = triedSave && name.isBlank()
 
-    if (confirmDelete && port != null) {
-        AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            title = { Text("Удалить запись о порте ${port.name}?") },
-            text = { Text("Порт и его кабели пропадут из базы. Сам коммутатор это не затрагивает.") },
-            confirmButton = {
-                TextButton(onClick = { onDelete(port) }, enabled = !busy) { Text("Удалить", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Отмена") } },
+    FormSheet(
+        title = if (port == null) "Новый порт" else "Порт ${port.name}",
+        onDismiss = onDismiss,
+        onSave = {
+            triedSave = true
+            if ((number.toIntOrNull() ?: 0) < 1 || name.isBlank()) return@FormSheet
+            onSave(
+                PortDraft(
+                    number = number.toIntOrNull() ?: 0,
+                    name = name.trim(),
+                    isUplink = uplink,
+                    mode = mode,
+                    accessVlan = access.takeIf { mode == PortMode.ACCESS },
+                    taggedVlans = if (mode == PortMode.TRUNK) taggedIds else emptyList(),
+                    speedMbps = speed,
+                    poeEnabled = poe,
+                ),
+            )
+        },
+        busy = busy,
+        deleteLabel = port?.let { "Удалить запись о порте" },
+        deleteQuestion = port?.let { "Удалить запись о порте ${it.name}?" to "Порт и его кабели пропадут из учёта. Сам коммутатор это не затрагивает." },
+        onDelete = port?.let { p -> { onDelete(p) } },
+    ) {
+        Text(
+            "Меняется только учёт. На коммутатор ничего не отправляется: для этого «Настройка порта» на панели.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        return
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (port == null) "Новый порт" else "Запись о порте") },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    "Меняется только база данных. На коммутатор ничего не отправляется.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+        FormSection("Порт") {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = number,
+                    onValueChange = { number = it.filter(Char::isDigit).take(4) },
+                    label = { Text("Номер") },
+                    isError = numberError,
+                    supportingText = if (numberError) ({ Text("От 1") }) else null,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f),
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = number,
-                        onValueChange = { number = it.filter(Char::isDigit).take(4) },
-                        label = { Text("Номер") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.weight(1f),
-                    )
-                    OutlinedTextField(
-                        value = name,
-                        onValueChange = { name = it.take(50) },
-                        label = { Text("Имя") },
-                        placeholder = { Text("Gi1/0/5") },
-                        singleLine = true,
-                        modifier = Modifier.weight(2f),
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it.take(50) },
+                    label = { Text("Имя") },
+                    placeholder = { Text("Gi1/0/5") },
+                    isError = nameError,
+                    supportingText = if (nameError) ({ Text("Укажите имя") }) else null,
+                    singleLine = true,
+                    modifier = Modifier.weight(2f),
+                )
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Аплинк", Modifier.weight(1f))
+                Switch(checked = uplink, onCheckedChange = { uplink = it })
+            }
+        }
+        FormSection("VLAN") {
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                PortMode.entries.forEachIndexed { i, m ->
+                    SegmentedButton(
+                        selected = mode == m,
+                        onClick = { mode = m },
+                        shape = SegmentedButtonDefaults.itemShape(i, PortMode.entries.size),
+                        label = { Text(m.label) },
                     )
                 }
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    PortMode.entries.forEachIndexed { i, m ->
-                        SegmentedButton(
-                            selected = mode == m,
-                            onClick = { mode = m },
-                            shape = SegmentedButtonDefaults.itemShape(i, PortMode.entries.size),
-                            label = { Text(m.label) },
+            }
+            if (mode == PortMode.ACCESS) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterChip(selected = access == null, onClick = { access = null }, label = { Text("Нет") })
+                    vlans.forEach { v ->
+                        FilterChip(
+                            selected = access == v.id,
+                            onClick = { access = v.id },
+                            label = { Text("${v.id} · ${v.name}") },
+                            leadingIcon = { StatusDot(Color(v.colorArgb), size = 10.dp) },
                         )
                     }
                 }
-                if (mode == PortMode.ACCESS) {
-                    Text("Access VLAN", style = MaterialTheme.typography.labelLarge)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        FilterChip(selected = access == null, onClick = { access = null }, label = { Text("Нет") })
-                        vlans.forEach { v ->
-                            FilterChip(
-                                selected = access == v.id,
-                                onClick = { access = v.id },
-                                label = { Text("${v.id} · ${v.name}") },
-                                leadingIcon = { StatusDot(Color(v.colorArgb), size = 10.dp) },
-                            )
-                        }
-                    }
-                } else {
-                    OutlinedTextField(
-                        value = tagged,
-                        onValueChange = { tagged = it.filter { c -> c.isDigit() || c == ',' || c == ' ' }.take(200) },
-                        label = { Text("Tagged VLAN через запятую") },
-                        placeholder = { Text("10,20,99") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                Text("Скорость порта", style = MaterialTheme.typography.labelLarge)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    SPEEDS.forEach { s ->
-                        FilterChip(selected = speed == s, onClick = { speed = s }, label = { Text(speedLabel(s)) })
-                    }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("PoE", Modifier.weight(1f))
-                    Switch(checked = poe, onCheckedChange = { poe = it })
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Аплинк", Modifier.weight(1f))
-                    Switch(checked = uplink, onCheckedChange = { uplink = it })
-                }
-                if (port != null) {
-                    TextButton(onClick = { confirmDelete = true }, enabled = !busy) {
-                        Icon(Icons.Outlined.DeleteOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Удалить запись о порте", color = MaterialTheme.colorScheme.error)
-                    }
+            } else {
+                OutlinedTextField(
+                    value = tagged,
+                    onValueChange = { tagged = it.filter { c -> c.isDigit() || c == ',' || c == ' ' }.take(200) },
+                    label = { Text("Tagged VLAN через запятую") },
+                    placeholder = { Text("10,20,99") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+        FormSection("Физика") {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                SPEEDS.forEach { s ->
+                    FilterChip(selected = speed == s, onClick = { speed = s }, label = { Text(speedLabel(s)) })
                 }
             }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    onSave(
-                        PortDraft(
-                            number = number.toIntOrNull() ?: 0,
-                            name = name.trim(),
-                            isUplink = uplink,
-                            mode = mode,
-                            accessVlan = access.takeIf { mode == PortMode.ACCESS },
-                            taggedVlans = if (mode == PortMode.TRUNK) taggedIds else emptyList(),
-                            speedMbps = speed,
-                            poeEnabled = poe,
-                        ),
-                    )
-                },
-                enabled = !busy && name.isNotBlank() && number.isNotBlank(),
-            ) { Text("Сохранить") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-    )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("PoE", Modifier.weight(1f))
+                Switch(checked = poe, onCheckedChange = { poe = it })
+            }
+        }
+    }
 }
 
 private fun speedLabel(mbps: Int) = when {

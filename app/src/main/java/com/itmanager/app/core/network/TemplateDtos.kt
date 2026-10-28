@@ -35,4 +35,10 @@ data class DeviceTemplateBody(
 )
 
 @Serializable
-data class DeviceFromTemplateBody(val name: String, val ip: String? = null)
+data class DeviceFromTemplateBody(
+    val name: String,
+    val ip: String? = null,
+    @SerialName("floor_id") val floorId: String? = null,
+    val x: Float? = null,
+    val y: Float? = null,
+)
