@@ -45,6 +45,8 @@ jobs:
         run: |
           base=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
           echo "version=${base}.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          # The server then says 1.1.0.<run>, like its package, in the web console and the app.
+          echo "BUILD = \"${GITHUB_RUN_NUMBER}\"" > app/_build.py
       - run: apt-get update && apt-get install -y --no-install-recommends binutils
       - run: pip install --no-cache-dir . pyinstaller
       - run: pyinstaller --noconfirm --distpath build/dist --workpath build/work packaging/netadmin-agent.spec
@@ -120,6 +122,7 @@ jobs:
         run: |
           $base = python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])"
           "version=$base.$env:GITHUB_RUN_NUMBER" >> $env:GITHUB_OUTPUT
+          "BUILD = `"$env:GITHUB_RUN_NUMBER`"" | Out-File -Encoding utf8NoBOM app/_build.py
       - run: pip install --no-cache-dir . pyinstaller
       - run: pyinstaller --noconfirm --distpath build/dist --workpath build/work packaging/netadmin-agent.spec
       - run: build/dist/netadmin-agent/netadmin-agent.exe selfcheck

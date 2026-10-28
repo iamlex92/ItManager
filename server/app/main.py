@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import hashlib
 import logging
 import os
 import re
@@ -14,7 +15,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 
-from . import __version__, crypto, serversettings
+from . import FULL_VERSION, crypto, serversettings
 from .api import (
     alerts,
     audit,
@@ -230,7 +231,7 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
 
     app = FastAPI(
         title="NetAdmin DCIM API",
-        version=__version__,
+        version=FULL_VERSION,
         description=(
             "Inventory, cable topology and switch management for the factory network. "
             "All /api/v1 routes except /health need `Authorization: Bearer <API_TOKEN>`."
@@ -263,7 +264,7 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
     async def health():
         return HealthOut(
             status="ok",
-            version=__version__,
+            version=FULL_VERSION,
             hal_mode=settings.hal_mode.value,
             device_writes_enabled=settings.device_writes_enabled,
             monitor_mode=settings.monitor_mode.value,
@@ -319,7 +320,13 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
             request.app.state.hub.publish(None, {"type": "inventory_changed"})
         return response
 
-    admin_page = (STATIC_DIR / "admin" / "index.html").read_text(encoding="utf-8").replace("{{version}}", __version__)
+    # {{asset}}: a fingerprint of the console's files, so a browser never keeps an old script after an update,
+    # whatever the version says.
+    admin_dir = STATIC_DIR / "admin"
+    files = b"".join(f.read_bytes() for f in sorted(admin_dir.iterdir()) if f.is_file())
+    asset = hashlib.sha256(files).hexdigest()[:12]
+    admin_page = (admin_dir / "index.html").read_text(encoding="utf-8")
+    admin_page = admin_page.replace("{{version}}", FULL_VERSION).replace("{{asset}}", asset)
 
     @app.get("/admin", include_in_schema=False)
     async def admin():

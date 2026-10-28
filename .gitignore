@@ -19,3 +19,4 @@ captures/
 .DS_Store
 Thumbs.db
 backups/
+server/app/_build.py

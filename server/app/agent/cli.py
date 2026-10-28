@@ -24,7 +24,7 @@ from pathlib import Path
 
 from sqlalchemy.engine import make_url
 
-from .. import __version__
+from .. import FULL_VERSION
 from . import configfile, connectqr
 from .pgsql import DEFAULT_PORT, ManagedPostgres
 
@@ -113,7 +113,7 @@ def cmd_run(args: argparse.Namespace) -> None:
 
     settings = get_settings()
     with _database(owner=True):
-        log.warning("NetAdmin %s: applying database migrations", __version__)
+        log.warning("NetAdmin %s: applying database migrations", FULL_VERSION)
         migrate(settings.database_url)
         host = os.environ.get("API_BIND", "0.0.0.0").strip() or "0.0.0.0"
         port = int(os.environ.get("API_PORT", "8000"))
@@ -252,14 +252,14 @@ def cmd_selfcheck(args: argparse.Namespace) -> None:
     static = Path(main.__file__).parent / "static"
     if not any(static.iterdir()):
         raise SystemExit(f"no static files in {static}")
-    print(f"netadmin-agent {__version__}: ok, {len(migrations)} migrations, SNMP MIBs load")
+    print(f"netadmin-agent {FULL_VERSION}: ok, {len(migrations)} migrations, SNMP MIBs load")
 
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="netadmin-agent", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    p.add_argument("--version", action="version", version=__version__)
+    p.add_argument("--version", action="version", version=FULL_VERSION)
     sub = p.add_subparsers(dest="command", required=True)
 
     def with_config(sp: argparse.ArgumentParser) -> argparse.ArgumentParser:
