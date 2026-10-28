@@ -1151,3 +1151,80 @@ class DeviceFromTemplate(BaseModel):
     ip: ipaddress.IPv4Address | ipaddress.IPv6Address | None = None
     rack_id: uuid.UUID | None = None
     rack_u: int | None = Field(default=None, ge=1, le=60)
+
+
+# --- domain computers ---------------------------------------------------------------------------------
+
+
+class PcStatusOut(BaseModel):
+    # «real»: WinRM to the computers with RUNBOOK_CREDENTIAL; «emulator»: made-up answers.
+    mode: Literal["real", "emulator"]
+    writes_enabled: bool
+    login_configured: bool
+    ad_configured: bool
+
+
+class PcSweepIn(BaseModel):
+    # «192.168.82», «192.168.82.0/24»: private ranges, at most a /22.
+    prefix: str = Field(min_length=1, max_length=40)
+
+
+class PcSweepHitOut(BaseModel):
+    ip: str
+    name: str | None
+    device_id: uuid.UUID | None = None
+    device_name: str | None = None
+
+
+class PcActionIn(BaseModel):
+    # The process name for «kill», the PowerShell command for «command».
+    arg: str | None = Field(default=None, max_length=4000)
+    # Cleanup, reboot, stopping a process and the console run only with "confirm": true (fingerprint on the phone).
+    confirm: bool = False
+    auth_method: str | None = Field(default=None, max_length=40)
+    operator: str | None = Field(default=None, max_length=60)
+
+
+class PcActionOut(BaseModel):
+    host: str
+    action: str
+    ok: bool
+    data: Any = None
+    error: str = ""
+    simulated: bool = False
+    audit_id: uuid.UUID | None = None
+
+
+class PcKeysIn(BaseModel):
+    # «ad»: every Windows computer in AD; «subnet»: the computers that answer in [prefix] and have a DNS name.
+    source: Literal["ad", "subnet"]
+    prefix: str | None = Field(default=None, max_length=40)
+    operator: str | None = Field(default=None, max_length=60)
+
+
+class PcKeyRowOut(BaseModel):
+    host: str
+    ok: bool
+    error: str = ""
+    computer: str | None = None
+    user: str | None = None
+    os: str | None = None
+    windows_bios_key: str | None = None
+    windows_registry_key: str | None = None
+    office: str = ""
+    one_c: str = ""
+
+
+class PcKeyJobOut(BaseModel):
+    id: uuid.UUID
+    source: str
+    status: Literal["running", "done", "failed"]
+    stage: str
+    total: int
+    online: int
+    done: int
+    error: str = ""
+    simulated: bool = False
+    started_at: datetime
+    finished_at: datetime | None = None
+    rows: list[PcKeyRowOut] = Field(default_factory=list)

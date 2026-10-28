@@ -358,3 +358,28 @@ Floors carry `annotations: [{id, kind: "BADGE"|"TEXT"|"ARROW", x, y, x2, y2, tex
 `PATCH /api/v1/floors/{id}` like `zones`. BADGE is a room number in a circle, TEXT a caption, ARROW points from
 x, y to x2, y2 (both required). Map pixels; `size` 0.3–5, 1 is normal. Up to 500 per floor.
 
+
+## Domain computers (the old Connect-DomainPC.ps1)
+
+Everything the admin script did, run by the server over WinRM with the login from `RUNBOOK_CREDENTIAL`.
+`RUNBOOK_MODE` switches it like runbooks: `real` talks to the computers, `emulator` answers with made-up data
+and marks it `"simulated": true`.
+
+| Method | Path | |
+|---|---|---|
+| GET | `/pcs/status` | `mode`, `writes_enabled`, `login_configured`, `ad_configured` |
+| POST | `/pcs/sweep` | `{"prefix": "192.168.82"}`: ping a private subnet (at most /22) and reverse-DNS what answers. No login is sent. |
+| POST | `/pcs/{host}/{action}` | `info`, `disks`, `folders`, `processes`, `cleanup`, `gpupdate`, `reboot`, `kill` (`arg`: process name), `command` (`arg`: PowerShell) |
+| POST | `/pcs/keys` | `{"source": "ad"}` or `{"source": "subnet", "prefix": "192.168.82"}`: key inventory job, 202 |
+| GET | `/pcs/keys/{id}` | progress and rows: Windows keys (BIOS, registry), Office (last five characters), 1C `.lic` files |
+| GET | `/pcs/keys/{id}/csv` | the same as CSV for Excel: `;`, UTF-8 with BOM |
+
+Safety:
+- The domain login goes only to computers the plant knows: in the inventory (by name or IP, a computer kind)
+  or in AD (`AD_LDAP_URL`). Anything else is `403 unknown_host` and nothing is sent.
+- `cleanup`, `gpupdate`, `reboot`, `kill`, `command` change the computer: in real mode they need
+  `ALLOW_RUNBOOK_WRITES=true` (`403 writes_disabled`). `cleanup`, `reboot`, `kill` and `command` also need
+  `"confirm": true` (`400 confirmation_required`); the app asks for a fingerprint first.
+- Every action is in the audit log as `pc:<action>` under «Сценарии». Reads are logged without what they returned,
+  so licence keys stay out of the log; changes keep their output, the console its command.
+- The console runs one command per request (no session between commands); arguments reach PowerShell base64-encoded.

@@ -30,6 +30,7 @@ from .api import (
     netbox,
     nfc,
     notifications,
+    pcs,
     peripherals,
     ports,
     printers,
@@ -48,6 +49,8 @@ from .hal.base import DeviceWritesDisabled, UnsupportedVendor
 from .hal.emulator import EmulatorDriver
 from .hal.factory import build_driver, build_printer_driver
 from .models import Credential, Device
+from .pcs.backend import EmulatedPcs, RealPcs
+from .pcs.service import KeyInventory
 from .runbooks.emulator import RunbookEnvironment
 from .runbooks.real import RealRunbooks
 from .schemas import HealthOut
@@ -111,6 +114,9 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
         else:
             app.state.runbooks = RunbookEnvironment(step_delay=settings.runbook_step_delay_seconds)
         app.state.discovery = ScanManager(app.state.sessionmaker, settings)
+        # Domain computers follow the runbooks' switch: real WinRM, or an emulator that says so.
+        app.state.pcs = RealPcs(settings) if settings.runbook_mode is RunbookMode.REAL else EmulatedPcs()
+        app.state.pc_keys = KeyInventory()
         log.warning(
             "HAL mode: %s, device writes %s",
             settings.hal_mode.value,
@@ -240,6 +246,7 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
         ipam,
         printers,
         nfc,
+        pcs,
         runbooks,
         scripts,
         audit,
