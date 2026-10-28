@@ -24,7 +24,7 @@ from pathlib import Path
 
 from sqlalchemy.engine import make_url
 
-from .. import __version__
+from .. import FULL_VERSION
 from . import configfile, connectqr
 from .pgsql import DEFAULT_PORT, ManagedPostgres
 
@@ -100,6 +100,10 @@ def migrate(database_url: str) -> None:
     command.upgrade(cfg, "head")
 
 
+# Not 0, so the service manager starts the agent again; not 1, so a real crash still reads as one in the logs.
+RESTART_EXIT_CODE = 3
+
+
 def cmd_run(args: argparse.Namespace) -> None:
     _load(args.config)
     import uvicorn
@@ -109,12 +113,26 @@ def cmd_run(args: argparse.Namespace) -> None:
 
     settings = get_settings()
     with _database(owner=True):
-        log.warning("NetAdmin %s: applying database migrations", __version__)
+        log.warning("NetAdmin %s: applying database migrations", FULL_VERSION)
         migrate(settings.database_url)
         host = os.environ.get("API_BIND", "0.0.0.0").strip() or "0.0.0.0"
         port = int(os.environ.get("API_PORT", "8000"))
         log.warning("listening on %s:%d", host, port)
-        uvicorn.run(create_app(settings), host=host, port=port, proxy_headers=True, log_level="info")
+        app = create_app(settings)
+        server = uvicorn.Server(uvicorn.Config(app, host=host, port=port, proxy_headers=True, log_level="info"))
+        restart = []
+
+        def request_restart() -> None:
+            # «Настройки сервера» → «Перезапустить»: stop cleanly (the bundled database too), then exit with
+            # RESTART_EXIT_CODE so systemd (Restart=on-failure) or WinSW (onfailure restart) start us again.
+            restart.append(True)
+            server.should_exit = True
+
+        app.state.restart = request_restart
+        server.run()
+    if restart:
+        log.warning("restarting to apply server settings")
+        raise SystemExit(RESTART_EXIT_CODE)
 
 
 def cmd_backup(args: argparse.Namespace) -> None:
@@ -234,14 +252,14 @@ def cmd_selfcheck(args: argparse.Namespace) -> None:
     static = Path(main.__file__).parent / "static"
     if not any(static.iterdir()):
         raise SystemExit(f"no static files in {static}")
-    print(f"netadmin-agent {__version__}: ok, {len(migrations)} migrations, SNMP MIBs load")
+    print(f"netadmin-agent {FULL_VERSION}: ok, {len(migrations)} migrations, SNMP MIBs load")
 
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="netadmin-agent", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    p.add_argument("--version", action="version", version=__version__)
+    p.add_argument("--version", action="version", version=FULL_VERSION)
     sub = p.add_subparsers(dest="command", required=True)
 
     def with_config(sp: argparse.ArgumentParser) -> argparse.ArgumentParser:

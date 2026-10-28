@@ -105,9 +105,8 @@ fun PrintersScreen(
                     if (emulated) {
                         item {
                             Text(
-                                "Сервер не опрашивает МФУ: в его настройках MONITOR_MODE=emulator, и уровни тонера и " +
-                                    "счётчики страниц здесь ненастоящие. Поставьте MONITOR_MODE=real в netadmin.env и " +
-                                    "перезапустите службу NetAdmin.",
+                                "Сервер не опрашивает МФУ: уровни тонера и счётчики страниц здесь ненастоящие. " +
+                                    "Включите «Опрос устройств: Настоящие» в «Ещё → Настройки сервера» и перезапустите сервер там же.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onErrorContainer,
                                 modifier = Modifier

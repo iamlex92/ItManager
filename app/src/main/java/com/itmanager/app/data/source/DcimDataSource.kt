@@ -7,6 +7,8 @@ import com.itmanager.app.data.model.PcStatus
 import com.itmanager.app.data.model.PcResult
 import com.itmanager.app.data.model.PcKeyJob
 import com.itmanager.app.data.model.PcAction
+import com.itmanager.app.data.model.ServerConfig
+import kotlinx.serialization.json.JsonElement
 import com.itmanager.app.data.model.MapPoint
 import com.itmanager.app.data.model.AuditEntry
 import com.itmanager.app.data.model.AuditKind
@@ -230,4 +232,9 @@ interface DcimDataSource {
     suspend fun pcKeysStart(source: String, prefix: String?): PcKeyJob
     suspend fun pcKeys(id: String): PcKeyJob
     suspend fun pcKeysCsv(id: String): ByteArray
+
+    // --- server settings ---
+    suspend fun serverConfig(): ServerConfig
+    suspend fun saveServerConfig(values: Map<String, JsonElement>, reset: List<String>): ServerConfig
+    suspend fun restartServer()
 }

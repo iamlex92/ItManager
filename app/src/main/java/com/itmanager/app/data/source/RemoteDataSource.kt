@@ -39,6 +39,9 @@ import com.itmanager.app.data.model.PcStatus
 import com.itmanager.app.data.model.PcResult
 import com.itmanager.app.data.model.PcKeyJob
 import com.itmanager.app.data.model.PcAction
+import com.itmanager.app.data.model.ServerConfig
+import kotlinx.serialization.json.JsonElement
+import com.itmanager.app.core.network.ServerConfigBody
 import com.itmanager.app.data.model.MapPoint
 import com.itmanager.app.data.model.AuditEntry
 import com.itmanager.app.data.model.AuditKind
@@ -455,6 +458,15 @@ class RemoteDataSource(
     override suspend fun pcKeys(id: String): PcKeyJob = api.pcKeys(settings, id).toDomain()
 
     override suspend fun pcKeysCsv(id: String): ByteArray = api.download(settings, "pcs/keys/$id/csv")
+
+    override suspend fun serverConfig(): ServerConfig = api.serverConfig(settings).toDomain()
+
+    override suspend fun saveServerConfig(values: Map<String, JsonElement>, reset: List<String>): ServerConfig =
+        api.saveServerConfig(settings, ServerConfigBody(values, reset, operator = Build.MODEL)).toDomain()
+
+    override suspend fun restartServer() {
+        api.restartServer(settings)
+    }
 
     private companion object {
         const val PLAN_MARGIN = 200f

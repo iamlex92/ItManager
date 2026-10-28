@@ -414,6 +414,14 @@ class NetAdminApi @Inject constructor(
         }.body()
     }
 
+    private suspend inline fun <reified B : Any, reified T> put(s: ServerSettings, path: String, body: B): T = guarded {
+        client.put("${requireBase(s)}/api/v1/$path") {
+            auth(s)
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }.body()
+    }
+
     private suspend inline fun <reified B : Any, reified T> post(s: ServerSettings, path: String, body: B): T = guarded {
         client.post("${requireBase(s)}/api/v1/$path") {
             auth(s)
@@ -456,7 +464,7 @@ class NetAdminApi @Inject constructor(
             "wrong_port", "port_busy", "invalid_request", "invalid_subnet", "unknown_host", "no_login", "no_ad",
             "ad_failed", "pc_failed", "writes_disabled",
             "no_switch_login", "switch_unreachable", "switch_login_failed", "switch_timeout", "switch_closed",
-            "switch_rejected", "snmp_failed",
+            "switch_rejected", "snmp_failed", "bad_setting", "cannot_restart",
         )
     }
 
@@ -506,6 +514,15 @@ class NetAdminApi @Inject constructor(
     suspend fun pcKeysStart(s: ServerSettings, body: PcKeysBody): PcKeyJobDto = post(s, "pcs/keys", body)
 
     suspend fun pcKeys(s: ServerSettings, id: String): PcKeyJobDto = guarded { fetch(s, "pcs/keys/$id") }
+
+    // --- server settings («Настройки сервера», server/API.md) ---
+
+    suspend fun serverConfig(s: ServerSettings): ServerConfigDto =
+        newerFeature("менять свои настройки") { guarded { fetch(s, "server-settings") } }
+
+    suspend fun saveServerConfig(s: ServerSettings, body: ServerConfigBody): ServerConfigDto = put(s, "server-settings", body)
+
+    suspend fun restartServer(s: ServerSettings): RestartDto = post(s, "server-settings/restart", EmptyBody())
 
     /** A file the server builds (NetBox archive, label page). Reads only. */
     suspend fun download(s: ServerSettings, path: String): ByteArray =

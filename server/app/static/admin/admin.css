@@ -216,3 +216,15 @@ dialog.card-dialog { width: min(980px, calc(100% - 32px)); height: min(760px, ca
 .kv > * { min-width: 0; }
 .kv select { width: 100%; }
 .badge.warn { color: var(--danger); border-color: var(--danger); }
+
+/* Server settings */
+.banner { margin: 0; padding: 10px 12px; border-radius: 10px; }
+.banner.warn { background: var(--warn-bg); }
+.settings-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 16px; margin-top: 16px; }
+.setting { display: grid; grid-template-columns: 1fr minmax(180px, 46%); gap: 4px 12px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+.setting:first-of-type { border-top: 0; }
+.setting .help { grid-column: 1 / -1; }
+.setting.changed { box-shadow: inset 3px 0 0 var(--accent, #4c9eff); padding-left: 8px; }
+.setting .tag { font-size: 11px; color: var(--muted); margin-left: 6px; }
+.setting input[type=checkbox] { justify-self: start; width: 20px; height: 20px; }
+@media (max-width: 520px) { .settings-groups { grid-template-columns: 1fr; } .setting { grid-template-columns: 1fr; } }

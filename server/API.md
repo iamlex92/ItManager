@@ -383,3 +383,16 @@ Safety:
 - Every action is in the audit log as `pc:<action>` under «Сценарии». Reads are logged without what they returned,
   so licence keys stay out of the log; changes keep their output, the console its command.
 - The console runs one command per request (no session between commands); arguments reach PowerShell base64-encoded.
+
+## Server settings («Настройки сервера»)
+
+Settings saved here override `netadmin.env` from the next start of the service.
+
+- `GET /api/v1/server-settings` → `{groups: [{title, note, fields: [{key, label, help, kind, choices, credential_kind,
+  value, is_set, source, restart_required}]}], restart_pending, can_restart}`. `kind`: bool, int, float, text, choice,
+  secret, credential. Secrets come back as `value: null` with `is_set`. `source`: ui, file, default.
+- `PUT /api/v1/server-settings` `{values: {key: value}, reset: [key], operator}` → the same payload. An empty secret
+  keeps the stored one; `reset` returns a setting to the file. Unknown or bootstrap keys (`api_token`,
+  `database_url`, ...) and values that do not fit → 422 `bad_setting` with `key`. Audited as `server_settings`.
+- `POST /api/v1/server-settings/restart` → 202; the service stops cleanly and its manager starts it again
+  (the agent exits with code 3; in Docker the container restarts). Not run as a service → 409 `cannot_restart`.

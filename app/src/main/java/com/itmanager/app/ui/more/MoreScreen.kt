@@ -27,6 +27,7 @@ import androidx.compose.material.icons.outlined.Print
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.TravelExplore
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -73,13 +74,14 @@ enum class MoreItem(val title: String, val subtitle: String, val icon: ImageVect
     RUNBOOKS("Сценарии", "Сброс пароля AD, права на папки, резервные копии", Icons.Outlined.Terminal),
     AUDIT("Журнал", "Кто, когда и что запускал и менял", Icons.AutoMirrored.Outlined.ManageSearch),
     SETTINGS("Сервер и безопасность", "Адрес сервера, ключ, вход по биометрии", Icons.Outlined.Settings),
+    SERVER("Настройки сервера", "Коммутаторы, SNMP, компьютеры домена, Telegram — без правки файла", Icons.Outlined.Tune),
     CREDENTIALS("Учётные данные", "Логины SSH, SNMPv3 и WinRM на сервере", Icons.Outlined.Key),
 }
 
 private val GROUPS = listOf(
     "Справочники" to listOf(MoreItem.VLANS, MoreItem.IPAM, MoreItem.TEMPLATES, MoreItem.PERIPHERALS, MoreItem.PRINTERS),
     "Инструменты" to listOf(MoreItem.SCANNER, MoreItem.TOOLS, MoreItem.PCS, MoreItem.RUNBOOKS, MoreItem.AUDIT),
-    "Система" to listOf(MoreItem.SETTINGS, MoreItem.CREDENTIALS),
+    "Система" to listOf(MoreItem.SETTINGS, MoreItem.SERVER, MoreItem.CREDENTIALS),
 )
 
 @Composable

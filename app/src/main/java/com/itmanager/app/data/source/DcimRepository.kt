@@ -13,6 +13,8 @@ import com.itmanager.app.data.model.PcStatus
 import com.itmanager.app.data.model.PcResult
 import com.itmanager.app.data.model.PcKeyJob
 import com.itmanager.app.data.model.PcAction
+import com.itmanager.app.data.model.ServerConfig
+import kotlinx.serialization.json.JsonElement
 import com.itmanager.app.data.model.MapPoint
 import com.itmanager.app.data.model.AuditEntry
 import com.itmanager.app.data.model.AuditKind
@@ -186,6 +188,11 @@ class DcimRepository @Inject constructor(
     suspend fun pcKeysStart(source: String, prefix: String?): Result<PcKeyJob> = load { pcKeysStart(source, prefix) }
     suspend fun pcKeys(id: String): Result<PcKeyJob> = load { pcKeys(id) }
     suspend fun pcKeysCsv(id: String): Result<ByteArray> = load { pcKeysCsv(id) }
+
+    suspend fun serverConfig(): Result<ServerConfig> = load { serverConfig() }
+    suspend fun saveServerConfig(values: Map<String, JsonElement>, reset: List<String>): Result<ServerConfig> =
+        load { saveServerConfig(values, reset) }
+    suspend fun restartServer(): Result<Unit> = load { restartServer() }
     suspend fun peripherals(): Result<List<Peripheral>> = load { peripherals() }
     suspend fun savePeripheral(id: String?, draft: PeripheralDraft): Result<Peripheral> =
         load { savePeripheral(id, draft) }.onSuccess { peripheralVersion.value++ }

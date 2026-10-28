@@ -204,6 +204,19 @@ class DeviceAlert(Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class ServerSetting(Base):
+    """A server setting changed in the web console or the app («Настройки сервера»). It overrides netadmin.env
+    from the next start; [id] is the setting's name (hal_mode, monitor_mode...), [value] its JSON, encrypted."""
+
+    __tablename__ = "server_settings"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(EncryptedText)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class Credential(Base):
     """A login for equipment or services (SSH, SNMPv3, WinRM). The secret is encrypted at rest
     and write-only through the API."""

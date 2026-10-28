@@ -69,7 +69,7 @@
 
   function render(action, r) {
     const d = r.data;
-    const sim = r.simulated ? el("p", { className: "muted small", textContent: "Эмуляция: данные ненастоящие (RUNBOOK_MODE=emulator)." }) : "";
+    const sim = r.simulated ? el("p", { className: "muted small", textContent: "Эмуляция: данные ненастоящие. Включается в «Ещё → Настройки сервера» → «Компьютеры домена»." }) : "";
     const out = $("pc-result");
     if (action === "info") {
       $("pc-user").textContent = d.user || "нет активного сеанса";

@@ -110,6 +110,8 @@ class Settings(BaseSettings):
     # real: AD over LDAPS and folder rights over WinRM (app/runbooks/real.py); backups, VM snapshots
     # and service restarts are not offered in this mode yet.
     runbook_mode: RunbookMode = RunbookMode.EMULATOR
+    # Domain computers (WinRM tools): empty follows RUNBOOK_MODE; emulator or real sets them apart.
+    pc_mode: str = Field(default="", pattern="^(|emulator|real)$")
     # Real mode only: allow password resets, unlocks and enable/disable in AD. Off: those runbooks
     # show the account and what they would change, nothing more.
     allow_runbook_writes: bool = False
@@ -186,6 +188,11 @@ class Settings(BaseSettings):
     @property
     def runbook_writes_enabled(self) -> bool:
         return self.runbook_mode is RunbookMode.EMULATOR or self.allow_runbook_writes
+
+    @property
+    def pcs_real(self) -> bool:
+        """Domain computers over real WinRM: PC_MODE, or RUNBOOK_MODE when PC_MODE is empty."""
+        return (self.pc_mode or self.runbook_mode.value) == RunbookMode.REAL.value
 
     @property
     def device_writes_enabled(self) -> bool:

@@ -1230,3 +1230,48 @@ class PcKeyJobOut(BaseModel):
     started_at: datetime
     finished_at: datetime | None = None
     rows: list[PcKeyRowOut] = Field(default_factory=list)
+
+
+# --- server settings («Настройки сервера») ---
+
+
+class ServerSettingChoice(BaseModel):
+    value: str
+    label: str
+
+
+class ServerSettingOut(BaseModel):
+    key: str
+    label: str
+    help: str = ""
+    # bool, int, float, text, choice, secret, credential
+    kind: str
+    choices: list[ServerSettingChoice] = Field(default_factory=list)
+    credential_kind: str | None = None
+    # None for secrets: they are never sent back, only [is_set].
+    value: Any = None
+    is_set: bool | None = None
+    # ui: saved here; file: netadmin.env; default: built-in.
+    source: str
+    # Saved but not in effect until the service restarts.
+    restart_required: bool = False
+
+
+class ServerSettingsGroupOut(BaseModel):
+    title: str
+    note: str = ""
+    fields: list[ServerSettingOut]
+
+
+class ServerSettingsOut(BaseModel):
+    groups: list[ServerSettingsGroupOut]
+    restart_pending: bool
+    # The server runs as a service (or container) it can restart itself through.
+    can_restart: bool
+
+
+class ServerSettingsIn(BaseModel):
+    values: dict[str, Any] = Field(default_factory=dict)
+    # Back to netadmin.env (or the built-in default).
+    reset: list[str] = Field(default_factory=list)
+    operator: str | None = Field(default=None, max_length=100)

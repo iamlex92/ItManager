@@ -1,5 +1,7 @@
 """The web console page, custom scripts, and the change notice the phone reloads on."""
 
+import re
+
 from fastapi.testclient import TestClient
 
 from app import __version__
@@ -20,7 +22,9 @@ SCRIPT = {
 def test_console_page_needs_no_token_but_locks_itself_down(seeded):
     with TestClient(create_app(make_settings())) as c:
         r = c.get("/admin")
-        assert r.status_code == 200 and "NetAdmin" in r.text and f"admin.js?v={__version__}" in r.text
+        assert r.status_code == 200 and "NetAdmin" in r.text and f"веб-консоль · {__version__}" in r.text
+        # Scripts carry a fingerprint of their contents, so an update is never served from the browser's cache.
+        assert re.search(r"admin\.js\?v=[0-9a-f]{12}\"", r.text) and "{{" not in r.text.split("<body")[0]
         csp = r.headers["content-security-policy"]
         assert "script-src 'self'" in csp and "frame-ancestors 'none'" in csp
         assert r.headers["x-frame-options"] == "DENY"
@@ -30,6 +34,7 @@ def test_console_page_needs_no_token_but_locks_itself_down(seeded):
         assert '"RACK"' in js.text and "zones" in js.text and "rack_units" in js.text
         assert "admin-more.js" in r.text and c.get("/static/admin/admin-more.js").status_code == 200
         assert c.get("/static/admin/admin-pcs.js").status_code == 200
+        assert c.get("/static/admin/admin-settings.js").status_code == 200
         tabs = ("vlans", "devices", "map", "alerts", "audit", "runbooks", "printers", "creds", "topology", "templates")
         tabs += ("pcs",)
         for tab in tabs:
