@@ -1,5 +1,7 @@
 package com.itmanager.app.core.network
 
+import com.itmanager.app.data.model.Annotation
+import com.itmanager.app.data.model.AnnotationKind
 import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.Drawing
 import com.itmanager.app.data.model.PlanRect
@@ -49,6 +51,26 @@ data class ZoneDto(
 }
 
 @Serializable
+data class AnnotationDto(
+    val id: String,
+    val kind: String = "TEXT",
+    val x: Float,
+    val y: Float,
+    val x2: Float? = null,
+    val y2: Float? = null,
+    val text: String = "",
+    val color: String = "#FFD60A",
+    val size: Float = 1f,
+) {
+    fun toDomain() = Annotation(id, AnnotationKind.parse(kind), x, y, text, parseColorHex(color, 0xFFFFD60A), x2, y2, size)
+
+    companion object {
+        fun of(a: Annotation) =
+            AnnotationDto(a.id, a.kind.name, a.x, a.y, a.x2, a.y2, a.text.take(100), "#%06X".format(a.colorArgb and 0xFFFFFF), a.size)
+    }
+}
+
+@Serializable
 data class FloorCreateBody(
     @SerialName("building_name") val buildingName: String,
     @SerialName("floor_number") val floorNumber: Int,
@@ -78,6 +100,7 @@ data class FloorPatch(
     @SerialName("height_px") val heightPx: Int? = null,
     val drawings: List<DrawingDto>? = null,
     val zones: List<ZoneDto>? = null,
+    val annotations: List<AnnotationDto>? = null,
 ) {
     companion object {
         /** The plan's place on the map; the floor grows to keep it inside. */
@@ -89,6 +112,8 @@ data class FloorPatch(
         fun drawings(list: List<Drawing>) = FloorPatch(drawings = list.map(DrawingDto::of))
 
         fun zones(list: List<Zone>) = FloorPatch(zones = list.map(ZoneDto::of))
+
+        fun annotations(list: List<Annotation>) = FloorPatch(annotations = list.map(AnnotationDto::of))
     }
 }
 

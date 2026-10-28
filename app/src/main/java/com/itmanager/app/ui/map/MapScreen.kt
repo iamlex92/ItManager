@@ -278,6 +278,15 @@ fun MapScreen(
                             haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
                             viewModel.tapZones(x, y)
                         },
+                        arrowStart = editor.arrowStart,
+                        onTapMarks = { id, x, y ->
+                            haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                            viewModel.tapMarks(id, x, y)
+                        },
+                        onMoveMark = { id, dx, dy ->
+                            haptics.performHapticFeedback(HapticFeedbackType.GestureEnd)
+                            viewModel.moveMark(id, dx, dy)
+                        },
                     ),
                 )
             }
@@ -500,6 +509,9 @@ fun MapScreen(
                 onFitPlan = viewModel::fitPlan,
                 onRemovePlan = { confirmRemovePlan = true },
                 onDismissError = viewModel::dismissError,
+                onMarkKind = viewModel::setMarkKind,
+                onMarkColor = viewModel::setMarkColor,
+                onCancelArrow = viewModel::cancelArrow,
             )
         }
 
@@ -517,6 +529,14 @@ fun MapScreen(
                     viewModel.openRack(id)
                 },
                 hosts = content?.allDevices.orEmpty().values.filter { it.type == DeviceType.SERVER }.sortedBy { it.name },
+            )
+        }
+        state.editor.markEdit?.let { edit ->
+            MarkDialog(
+                edit = edit,
+                onSave = viewModel::saveMark,
+                onDelete = viewModel::deleteMark,
+                onDismiss = viewModel::closeMark,
             )
         }
         zoneEdit?.let { edit ->

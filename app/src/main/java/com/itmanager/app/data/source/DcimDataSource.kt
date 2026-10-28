@@ -1,6 +1,7 @@
 package com.itmanager.app.data.source
 
 import com.itmanager.app.data.model.Alert
+import com.itmanager.app.data.model.Annotation
 import com.itmanager.app.data.model.AuditEntry
 import com.itmanager.app.data.model.AuditKind
 import com.itmanager.app.data.model.AuthMethod
@@ -181,6 +182,7 @@ interface DcimDataSource {
     suspend fun placePlan(plan: FloorPlan, rect: PlanRect): FloorPlan
     suspend fun saveDrawings(plan: FloorPlan, drawings: List<Drawing>): FloorPlan
     suspend fun saveZones(plan: FloorPlan, zones: List<Zone>): FloorPlan
+    suspend fun saveAnnotations(plan: FloorPlan, annotations: List<Annotation>): FloorPlan
 
     // Peripherals: equipment without a network port attached to devices. Inventory only.
 

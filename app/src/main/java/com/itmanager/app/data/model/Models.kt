@@ -236,6 +236,8 @@ data class FloorPlan(
     val drawings: List<Drawing> = emptyList(),
     /** Areas outlined on the map; the ones marked as rooms collect the devices that stand in them. */
     val zones: List<Zone> = emptyList(),
+    /** Room numbers in circles, captions and pointers placed on the map. */
+    val annotations: List<Annotation> = emptyList(),
     /** False for the placeholder floor of a server that has none yet; the editor creates one on first save. */
     val stored: Boolean = true,
 )
@@ -292,6 +294,35 @@ data class Zone(
             val ys = points.filterIndexed { i, _ -> i % 2 == 1 }
             return ((xs.minOrNull() ?: 0f) + (xs.maxOrNull() ?: 0f)) / 2f to ((ys.minOrNull() ?: 0f) + (ys.maxOrNull() ?: 0f)) / 2f
         }
+}
+
+enum class AnnotationKind(val label: String) {
+    /** A room number in a circle. */
+    BADGE("Номер"),
+    /** A caption. */
+    TEXT("Подпись"),
+    /** A pointer from [Annotation.x], [Annotation.y] to [Annotation.x2], [Annotation.y2]. */
+    ARROW("Стрелка");
+
+    companion object {
+        fun parse(raw: String?): AnnotationKind = entries.firstOrNull { it.name == raw?.uppercase() } ?: TEXT
+    }
+}
+
+/** A mark on the map, in map pixels. [size] 1 is normal. */
+data class Annotation(
+    val id: String,
+    val kind: AnnotationKind,
+    val x: Float,
+    val y: Float,
+    val text: String,
+    val colorArgb: Long,
+    val x2: Float? = null,
+    val y2: Float? = null,
+    val size: Float = 1f,
+) {
+    /** Moved by [dx], [dy]: an arrow moves whole. */
+    fun movedBy(dx: Float, dy: Float) = copy(x = x + dx, y = y + dy, x2 = x2?.plus(dx), y2 = y2?.plus(dy))
 }
 
 /** The room a point lies in; the smallest one wins when rooms are drawn inside each other. */

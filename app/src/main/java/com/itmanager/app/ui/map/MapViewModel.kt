@@ -9,6 +9,8 @@ import androidx.lifecycle.viewModelScope
 import com.itmanager.app.core.network.toUserMessage
 import com.itmanager.app.core.nfc.NfcController
 import com.itmanager.app.data.model.ALL_DEVICES
+import com.itmanager.app.data.model.Annotation
+import com.itmanager.app.data.model.AnnotationKind
 import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceDraft
@@ -111,8 +113,12 @@ enum class EditTool(val label: String, val hint: String) {
     LINK("Связи", "Коснитесь двух устройств, чтобы соединить их. Коснитесь кабеля, чтобы проложить его по своей трассе."),
     DRAW("Карандаш", "Рисуйте одним пальцем, двумя двигайте карту."),
     ZONES("Помещения", "Коснитесь карты, чтобы поставить углы зоны. Коснитесь готовой зоны, чтобы изменить её."),
+    MARKS("Метки", "Коснитесь карты, чтобы поставить метку; стрелку ставят двумя касаниями: откуда и куда. Метку можно перетащить."),
     PLAN("Подложка", "Загрузите план здания и подвиньте его пальцем под устройства."),
 }
+
+/** The mark form: a new mark (not yet on the floor) or one picked on the map. */
+data class MarkEdit(val annotation: Annotation, val isNew: Boolean)
 
 data class MapEditorState(
     val tool: EditTool = EditTool.MOVE,
@@ -131,6 +137,11 @@ data class MapEditorState(
     /** Zone tool: corners placed so far (x, y pairs, map pixels) and the zone picked for editing. */
     val zoneDraft: List<Float> = emptyList(),
     val selectedZone: String? = null,
+    /** Marks tool: the kind and colour of the next mark, the tail of an arrow being placed, the form. */
+    val markKind: AnnotationKind = AnnotationKind.BADGE,
+    val markColor: Long = MARK_COLORS.first(),
+    val arrowStart: Offset? = null,
+    val markEdit: MarkEdit? = null,
     val busy: Boolean = false,
     /** An error from the last change; the tool hint shows when there is none. */
     val error: String? = null,
@@ -158,6 +169,8 @@ const val MAX_STROKE_POINTS = 3_900
 
 /** Server limits on zones: zones per floor and corners per zone. */
 const val MAX_ZONES = 200
+const val MAX_ANNOTATIONS = 500
+val MARK_COLORS = listOf(0xFFFFD60A, 0xFF0A84FF, 0xFF30D158, 0xFFFF453A, 0xFFFFFFFF)
 const val MAX_ZONE_CORNERS = 900
 
 @HiltViewModel
@@ -301,7 +314,7 @@ class MapViewModel @Inject constructor(
     }
 
     fun setTool(tool: EditTool) = editor {
-        it.copy(tool = tool, linkFrom = null, error = null, selectedLink = null, selectedPoint = null, zoneDraft = emptyList(), selectedZone = null)
+        it.copy(tool = tool, linkFrom = null, error = null, selectedLink = null, selectedPoint = null, zoneDraft = emptyList(), selectedZone = null, arrowStart = null)
     }
     fun setCable(cable: String) = editor { it.copy(cable = cable) }
     fun cancelLink() = editor { it.copy(linkFrom = null) }
@@ -462,6 +475,72 @@ class MapViewModel @Inject constructor(
     }
 
     fun clearDrawings() = saveDrawings(emptyList())
+
+    fun setMarkKind(kind: AnnotationKind) = editor { it.copy(markKind = kind, arrowStart = null) }
+    fun setMarkColor(color: Long) = editor { it.copy(markColor = color) }
+    fun cancelArrow() = editor { it.copy(arrowStart = null) }
+    fun closeMark() = editor { it.copy(markEdit = null) }
+
+    /**
+     * Marks tool, a tap at [x], [y] (map pixels) on the mark [hitId] or on empty map: opens that mark, places the
+     * tail of a new arrow, finishes the arrow, or opens the form of a new number or caption there.
+     */
+    fun tapMarks(hitId: String?, x: Float, y: Float) {
+        val e = _state.value.editor
+        val plan = content?.map?.plan ?: return
+        if (hitId != null && e.arrowStart == null) {
+            plan.annotations.firstOrNull { it.id == hitId }?.let { a -> editor { it.copy(markEdit = MarkEdit(a, isNew = false)) } }
+            return
+        }
+        if (plan.annotations.size >= MAX_ANNOTATIONS) {
+            editor { it.copy(error = "На этаже уже $MAX_ANNOTATIONS меток: удалите лишние.") }
+            return
+        }
+        val id = "m" + java.util.UUID.randomUUID().toString().take(8)
+        when {
+            e.markKind != AnnotationKind.ARROW ->
+                editor { it.copy(markEdit = MarkEdit(Annotation(id, e.markKind, x, y, "", e.markColor), isNew = true), error = null) }
+            e.arrowStart == null -> editor { it.copy(arrowStart = Offset(x, y), error = null) }
+            else -> {
+                val start = e.arrowStart ?: return
+                val arrow = Annotation(id, AnnotationKind.ARROW, start.x, start.y, "", e.markColor, x2 = x, y2 = y)
+                editor { it.copy(arrowStart = null, markEdit = MarkEdit(arrow, isNew = true), error = null) }
+            }
+        }
+    }
+
+    /** Saves a new mark or the changes to one, matched by id. */
+    fun saveMark(annotation: Annotation) {
+        val plan = content?.map?.plan ?: return
+        val list = if (plan.annotations.any { it.id == annotation.id }) {
+            plan.annotations.map { if (it.id == annotation.id) annotation else it }
+        } else {
+            plan.annotations + annotation
+        }
+        editor { it.copy(markEdit = null) }
+        saveAnnotations(list)
+    }
+
+    fun deleteMark(id: String) {
+        val plan = content?.map?.plan ?: return
+        editor { it.copy(markEdit = null) }
+        saveAnnotations(plan.annotations.filter { it.id != id })
+    }
+
+    /** A mark dragged by [dx], [dy] map pixels. */
+    fun moveMark(id: String, dx: Float, dy: Float) {
+        val plan = content?.map?.plan ?: return
+        saveAnnotations(plan.annotations.map { if (it.id == id) it.movedBy(dx, dy) else it })
+    }
+
+    private fun saveAnnotations(list: List<Annotation>) {
+        updatePlan { it.copy(annotations = list) }
+        write {
+            val floor = floor() ?: return@write
+            val latest = content?.map?.plan?.annotations ?: list
+            repository.saveAnnotations(floor, latest).onFailure { failAndReload(it) }
+        }
+    }
 
     /** Zone tool, a tap at [x], [y]: adds a corner to the zone being outlined, picks a zone, or starts a new outline. */
     fun tapZones(x: Float, y: Float) {

@@ -339,3 +339,24 @@ def test_cable_colour_and_port_edit(client):
     assert r.json()["access_vlan"] is None
     other = client.post("/api/v1/ports", json={"device_id": a["id"], "number": 31, "name": "Gi1/0/32"}).json()
     assert client.patch(f"/api/v1/ports/{other['id']}", json={"number": 30}).status_code == 409
+
+
+def test_annotations_on_the_map(client):
+    floor = new_floor(client)
+    marks = [
+        {"id": "a1", "kind": "BADGE", "x": 100, "y": 200, "text": "214", "color": "#0A84FF"},
+        {"id": "a2", "kind": "TEXT", "x": 300, "y": 120, "text": "Склад"},
+        {"id": "a3", "kind": "ARROW", "x": 10, "y": 10, "x2": 80, "y2": 40, "text": "Выход", "size": 1.5},
+    ]
+    r = client.patch(f"/api/v1/floors/{floor['id']}", json={"annotations": marks})
+    assert r.status_code == 200, r.text
+    got = client.get(f"/api/v1/floors/{floor['id']}").json()["annotations"]
+    assert [a["kind"] for a in got] == ["BADGE", "TEXT", "ARROW"]
+    assert got[0]["text"] == "214" and got[1]["color"] == "#FFD60A" and got[2]["x2"] == 80
+    # An arrow without an end, an unknown kind
+    bad_arrow = {"id": "b", "kind": "ARROW", "x": 1, "y": 1}
+    assert client.patch(f"/api/v1/floors/{floor['id']}", json={"annotations": [bad_arrow]}).status_code == 422
+    odd = {"id": "c", "kind": "STAR", "x": 1, "y": 1}
+    assert client.patch(f"/api/v1/floors/{floor['id']}", json={"annotations": [odd]}).status_code == 422
+    # Zones and drawings stay when only the marks change
+    assert client.patch(f"/api/v1/floors/{floor['id']}", json={"annotations": []}).json()["annotations"] == []

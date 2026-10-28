@@ -167,6 +167,13 @@ class MapCamera internal constructor(private val scope: CoroutineScope) {
         animateTo(target, clampOffset(Offset(centre.x - planX * target, centre.y - planY * target), target))
     }
 
+    /** Zooms in around a plan point: a group of markers there comes apart. */
+    fun zoomInto(planX: Float, planY: Float) {
+        val target = (scale * 2.5f).coerceAtMost(maxScale)
+        val centre = visibleCentre()
+        animateTo(target, clampOffset(Offset(centre.x - planX * target, centre.y - planY * target), target))
+    }
+
     private fun animateTo(targetScale: Float, targetOffset: Offset) {
         val startScale = scale
         val startOffset = offset
