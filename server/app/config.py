@@ -4,6 +4,9 @@ from functools import lru_cache
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Real switches are polled over SSH (a login per switch), so not more often than this.
+REAL_SWITCH_MIN_POLL_SECONDS = 60.0
+
 
 class HalMode(StrEnum):
     # Emulated switches only. Nothing leaves the server.
@@ -59,8 +62,18 @@ class Settings(BaseSettings):
     # (port mode/VLAN, shutdown, bounce, write memory). Off by default.
     # The emulator ignores it: its writes never reach real hardware.
     allow_device_writes: bool = False
+    # Real switches: the stored SSH credential (name, «Учётные данные») for switches whose card names none.
+    switch_credential: str = ""
+    # Real switches: the enable password when the login lands in user mode (>); empty: the login password.
+    switch_enable_secret: str = ""
+    switch_ssh_port: int = Field(default=22, ge=1, le=65535)
+    switch_connect_timeout_seconds: float = 15.0
+    switch_command_timeout_seconds: float = 30.0
+    # A known_hosts file with the switches' host keys; empty accepts any key (the LAN is trusted).
+    switch_known_hosts: str = ""
 
     # Background port status polling, seconds. 0 disables the poller.
+    # Real switches are polled over SSH no more often than every REAL_SWITCH_MIN_POLL_SECONDS.
     poll_interval_seconds: float = 10.0
     # Emulator: chance per switch per poll that one connected access port
     # goes down for a few polls (exercises alerts and live updates).

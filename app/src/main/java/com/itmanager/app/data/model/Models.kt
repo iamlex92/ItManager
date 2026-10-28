@@ -57,6 +57,8 @@ data class Device(
     val switchId: String? = null,
     val switchPortId: String? = null,
     val switchPortName: String? = null,
+    /** A switch's SSH login (a stored credential); null: the server's SWITCH_CREDENTIAL. */
+    val sshCredentialId: String? = null,
     /** Free-form server-side attributes; a rack keeps its look here (see [RackStyle]). */
     val metadata: Map<String, JsonElement> = emptyMap(),
 ) {
@@ -66,7 +68,7 @@ data class Device(
     fun toDraft() = DeviceDraft(
         name = name, type = type, ip = ip, vendor = vendor, model = model, hostId = hostId,
         comment = comment, rackId = rackId, rackU = rackU, rackH = rackH, rackUnits = rackUnits, mac = mac,
-        metadata = metadata,
+        sshCredentialId = sshCredentialId, metadata = metadata,
     )
 
     fun matches(query: String): Boolean {
@@ -346,6 +348,8 @@ data class DeviceDraft(
     val rackUnits: Int? = null,
     /** aa:bb:cc:dd:ee:ff; null clears it. */
     val mac: String? = null,
+    /** A switch's SSH login; null: the server default. */
+    val sshCredentialId: String? = null,
     /** Sent whole: the server replaces the dictionary, so keep what the device already has. */
     val metadata: Map<String, JsonElement>? = null,
 )

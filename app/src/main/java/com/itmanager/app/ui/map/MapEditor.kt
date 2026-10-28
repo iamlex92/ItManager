@@ -54,6 +54,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -355,6 +358,27 @@ private const val ROUTE_HINT =
 
 private val FORM_TYPES = DEVICE_TYPES_IN_ORDER
 
+/** The switch's SSH login for the server's real driver; «По умолчанию» is SWITCH_CREDENTIAL on the server. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SshLoginPicker(selected: String?, onPick: (String?) -> Unit) {
+    val viewModel: SshLoginsViewModel = hiltViewModel()
+    val logins by viewModel.logins.collectAsStateWithLifecycle()
+    LaunchedEffect(viewModel) { viewModel.load() }
+    Text("Логин SSH", style = MaterialTheme.typography.labelLarge)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        FilterChip(selected = selected == null, onClick = { onPick(null) }, label = { Text("По умолчанию сервера") })
+        logins.forEach { c ->
+            FilterChip(selected = c.id == selected, onClick = { onPick(c.id) }, label = { Text(c.name) })
+        }
+    }
+    Text(
+        "Нужен, когда сервер работает с настоящими коммутаторами (HAL_MODE=real). Логины — в «Ещё → Учётные данные».",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
 private val IPV4 = Regex("""^((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$""")
 
 /** Adds an object to the map or edits one. Only the inventory changes; the device itself is never contacted. */
@@ -384,6 +408,7 @@ fun DeviceFormDialog(
     var hostId by rememberSaveable(key) { mutableStateOf(device?.hostId) }
     var comment by rememberSaveable(key) { mutableStateOf(device?.comment.orEmpty()) }
     var rackUnits by rememberSaveable(key) { mutableStateOf((device?.rackUnits ?: DEFAULT_RACK_UNITS).toString()) }
+    var sshLogin by rememberSaveable(key) { mutableStateOf(device?.sshCredentialId) }
     val ipError = ip.isNotBlank() && !IPV4.matches(ip.trim())
     val macError = mac.isNotBlank() && !isMac(mac)
     var triedSave by rememberSaveable(key) { mutableStateOf(false) }
@@ -410,6 +435,7 @@ fun DeviceFormDialog(
                     rackId = device?.rackId.takeIf { type != DeviceType.RACK },
                     rackU = device?.rackU.takeIf { type != DeviceType.RACK },
                     rackH = device?.rackH.takeIf { type != DeviceType.RACK },
+                    sshCredentialId = sshLogin.takeIf { type == DeviceType.SWITCH },
                 ),
             )
         },
@@ -481,6 +507,7 @@ fun DeviceFormDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                if (type == DeviceType.SWITCH) SshLoginPicker(sshLogin) { sshLogin = it }
             }
         }
         val hostChoices = hosts.filter { it.id != device?.id }

@@ -123,7 +123,7 @@ def test_real_mode_blocks_writes_by_default(real_client):
     assert c.post(f"/api/v1/ports/{p['id']}/config/preview", json={"access_vlan": 20}).status_code == 200
 
 
-def test_real_mode_reads_not_implemented(real_client):
+def test_real_mode_reads_need_an_ssh_login(real_client):
     sw = find(real_client, "SW-ACC-01")
     r = real_client.post(f"/api/v1/devices/{sw['id']}/refresh")
-    assert r.status_code == 501
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "no_switch_login"

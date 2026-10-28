@@ -47,6 +47,7 @@ def test_ping_needs_a_switch(client):
     assert r.status_code == 422
 
 
-def test_real_mode_ping_not_implemented(real_client):
+def test_real_mode_ping_needs_an_ssh_login(real_client):
     sw = find(real_client, "SW-CORE-01")
-    assert real_client.post(f"/api/v1/devices/{sw['id']}/ping", json={"target": "10.10.10.22"}).status_code == 501
+    r = real_client.post(f"/api/v1/devices/{sw['id']}/ping", json={"target": "10.10.10.22"})
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "no_switch_login"

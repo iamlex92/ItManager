@@ -2101,7 +2101,20 @@
     $("device-ports").hidden = !dialogDevice || id === "RACK" || id === "VIRTUAL";
     $("device-rack-open").hidden = !dialogDevice || id !== "RACK";
     $("device-net").hidden = id === "RACK" || id === "SOCKET" || id === "PATCH_PANEL";
+    $("device-ssh-label").hidden = id !== "SWITCH";
     for (const b of $("device-types").children) b.classList.toggle("active", b.dataset.type === id);
+  }
+
+  /** SSH logins from «Учётные данные»; «по умолчанию» is the server's SWITCH_CREDENTIAL. */
+  async function fillSshLogins(value) {
+    const select = $("device-ssh");
+    select.replaceChildren(new Option("По умолчанию сервера (SWITCH_CREDENTIAL)", ""));
+    select.value = "";
+    try {
+      const creds = (await api("GET", "credentials")).filter((c) => c.kind === "ssh");
+      select.append(...creds.map((c) => new Option(c.username ? `${c.name} (${c.username})` : c.name, c.id)));
+      select.value = creds.some((c) => c.id === value) ? value : "";
+    } catch { /* the list stays at the default */ }
   }
 
   function openDeviceDialog(device, at) {
@@ -2127,6 +2140,7 @@
     fillHosts($("device-host"), device && device.id, (device && device.host_id) || "", "Не указан");
     fillRooms(floorSel.value, (device && roomOf(device) && roomOf(device).id) || "");
     $("device-comment").value = (device && device.comment) || "";
+    fillSshLogins(device ? device.ssh_credential_id || "" : "");
     $("device-units").value = (device && device.rack_units) || DEFAULT_RACK_UNITS;
     const rackSel = $("device-rack");
     rackSel.replaceChildren(new Option("Не в стойке", ""),
@@ -2165,6 +2179,7 @@
       host_id: dialogType === "VIRTUAL" ? $("device-host").value || null : null,
       comment: $("device-comment").value.trim() || null,
     };
+    if (dialogType === "SWITCH") body.ssh_credential_id = $("device-ssh").value || null;
     if (dialogType === "RACK") {
       Object.assign(body, { rack_units: Number.parseInt($("device-units").value, 10) || DEFAULT_RACK_UNITS, rack_id: null });
     } else {
