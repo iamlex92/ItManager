@@ -358,6 +358,11 @@ private const val ROUTE_HINT =
 
 private val FORM_TYPES = DEVICE_TYPES_IN_ORDER
 
+/** Devices the server reads over SNMP: switch links and traffic, printer supplies and counters. */
+private val SNMP_TYPES = setOf(
+    DeviceType.SWITCH, DeviceType.PRINTER, DeviceType.ROUTER, DeviceType.FIREWALL, DeviceType.ACCESS_POINT, DeviceType.UPS,
+)
+
 /** The switch's SSH login for the server's real driver; «По умолчанию» is SWITCH_CREDENTIAL on the server. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -409,6 +414,7 @@ fun DeviceFormDialog(
     var comment by rememberSaveable(key) { mutableStateOf(device?.comment.orEmpty()) }
     var rackUnits by rememberSaveable(key) { mutableStateOf((device?.rackUnits ?: DEFAULT_RACK_UNITS).toString()) }
     var sshLogin by rememberSaveable(key) { mutableStateOf(device?.sshCredentialId) }
+    var snmpCommunity by rememberSaveable(key) { mutableStateOf("") }
     val ipError = ip.isNotBlank() && !IPV4.matches(ip.trim())
     val macError = mac.isNotBlank() && !isMac(mac)
     var triedSave by rememberSaveable(key) { mutableStateOf(false) }
@@ -436,6 +442,7 @@ fun DeviceFormDialog(
                     rackU = device?.rackU.takeIf { type != DeviceType.RACK },
                     rackH = device?.rackH.takeIf { type != DeviceType.RACK },
                     sshCredentialId = sshLogin.takeIf { type == DeviceType.SWITCH },
+                    snmpCommunity = snmpCommunity.trim().takeIf { it.isNotEmpty() && type in SNMP_TYPES },
                 ),
             )
         },
@@ -507,6 +514,25 @@ fun DeviceFormDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                if (type in SNMP_TYPES) {
+                    OutlinedTextField(
+                        value = snmpCommunity,
+                        onValueChange = { snmpCommunity = it.take(50) },
+                        label = { Text("SNMP community (только чтение)") },
+                        placeholder = {
+                            Text(
+                                when {
+                                    device == null -> "public"
+                                    device.hasSnmpCommunity -> "задано — оставьте пустым, чтобы не менять"
+                                    else -> "не задано"
+                                },
+                            )
+                        },
+                        supportingText = { Text("Линк и загрузка портов, тонер и счётчики МФУ.") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
                 if (type == DeviceType.SWITCH) SshLoginPicker(sshLogin) { sshLogin = it }
             }
         }

@@ -2102,6 +2102,8 @@
     $("device-rack-open").hidden = !dialogDevice || id !== "RACK";
     $("device-net").hidden = id === "RACK" || id === "SOCKET" || id === "PATCH_PANEL";
     $("device-ssh-label").hidden = id !== "SWITCH";
+    // Read-only SNMP: links and traffic of switches, toner and pages of printers.
+    $("device-snmp-label").hidden = !["SWITCH", "PRINTER", "ROUTER", "FIREWALL", "ACCESS_POINT", "UPS"].includes(id);
     for (const b of $("device-types").children) b.classList.toggle("active", b.dataset.type === id);
   }
 
@@ -2141,6 +2143,10 @@
     fillRooms(floorSel.value, (device && roomOf(device) && roomOf(device).id) || "");
     $("device-comment").value = (device && device.comment) || "";
     fillSshLogins(device ? device.ssh_credential_id || "" : "");
+    // The community is write-only: the server only says whether one is set.
+    $("device-snmp").value = "";
+    $("device-snmp").placeholder = device ? (device.has_snmp_community ? "задано — пусто, чтобы не менять" : "не задано") : "public";
+    $("device-snmp-state").textContent = device ? (device.has_snmp_community ? "(задано)" : "(не задано)") : "(только чтение)";
     $("device-units").value = (device && device.rack_units) || DEFAULT_RACK_UNITS;
     const rackSel = $("device-rack");
     rackSel.replaceChildren(new Option("Не в стойке", ""),
@@ -2180,6 +2186,8 @@
       comment: $("device-comment").value.trim() || null,
     };
     if (dialogType === "SWITCH") body.ssh_credential_id = $("device-ssh").value || null;
+    const community = $("device-snmp").value.trim();
+    if (community && !$("device-snmp-label").hidden) body.snmp_community = community;
     if (dialogType === "RACK") {
       Object.assign(body, { rack_units: Number.parseInt($("device-units").value, 10) || DEFAULT_RACK_UNITS, rack_id: null });
     } else {

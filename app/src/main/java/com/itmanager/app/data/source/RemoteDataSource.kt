@@ -304,6 +304,7 @@ class RemoteDataSource(
                     draft.name, draft.type.name, floorId, x, y, draft.ip, draft.vendor, draft.model, draft.hostId,
                     draft.comment, draft.rackId, draft.rackU, draft.rackH, draft.rackUnits, draft.mac?.trim()?.ifEmpty { null },
                     sshCredentialId = draft.sshCredentialId,
+                    snmpCommunity = draft.snmpCommunity,
                 ),
             ).toDomain()
         }
