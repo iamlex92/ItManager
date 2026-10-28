@@ -1,3 +1,5 @@
+from app import __version__
+
 from .conftest import find, ports_of
 
 
@@ -6,7 +8,7 @@ def test_health_is_public(client):
     assert r.status_code == 200
     assert r.json() == {
         "status": "ok",
-        "version": "0.1.0",
+        "version": __version__,
         "hal_mode": "emulator",
         "device_writes_enabled": True,
         "monitor_mode": "emulator",

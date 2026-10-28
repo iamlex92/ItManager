@@ -1,6 +1,6 @@
 [project]
 name = "netadmin-server"
-version = "0.1.0"
+version = "1.0.0"
 description = "NetAdmin DCIM backend: inventory, topology and switch management API"
 requires-python = ">=3.11"
 dependencies = [

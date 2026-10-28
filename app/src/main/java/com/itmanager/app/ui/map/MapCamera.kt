@@ -22,6 +22,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.lerp
 import androidx.compose.ui.input.pointer.PointerInputScope
+import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.unit.Velocity
@@ -47,6 +48,10 @@ class MapCamera internal constructor(private val scope: CoroutineScope) {
 
     var scale by mutableFloatStateOf(1f)
         private set
+
+    /** Two or more fingers are on the map: a pinch, which belongs to the map even over a marker. */
+    var pinching = false
+        internal set
     var offset by mutableStateOf(Offset.Zero)
         private set
 
@@ -256,6 +261,8 @@ internal suspend fun PointerInputScope.detectMapGestures(
     onGesture: (centroid: Offset, pan: Offset, zoom: Float) -> Unit,
     /** Called only when the fingers actually moved the plan; a plain tap leaves it alone. */
     onEnd: (Velocity) -> Unit,
+    /** Told when a second finger lands (true) and when the gesture is over (false). */
+    onPinch: (Boolean) -> Unit = {},
 ) {
     awaitEachGesture {
         awaitFirstDown(requireUnconsumed = false)
@@ -269,11 +276,14 @@ internal suspend fun PointerInputScope.detectMapGestures(
 
         while (true) {
             val event = awaitPointerEvent()
-            if (event.changes.any { it.isConsumed }) {
+            val pressed = event.changes.count { it.pressed }
+            if (pressed >= 2) onPinch(true)
+            // A marker under one finger claims its own press (it may be a tap); that alone does not take the map.
+            // Only a one-finger drag someone else took (a device or a mark being moved) does; a pinch never yields.
+            if (pressed < 2 && event.changes.any { it.isConsumed && !it.changedToDownIgnoreConsumed() }) {
                 canceled = true
                 break
             }
-            val pressed = event.changes.count { it.pressed }
             if (pressed == 0) break
             if (pressed != pointerCount) {
                 pointerCount = pressed
@@ -297,6 +307,7 @@ internal suspend fun PointerInputScope.detectMapGestures(
                 event.changes.forEach { if (it.positionChanged()) it.consume() }
             }
         }
+        onPinch(false)
         if (pastSlop) onEnd(if (canceled) Velocity.Zero else tracker.calculateVelocity())
     }
 }
