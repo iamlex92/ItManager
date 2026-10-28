@@ -203,6 +203,7 @@ fun FloorPlanView(
                     onStart = camera::stop,
                     onGesture = camera::onGesture,
                     onEnd = camera::onGestureEnd,
+                    onPinch = { camera.pinching = it },
                 )
             }
             .pointerInput(camera) {
@@ -900,8 +901,11 @@ private fun DeviceMarker(
                         // Consuming past the touch slop takes the drag from the map, which then stays still.
                         detectDragGestures(
                             onDrag = { change, delta ->
-                                change.consume()
-                                currentOnDrag(delta)
+                                // A second finger makes it a pinch of the map: the device stays where it is.
+                                if (!camera.pinching) {
+                                    change.consume()
+                                    currentOnDrag(delta)
+                                }
                             },
                             onDragEnd = { currentOnDragEnd() },
                             onDragCancel = { currentOnDragEnd() },
