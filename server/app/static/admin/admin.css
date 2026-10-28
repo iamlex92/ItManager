@@ -162,3 +162,56 @@ details.row-details > summary { cursor: pointer; color: var(--muted); }
 #plate-ports button.marked { border-color: var(--ok); }
 #plate-copy { width: auto; }
 .plate-cell { cursor: pointer; }
+
+/* --- navigation: four tabs and «Ещё» --- */
+.tabs { align-items: center; }
+.count { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--danger); color: #fff; font-size: 11px; line-height: 18px; text-align: center; margin-left: 4px; }
+.more, .menu-wrap { position: relative; }
+.pop { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; min-width: 230px; display: flex; flex-direction: column; gap: 2px; padding: 6px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 30px rgba(0, 0, 0, .4); }
+.pop > button { justify-content: flex-start; background: transparent; border-color: transparent; text-align: left; }
+.pop > button:hover, .pop > button.active { background: var(--raised); }
+.pop-group { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding: 8px 10px 2px; }
+#more-toggle.active { background: var(--raised); border-color: var(--line); }
+
+/* --- map: view / edit --- */
+.edit-bar { padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.edit-note { margin-left: auto; }
+#map-search { width: auto; flex: 0 1 240px; }
+.search-results { top: 8px; left: auto; right: 12px; max-height: 60%; overflow: auto; }
+.map-empty { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(440px, calc(100% - 32px)); text-align: center; align-items: center; }
+
+/* --- forms: save at the top, delete at the bottom, errors under the field --- */
+.dialog-head { display: flex; align-items: center; gap: 8px; position: sticky; top: 0; background: var(--card); padding-bottom: 6px; z-index: 1; }
+.dialog-head h2 { font-size: 18px; }
+dialog.sheet { width: min(680px, calc(100% - 32px)); max-height: calc(100% - 32px); }
+fieldset.section { border: 0; border-top: 1px solid var(--line); margin: 0; padding: 10px 0 0; display: flex; flex-direction: column; gap: 10px; }
+fieldset.section > legend { color: var(--accent); font-size: 13px; font-weight: 600; padding: 0 6px 0 0; }
+.field-error { color: var(--danger); font-size: 12px; }
+input.invalid, select.invalid, textarea.invalid { border-color: var(--danger); }
+.error-box { margin: 0; padding: 10px 12px; border-radius: 10px; background: rgba(255, 107, 94, .14); color: var(--text); border: 1px solid var(--danger); }
+label.inline { flex-direction: row; align-items: center; gap: 6px; }
+label.inline select { width: auto; }
+
+/* --- device card --- */
+dialog.card-dialog { width: min(980px, calc(100% - 32px)); height: min(760px, calc(100% - 32px)); }
+.card-dialog .dialog { height: 100%; }
+.card-status { align-items: center; }
+.card-body { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 12px; }
+.info { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.info .card { gap: 6px; }
+.info h3 { margin: 0 0 4px; font-size: 13px; color: var(--accent); }
+.kv { display: grid; grid-template-columns: 120px 1fr; gap: 4px 10px; align-items: baseline; }
+.kv > span:nth-child(odd) { color: var(--muted); }
+.link { color: var(--accent); cursor: pointer; background: none; border: 0; padding: 0; font: inherit; }
+.link:hover { text-decoration: underline; }
+.online { color: var(--ok); } .offline { color: var(--danger); }
+.down-mark { color: var(--danger); font-size: 11px; margin-left: 8px; }
+.grid tr.group td { background: var(--bg); color: var(--accent); font-weight: 600; padding-top: 14px; }
+.grid tr.clickable { cursor: pointer; }
+.empty-state { padding: 32px 16px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.config-action { flex-direction: column; align-items: flex-start; gap: 2px; padding: 14px; text-align: left; white-space: normal; background: var(--card); border-radius: 12px; }
+.config-action strong { font-size: 14px; }
+.topo-card .row { margin-top: 6px; }
+#vlan-form label { align-self: flex-start; }
+.kv > * { min-width: 0; }
+.kv select { width: 100%; }

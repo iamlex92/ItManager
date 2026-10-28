@@ -12,7 +12,7 @@
 <div id="login" class="login" hidden>
   <form id="login-form" class="card">
     <h1>NetAdmin</h1>
-    <p class="muted">Веб-консоль агента. Всё, что вы внесёте здесь, сразу появится в приложении на телефоне.</p>
+    <p class="muted">Веб-консоль агента: карта, устройства, сеть и события того же учёта, что в приложении на телефоне. Всё, что вы внесёте здесь, сразу появится там.</p>
     <label>Ключ доступа (API-токен)
       <input id="login-token" type="password" autocomplete="current-password" required>
     </label>
@@ -29,16 +29,25 @@
     <nav class="tabs" id="tabs">
       <button data-tab="map" class="active">Карта</button>
       <button data-tab="devices">Устройства</button>
-      <button data-tab="peripherals">Периферия</button>
-      <button data-tab="topology">Топология</button>
-      <button data-tab="vlans">VLAN</button>
-      <button data-tab="alerts">Оповещения</button>
-      <button data-tab="audit">Журнал</button>
-      <button data-tab="runbooks">Автоматизация</button>
-      <button data-tab="printers">Принтеры</button>
-      <button data-tab="creds">Доступ</button>
-      <button data-tab="scan">Сканирование</button>
-      <button data-tab="scripts">Скрипты</button>
+      <button data-tab="topology">Сеть</button>
+      <button data-tab="alerts">События <span id="alerts-count" class="count" hidden></span></button>
+      <div class="more">
+        <button type="button" id="more-toggle" aria-haspopup="true" aria-expanded="false">Ещё ▾</button>
+        <div id="more-menu" class="pop more-menu" hidden>
+          <div class="pop-group">Справочники</div>
+          <button data-tab="vlans">VLAN и подсети</button>
+          <button data-tab="templates">Шаблоны устройств</button>
+          <button data-tab="peripherals">Периферия и склад</button>
+          <button data-tab="printers">МФУ и расходники</button>
+          <div class="pop-group">Инструменты</div>
+          <button data-tab="scan">Сканер сети</button>
+          <button data-tab="runbooks">Сценарии</button>
+          <button data-tab="scripts">Свои скрипты</button>
+          <button data-tab="audit">Журнал</button>
+          <div class="pop-group">Система</div>
+          <button data-tab="creds">Учётные данные</button>
+        </div>
+      </div>
     </nav>
     <div class="right">
       <span id="mode" class="badge"></span>
@@ -50,17 +59,43 @@
     <section id="tab-map" class="tab">
       <div class="toolbar">
         <select id="floor-select" title="Этаж"></select>
-        <button id="floors-edit" title="Добавить, переименовать, упорядочить этажи">Этажи…</button>
+        <div class="seg" id="mode-seg" title="Просмотр: щелчок открывает карточку устройства. Правка: всё, что меняет карту">
+          <button data-mode="view" class="active">Просмотр</button>
+          <button data-mode="edit">Правка</button>
+        </div>
+        <div class="seg" id="layer-seg" title="Что показывать поверх плана">
+          <button data-layer="L1" class="active">Кабели</button>
+          <button data-layer="L2">VLAN</button>
+          <button data-layer="L3">Подсети</button>
+        </div>
+        <select id="vlan-filter" title="Показать один VLAN" hidden></select>
+        <button id="vlans-open" hidden title="Справочник VLAN и подсетей">VLAN и подсети…</button>
         <label class="check" title="Виртуальные машины не существуют физически и не имеют кабелей"><input id="show-vms" type="checkbox"> ВМ</label>
-        <div class="seg" id="tools">
-          <button data-tool="move" class="active" title="Перетаскивайте объекты; щелчок открывает карточку">Объекты</button>
-          <button data-tool="link" title="Щёлкните два устройства, чтобы соединить их кабелем">Связи</button>
-          <button data-tool="zones" title="Обведите кабинет или зону на плане">Помещения</button>
-          <button data-tool="draw" title="Рисуйте линии мышью">Карандаш</button>
-          <button data-tool="plan" title="Загрузите план здания и подвиньте его">Подложка</button>
+        <div class="spacer"></div>
+        <input id="map-search" type="search" placeholder="Найти: имя, IP, MAC">
+        <button id="map-fit" title="Показать весь план">Весь план</button>
+        <button id="map-reload" title="Загрузить заново">Обновить</button>
+      </div>
+      <div class="toolbar edit-bar" id="edit-bar" hidden>
+        <div class="seg tools" id="tools">
+          <button data-tool="move" class="active" title="Перетаскивайте объекты; щелчок открывает форму">Объекты</button>
+          <button data-tool="link" title="Щёлкните два устройства, чтобы соединить их кабелем">Кабели</button>
+          <button data-tool="zones" title="Обведите кабинет или зону на плане">Комнаты</button>
+          <button data-tool="draw" title="Рисуйте линии мышью">Рисунок</button>
+          <button data-tool="marks" title="Номера кабинетов, подписи и стрелки">Метки</button>
+          <button data-tool="plan" title="Загрузите план здания и подвиньте его">План</button>
         </div>
         <div class="tool-opts" data-for="move">
-          <button id="add-device" class="primary">+ Объект</button>
+          <div class="menu-wrap">
+            <button id="add-toggle" class="primary" aria-haspopup="true">+ Добавить ▾</button>
+            <div id="add-menu" class="pop" hidden>
+              <button data-add="device">Устройство</button>
+              <button data-add="template">Из шаблона…</button>
+              <button data-add="rack">Стойка</button>
+              <button data-add="mark">Метка: номер кабинета</button>
+            </div>
+          </div>
+          <button id="floors-edit" title="Добавить, переименовать, упорядочить этажи">Этажи…</button>
         </div>
         <div class="tool-opts" data-for="link" hidden>
           <select id="cable"><option value="Cat6">Медь Cat6</option><option value="OM3">Оптика OM3</option></select>
@@ -78,6 +113,14 @@
           <button id="undo-line">Отменить линию</button>
           <button id="clear-lines" class="danger">Стереть все</button>
         </div>
+        <div class="tool-opts" data-for="marks" hidden>
+          <div class="seg" id="mark-kinds">
+            <button data-kind="BADGE" class="active">Номер</button>
+            <button data-kind="TEXT">Подпись</button>
+            <button data-kind="ARROW">Стрелка</button>
+          </div>
+          <span id="mark-colors" class="pens"></span>
+        </div>
         <div class="tool-opts" data-for="plan" hidden>
           <label class="button primary">Загрузить план<input id="plan-file" type="file" accept="image/png,image/jpeg,image/svg+xml,application/pdf" hidden></label>
           <button id="plan-smaller" title="Уменьшить">−</button>
@@ -85,9 +128,7 @@
           <button id="plan-fit">Вписать</button>
           <button id="plan-remove" class="danger">Убрать план</button>
         </div>
-        <div class="spacer"></div>
-        <button id="map-fit" title="Показать весь план">Весь план</button>
-        <button id="map-reload" title="Загрузить заново">Обновить</button>
+        <span class="muted small edit-note">Меняется только учёт, оборудование не затрагивается</span>
       </div>
       <div class="map-wrap">
         <canvas id="map"></canvas>
@@ -98,6 +139,12 @@
           <button id="route-delete" class="danger">Удалить кабель</button>
         </div>
         <div id="map-hint" class="map-hint"></div>
+        <div id="map-empty" class="map-empty card" hidden>
+          <h2>В учёте пока нет устройств</h2>
+          <p class="muted">Найдите их сканером сети или нарисуйте этаж: загрузите план и расставьте устройства.</p>
+          <div class="row"><button id="empty-scan" class="primary">Сканер сети</button><button id="empty-edit">Правка карты</button></div>
+        </div>
+        <div id="search-results" class="pop search-results" hidden></div>
         <div id="legend" class="legend" hidden></div>
         <button id="legend-toggle" class="legend-toggle" title="Что значат значки">Легенда</button>
       </div>
@@ -105,8 +152,12 @@
 
     <section id="tab-devices" class="tab" hidden>
       <div class="toolbar">
-        <input id="device-filter" type="search" placeholder="Имя, IP, тип, модель">
+        <input id="device-filter" type="search" placeholder="Имя, IP, MAC, тип, модель">
         <select id="type-filter" title="Показать только одну категорию"></select>
+        <label class="inline">Группировать<select id="group-by">
+          <option value="type">по типу</option><option value="floor">по этажу</option><option value="room">по помещению</option>
+        </select></label>
+        <span id="device-count" class="muted small"></span>
         <div class="spacer"></div>
         <button id="device-new" class="primary">+ Добавить устройство</button>
       </div>
@@ -118,7 +169,7 @@
       </div>
       <div class="table-wrap">
         <table class="grid">
-          <thead><tr><th class="pick"><input type="checkbox" id="pick-all" title="Выбрать все показанные"></th><th>Имя</th><th>Тип</th><th>IP</th><th>Производитель</th><th>Модель</th><th>Помещение</th><th>Стойка</th><th>Хост</th><th>На карте</th><th></th></tr></thead>
+          <thead><tr><th class="pick"><input type="checkbox" id="pick-all" title="Выбрать все показанные"></th><th>Имя</th><th>Тип</th><th>IP</th><th>Производитель</th><th>Модель</th><th>Помещение</th><th>Стойка</th><th>Хост</th><th></th></tr></thead>
           <tbody id="device-rows"></tbody>
         </table>
       </div>
@@ -126,18 +177,18 @@
 
     <section id="tab-vlans" class="tab" hidden>
       <div class="card">
-        <h2>VLAN</h2>
-        <p class="muted small">Справочник сетей: порты коммутаторов ссылаются на эти номера. Записи инвентаря, на оборудование ничего не отправляется.</p>
+        <h2>VLAN и подсети</h2>
+        <p class="muted small">Справочник сетей: порты коммутаторов ссылаются на эти номера, слои «VLAN» и «Подсети» на карте красят по ним устройства. Меняется только учёт, на оборудование ничего не отправляется.</p>
         <div class="table-wrap">
           <table class="grid">
             <thead><tr><th>VLAN</th><th>Название</th><th>Подсеть</th><th>Цвет</th><th>Описание</th><th></th></tr></thead>
             <tbody id="vlan-rows"></tbody>
           </table>
         </div>
-        <form id="vlan-form" class="row wrap">
-          <label>VLAN<input id="vlan-id" type="number" min="1" max="4094" required></label>
-          <label>Название<input id="vlan-name" maxlength="50" required></label>
-          <label>Подсеть<input id="vlan-subnet" placeholder="10.10.20.0/24, можно пусто"></label>
+        <form id="vlan-form" class="row wrap" novalidate>
+          <label>VLAN<input id="vlan-id" type="number" min="1" max="4094"><small class="field-error" id="vlan-id-error" hidden></small></label>
+          <label>Название<input id="vlan-name" maxlength="50"><small class="field-error" id="vlan-name-error" hidden></small></label>
+          <label>Подсеть<input id="vlan-subnet" placeholder="10.10.20.0/24, можно пусто"><small class="field-error" id="vlan-subnet-error" hidden></small></label>
           <label>Цвет<input id="vlan-color" type="color" value="#3498db"></label>
           <label class="grow">Описание<input id="vlan-desc"></label>
           <button type="submit" class="primary">Добавить</button>
@@ -177,7 +228,7 @@
     <section id="tab-runbooks" class="tab" hidden>
       <div class="columns">
         <div class="card narrow">
-          <h2>Автоматизация</h2>
+          <h2>Сценарии</h2>
           <p id="runbook-mode" class="muted small"></p>
           <div id="runbook-list"></div>
         </div>
@@ -244,13 +295,25 @@
           </div>
           <div class="table-wrap">
             <table class="grid">
-              <thead><tr><th><input type="checkbox" id="scan-all"></th><th>IP</th><th>Имя</th><th>Тип</th><th>Модель</th><th>Как найден</th><th>В инвентаре</th></tr></thead>
+              <thead><tr><th><input type="checkbox" id="scan-all"></th><th>IP</th><th>Имя</th><th>Тип</th><th>Модель</th><th>Как найден</th><th>В учёте</th></tr></thead>
               <tbody id="scan-rows"></tbody>
             </table>
           </div>
           <p id="scan-result" class="muted"></p>
         </div>
       </div>
+    </section>
+
+    <section id="tab-templates" class="tab" hidden>
+      <div class="toolbar">
+        <span class="muted small">Шаблон хранит тип, модель и порты типового устройства: из него устройство создаётся в один щелчок, в том числе на карте.</span>
+        <div class="spacer"></div>
+        <button id="template-new" class="primary">+ Шаблон</button>
+      </div>
+      <div class="table-wrap"><table class="grid">
+        <thead><tr><th>Шаблон</th><th>Категория</th><th>Производитель</th><th>Модель</th><th>Портов</th><th></th></tr></thead>
+        <tbody id="template-rows"></tbody>
+      </table></div>
     </section>
 
     <section id="tab-peripherals" class="tab" hidden>
@@ -290,7 +353,7 @@
       <div class="columns">
         <div class="card narrow">
           <div class="row"><h2>Свои скрипты</h2><div class="spacer"></div><button id="script-new" class="primary">+ Новый</button></div>
-          <p class="muted small">Скрипты появляются в приложении на вкладке «Автоматизация». Запуск только в режиме эмуляции: сервер показывает текст с подставленными параметрами и ничего не выполняет.</p>
+          <p class="muted small">Скрипты появляются в приложении в разделе «Ещё» → «Сценарии». Запуск только в режиме эмуляции: сервер показывает текст с подставленными параметрами и ничего не выполняет.</p>
           <ul id="script-list" class="list"></ul>
         </div>
         <form id="script-form" class="card grow" hidden>
@@ -320,35 +383,137 @@
   </main>
 </div>
 
-<dialog id="device-dialog">
-  <form id="device-form" method="dialog" class="dialog">
-    <h2 id="device-heading">Устройство</h2>
-    <div id="device-types" class="chips"></div>
-    <label>Имя<input id="device-name" required maxlength="100" placeholder="Например, SW-ACC-04"></label>
-    <label>IP-адрес, если есть<input id="device-ip" maxlength="45" placeholder="10.0.0.1"></label>
-    <div class="row">
-      <label class="grow">Производитель<input id="device-vendor" maxlength="50"></label>
-      <label class="grow">Модель<input id="device-model" maxlength="100"></label>
-    </div>
-    <label id="device-host-label" hidden>Хост виртуализации<select id="device-host"></select></label>
-    <label id="device-floor-label">Этаж<select id="device-floor"></select></label>
-    <label id="device-room-label" hidden>Помещение <span class="muted small">(выбор переносит объект в помещение на карте)</span><select id="device-room"></select></label>
-    <label id="device-units-label" hidden>Высота стойки, U<input id="device-units" type="number" min="1" max="60" value="42"></label>
-    <div id="device-mount" class="row">
-      <label class="grow">В стойке<select id="device-rack"></select></label>
-      <label>Юнит (с низа)<input id="device-rack-u" type="number" min="1" max="60"></label>
-      <label>Высота, U<input id="device-rack-h" type="number" min="1" max="60"></label>
-    </div>
-    <label>Комментарий<textarea id="device-comment" rows="3" maxlength="4000" placeholder="Заметка для себя: что тут стоит, кто отвечает, особенности"></textarea></label>
-    <p id="device-error" class="error" hidden></p>
-    <div class="row">
-      <button type="button" id="device-delete" class="danger">Удалить</button>
-      <button type="button" id="device-ports" title="Порты в инвентаре" hidden>Порты…</button>
-      <button type="button" id="device-rack-open" title="Вид стойки спереди" hidden>Стойка…</button>
+<dialog id="device-dialog" class="sheet">
+  <form id="device-form" method="dialog" class="dialog" novalidate>
+    <div class="dialog-head">
+      <h2 id="device-heading">Устройство</h2>
       <div class="spacer"></div>
       <button type="button" id="device-cancel">Отмена</button>
       <button type="submit" class="primary">Сохранить</button>
     </div>
+    <fieldset class="section"><legend>Что это</legend>
+      <div id="device-types" class="chips"></div>
+      <label>Имя<input id="device-name" maxlength="100" placeholder="Например, SW-ACC-04"><small class="field-error" id="device-name-error" hidden></small></label>
+      <div class="row">
+        <label class="grow">Производитель<input id="device-vendor" maxlength="50"></label>
+        <label class="grow">Модель<input id="device-model" maxlength="100"></label>
+      </div>
+    </fieldset>
+    <fieldset class="section" id="device-net"><legend>Сеть</legend>
+      <div class="row">
+        <label class="grow">IP-адрес, если есть<input id="device-ip" maxlength="45" placeholder="10.0.0.1"><small class="field-error" id="device-ip-error" hidden></small></label>
+        <label class="grow">MAC-адрес, если есть<input id="device-mac" maxlength="17" placeholder="aa:bb:cc:dd:ee:ff"><small class="field-error" id="device-mac-error" hidden></small></label>
+      </div>
+    </fieldset>
+    <fieldset class="section"><legend>Где стоит</legend>
+      <label id="device-host-label" hidden>Хост виртуализации<select id="device-host"></select></label>
+      <label id="device-floor-label">Этаж<select id="device-floor"></select></label>
+      <label id="device-room-label" hidden>Помещение <span class="muted small">(выбор переносит объект в помещение на карте)</span><select id="device-room"></select></label>
+      <label id="device-units-label" hidden>Высота стойки, U<input id="device-units" type="number" min="1" max="60" value="42"></label>
+      <div id="device-mount" class="row">
+        <label class="grow">В стойке<select id="device-rack"></select></label>
+        <label>Юнит (с низа)<input id="device-rack-u" type="number" min="1" max="60"></label>
+        <label>Высота, U<input id="device-rack-h" type="number" min="1" max="60"></label>
+      </div>
+    </fieldset>
+    <fieldset class="section"><legend>Заметки</legend>
+      <label>Комментарий<textarea id="device-comment" rows="3" maxlength="4000" placeholder="Заметка для себя: что тут стоит, кто отвечает, особенности"></textarea></label>
+    </fieldset>
+    <p id="device-error" class="error-box" hidden></p>
+    <div class="row">
+      <button type="button" id="device-ports" title="Порты в учёте" hidden>Порты…</button>
+      <button type="button" id="device-rack-open" title="Вид стойки спереди" hidden>Стойка…</button>
+      <div class="spacer"></div>
+      <button type="button" id="device-delete" class="danger">Удалить из учёта</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="card-dialog" class="card-dialog">
+  <div class="dialog">
+    <div class="dialog-head">
+      <canvas id="card-glyph" width="36" height="36"></canvas>
+      <div class="grow">
+        <h2 id="card-name">Устройство</h2>
+        <div id="card-sub" class="muted small"></div>
+      </div>
+      <button type="button" id="card-close" title="Закрыть (Esc)">✕</button>
+    </div>
+    <div class="row wrap card-status">
+      <span id="card-online"></span>
+      <code id="card-addr" class="muted"></code>
+      <div class="spacer"></div>
+      <button type="button" id="card-edit" class="primary">Изменить</button>
+      <button type="button" id="card-map">На карте</button>
+      <button type="button" id="card-ping" title="Проверить доступность с сервера">Ping</button>
+      <button type="button" id="card-plate" title="Схема лицевой панели (SVG) и места портов">Схема панели</button>
+    </div>
+    <div class="seg" id="card-tabs">
+      <button data-part="overview" class="active">Обзор</button>
+      <button data-part="ports">Порты</button>
+      <button data-part="peripherals">Периферия</button>
+      <button data-part="config">Конфигурация</button>
+    </div>
+    <div id="card-overview" class="card-body"></div>
+    <div id="card-ports" class="card-body" hidden></div>
+    <div id="card-peripherals" class="card-body" hidden></div>
+    <div id="card-config" class="card-body" hidden></div>
+  </div>
+</dialog>
+
+<dialog id="mark-dialog">
+  <form id="mark-form" method="dialog" class="dialog" novalidate>
+    <div class="dialog-head">
+      <h2 id="mark-heading">Метка</h2>
+      <div class="spacer"></div>
+      <button type="button" id="mark-cancel">Отмена</button>
+      <button type="submit" class="primary">Сохранить</button>
+    </div>
+    <label id="mark-text-label">Текст<input id="mark-text" maxlength="60" placeholder="201"><small class="field-error" id="mark-text-error" hidden></small></label>
+    <label>Цвет<input id="mark-color" type="color" value="#ffd60a"></label>
+    <label>Размер<input id="mark-size" type="range" min="0.5" max="3" step="0.1" value="1"></label>
+    <div class="row"><div class="spacer"></div><button type="button" id="mark-delete" class="danger">Удалить метку</button></div>
+  </form>
+</dialog>
+
+<dialog id="place-dialog">
+  <form id="place-form" method="dialog" class="dialog" novalidate>
+    <div class="dialog-head">
+      <h2 id="place-heading">Устройство из шаблона</h2>
+      <div class="spacer"></div>
+      <button type="button" id="place-cancel">Отмена</button>
+      <button type="submit" class="primary" id="place-save">Добавить</button>
+    </div>
+    <label>Шаблон<select id="place-template"></select></label>
+    <p id="place-empty" class="muted" hidden>Шаблонов пока нет. <button type="button" id="place-templates">Создать шаблон</button></p>
+    <label>Имя устройства<input id="place-name" maxlength="100" placeholder="SW-2-01"><small class="field-error" id="place-name-error" hidden></small></label>
+    <label>IP-адрес, если есть<input id="place-ip" maxlength="45"></label>
+    <p class="muted small">Встанет в центр экрана с типом, моделью и портами шаблона; потом его можно перетащить.</p>
+    <p id="place-error" class="error-box" hidden></p>
+  </form>
+</dialog>
+
+<dialog id="template-dialog">
+  <form id="template-form" method="dialog" class="dialog" novalidate>
+    <div class="dialog-head">
+      <h2 id="template-heading">Шаблон</h2>
+      <div class="spacer"></div>
+      <button type="button" id="template-cancel">Отмена</button>
+      <button type="submit" class="primary">Сохранить</button>
+    </div>
+    <label>Название шаблона<input id="template-name" maxlength="100" placeholder="Коммутатор доступа 24 порта"><small class="field-error" id="template-name-error" hidden></small></label>
+    <label>Категория<select id="template-type"></select></label>
+    <div class="row">
+      <label class="grow">Производитель<input id="template-vendor" maxlength="50"></label>
+      <label class="grow">Модель<input id="template-model" maxlength="100"></label>
+    </div>
+    <div class="row">
+      <label>Портов<input id="template-ports" type="number" min="0" max="96" value="0"></label>
+      <label class="grow">Имя порта (префикс)<input id="template-prefix" maxlength="30" value="Gi0/"></label>
+      <label>Высота, U<input id="template-rack-h" type="number" min="1" max="60"></label>
+    </div>
+    <p id="template-error" class="error-box" hidden></p>
+    <div class="row"><div class="spacer"></div><button type="button" id="template-delete" class="danger">Удалить шаблон</button></div>
   </form>
 </dialog>
 
@@ -407,7 +572,7 @@
 <dialog id="ports-dialog">
   <div class="dialog">
     <h2 id="ports-heading">Порты</h2>
-    <p class="muted small">Это записи инвентаря: здесь меняется то, что хранит NetAdmin. На само оборудование ничего не отправляется.</p>
+    <p class="muted small">Это записи учёта: здесь меняется то, что хранит NetAdmin. На само оборудование ничего не отправляется.</p>
     <div class="table-wrap">
       <table class="grid">
         <thead><tr><th>№</th><th>Имя</th><th>Аплинк</th><th>Режим</th><th>Access VLAN</th><th>Tagged VLAN</th><th>Мбит/с</th><th>PoE</th><th>Подключено</th><th></th></tr></thead>
@@ -492,40 +657,48 @@
 <dialog id="import-dialog">
   <div class="dialog">
     <h2>Импорт конфигурации</h2>
-    <p class="muted small">Вставьте running-config (Cisco, Eltex) или вывод <code>show vlan brief</code>. Сначала покажем, что изменится в инвентаре; на коммутатор ничего не отправляется.</p>
+    <p class="muted small">Вставьте running-config (Cisco, Eltex) или вывод <code>show vlan brief</code>. Сначала покажем, что изменится в учёте; на коммутатор ничего не отправляется.</p>
     <textarea id="import-text" rows="10" class="mono"></textarea>
     <pre id="import-result" class="output" hidden></pre>
     <p id="import-error" class="error" hidden></p>
     <div class="row">
       <button type="button" id="import-cancel">Закрыть</button><div class="spacer"></div>
       <button type="button" id="import-preview">Показать изменения</button>
-      <button type="button" id="import-apply" class="primary" disabled>Применить к инвентарю</button>
+      <button type="button" id="import-apply" class="primary" disabled>Применить к учёту</button>
     </div>
   </div>
 </dialog>
 
-<dialog id="per-dialog">
+<dialog id="per-dialog" class="sheet">
   <form id="per-form" method="dialog" class="dialog">
-    <h2 id="per-heading">Периферия</h2>
-    <div id="per-kinds" class="chips"></div>
-    <div class="row">
-      <label class="grow">Производитель<input id="per-vendor" maxlength="50" placeholder="Dell"></label>
-      <label class="grow">Модель<input id="per-model" maxlength="100" placeholder="P2422H"></label>
-    </div>
-    <label>Характеристики<input id="per-specs" maxlength="200" placeholder="24&quot;, 1920×1080, DP/HDMI"></label>
-    <div class="row">
-      <label class="grow">Серийный номер<input id="per-serial" maxlength="100"></label>
-      <label class="grow">Инвентарный номер<input id="per-inventory" maxlength="100"></label>
-    </div>
-    <label>Подключено к<select id="per-device"></select></label>
-    <label>Комментарий<textarea id="per-comment" rows="2" maxlength="4000"></textarea></label>
-    <p id="per-error" class="error" hidden></p>
-    <div class="row">
-      <button type="button" id="per-delete" class="danger">Удалить</button>
+    <div class="dialog-head">
+      <h2 id="per-heading">Периферия</h2>
       <div class="spacer"></div>
       <button type="button" id="per-cancel">Отмена</button>
       <button type="submit" class="primary">Сохранить</button>
     </div>
+    <fieldset class="section"><legend>Что это</legend>
+      <div id="per-kinds" class="chips"></div>
+      <div class="row">
+        <label class="grow">Производитель<input id="per-vendor" maxlength="50" placeholder="Dell"></label>
+        <label class="grow">Модель<input id="per-model" maxlength="100" placeholder="P2422H"></label>
+      </div>
+      <label>Характеристики<input id="per-specs" maxlength="200" placeholder="24&quot;, 1920×1080, DP/HDMI"></label>
+    </fieldset>
+    <fieldset class="section"><legend>Учёт</legend>
+      <div class="row">
+        <label class="grow">Серийный номер<input id="per-serial" maxlength="100"></label>
+        <label class="grow">Инвентарный номер<input id="per-inventory" maxlength="100"></label>
+      </div>
+    </fieldset>
+    <fieldset class="section"><legend>Где сейчас</legend>
+      <label>Подключено к<select id="per-device"></select></label>
+    </fieldset>
+    <fieldset class="section"><legend>Заметки</legend>
+      <label>Комментарий<textarea id="per-comment" rows="2" maxlength="4000"></textarea></label>
+    </fieldset>
+    <p id="per-error" class="error-box" hidden></p>
+    <div class="row"><div class="spacer"></div><button type="button" id="per-delete" class="danger">Удалить из учёта</button></div>
   </form>
 </dialog>
 
