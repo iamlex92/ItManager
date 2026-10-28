@@ -441,7 +441,12 @@ private fun AppNavHost(
             popEnterTransition = { EnterTransition.None },
             popExitTransition = { slideOutHorizontally(push) { it } },
         ) { entry ->
-            ConfigDiffScreen(switchName = entry.toRoute<ConfigDiffRoute>().switchName, onBack = back)
+            val route = entry.toRoute<ConfigDiffRoute>()
+            ConfigDiffScreen(
+                switchName = route.switchName,
+                onBack = back,
+                onImportFromSwitch = { navController.navigate(ConfigImportRoute(route.deviceId, route.switchName, fromSwitch = true)) },
+            )
         }
         composable<ConfigImportRoute>(
             enterTransition = { slideInHorizontally(push) { it } },

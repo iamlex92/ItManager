@@ -101,7 +101,7 @@ class DcimRepository @Inject constructor(
     suspend fun bouncePort(switchId: String, portId: String, confirmUplink: Boolean) =
         load { bouncePort(switchId, portId, confirmUplink) }
     suspend fun writeMemory(switchId: String) = load { writeMemory(switchId) }
-    suspend fun backupConfig(switchId: String) = load { backupConfig(switchId) }
+    suspend fun backupConfig(switchId: String): Result<String> = load { backupConfig(switchId) }
     suspend fun configDiff(switchId: String) = load { configDiff(switchId) }
     suspend fun ipam() = load { ipam() }
     suspend fun ipamCheck(ip: String) = load { ipamCheck(ip) }

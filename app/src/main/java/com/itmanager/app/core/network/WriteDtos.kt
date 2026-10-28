@@ -49,6 +49,9 @@ data class PortConfigResultDto(val port: PortDto, val commands: List<String> = e
 }
 
 @Serializable
+data class ConfigCopyDto(val content: String = "")
+
+@Serializable
 data class ConfigDiffDto(val changed: Boolean, val diff: String = "") {
     fun toDomain() = ConfigDiff(changed, diff)
 }

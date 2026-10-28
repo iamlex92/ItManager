@@ -39,7 +39,8 @@ import kotlinx.serialization.Serializable
 @Serializable data class SwitchRoute(val deviceId: String)
 @Serializable data class HistoryRoute(val deviceId: String, val switchName: String)
 @Serializable data class ConfigDiffRoute(val deviceId: String, val switchName: String? = null)
-@Serializable data class ConfigImportRoute(val deviceId: String, val switchName: String? = null)
+/** [fromSwitch]: take a copy of the running-config at once and show what it changes in the inventory. */
+@Serializable data class ConfigImportRoute(val deviceId: String, val switchName: String? = null, val fromSwitch: Boolean = false)
 
 /** Bottom bar tabs. Labels name what is inside, not generic "Home"-style umbrellas. */
 enum class TopLevelDestination(

@@ -169,7 +169,7 @@ class RemoteDataSource(
 
     override suspend fun writeMemory(switchId: String): List<String> = api.writeMemory(settings, switchId).commands
 
-    override suspend fun backupConfig(switchId: String) = api.backupConfig(settings, switchId)
+    override suspend fun backupConfig(switchId: String): String = api.backupConfig(settings, switchId)
 
     override suspend fun configDiff(switchId: String): ConfigDiff = api.configDiff(settings, switchId).toDomain()
 
