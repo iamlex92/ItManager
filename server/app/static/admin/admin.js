@@ -3572,6 +3572,7 @@
   // One card for a device, the same from the map, the list, the network and the events, as in the app.
   let cardId = null, cardPart = "overview";
   const PORTED = new Set(["SWITCH", "ROUTER", "FIREWALL", "PATCH_PANEL"]);
+  const PC_KINDS = new Set(["WORKSTATION", "SERVER", "VIRTUAL"]);
   const node = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
   const linkTo = (text, onClick) => node("button", { type: "button", className: "link", textContent: text, onclick: onClick });
 
@@ -3622,6 +3623,8 @@
     // Ping runs on the switch the device is cabled to: the console itself is not in the plant network.
     $("card-ping").hidden = !(d.ip && d.switch_id);
     $("card-plate").hidden = d.type === "RACK" || d.type === "SOCKET";
+    // A Windows computer: the domain admin's tools (disks, processes, licences, reboot) are one click away.
+    $("card-pc").hidden = !PC_KINDS.has(d.type);
   }
 
   function kv(rows) {
@@ -3786,6 +3789,12 @@
     showOnMap(id).catch(fail);
   });
   $("card-plate").addEventListener("click", () => { const d = cardDevice(); if (d) openFaceplate(d); });
+  $("card-pc").addEventListener("click", () => {
+    const d = cardDevice();
+    if (!d) return;
+    $("card-dialog").close();
+    window.NetAdmin.openPc(d.name || d.ip);
+  });
   $("card-ping").addEventListener("click", async () => {
     const d = cardDevice();
     const out = $("card-ping-out");
@@ -3867,6 +3876,7 @@
     $, api, toast, fail, typeOf, glyphCanvas, OPERATOR, tabs: {},
     picked, renderPorts: () => renderPorts(), portsDevice: () => portsDevice,
     openCard: (id) => openCard(id).catch(fail),
+    openTab: (name) => openTab(name),
   };
 
   // ---------------------------------------------------------------- go
