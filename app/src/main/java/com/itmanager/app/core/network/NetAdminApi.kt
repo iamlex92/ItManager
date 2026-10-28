@@ -232,10 +232,9 @@ class NetAdminApi @Inject constructor(
     suspend fun writeMemory(s: ServerSettings, deviceId: String): CommandsDto =
         post(s, "devices/$deviceId/write-memory", ConfirmBody(confirm = true))
 
-    /** Reads running-config and stores it; read-only on the switch. */
-    suspend fun backupConfig(s: ServerSettings, deviceId: String) {
-        guarded { client.post("${requireBase(s)}/api/v1/devices/$deviceId/configs/backup") { auth(s) } }
-    }
+    /** Reads running-config and stores it; read-only on the switch. Returns the stored text. */
+    suspend fun backupConfig(s: ServerSettings, deviceId: String): String =
+        guarded { client.post("${requireBase(s)}/api/v1/devices/$deviceId/configs/backup") { auth(s) }.body<ConfigCopyDto>() }.content
 
     suspend fun configDiff(s: ServerSettings, deviceId: String): ConfigDiffDto =
         guarded { client.get("${requireBase(s)}/api/v1/devices/$deviceId/configs/diff") { auth(s) }.body() }
@@ -456,6 +455,8 @@ class NetAdminApi @Inject constructor(
             "bad_svg", "svg_too_big", "bad_device", "bad_port", "duplicate_port", "kind_required",
             "wrong_port", "port_busy", "invalid_request", "invalid_subnet", "unknown_host", "no_login", "no_ad",
             "ad_failed", "pc_failed", "writes_disabled",
+            "no_switch_login", "switch_unreachable", "switch_login_failed", "switch_timeout", "switch_closed",
+            "switch_rejected", "snmp_failed",
         )
     }
 

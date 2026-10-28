@@ -18,6 +18,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -81,6 +82,10 @@ fun ConfigImportScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Spacer(Modifier.height(12.dp))
+            FilledTonalButton(onClick = viewModel::fromSwitch, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
+                Text("Снять копию с коммутатора и показать изменения")
+            }
             Spacer(Modifier.height(12.dp))
             OutlinedTextField(
                 value = state.text,

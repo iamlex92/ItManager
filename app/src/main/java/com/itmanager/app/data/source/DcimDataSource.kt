@@ -83,7 +83,8 @@ interface DcimDataSource {
     suspend fun applyPortChange(switchId: String, portId: String, change: PortChange, confirmUplink: Boolean): PortChangeResult
     suspend fun bouncePort(switchId: String, portId: String, confirmUplink: Boolean): List<String>
     suspend fun writeMemory(switchId: String): List<String>
-    suspend fun backupConfig(switchId: String)
+    /** Takes a copy of the running-config; returns its text. */
+    suspend fun backupConfig(switchId: String): String
     suspend fun configDiff(switchId: String): ConfigDiff
 
     /** Reads pasted config text into the inventory (apply=false only previews). Never writes to the switch. */

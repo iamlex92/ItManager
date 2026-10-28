@@ -462,6 +462,7 @@
         <label class="grow">IP-адрес, если есть<input id="device-ip" maxlength="45" placeholder="10.0.0.1"><small class="field-error" id="device-ip-error" hidden></small></label>
         <label class="grow">MAC-адрес, если есть<input id="device-mac" maxlength="17" placeholder="aa:bb:cc:dd:ee:ff"><small class="field-error" id="device-mac-error" hidden></small></label>
       </div>
+      <label id="device-snmp-label">SNMP community <span class="muted small" id="device-snmp-state"></span><input id="device-snmp" maxlength="50" autocomplete="off" placeholder="public"></label>
       <label id="device-ssh-label" hidden>Логин SSH <span class="muted small">(для работы с коммутатором при HAL_MODE=real)</span><select id="device-ssh"></select></label>
     </fieldset>
     <fieldset class="section"><legend>Где стоит</legend>
@@ -722,6 +723,7 @@
     <div id="detail-configs" hidden>
       <div class="row wrap">
         <button type="button" id="config-backup" title="Прочитать running-config с коммутатора и сохранить копию (только чтение)">Снять копию сейчас</button>
+        <button type="button" id="config-backup-import" title="Снять копию и сразу показать, что она изменит в учёте портов и VLAN">Снять копию и обновить учёт</button>
         <button type="button" id="config-live" title="Сравнить выбранную копию с текущей конфигурацией на коммутаторе">Сравнить с коммутатором</button>
         <span class="muted small">Выберите копию; для сравнения двух копий отметьте вторую «со»</span>
       </div>

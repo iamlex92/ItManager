@@ -33,10 +33,13 @@ def credential_logins(settings: Settings, sessionmaker: async_sessionmaker[Async
 
 def build_driver(settings: Settings, sessionmaker: async_sessionmaker[AsyncSession] | None = None) -> SwitchDriver:
     if settings.hal_mode is HalMode.EMULATOR:
+        # With real monitoring the links come from SNMP (services/linkstate.py): nothing is made up.
+        real_links = settings.monitor_mode is MonitorMode.REAL
         return EmulatorDriver(
-            flap_probability=settings.emulator_flap_probability,
+            flap_probability=0.0 if real_links else settings.emulator_flap_probability,
             seed=settings.emulator_seed,
             bounce_delay=settings.emulator_bounce_delay_seconds,
+            links_from_inventory=real_links,
         )
     options = SshOptions(
         port=settings.switch_ssh_port,

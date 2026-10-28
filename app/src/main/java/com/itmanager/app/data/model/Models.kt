@@ -59,6 +59,8 @@ data class Device(
     val switchPortName: String? = null,
     /** A switch's SSH login (a stored credential); null: the server's SWITCH_CREDENTIAL. */
     val sshCredentialId: String? = null,
+    /** An SNMP community is stored on the server (it never comes back, only whether it is set). */
+    val hasSnmpCommunity: Boolean = false,
     /** Free-form server-side attributes; a rack keeps its look here (see [RackStyle]). */
     val metadata: Map<String, JsonElement> = emptyMap(),
 ) {
@@ -350,6 +352,8 @@ data class DeviceDraft(
     val mac: String? = null,
     /** A switch's SSH login; null: the server default. */
     val sshCredentialId: String? = null,
+    /** A new SNMP community (read-only); null keeps the stored one. */
+    val snmpCommunity: String? = null,
     /** Sent whole: the server replaces the dictionary, so keep what the device already has. */
     val metadata: Map<String, JsonElement>? = null,
 )

@@ -28,12 +28,32 @@ class ConfigImportViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: DcimRepository,
 ) : ViewModel() {
-    private val deviceId = savedStateHandle.toRoute<ConfigImportRoute>().deviceId
+    private val route = savedStateHandle.toRoute<ConfigImportRoute>()
+    private val deviceId = route.deviceId
 
     private val _state = MutableStateFlow(ConfigImportState())
     val state: StateFlow<ConfigImportState> = _state.asStateFlow()
 
+    init {
+        if (route.fromSwitch) fromSwitch()
+    }
+
     fun setText(text: String) = _state.update { it.copy(text = text, result = null, error = null) }
+
+    /** Takes a copy of the running-config (stored on the server, read-only on the switch) and previews it. */
+    fun fromSwitch() {
+        if (_state.value.busy) return
+        viewModelScope.launch {
+            _state.update { it.copy(busy = true, error = null, result = null) }
+            repository.backupConfig(deviceId).fold(
+                onSuccess = { text ->
+                    _state.update { it.copy(text = text, busy = false) }
+                    preview()
+                },
+                onFailure = { e -> _state.update { it.copy(busy = false, error = e.toUserMessage()) } },
+            )
+        }
+    }
 
     /** Shows what the text would change in the inventory; writes nothing. */
     fun preview() = run(apply = false)

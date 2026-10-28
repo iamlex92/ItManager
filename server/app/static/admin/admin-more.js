@@ -310,10 +310,15 @@
         type: "checkbox", checked: c.id === versus, title: "Сравнить выбранную копию с этой",
         onchange: (ev) => { versus = ev.target.checked ? c.id : null; for (const b of body.querySelectorAll("input[type=checkbox]")) b.checked = b === ev.target && ev.target.checked; if (versus) showDiff(); },
       }));
-      td(tr, el("button", { textContent: "Показать", onclick: async () => {
-        const full = await api("GET", `devices/${d.id}/configs/${c.id}`).catch((e) => { detailError(e); return null; });
-        if (full) output(full.content);
-      } }));
+      td(tr, el("div", { className: "row" },
+        el("button", { textContent: "Показать", onclick: async () => {
+          const full = await api("GET", `devices/${d.id}/configs/${c.id}`).catch((e) => { detailError(e); return null; });
+          if (full) output(full.content);
+        } }),
+        el("button", { textContent: "В учёт…", title: "Обновить порты и VLAN в учёте по этой копии", onclick: async () => {
+          const full = await api("GET", `devices/${d.id}/configs/${c.id}`).catch((e) => { detailError(e); return null; });
+          if (full) openImport(full.content);
+        } })));
       return tr;
     }));
   }
@@ -336,6 +341,16 @@
     const d = window.NetAdmin.portsDevice();
     try { detailError(null); await api("POST", `devices/${d.id}/configs/backup`); toast("Копия сохранена"); await renderConfigs(); } catch (e) { detailError(e); }
   });
+  // A copy straight into the inventory: take it, then show what it changes, «Применить» saves.
+  $("config-backup-import").addEventListener("click", async () => {
+    const d = window.NetAdmin.portsDevice();
+    try {
+      detailError(null);
+      const copy = await api("POST", `devices/${d.id}/configs/backup`);
+      await renderConfigs();
+      openImport(copy.content);
+    } catch (e) { detailError(e); }
+  });
   $("config-live").addEventListener("click", () => { versus = null; showDiff(); });
 
   $("port-refresh").addEventListener("click", async () => {
@@ -357,15 +372,17 @@
   const importError = (e) => { $("import-error").hidden = !e; $("import-error").textContent = e ? e.message : ""; };
 
   $("port-import").addEventListener("click", () => openImport());
-  window.NetAdmin.openImport = () => openImport();
-  function openImport() {
+  window.NetAdmin.openImport = (text) => openImport(text);
+  /** [text]: a running-config already in hand (a stored copy); it is previewed at once. */
+  function openImport(text) {
     $("ports-dialog").close();
-    $("import-text").value = "";
+    $("import-text").value = text || "";
     $("import-result").hidden = true;
     $("import-apply").disabled = true;
     previewed = false;
     importError(null);
     $("import-dialog").showModal();
+    if (text) runImport(false);
   }
   $("import-text").addEventListener("input", () => { $("import-apply").disabled = true; previewed = false; });
   $("import-cancel").addEventListener("click", () => $("import-dialog").close());

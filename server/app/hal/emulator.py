@@ -41,11 +41,14 @@ class EmulatorDriver(SwitchDriver):
         flap_probability: float = 0.0,
         seed: int | None = None,
         bounce_delay: float = 2.0,
+        links_from_inventory: bool = False,
     ) -> None:
         self._devices: dict[uuid.UUID, _EmuDevice] = {}
         self._rng = random.Random(seed)
         self._flap_probability = flap_probability
         self._bounce_delay = bounce_delay
+        # Real links read over SNMP are in the inventory: follow them instead of keeping our own.
+        self._links_from_inventory = links_from_inventory
         self._lock = asyncio.Lock()
         # Set by the app: IP -> True (online) / False (offline) / None (unknown),
         # so emulated ping answers match what the map shows.
@@ -76,6 +79,13 @@ class EmulatorDriver(SwitchDriver):
             }
             dev = _EmuDevice(target=target, ports=ports)
             self._devices[target.id] = dev
+        elif self._links_from_inventory:
+            for p in target.ports:
+                ep = dev.ports.get(p.number)
+                if ep is not None:
+                    ep.status = replace(
+                        ep.status, is_oper_up=p.is_oper_up and ep.status.is_admin_up, speed_mbps=p.speed_mbps
+                    )
         return dev
 
     def _port(self, target: DeviceTarget, port: PortRef) -> _EmuPort:

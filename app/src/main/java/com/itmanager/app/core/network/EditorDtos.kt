@@ -135,6 +135,8 @@ data class DeviceBody(
     @SerialName("rack_units") val rackUnits: Int? = null,
     val mac: String? = null,
     @SerialName("ssh_credential_id") val sshCredentialId: String? = null,
+    // Left out when null: the server then uses «public».
+    @SerialName("snmp_community") val snmpCommunity: String? = null,
 )
 
 @Serializable
@@ -155,6 +157,8 @@ fun DeviceDraft.toPatch(): JsonObject = buildJsonObject {
     put("rack_units", rackUnits?.let { JsonPrimitive(it) } ?: JsonNull)
     put("mac", mac?.trim()?.takeIf { it.isNotEmpty() }?.let { JsonPrimitive(it) } ?: JsonNull)
     put("ssh_credential_id", sshCredentialId?.let { JsonPrimitive(it) } ?: JsonNull)
+    // Write-only on the server: sent only when the user typed a new one.
+    snmpCommunity?.let { put("snmp_community", JsonPrimitive(it)) }
     metadata?.let { put("metadata", JsonObject(it)) }
 }
 

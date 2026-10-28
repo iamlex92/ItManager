@@ -165,12 +165,13 @@ class SshSwitchDriver(SwitchDriver):
     @contextlib.asynccontextmanager
     async def _cli(self, target: DeviceTarget) -> AsyncIterator[CliSession]:
         if not target.ip:
-            raise SwitchError("switch_unreachable", f"{target.name}: no IP address in the inventory")
+            raise SwitchError("switch_unreachable", f"{target.name}: в учёте нет IP-адреса")
         login = await self._logins(target.credential_id)
         if login is None:
             raise SwitchError(
                 "no_switch_login",
-                f"{target.name}: no SSH login — pick one in the device card or set SWITCH_CREDENTIAL on the server",
+                f"{target.name}: нет логина SSH — выберите его в карточке коммутатора "
+                "или задайте SWITCH_CREDENTIAL на сервере",
             )
         commands._vendor(target.vendor)  # unsupported vendors fail before connecting
         async with self._locks.setdefault(target.id, asyncio.Lock()):

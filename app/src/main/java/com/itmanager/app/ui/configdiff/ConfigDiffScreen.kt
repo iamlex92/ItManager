@@ -55,6 +55,8 @@ import com.itmanager.app.ui.theme.StatusColors
 fun ConfigDiffScreen(
     switchName: String?,
     onBack: () -> Unit,
+    /** Takes a copy and opens the import with it, so the inventory follows the switch. */
+    onImportFromSwitch: () -> Unit,
     viewModel: ConfigDiffViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -94,14 +96,14 @@ fun ConfigDiffScreen(
                     FilledTonalButton(onClick = viewModel::backup) { Text("Сделать резервную копию сейчас") }
                     OutlinedButton(onClick = viewModel::load, modifier = Modifier.padding(top = 8.dp)) { Text("Повторить") }
                 }
-                is UiState.Content -> DiffContent(s.data, onBackup = viewModel::backup)
+                is UiState.Content -> DiffContent(s.data, onBackup = viewModel::backup, onImport = onImportFromSwitch)
             }
         }
     }
 }
 
 @Composable
-private fun DiffContent(diff: ConfigDiff, onBackup: () -> Unit) {
+private fun DiffContent(diff: ConfigDiff, onBackup: () -> Unit, onImport: () -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
@@ -134,6 +136,9 @@ private fun DiffContent(diff: ConfigDiff, onBackup: () -> Unit) {
             Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
             Text("Сохранить текущую как новую копию")
+        }
+        FilledTonalButton(onClick = onImport, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+            Text("Снять копию и обновить учёт портов")
         }
         Text(
             "Копия хранится на сервере. Сравнение только читает конфигурацию коммутатора и ничего в ней не меняет.",

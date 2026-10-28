@@ -95,6 +95,7 @@ data class DeviceDto(
     @SerialName("switch_port_id") val switchPortId: String? = null,
     @SerialName("switch_port_name") val switchPortName: String? = null,
     @SerialName("ssh_credential_id") val sshCredentialId: String? = null,
+    @SerialName("has_snmp_community") val hasSnmpCommunity: Boolean = false,
     val metadata: Map<String, JsonElement> = emptyMap(),
 ) {
     fun toDomain() = Device(
@@ -120,6 +121,7 @@ data class DeviceDto(
         switchPortId = switchPortId,
         switchPortName = switchPortName,
         sshCredentialId = sshCredentialId,
+        hasSnmpCommunity = hasSnmpCommunity,
         metadata = metadata,
     )
 }

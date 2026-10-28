@@ -169,7 +169,7 @@ class RemoteDataSource(
 
     override suspend fun writeMemory(switchId: String): List<String> = api.writeMemory(settings, switchId).commands
 
-    override suspend fun backupConfig(switchId: String) = api.backupConfig(settings, switchId)
+    override suspend fun backupConfig(switchId: String): String = api.backupConfig(settings, switchId)
 
     override suspend fun configDiff(switchId: String): ConfigDiff = api.configDiff(settings, switchId).toDomain()
 
@@ -304,6 +304,7 @@ class RemoteDataSource(
                     draft.name, draft.type.name, floorId, x, y, draft.ip, draft.vendor, draft.model, draft.hostId,
                     draft.comment, draft.rackId, draft.rackU, draft.rackH, draft.rackUnits, draft.mac?.trim()?.ifEmpty { null },
                     sshCredentialId = draft.sshCredentialId,
+                    snmpCommunity = draft.snmpCommunity,
                 ),
             ).toDomain()
         }
