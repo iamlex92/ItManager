@@ -115,6 +115,32 @@ class Principal:
 
 class Directory(Protocol):
     def find(self, sam: str, groups_too: bool = False) -> Principal | None: ...
+    def computer_exists(self, host: str) -> bool:
+        """A computer account with this name or DNS name: the server sends the domain login only to those."""
+        esc = self._ldap3.utils.conv.escape_filter_chars(host)
+        short = self._ldap3.utils.conv.escape_filter_chars(host.split(".")[0])
+        flt = f"(&(objectCategory=computer)(|(dNSHostName={esc})(name={short})))"
+        return bool(self._search(self.base_dn, flt, ["name"]))
+
+    def windows_computers(self, limit: int = 5000) -> list[str]:
+        """Every Windows computer in the domain, by DNS name where it has one (as the script's ADSI search)."""
+        flt = "(&(objectCategory=computer)(operatingSystem=*Windows*))"
+        out: list[str] = []
+        for row in self.conn.extend.standard.paged_search(
+            self.base_dn, flt, attributes=["name", "dNSHostName"], paged_size=500, generator=True
+        ):
+            if row.get("type") != "searchResEntry":
+                continue
+            attrs = row.get("attributes", {})
+            name = attrs.get("dNSHostName") or attrs.get("name")
+            if isinstance(name, list):
+                name = name[0] if name else None
+            if name:
+                out.append(str(name))
+            if len(out) >= limit:
+                break
+        return out
+
     def token_sids(self, dn: str) -> set[str]: ...
     def modify(self, dn: str, changes: dict[str, Any]) -> None: ...
 

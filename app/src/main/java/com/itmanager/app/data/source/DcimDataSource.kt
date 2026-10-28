@@ -2,6 +2,11 @@ package com.itmanager.app.data.source
 
 import com.itmanager.app.data.model.Alert
 import com.itmanager.app.data.model.Annotation
+import com.itmanager.app.data.model.PcSweepHit
+import com.itmanager.app.data.model.PcStatus
+import com.itmanager.app.data.model.PcResult
+import com.itmanager.app.data.model.PcKeyJob
+import com.itmanager.app.data.model.PcAction
 import com.itmanager.app.data.model.MapPoint
 import com.itmanager.app.data.model.AuditEntry
 import com.itmanager.app.data.model.AuditKind
@@ -165,7 +170,13 @@ interface DcimDataSource {
     suspend fun bulkUpdateDevices(ids: List<String>, change: DeviceBulkChange): Int
     suspend fun bulkDeleteDevices(ids: List<String>): Int
     /** A cable between two devices; the server picks or adds free ports on each. */
-    suspend fun linkDevices(deviceAId: String, deviceBId: String, cableType: String): Connection
+    suspend fun linkDevices(
+        deviceAId: String,
+        deviceBId: String,
+        cableType: String,
+        portAId: String? = null,
+        portBId: String? = null,
+    ): Connection
     suspend fun deleteConnection(id: String)
     /** The cable's colour on the map; null gives the automatic colour back. */
     suspend fun recolorConnection(id: String, colorArgb: Long?): Connection
@@ -210,4 +221,12 @@ interface DcimDataSource {
 
     /** Live port and device status for one switch, or for every device with [com.itmanager.app.data.model.ALL_DEVICES]. */
     fun live(deviceId: String): Flow<LiveEvent>
+
+    // Domain computers: the admin script's tools, run by the server over WinRM.
+    suspend fun pcStatus(): PcStatus
+    suspend fun pcSweep(prefix: String): List<PcSweepHit>
+    suspend fun pcAction(host: String, action: PcAction, arg: String?, authMethod: AuthMethod): PcResult
+    suspend fun pcKeysStart(source: String, prefix: String?): PcKeyJob
+    suspend fun pcKeys(id: String): PcKeyJob
+    suspend fun pcKeysCsv(id: String): ByteArray
 }

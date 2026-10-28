@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.ManageSearch
+import androidx.compose.material.icons.outlined.Computer
 import androidx.compose.material.icons.outlined.Construction
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Inventory2
@@ -68,6 +69,7 @@ enum class MoreItem(val title: String, val subtitle: String, val icon: ImageVect
     PRINTERS("МФУ и расходники", "Тонер, барабаны, счётчики страниц", Icons.Outlined.Print),
     SCANNER("Сканер сети", "Найти устройства в подсетях и добавить в учёт", Icons.Outlined.TravelExplore),
     TOOLS("Сетевые утилиты", "Ping, трассировка, порты, SNMP, iperf3, Wake-on-LAN", Icons.Outlined.Construction),
+    PCS("Компьютеры домена", "Сведения и ключи, диски, процессы, очистка, перезагрузка", Icons.Outlined.Computer),
     RUNBOOKS("Сценарии", "Сброс пароля AD, права на папки, резервные копии", Icons.Outlined.Terminal),
     AUDIT("Журнал", "Кто, когда и что запускал и менял", Icons.AutoMirrored.Outlined.ManageSearch),
     SETTINGS("Сервер и безопасность", "Адрес сервера, ключ, вход по биометрии", Icons.Outlined.Settings),
@@ -76,7 +78,7 @@ enum class MoreItem(val title: String, val subtitle: String, val icon: ImageVect
 
 private val GROUPS = listOf(
     "Справочники" to listOf(MoreItem.VLANS, MoreItem.IPAM, MoreItem.TEMPLATES, MoreItem.PERIPHERALS, MoreItem.PRINTERS),
-    "Инструменты" to listOf(MoreItem.SCANNER, MoreItem.TOOLS, MoreItem.RUNBOOKS, MoreItem.AUDIT),
+    "Инструменты" to listOf(MoreItem.SCANNER, MoreItem.TOOLS, MoreItem.PCS, MoreItem.RUNBOOKS, MoreItem.AUDIT),
     "Система" to listOf(MoreItem.SETTINGS, MoreItem.CREDENTIALS),
 )
 

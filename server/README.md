@@ -27,7 +27,8 @@ The only switches this will ever see are production ones, so:
   Critical runbooks need `"confirm": true`, and every run is audited.
 - **Monitoring is read-only.** `MONITOR_MODE=real` sends only SNMP GET /
   GETNEXT to printers and one ICMP echo per device per round; the trap
-  receiver only listens. `MONITOR_MODE=emulator` (default) sends nothing.
+  receiver only listens. `MONITOR_MODE=emulator` (the code default, used by tests) sends nothing and
+  makes the figures up; the installers' config sets `MONITOR_MODE=real`.
 - **Network discovery is read-only and manual.** A scan starts only from an
   explicit request with explicit private ranges (at most a /22 each, 2048
   addresses in total). It sends ICMP echo, TCP connects to common ports, reads

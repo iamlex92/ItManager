@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="/static/admin/admin.css?v={{version}}">
 <script src="/static/admin/admin.js?v={{version}}" defer></script>
 <script src="/static/admin/admin-more.js?v={{version}}" defer></script>
+<script src="/static/admin/admin-pcs.js?v={{version}}" defer></script>
 </head>
 <body>
 <div id="login" class="login" hidden>
@@ -41,6 +42,7 @@
           <button data-tab="printers">МФУ и расходники</button>
           <div class="pop-group">Инструменты</div>
           <button data-tab="scan">Сканер сети</button>
+          <button data-tab="pcs">Компьютеры домена</button>
           <button data-tab="runbooks">Сценарии</button>
           <button data-tab="scripts">Свои скрипты</button>
           <button data-tab="audit">Журнал</button>
@@ -244,6 +246,9 @@
 
     <section id="tab-printers" class="tab" hidden>
       <div class="toolbar"><div class="spacer"></div><button id="printer-reload">Обновить</button></div>
+      <p id="printer-emulated" class="error-box" hidden>Сервер не опрашивает МФУ: в его настройках <code>MONITOR_MODE=emulator</code>,
+        и уровни тонера и счётчики страниц здесь ненастоящие. Поставьте <code>MONITOR_MODE=real</code> в <code>netadmin.env</code>
+        и перезапустите службу NetAdmin.</p>
       <div id="printer-cards" class="cards"></div>
     </section>
 
@@ -304,6 +309,56 @@
       </div>
     </section>
 
+    <section id="tab-pcs" class="tab" hidden>
+      <div class="toolbar">
+        <form id="pc-open-form" class="row">
+          <input id="pc-host" placeholder="Имя ПК или IP-адрес" autocomplete="off">
+          <button type="submit" class="primary">Открыть</button>
+        </form>
+        <form id="pc-sweep-form" class="row">
+          <input id="pc-prefix" placeholder="Подсеть, например 192.168.82" autocomplete="off">
+          <button type="submit">Просканировать</button>
+        </form>
+        <div class="spacer"></div>
+        <span id="pc-mode" class="badge"></span>
+      </div>
+      <div class="columns">
+        <div class="card narrow">
+          <h2>Найденные компьютеры</h2>
+          <p id="pc-sweep-note" class="muted small">Просканируйте подсеть: сервер пингует адреса и спрашивает их имена в DNS. Учётная запись при этом никуда не отправляется.</p>
+          <ul id="pc-sweep-list" class="list"></ul>
+          <h2 style="margin-top:12px">Инвентаризация ключей</h2>
+          <p class="muted small">Windows (BIOS и реестр), MS Office, файлы лицензий 1С со всех включённых компьютеров.</p>
+          <div class="row wrap">
+            <label>Откуда<select id="keys-source"><option value="ad">Все ПК из Active Directory</option><option value="subnet">Подсеть</option></select></label>
+            <label id="keys-prefix-label" hidden>Подсеть<input id="keys-prefix" placeholder="192.168.82"></label>
+            <button id="keys-start" class="primary">Собрать</button>
+          </div>
+          <p id="keys-status" class="muted small"></p>
+        </div>
+        <div class="card grow" id="pc-panel">
+          <div class="row"><h2 id="pc-title">Компьютер не выбран</h2><div class="spacer"></div><span id="pc-user" class="muted"></span></div>
+          <div id="pc-actions" class="row wrap" hidden>
+            <button data-pc="info" class="primary">Сведения и лицензии</button>
+            <button data-pc="disks">Свободное место</button>
+            <button data-pc="folders">Крупные папки на C:</button>
+            <button data-pc="processes">Процессы</button>
+            <button data-pc="gpupdate">Обновить групповые политики</button>
+            <button data-pc="cleanup">Очистить Temp и кэш обновлений</button>
+            <button data-pc="reboot" class="danger">Перезагрузить</button>
+          </div>
+          <div id="pc-result" class="stack"></div>
+          <form id="pc-console" class="stack" hidden>
+            <label>Консоль PowerShell <span class="muted small">(каждая команда выполняется отдельно, переменные между командами не сохраняются)</span>
+              <div class="row"><input id="pc-command" class="mono" placeholder="Get-NetIPConfiguration" autocomplete="off"><button type="submit">Выполнить</button></div>
+            </label>
+            <pre id="pc-console-out" class="output" hidden></pre>
+          </form>
+          <div id="keys-result" class="stack" hidden></div>
+        </div>
+      </div>
+    </section>
+
     <section id="tab-templates" class="tab" hidden>
       <div class="toolbar">
         <span class="muted small">Шаблон хранит тип, модель и порты типового устройства: из него устройство создаётся в один щелчок, в том числе на карте.</span>
@@ -341,6 +396,9 @@
         <button id="topo-fit">Показать всё</button>
         <button id="topo-reload">Обновить</button>
         <span id="topo-stats" class="muted small"></span>
+        <div class="spacer"></div>
+        <button id="topo-new-device">+ Устройство</button>
+        <button id="topo-new-link" class="primary">+ Связь</button>
       </div>
       <div class="map-wrap">
         <canvas id="topo"></canvas>
@@ -447,6 +505,7 @@
       <button type="button" id="card-map">На карте</button>
       <button type="button" id="card-ping" title="Проверить доступность с сервера">Ping</button>
       <button type="button" id="card-plate" title="Схема лицевой панели (SVG) и места портов">Схема панели</button>
+      <button type="button" id="card-pc" title="Диски, процессы, лицензии, очистка, перезагрузка по WinRM" hidden>Управление ПК</button>
     </div>
     <div class="seg" id="card-tabs">
       <button data-part="overview" class="active">Обзор</button>
@@ -459,6 +518,28 @@
     <div id="card-peripherals" class="card-body" hidden></div>
     <div id="card-config" class="card-body" hidden></div>
   </div>
+</dialog>
+
+<dialog id="link-dialog">
+  <form id="link-form" method="dialog" class="dialog" novalidate>
+    <div class="dialog-head">
+      <h2>Новая связь</h2>
+      <div class="spacer"></div>
+      <button type="button" id="link-cancel">Отмена</button>
+      <button type="submit" class="primary">Соединить</button>
+    </div>
+    <div class="row">
+      <label class="grow">Откуда<select id="link-a"></select></label>
+      <label class="grow">Порт<select id="link-a-port"></select></label>
+    </div>
+    <div class="row">
+      <label class="grow">Куда<select id="link-b"></select><small class="field-error" id="link-b-error" hidden></small></label>
+      <label class="grow">Порт<select id="link-b-port"></select></label>
+    </div>
+    <label>Кабель<select id="link-cable"><option value="Cat6">Медь Cat6</option><option value="OM3">Оптика OM3</option></select></label>
+    <p class="muted small">Кабель запишется в учёт и появится на карте и в сети. «Любой свободный» порт сервер выберет сам. На оборудование ничего не отправляется.</p>
+    <p id="link-error" class="error-box" hidden></p>
+  </form>
 </dialog>
 
 <dialog id="mark-dialog">

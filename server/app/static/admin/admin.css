@@ -215,3 +215,4 @@ dialog.card-dialog { width: min(980px, calc(100% - 32px)); height: min(760px, ca
 #vlan-form label { align-self: flex-start; }
 .kv > * { min-width: 0; }
 .kv select { width: 100%; }
+.badge.warn { color: var(--danger); border-color: var(--danger); }

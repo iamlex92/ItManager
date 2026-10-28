@@ -21,6 +21,9 @@ import com.itmanager.app.core.network.FaceplatePortsBody
 import com.itmanager.app.core.network.ImportBody
 import com.itmanager.app.core.network.attachBody
 import com.itmanager.app.core.network.LinkBody
+import com.itmanager.app.core.network.PcSweepBody
+import com.itmanager.app.core.network.PcKeysBody
+import com.itmanager.app.core.network.PcActionBody
 import com.itmanager.app.core.network.RunbookRunBody
 import com.itmanager.app.core.network.ScanBody
 import com.itmanager.app.core.network.toBody
@@ -31,6 +34,11 @@ import com.itmanager.app.core.network.toDomain
 import com.itmanager.app.core.settings.ServerSettings
 import com.itmanager.app.data.model.Alert
 import com.itmanager.app.data.model.Annotation
+import com.itmanager.app.data.model.PcSweepHit
+import com.itmanager.app.data.model.PcStatus
+import com.itmanager.app.data.model.PcResult
+import com.itmanager.app.data.model.PcKeyJob
+import com.itmanager.app.data.model.PcAction
 import com.itmanager.app.data.model.MapPoint
 import com.itmanager.app.data.model.AuditEntry
 import com.itmanager.app.data.model.AuditKind
@@ -329,8 +337,14 @@ class RemoteDataSource(
         ids.size
     }
 
-    override suspend fun linkDevices(deviceAId: String, deviceBId: String, cableType: String): Connection =
-        api.linkDevices(settings, LinkBody(deviceAId, deviceBId, cableType)).toDomain()
+    override suspend fun linkDevices(
+        deviceAId: String,
+        deviceBId: String,
+        cableType: String,
+        portAId: String?,
+        portBId: String?,
+    ): Connection =
+        api.linkDevices(settings, LinkBody(deviceAId, deviceBId, cableType, portAId, portBId)).toDomain()
             ?: throw UserFacingException("Сервер не вернул кабель")
 
     override suspend fun deleteConnection(id: String) = api.deleteConnection(settings, id)
@@ -415,6 +429,30 @@ class RemoteDataSource(
     override suspend fun deleteFaceplate(deviceId: String) = api.deleteFaceplate(settings, deviceId)
 
     override fun live(deviceId: String): Flow<LiveEvent> = liveSocket.events(settings, deviceId)
+
+    override suspend fun pcStatus(): PcStatus = api.pcStatus(settings).toDomain()
+
+    override suspend fun pcSweep(prefix: String): List<PcSweepHit> = api.pcSweep(settings, PcSweepBody(prefix)).map { it.toDomain() }
+
+    override suspend fun pcAction(host: String, action: PcAction, arg: String?, authMethod: AuthMethod): PcResult =
+        api.pcAction(
+            settings,
+            host,
+            action.wire,
+            PcActionBody(
+                arg = arg,
+                confirm = action.confirm && authMethod != AuthMethod.NOT_REQUIRED,
+                authMethod = authMethod.wire,
+                operator = Build.MODEL,
+            ),
+        ).toDomain(action)
+
+    override suspend fun pcKeysStart(source: String, prefix: String?): PcKeyJob =
+        api.pcKeysStart(settings, PcKeysBody(source, prefix, operator = Build.MODEL)).toDomain()
+
+    override suspend fun pcKeys(id: String): PcKeyJob = api.pcKeys(settings, id).toDomain()
+
+    override suspend fun pcKeysCsv(id: String): ByteArray = api.download(settings, "pcs/keys/$id/csv")
 
     private companion object {
         const val PLAN_MARGIN = 200f

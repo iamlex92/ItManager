@@ -328,6 +328,8 @@ private fun ConnectionCheckResult(check: ConnectionCheck) {
                         h.version?.let { "Версия сервера $it" },
                         mode,
                         secrets,
+                        "опрос устройств выключен (MONITOR_MODE=emulator): уровни тонера, страницы и ping ненастоящие"
+                            .takeIf { h.monitorMode == "emulator" },
                         "уведомления в Telegram включены".takeIf { h.telegramAlerts == true },
                         when {
                             h.runbookMode != "real" -> null

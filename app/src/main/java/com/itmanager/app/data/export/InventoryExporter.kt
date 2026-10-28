@@ -67,13 +67,20 @@ class InventoryExporter @Inject constructor(
 
     private suspend fun exportFromServer(format: ExportFormat, path: String): ExportedFile {
         val bytes = api.download(settings.current(), path)
-        return withContext(Dispatchers.IO) {
-            val dir = File(context.cacheDir, "exports").apply { mkdirs() }
-            dir.listFiles()?.forEach { it.delete() }
-            val name = "itmanager-${format.name.lowercase()}-${fileStamp.format(Instant.now())}.${format.extension}"
-            val file = File(dir, name).apply { writeBytes(bytes) }
-            ExportedFile(FileProvider.getUriForFile(context, "${context.packageName}.exports", file), format.mime, name)
-        }
+        return save("itmanager-${format.name.lowercase()}-${fileStamp.format(Instant.now())}.${format.extension}", format.mime, bytes)
+    }
+
+    /** The domain computers' licence keys (Windows, Office, 1C) as the server built them: CSV for Excel. */
+    suspend fun keysInventory(jobId: String): Result<ExportedFile> = runCatching {
+        val bytes = repository.pcKeysCsv(jobId).getOrThrow()
+        save("Keys_Inventory_${fileStamp.format(Instant.now())}.csv", "text/csv", bytes)
+    }
+
+    private suspend fun save(name: String, mime: String, bytes: ByteArray): ExportedFile = withContext(Dispatchers.IO) {
+        val dir = File(context.cacheDir, "exports").apply { mkdirs() }
+        dir.listFiles()?.forEach { it.delete() }
+        val file = File(dir, name).apply { writeBytes(bytes) }
+        ExportedFile(FileProvider.getUriForFile(context, "${context.packageName}.exports", file), mime, name)
     }
 
     private suspend fun collect(): InventoryReport = coroutineScope {

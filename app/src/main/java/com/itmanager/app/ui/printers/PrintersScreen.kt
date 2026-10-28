@@ -70,6 +70,7 @@ fun PrintersScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val polling by viewModel.polling.collectAsStateWithLifecycle()
+    val emulated by viewModel.emulated.collectAsStateWithLifecycle()
     val printers = (state as? UiState.Content)?.data
     val lowCount = printers?.count { it.hasLowConsumable } ?: 0
     val silentCount = printers?.count { !it.isOnline } ?: 0
@@ -101,6 +102,21 @@ fun PrintersScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
+                    if (emulated) {
+                        item {
+                            Text(
+                                "Сервер не опрашивает МФУ: в его настройках MONITOR_MODE=emulator, и уровни тонера и " +
+                                    "счётчики страниц здесь ненастоящие. Поставьте MONITOR_MODE=real в netadmin.env и " +
+                                    "перезапустите службу NetAdmin.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(14.dp))
+                                    .padding(14.dp),
+                            )
+                        }
+                    }
                     if (s.data.isEmpty()) item { EmptyView("МФУ в учёте нет. Добавьте их на карте с типом «МФУ» и IP-адресом: сервер начнёт опрашивать расходники.") }
                     items(s.data, key = { it.id }) { printer ->
                         PrinterCard(

@@ -84,6 +84,7 @@ import com.itmanager.app.ui.printers.PrintersScreen
 import com.itmanager.app.ui.scanner.ScannerScreen
 import com.itmanager.app.ui.security.AppLockOverlay
 import com.itmanager.app.ui.settings.SettingsScreen
+import com.itmanager.app.ui.pcs.PcsScreen
 import com.itmanager.app.ui.tools.ToolsHubScreen
 import com.itmanager.app.ui.switchdetail.SwitchScreen
 import com.itmanager.app.ui.theme.Motion
@@ -330,6 +331,7 @@ private fun AppNavHost(
                         MoreItem.PRINTERS -> PrintersRoute
                         MoreItem.SCANNER -> ScannerRoute
                         MoreItem.TOOLS -> ToolsRoute
+                        MoreItem.PCS -> PcsRoute()
                         MoreItem.RUNBOOKS -> AutomationRoute
                         MoreItem.AUDIT -> AuditRoute
                         MoreItem.SETTINGS -> SettingsRoute
@@ -356,6 +358,7 @@ private fun AppNavHost(
                 onOpenDiff = { id, name -> navController.navigate(ConfigDiffRoute(id, name)) },
                 onOpenImport = { id, name -> navController.navigate(ConfigImportRoute(id, name)) },
                 onOpenTool = { kind, host -> navController.navigate(ToolRoute(kind, host)) },
+                onOpenPc = { host -> navController.navigate(PcsRoute(host)) },
                 onOpenVlans = openVlans,
             )
         }
@@ -502,6 +505,14 @@ private fun AppNavHost(
         ) { entry ->
             val route = entry.toRoute<ToolRoute>()
             com.itmanager.app.ui.tools.ToolRoute(kind = route.kind, host = route.host, onBack = back)
+        }
+        composable<PcsRoute>(
+            enterTransition = { slideInHorizontally(push) { it } },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { slideOutHorizontally(push) { it } },
+        ) { entry ->
+            PcsScreen(onBack = back, initialHost = entry.toRoute<PcsRoute>().host)
         }
         composable<CredentialsRoute>(
             enterTransition = { slideInHorizontally(push) { it } },

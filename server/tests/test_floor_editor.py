@@ -360,3 +360,33 @@ def test_annotations_on_the_map(client):
     assert client.patch(f"/api/v1/floors/{floor['id']}", json={"annotations": [odd]}).status_code == 422
     # Zones and drawings stay when only the marks change
     assert client.patch(f"/api/v1/floors/{floor['id']}", json={"annotations": []}).json()["annotations"] == []
+
+
+def test_link_to_a_chosen_switch_port(client):
+    switch = find(client, "SW-ACC-03")
+    ports = client.get(f"/api/v1/devices/{switch['id']}/ports").json()
+    free = next(p for p in reversed(ports) if not p["connected_device_name"] and not p["is_uplink"])
+    busy = next(p for p in ports if p["connected_device_name"])
+    cam = client.post("/api/v1/devices", json={"name": "CAM-PORT", "type": "CAMERA", "x": 1, "y": 1}).json()
+    other = find(client, "SW-ACC-01")
+    other_port = client.get(f"/api/v1/devices/{other['id']}/ports").json()[0]
+
+    wrong = client.post(
+        "/api/v1/connections/link",
+        json={"device_a_id": switch["id"], "device_b_id": cam["id"], "port_a_id": other_port["id"]},
+    )
+    assert wrong.status_code == 422 and wrong.json()["detail"]["code"] == "wrong_port"
+    taken = client.post(
+        "/api/v1/connections/link",
+        json={"device_a_id": switch["id"], "device_b_id": cam["id"], "port_a_id": busy["id"]},
+    )
+    assert taken.status_code == 409 and taken.json()["detail"]["code"] == "port_busy"
+
+    r = client.post(
+        "/api/v1/connections/link",
+        json={"device_a_id": switch["id"], "device_b_id": cam["id"], "port_a_id": free["id"]},
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["port_a_id"] == free["id"]
+    after = {p["id"]: p for p in client.get(f"/api/v1/devices/{switch['id']}/ports").json()}
+    assert after[free["id"]]["connected_device_name"] == "CAM-PORT"

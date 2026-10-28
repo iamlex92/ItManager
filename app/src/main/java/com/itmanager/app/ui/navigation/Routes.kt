@@ -32,6 +32,8 @@ import kotlinx.serialization.Serializable
 @Serializable data object IpamRoute
 @Serializable data object TemplatesRoute
 @Serializable data class ToolRoute(val kind: String, val host: String = "")
+/** Domain computers; [host] set: that computer opened at once (from a device card). */
+@Serializable data class PcsRoute(val host: String = "")
 @Serializable data object MoreRoute
 @Serializable data class DeviceRoute(val deviceId: String)
 @Serializable data class SwitchRoute(val deviceId: String)

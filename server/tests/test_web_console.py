@@ -29,7 +29,9 @@ def test_console_page_needs_no_token_but_locks_itself_down(seeded):
         # The console knows every device category the app has, and draws racks and room zones.
         assert '"RACK"' in js.text and "zones" in js.text and "rack_units" in js.text
         assert "admin-more.js" in r.text and c.get("/static/admin/admin-more.js").status_code == 200
+        assert c.get("/static/admin/admin-pcs.js").status_code == 200
         tabs = ("vlans", "devices", "map", "alerts", "audit", "runbooks", "printers", "creds", "topology", "templates")
+        tabs += ("pcs",)
         for tab in tabs:
             assert f'data-tab="{tab}"' in r.text
         # As in the app: one device card from everywhere, view and edit modes, layers and marks on the map.

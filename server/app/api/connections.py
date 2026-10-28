@@ -80,9 +80,19 @@ async def link_devices(body: LinkCreate, session: SessionDep):
         raise conflict("already_linked", f"{devices[0].name} и {devices[1].name} уже соединены")
 
     ends: list[Port] = []
-    for dev in devices:
+    for dev, chosen in zip(devices, (body.port_a_id, body.port_b_id), strict=True):
         ports = sorted((p for p in graph.ports.values() if p.device_id == dev.id), key=lambda p: p.port_number)
         limit = _cable_limit(dev.device_type)
+        if chosen is not None:
+            port = graph.ports.get(chosen)
+            if port is None or port.device_id != dev.id:
+                raise HTTPException(
+                    422, detail={"code": "wrong_port", "message": f"этот порт не принадлежит {dev.name}"}
+                )
+            if len(graph.adj.get(port.id, [])) >= limit:
+                raise conflict("port_busy", f"порт {port.port_name} у {dev.name} уже занят")
+            ends.append(port)
+            continue
         free = next((p for p in ports if not p.is_uplink and len(graph.adj.get(p.id, [])) < limit), None)
         free = free or next((p for p in ports if len(graph.adj.get(p.id, [])) < limit), None)
         if free is None:

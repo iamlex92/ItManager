@@ -136,6 +136,7 @@
   async function loadPrinters() {
     const printers = await api("GET", "printers");
     const box = $("printer-cards");
+    $("printer-emulated").hidden = !window.NetAdmin.monitorEmulated;
     if (!printers.length) { box.replaceChildren(el("p", { className: "muted", textContent: "МФУ в учёте нет. Добавьте устройство категории «МФУ» с IP-адресом: сервер начнёт опрашивать расходники." })); return; }
     box.replaceChildren(...printers.map((p) => el("div", { className: "card" },
       el("strong", { textContent: p.name }),

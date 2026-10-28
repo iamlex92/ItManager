@@ -9,6 +9,7 @@ from ..runbooks.catalog import BY_ID
 from ..schemas import AuditOut
 from .credentials import ACTIONS as SECURITY_ACTIONS
 from .deps import SessionDep
+from .pcs import AUDIT_PREFIX as PC_PREFIX
 from .runbooks import AUDIT_PREFIX
 from .vlans import ACTIONS as VLAN_ACTIONS
 
@@ -28,8 +29,25 @@ NETWORK_ACTIONS = {
 }
 
 
+PC_ACTIONS = {
+    "info": "ПК: системная информация",
+    "disks": "ПК: свободное место",
+    "folders": "ПК: крупные папки на C:",
+    "processes": "ПК: процессы",
+    "cleanup": "ПК: очистка Temp и кэша обновлений",
+    "gpupdate": "ПК: обновление групповых политик",
+    "reboot": "ПК: перезагрузка",
+    "kill": "ПК: завершение процесса",
+    "command": "ПК: команда в консоли",
+    "keys": "Инвентаризация ключей",
+}
+
+
 def audit_out(row: ScriptAuditLog) -> AuditOut:
-    if row.script_name.startswith(AUDIT_PREFIX):
+    if row.script_name.startswith(PC_PREFIX):
+        action = row.script_name.removeprefix(PC_PREFIX)
+        kind, title = "runbook", PC_ACTIONS.get(action, row.script_name)
+    elif row.script_name.startswith(AUDIT_PREFIX):
         rb = BY_ID.get(row.script_name.removeprefix(AUDIT_PREFIX))
         kind, title = "runbook", rb.title if rb else row.script_name
     elif row.script_name in NETWORK_ACTIONS:
@@ -63,7 +81,9 @@ async def list_audit(
     """Every runbook run, switch write attempt (including blocked ones) and network scan, newest first."""
     stmt = select(ScriptAuditLog).order_by(ScriptAuditLog.executed_at.desc(), ScriptAuditLog.id)
     if kind == "runbook":
-        stmt = stmt.where(ScriptAuditLog.script_name.startswith(AUDIT_PREFIX))
+        stmt = stmt.where(
+            ScriptAuditLog.script_name.startswith(AUDIT_PREFIX) | ScriptAuditLog.script_name.startswith(PC_PREFIX)
+        )
     elif kind == "network":
         stmt = stmt.where(ScriptAuditLog.script_name.in_(NETWORK_ACTIONS))
     elif kind == "security":
@@ -71,6 +91,7 @@ async def list_audit(
     elif kind == "switch":
         stmt = stmt.where(
             ~ScriptAuditLog.script_name.startswith(AUDIT_PREFIX),
+            ~ScriptAuditLog.script_name.startswith(PC_PREFIX),
             ScriptAuditLog.script_name.not_in([*NETWORK_ACTIONS, *SECURITY_ACTIONS]),
         )
     rows = (await session.scalars(stmt.limit(limit).offset(offset))).all()

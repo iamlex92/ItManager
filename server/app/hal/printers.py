@@ -11,10 +11,14 @@ from typing import Any
 SUPPLIES = "1.3.6.1.2.1.43.11.1.1"
 COL_TYPE = 5
 COL_DESCRIPTION = 6
+COL_UNIT = 7
 COL_MAX_CAPACITY = 8
 COL_LEVEL = 9
-# prtMarkerLifeCount for marker 1 of device 1: total pages printed
-LIFE_COUNT = "1.3.6.1.2.1.43.10.2.1.4.1.1"
+# prtMarkerSuppliesSupplyUnit: percent. Some printers give the level in percent with no known capacity.
+UNIT_PERCENT = 19
+# prtMarkerLifeCount: pages printed, per marker of each printer (<hrDeviceIndex>.<markerIndex>). The first
+# marker is not always 1.1, so the column is walked and its first row taken.
+LIFE_COUNT = "1.3.6.1.2.1.43.10.2.1.4"
 
 # prtMarkerSuppliesType values (RFC 3805, PrtMarkerSuppliesTypeTC)
 _KIND_BY_TYPE = {3: "TONER", 21: "TONER", 4: "WASTE", 9: "DRUM"}
@@ -23,6 +27,13 @@ _COLORS = {
     "cyan": "#00aeef",
     "magenta": "#ec008c",
     "yellow": "#ffd400",
+}
+# The same colours as Russian printers name them.
+_COLOR_WORDS = {
+    "#000000": ("black", "черн", "чёрн"),
+    "#00aeef": ("cyan", "голуб", "циан"),
+    "#ec008c": ("magenta", "пурпур", "маджент"),
+    "#ffd400": ("yellow", "желт", "жёлт"),
 }
 _KIND_COLORS = {"WASTE": "#7f8c8d", "DRUM": "#95a5a6", "OTHER": "#bdc3c7"}
 
@@ -64,11 +75,34 @@ class PrinterDriver(ABC):
 def color_for(description: str, kind: str) -> str:
     if kind == "TONER":
         low = description.lower()
-        for word, hexv in _COLORS.items():
-            if word in low:
+        for hexv, words in _COLOR_WORDS.items():
+            if any(w in low for w in words):
                 return hexv
         return _COLORS["black"]
     return _KIND_COLORS.get(kind, _KIND_COLORS["OTHER"])
+
+
+def _int(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def snmp_value(value: Any) -> int | str:
+    """A varbind value as Python: numbers as int, strings decoded (Russian printers often send CP1251)."""
+    if hasattr(value, "asOctets"):
+        raw = bytes(value.asOctets())
+        for codec in ("utf-8", "cp1251"):
+            try:
+                return raw.decode(codec).strip("\x00 ").strip()
+            except UnicodeDecodeError:
+                continue
+        return raw.decode("latin-1").strip()
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return value.prettyPrint()
 
 
 def parse_supplies(rows: dict[str, Any]) -> tuple[Supply, ...]:
@@ -85,12 +119,19 @@ def parse_supplies(rows: dict[str, Any]) -> tuple[Supply, ...]:
         cols = by_index[index]
         desc = str(cols.get(COL_DESCRIPTION, f"Supply {index}")).strip()
         kind = _KIND_BY_TYPE.get(int(cols.get(COL_TYPE, 1)), "OTHER")
-        max_cap = int(cols.get(COL_MAX_CAPACITY, -2))
-        level = int(cols.get(COL_LEVEL, -2))
+        max_cap = _int(cols.get(COL_MAX_CAPACITY), -2)
+        level = _int(cols.get(COL_LEVEL), -2)
+        unit = _int(cols.get(COL_UNIT), 0)
         # -1 other, -2 unknown, -3 "some remaining": no usable percentage.
-        if max_cap <= 0 or level < 0:
+        if level < 0:
             continue
-        pct = max(0, min(100, round(level * 100 / max_cap)))
+        if max_cap > 0:
+            pct = round(level * 100 / max_cap)
+        elif unit == UNIT_PERCENT and level <= 100:
+            pct = level
+        else:
+            continue
+        pct = max(0, min(100, pct))
         out.append(Supply(name=desc, color_hex=color_for(desc, kind), kind=kind, level_percent=pct))
     return tuple(out)
 
@@ -168,29 +209,27 @@ class SnmpPrinters(PrinterDriver):
         transport = await h.UdpTransportTarget.create(
             (target.ip, 161), timeout=self._s.snmp_timeout_seconds, retries=self._s.snmp_retries
         )
+        rows = await self._walk(h, auth, transport, target, SUPPLIES)
+        try:
+            counters = await self._walk(h, auth, transport, target, LIFE_COUNT)
+        except PrinterUnreachable:
+            counters = {}  # the supplies came back: a printer without a page counter is still polled
+        total = next((v for v in counters.values() if isinstance(v, int) and v >= 0), None)
+        return PrinterSnapshot(total_pages=total, supplies=parse_supplies(rows))
+
+    async def _walk(self, h, auth, transport, target: PrinterTarget, root: str) -> dict[str, Any]:
+        """GETNEXT through one subtree: full OID -> value."""
         rows: dict[str, Any] = {}
         async for err_ind, err_stat, _idx, var_binds in h.walk_cmd(
             self._engine,
             auth,
             transport,
             h.ContextData(),
-            h.ObjectType(h.ObjectIdentity(SUPPLIES)),
+            h.ObjectType(h.ObjectIdentity(root)),
             lexicographicMode=False,
         ):
             if err_ind or err_stat:
                 raise PrinterUnreachable(f"{target.name}: {err_ind or err_stat.prettyPrint()}")
             for name, value in var_binds:
-                try:
-                    rows[str(name)] = int(value)
-                except (TypeError, ValueError):
-                    rows[str(name)] = value.prettyPrint()
-        err_ind, err_stat, _idx, var_binds = await h.get_cmd(
-            self._engine, auth, transport, h.ContextData(), h.ObjectType(h.ObjectIdentity(LIFE_COUNT))
-        )
-        total = None
-        if not err_ind and not err_stat and var_binds:
-            try:
-                total = int(var_binds[0][1])
-            except (TypeError, ValueError):
-                total = None
-        return PrinterSnapshot(total_pages=total, supplies=parse_supplies(rows))
+                rows[str(name)] = snmp_value(value)
+        return rows
