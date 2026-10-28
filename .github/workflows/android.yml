@@ -1,6 +1,8 @@
 name: Android
 
 # PRs: tests + debug build (Linux only). Publishing test/release APKs: only on a v* tag or by hand.
+# A v* tag also puts the signed APK on that version's release (see .github/scripts/release.sh); a tag
+# without the release key fails, so a release never ships unsigned.
 on:
   pull_request:
     paths: ["app/**", "gradle/**", "*.gradle*", "gradle.properties", "gradlew*", ".github/workflows/android.yml"]
@@ -75,6 +77,10 @@ jobs:
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
           if [ -z "$RELEASE_KEYSTORE_BASE64" ]; then
+            if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+              echo "::error::Release key secrets are not set: a release needs a signed APK. See README, «Релизная подпись»."
+              exit 1
+            fi
             echo "::notice::Release key secrets are not set: only the test build is published. See README, «Релизная подпись»."
             exit 0
           fi
@@ -90,6 +96,10 @@ jobs:
           else
             gh release create android-release itmanager-release.apk \
               --title "ItManager: рабочая сборка" --notes "$notes" --target "$GITHUB_SHA"
+          fi
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            cp itmanager-release.apk "itmanager-${GITHUB_REF_NAME#v}.apk"
+            .github/scripts/release.sh "itmanager-${GITHUB_REF_NAME#v}.apk"
           fi
 
       - name: Upload test reports

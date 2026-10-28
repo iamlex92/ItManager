@@ -215,6 +215,7 @@ jobs:
     needs: [deb, deb-install, windows]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v5
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -236,3 +237,10 @@ jobs:
             gh release create server-latest dist/* --prerelease \
               --title "NetAdmin Server: установщики" --notes "$notes" --target "$GITHUB_SHA"
           fi
+      # A v* tag: the same installers on that version's release, next to the signed APK.
+      - name: Publish to the version release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: .github/scripts/release.sh dist/*

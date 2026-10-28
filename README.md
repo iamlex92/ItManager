@@ -300,7 +300,19 @@ APK любой ветки и pull request тоже есть в GitHub Actions: �
    `RELEASE_KEYSTORE_BASE64` (содержимое `itmanager-release.b64`), `RELEASE_STORE_PASSWORD`,
    `RELEASE_KEY_ALIAS` (`itmanager`), `RELEASE_KEY_PASSWORD`.
 3. Следующий релиз (тег `v*` или ручной запуск) опубликует `itmanager-release.apk` на странице релиза **ItManager: рабочая сборка**
-   (`android-release`).
+   (`android-release`). Без этих секретов тег `v*` завершается ошибкой: релиз не выходит с неподписанным APK.
+
+#### Выпуск релиза
+
+`android-latest` и `server-latest` — тестовые сборки, они помечены как pre-release и обновляются при каждом запуске.
+Настоящий релиз выходит по тегу версии:
+
+1. Поднять версию в `app/build.gradle.kts` (`versionName`), `server/pyproject.toml` и `server/app/__init__.py`
+   и добавить раздел `## <версия>` в [CHANGELOG.md](CHANGELOG.md).
+2. После слияния в master поставить тег, например `git tag v1.0.0 && git push origin v1.0.0`.
+3. Workflow «Android» и «server agent» создадут релиз **ItManager 1.0.0** (обычный, отмеченный как последний)
+   и положат в него подписанный `itmanager-1.0.0.apk`, `.deb` и `NetAdmin-Server-Setup.exe`, описание берётся из
+   CHANGELOG. Если версия в файлах не совпадает с тегом или раздела в CHANGELOG нет, публикация остановится с ошибкой.
 
 Рабочая сборка ставится отдельным приложением рядом с тестовой (`com.itmanager.app` и `com.itmanager.app.debug`),
 настройки у них раздельные. Ключ терять нельзя: обновить установленную рабочую сборку можно только APK с тем же ключом.
