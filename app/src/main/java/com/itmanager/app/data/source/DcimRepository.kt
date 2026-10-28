@@ -152,8 +152,8 @@ class DcimRepository @Inject constructor(
     suspend fun bulkUpdateDevices(ids: List<String>, change: DeviceBulkChange): Result<Int> =
         edit { bulkUpdateDevices(ids, change) }
     suspend fun bulkDeleteDevices(ids: List<String>): Result<Int> = edit { bulkDeleteDevices(ids) }
-    suspend fun linkDevices(a: String, b: String, cableType: String): Result<Connection> =
-        edit { linkDevices(a, b, cableType) }
+    suspend fun linkDevices(a: String, b: String, cableType: String, portA: String? = null, portB: String? = null): Result<Connection> =
+        edit { linkDevices(a, b, cableType, portA, portB) }
     suspend fun deleteConnection(id: String): Result<Unit> = edit { deleteConnection(id) }
     suspend fun recolorConnection(id: String, colorArgb: Long?): Result<Connection> = edit { recolorConnection(id, colorArgb) }
     suspend fun createPort(deviceId: String, draft: PortDraft): Result<SwitchPort> = edit { createPort(deviceId, draft) }

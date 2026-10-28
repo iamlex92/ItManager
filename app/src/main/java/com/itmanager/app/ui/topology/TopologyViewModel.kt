@@ -6,6 +6,7 @@ import com.itmanager.app.core.network.toUserMessage
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.DeviceType
+import com.itmanager.app.data.model.SwitchPort
 import com.itmanager.app.data.model.Topology
 import com.itmanager.app.data.model.TopologyLink
 import com.itmanager.app.data.model.TopologyLayout
@@ -34,9 +35,12 @@ data class TopologyUiState(
     val busy: Boolean = false,
     /** The device form opened from the topology: the device with its servers to pick a host from. */
     val form: TopologyForm? = null,
+    /** Ports of the devices being cabled in the link dialog, by device id. */
+    val ports: Map<String, List<SwitchPort>> = emptyMap(),
 )
 
-data class TopologyForm(val device: Device, val hosts: List<Device>, val error: String? = null)
+/** [device] null: a new device, put in the middle of the first floor's plan. */
+data class TopologyForm(val device: Device?, val hosts: List<Device>, val error: String? = null)
 
 @HiltViewModel
 class TopologyViewModel @Inject constructor(
@@ -105,9 +109,18 @@ class TopologyViewModel @Inject constructor(
         }
     }
 
-    /** A cable between two devices; the server takes a free port on each side. Inventory only. */
-    fun connect(aId: String, bId: String, cable: String) = busy {
-        repository.linkDevices(aId, bId, cable)
+    /** Ports of [deviceId] for the link dialog: which one the cable goes into. */
+    fun loadPorts(deviceId: String) {
+        viewModelScope.launch {
+            repository.ports(deviceId).onSuccess { list ->
+                _state.update { it.copy(ports = it.ports + (deviceId to list.sortedBy { p -> p.number })) }
+            }
+        }
+    }
+
+    /** A cable between two devices on the chosen ports, or free ones the server picks. Inventory only. */
+    fun connect(aId: String, bId: String, cable: String, portA: String? = null, portB: String? = null) = busy {
+        repository.linkDevices(aId, bId, cable, portA, portB)
             .onSuccess { _messages.tryEmit("Соединено") }
             .onFailure { _messages.tryEmit(it.toUserMessage()) }
     }
@@ -128,11 +141,28 @@ class TopologyViewModel @Inject constructor(
         }
     }
 
+    fun openNew() = busy {
+        val all = repository.devices().getOrElse { _messages.tryEmit(it.toUserMessage()); return@busy }
+        _state.update { it.copy(form = TopologyForm(null, all.filter { d -> d.type == DeviceType.SERVER }.sortedBy { d -> d.name })) }
+    }
+
     fun closeEdit() = _state.update { it.copy(form = null) }
 
     fun saveDevice(draft: DeviceDraft) = busy {
         val form = _state.value.form ?: return@busy
-        repository.updateDevice(form.device.id, draft).fold(
+        val result = if (form.device != null) {
+            repository.updateDevice(form.device.id, draft).map { }
+        } else {
+            // A new device stands in the middle of the first floor; it is moved to its place on the map later.
+            repository.floorMap().mapCatching { map ->
+                val plan = if (map.plan.stored) map.plan else repository.ensureFloor(map.plan).getOrThrow()
+                repository.createDevice(plan.id, draft, plan.widthPx / 2f, plan.heightPx / 2f).getOrThrow()
+            }.onSuccess { d ->
+                _messages.tryEmit("${d.name} добавлено; место на плане можно поправить на карте")
+                _state.update { it.copy(selectedId = d.id) }
+            }.map { }
+        }
+        result.fold(
             onSuccess = { _state.update { it.copy(form = null) } },
             onFailure = { e -> _state.update { s -> s.copy(form = s.form?.copy(error = e.toUserMessage())) } },
         )

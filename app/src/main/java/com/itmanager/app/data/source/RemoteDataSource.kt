@@ -329,8 +329,14 @@ class RemoteDataSource(
         ids.size
     }
 
-    override suspend fun linkDevices(deviceAId: String, deviceBId: String, cableType: String): Connection =
-        api.linkDevices(settings, LinkBody(deviceAId, deviceBId, cableType)).toDomain()
+    override suspend fun linkDevices(
+        deviceAId: String,
+        deviceBId: String,
+        cableType: String,
+        portAId: String?,
+        portBId: String?,
+    ): Connection =
+        api.linkDevices(settings, LinkBody(deviceAId, deviceBId, cableType, portAId, portBId)).toDomain()
             ?: throw UserFacingException("Сервер не вернул кабель")
 
     override suspend fun deleteConnection(id: String) = api.deleteConnection(settings, id)

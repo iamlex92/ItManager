@@ -165,7 +165,13 @@ interface DcimDataSource {
     suspend fun bulkUpdateDevices(ids: List<String>, change: DeviceBulkChange): Int
     suspend fun bulkDeleteDevices(ids: List<String>): Int
     /** A cable between two devices; the server picks or adds free ports on each. */
-    suspend fun linkDevices(deviceAId: String, deviceBId: String, cableType: String): Connection
+    suspend fun linkDevices(
+        deviceAId: String,
+        deviceBId: String,
+        cableType: String,
+        portAId: String? = null,
+        portBId: String? = null,
+    ): Connection
     suspend fun deleteConnection(id: String)
     /** The cable's colour on the map; null gives the automatic colour back. */
     suspend fun recolorConnection(id: String, colorArgb: Long?): Connection

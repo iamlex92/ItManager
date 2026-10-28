@@ -49,6 +49,13 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import com.itmanager.app.data.model.SwitchPort
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material.icons.outlined.Cable
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -128,7 +135,9 @@ fun TopologyScreen(
     var query by rememberSaveable { mutableStateOf("") }
     var searchMiss by remember { mutableStateOf(false) }
     val density = LocalDensity.current
-    var connectFrom by remember { mutableStateOf<TopologyNode?>(null) }
+    // The link dialog: open with the device it starts from, or with none to pick both ends.
+    var linking by remember { mutableStateOf<LinkStart?>(null) }
+    var addMenu by remember { mutableStateOf(false) }
     var disconnect by remember { mutableStateOf<Pair<String, TopologyLink>?>(null) }
     val context = LocalContext.current
     LaunchedEffect(viewModel) {
@@ -165,6 +174,27 @@ fun TopologyScreen(
                 "${t.nodes.size} устр. · ${t.links.count { it.kind == TopologyLinkKind.CABLE }} связей" + if (down > 0) " · не в сети: $down" else ""
             },
             actions = {
+                Box {
+                    IconButton(onClick = { addMenu = true }) { Icon(Icons.Outlined.Add, contentDescription = "Добавить") }
+                    DropdownMenu(expanded = addMenu, onDismissRequest = { addMenu = false }) {
+                        DropdownMenuItem(
+                            text = { Text("Новое устройство") },
+                            leadingIcon = { Icon(DeviceType.SWITCH.icon, contentDescription = null) },
+                            onClick = {
+                                addMenu = false
+                                viewModel.openNew()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Новая связь (кабель)") },
+                            leadingIcon = { Icon(Icons.Outlined.Cable, contentDescription = null) },
+                            onClick = {
+                                addMenu = false
+                                linking = LinkStart(null)
+                            },
+                        )
+                    }
+                }
                 IconButton(onClick = { layout?.let(::fit) }) { Icon(Icons.Outlined.CenterFocusStrong, contentDescription = "Показать всё") }
                 IconButton(onClick = viewModel::retry) { Icon(Icons.Outlined.Refresh, contentDescription = "Обновить") }
             },
@@ -212,7 +242,7 @@ fun TopologyScreen(
                 if (l == null || l.nodes.isEmpty()) {
                     Text(
                         if (t.data.nodes.isEmpty()) {
-                            "В учёте пока нет активного оборудования. Добавьте устройства на карте или найдите их сканером сети."
+                            "В учёте пока нет активного оборудования. Добавьте устройство кнопкой «+» вверху, на карте или сканером сети."
                         } else {
                             "Коммутаторов, маршрутизаторов и межсетевых экранов нет. Включите «Все устройства»."
                         },
@@ -243,7 +273,7 @@ fun TopologyScreen(
                             onShowOnMap()
                         },
                         onEdit = { viewModel.openEdit(node.id) },
-                        onConnect = { connectFrom = node },
+                        onConnect = { linking = LinkStart(node) },
                         onDisconnect = { link -> disconnect = node.id to link },
                         onPick = { id ->
                             viewModel.select(id)
@@ -259,15 +289,17 @@ fun TopologyScreen(
         }
     }
 
-    connectFrom?.let { from ->
-        ConnectDialog(
-            from = from,
+    linking?.let { start ->
+        LinkDialog(
+            start = start.from,
             nodes = topology?.nodes.orEmpty(),
-            onConnect = { to, cable ->
-                connectFrom = null
-                viewModel.connect(from.id, to, cable)
+            ports = state.ports,
+            onLoadPorts = viewModel::loadPorts,
+            onConnect = { a, b, cable, portA, portB ->
+                linking = null
+                viewModel.connect(a, b, cable, portA, portB)
             },
-            onDismiss = { connectFrom = null },
+            onDismiss = { linking = null },
         )
     }
     disconnect?.let { (selfId, link) ->
@@ -293,7 +325,7 @@ fun TopologyScreen(
     }
     state.form?.let { f ->
         DeviceFormDialog(
-            form = DeviceForm(f.device, f.device.x, f.device.y, f.device.floorId, error = f.error),
+            form = DeviceForm(f.device, f.device?.x ?: 0f, f.device?.y ?: 0f, f.device?.floorId, error = f.error),
             busy = state.busy,
             floors = emptyList(),
             onFloor = {},
@@ -534,61 +566,130 @@ private fun LinkLine(
     }
 }
 
-/** Joins the selected device to another one with a new cable; the server takes a free port on each. */
+/** Where the link dialog starts: from a picked device, or with nothing picked yet. */
+private class LinkStart(val from: TopologyNode?)
+
+private val NETWORK_GEAR = setOf(DeviceType.SWITCH, DeviceType.ROUTER, DeviceType.FIREWALL)
+
+/**
+ * A new cable in three steps: where from, where to, and into which ports (a free one is taken when none is picked).
+ * The inventory changes; nothing is sent to the equipment.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ConnectDialog(
-    from: TopologyNode,
+private fun LinkDialog(
+    start: TopologyNode?,
     nodes: List<TopologyNode>,
-    onConnect: (String, String) -> Unit,
+    ports: Map<String, List<SwitchPort>>,
+    onLoadPorts: (String) -> Unit,
+    onConnect: (a: String, b: String, cable: String, portA: String?, portB: String?) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var query by remember { mutableStateOf("") }
+    var a by remember { mutableStateOf(start) }
+    var b by remember { mutableStateOf<TopologyNode?>(null) }
+    var portA by remember { mutableStateOf<String?>(null) }
+    var portB by remember { mutableStateOf<String?>(null) }
     var cable by remember { mutableStateOf("Cat6") }
-    val shown = nodes.filter { it.id != from.id && it.type != DeviceType.VIRTUAL }
-        .filter { query.isBlank() || it.name.contains(query, true) || it.ip?.contains(query.trim()) == true }
-        .sortedWith(compareBy({ it.type !in setOf(DeviceType.SWITCH, DeviceType.ROUTER, DeviceType.FIREWALL) }, { it.name }))
-        .take(200)
+    var query by remember { mutableStateOf("") }
+    LaunchedEffect(a?.id) { a?.let { onLoadPorts(it.id) } }
+    LaunchedEffect(b?.id) { b?.let { onLoadPorts(it.id) } }
+    val picking = if (a == null) "Откуда идёт кабель" else if (b == null) "Куда: соединить ${a?.name} с…" else null
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Соединить ${from.name} с…") },
+        title = { Text(picking ?: "${a?.name} — ${b?.name}") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = cable == "Cat6", onClick = { cable = "Cat6" }, label = { Text("Медь Cat6") })
-                    FilterChip(selected = cable == "OM3", onClick = { cable = "OM3" }, label = { Text("Оптика OM3") })
-                }
-                TextField(
-                    value = query,
-                    onValueChange = { query = it.take(60) },
-                    singleLine = true,
-                    placeholder = { Text("Имя или IP") },
-                    leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Text(
-                    "Кабель запишется в учёт: сервер займёт свободный порт на каждом устройстве. На карте он появится сам.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                LazyColumn(Modifier.heightIn(max = 320.dp)) {
-                    items(shown, key = { it.id }) { n ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth().clickable { onConnect(n.id, cable) }.padding(vertical = 8.dp),
-                        ) {
-                            Icon(n.type.icon, contentDescription = null, tint = n.type.tint, modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(10.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(n.name, style = MaterialTheme.typography.bodyMedium)
-                                Text(listOfNotNull(n.type.label, n.ip).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (picking != null) {
+                    val shown = nodes.filter { it.id != a?.id && it.type != DeviceType.VIRTUAL }
+                        .filter { query.isBlank() || it.name.contains(query, true) || it.ip?.contains(query.trim()) == true }
+                        .sortedWith(compareBy({ it.type !in NETWORK_GEAR }, { it.name }))
+                        .take(200)
+                    TextField(
+                        value = query,
+                        onValueChange = { query = it.take(60) },
+                        singleLine = true,
+                        placeholder = { Text("Имя или IP") },
+                        leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    LazyColumn(Modifier.heightIn(max = 340.dp)) {
+                        items(shown, key = { it.id }) { n ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        query = ""
+                                        if (a == null) a = n else b = n
+                                    }
+                                    .padding(vertical = 8.dp),
+                            ) {
+                                Icon(n.type.icon, contentDescription = null, tint = n.type.tint, modifier = Modifier.size(20.dp))
+                                Spacer(Modifier.width(10.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(n.name, style = MaterialTheme.typography.bodyMedium)
+                                    Text(listOfNotNull(n.type.label, n.ip).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
                             }
                         }
+                    }
+                } else {
+                    Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(selected = cable == "Cat6", onClick = { cable = "Cat6" }, label = { Text("Медь Cat6") })
+                            FilterChip(selected = cable == "OM3", onClick = { cable = "OM3" }, label = { Text("Оптика OM3") })
+                        }
+                        PortPicker(a!!.name, ports[a!!.id], portA) { portA = it }
+                        PortPicker(b!!.name, ports[b!!.id], portB) { portB = it }
+                        Text(
+                            "Кабель запишется в учёт и появится на карте и в сети. На оборудование ничего не отправляется.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
             }
         },
-        confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        confirmButton = {
+            val from = a
+            val to = b
+            if (from != null && to != null) {
+                TextButton(onClick = { onConnect(from.id, to.id, cable, portA, portB) }) { Text("Соединить") }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = {
+                when {
+                    b != null -> { b = null; portB = null }
+                    a != null && start == null -> { a = null; portA = null }
+                    else -> onDismiss()
+                }
+            }) { Text(if (b != null || (a != null && start == null)) "Назад" else "Отмена") }
+        },
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
     )
+}
+
+/** One end's port: «свободный» lets the server choose; taken ports show what is in them and cannot be picked. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PortPicker(deviceName: String, ports: List<SwitchPort>?, picked: String?, onPick: (String?) -> Unit) {
+    Text("Порт $deviceName", style = MaterialTheme.typography.labelLarge)
+    when {
+        ports == null -> Text("Загружаю порты…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        ports.isEmpty() -> Text("Портов в учёте нет: сервер добавит порт сам.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        else -> FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            FilterChip(selected = picked == null, onClick = { onPick(null) }, label = { Text("Любой свободный") })
+            ports.forEach { p ->
+                val taken = p.connectedDeviceName != null
+                FilterChip(
+                    selected = picked == p.id,
+                    enabled = !taken,
+                    onClick = { onPick(p.id) },
+                    label = { Text(if (taken) "${p.name} · ${p.connectedDeviceName}" else p.name, maxLines = 1) },
+                )
+            }
+        }
+    }
 }

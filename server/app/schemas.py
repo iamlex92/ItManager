@@ -504,6 +504,9 @@ class LinkCreate(BaseModel):
 
     device_a_id: uuid.UUID
     device_b_id: uuid.UUID
+    # A chosen port on either end (say gi1/0/12 of a switch); unset: the server takes a free one.
+    port_a_id: uuid.UUID | None = None
+    port_b_id: uuid.UUID | None = None
     cable_type: str = Field(default="Cat6", max_length=20)
     label: str | None = Field(default=None, max_length=50)
     color: str | None = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")

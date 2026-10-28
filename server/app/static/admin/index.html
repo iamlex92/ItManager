@@ -344,6 +344,9 @@
         <button id="topo-fit">Показать всё</button>
         <button id="topo-reload">Обновить</button>
         <span id="topo-stats" class="muted small"></span>
+        <div class="spacer"></div>
+        <button id="topo-new-device">+ Устройство</button>
+        <button id="topo-new-link" class="primary">+ Связь</button>
       </div>
       <div class="map-wrap">
         <canvas id="topo"></canvas>
@@ -462,6 +465,28 @@
     <div id="card-peripherals" class="card-body" hidden></div>
     <div id="card-config" class="card-body" hidden></div>
   </div>
+</dialog>
+
+<dialog id="link-dialog">
+  <form id="link-form" method="dialog" class="dialog" novalidate>
+    <div class="dialog-head">
+      <h2>Новая связь</h2>
+      <div class="spacer"></div>
+      <button type="button" id="link-cancel">Отмена</button>
+      <button type="submit" class="primary">Соединить</button>
+    </div>
+    <div class="row">
+      <label class="grow">Откуда<select id="link-a"></select></label>
+      <label class="grow">Порт<select id="link-a-port"></select></label>
+    </div>
+    <div class="row">
+      <label class="grow">Куда<select id="link-b"></select><small class="field-error" id="link-b-error" hidden></small></label>
+      <label class="grow">Порт<select id="link-b-port"></select></label>
+    </div>
+    <label>Кабель<select id="link-cable"><option value="Cat6">Медь Cat6</option><option value="OM3">Оптика OM3</option></select></label>
+    <p class="muted small">Кабель запишется в учёт и появится на карте и в сети. «Любой свободный» порт сервер выберет сам. На оборудование ничего не отправляется.</p>
+    <p id="link-error" class="error-box" hidden></p>
+  </form>
 </dialog>
 
 <dialog id="mark-dialog">

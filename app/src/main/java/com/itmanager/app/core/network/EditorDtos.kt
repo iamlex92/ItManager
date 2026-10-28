@@ -178,6 +178,9 @@ data class LinkBody(
     @SerialName("device_a_id") val deviceAId: String,
     @SerialName("device_b_id") val deviceBId: String,
     @SerialName("cable_type") val cableType: String,
+    /** A chosen port on either end; null lets the server take a free one. */
+    @SerialName("port_a_id") val portAId: String? = null,
+    @SerialName("port_b_id") val portBId: String? = null,
 )
 
 /** A port record from the form, nulls included: a cleared access VLAN is cleared on the server too. */

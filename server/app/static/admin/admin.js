@@ -3174,7 +3174,7 @@
   };
 
   async function loadTopology() {
-    T.data = await api("GET", "topology");
+    [T.data, allDevices] = await Promise.all([api("GET", "topology"), api("GET", "devices")]);
     relayout(!T.layout);
     const down = T.data.nodes.filter((n) => !n.is_online && n.type !== "VIRTUAL").length;
     $("topo-stats").textContent = `${T.data.nodes.length} устр. · ${T.data.links.filter((l) => l.kind === "CABLE").length} связей` + (down ? ` · не в сети: ${down}` : "");
@@ -3304,15 +3304,41 @@
       }
       row.append(dot, text);
       row.addEventListener("click", () => selectNode(other, true));
-      card.append(row);
+      // Unplug this end: the cable at this device's port leaves the inventory, the cabling beyond stays.
+      const cut = l.kind === "VIRTUAL" ? null : (self ? l.connection_ids[0] : l.connection_ids[l.connection_ids.length - 1]);
+      if (cut) {
+        const x = document.createElement("button");
+        x.type = "button";
+        x.className = "ghost";
+        x.textContent = "✕";
+        x.title = `Отключить: удалить кабель у порта ${(self ? l.a_port : l.b_port) || "?"}`;
+        x.addEventListener("click", async (ev) => {
+          ev.stopPropagation();
+          if (!confirm(`Удалить из учёта кабель у порта ${(self ? l.a_port : l.b_port) || "?"} (${n.name} → ${names.get(other) || "?"})? Розетки и патч-панели на пути остаются.`)) return;
+          try { await api("DELETE", `connections/${cut}`); toast("Кабель удалён"); await loadTopology(); } catch (e) { fail(e); }
+        });
+        const wrap = document.createElement("div");
+        wrap.className = "row";
+        wrap.append(row, x);
+        card.append(wrap);
+      } else card.append(row);
     }
     const actions = document.createElement("div");
-    actions.className = "row";
+    actions.className = "row wrap";
     const open = document.createElement("button");
     open.className = "primary";
     open.textContent = "Карточка устройства";
     open.addEventListener("click", () => openCard(n.id).catch(fail));
-    actions.append(open);
+    const edit = document.createElement("button");
+    edit.textContent = "Изменить";
+    edit.addEventListener("click", () => { const d = allDevices.find((x) => x.id === n.id); if (d) openDeviceDialog(d); });
+    actions.append(open, edit);
+    if (n.type !== "VIRTUAL") {
+      const link = document.createElement("button");
+      link.textContent = "Соединить…";
+      link.addEventListener("click", () => openLinkDialog(n.id).catch(fail));
+      actions.append(link);
+    }
     if (n.type !== "VIRTUAL") {
       const map = document.createElement("button");
       map.textContent = "На карте";
@@ -3776,6 +3802,65 @@
   for (const id of ["device-dialog", "per-dialog", "ports-dialog", "rack-dialog", "plate-dialog", "import-dialog", "detail-dialog"]) {
     $(id).addEventListener("close", () => { if (cardId && $("card-dialog").open) openCard(cardId, true).catch(() => {}); });
   }
+
+  // ---------------------------------------------------------------- new links (the network view)
+
+  const NETWORK_GEAR = new Set(["SWITCH", "ROUTER", "FIREWALL"]);
+  const linkError = (e) => { $("link-error").hidden = !e; $("link-error").textContent = e ? e.message : ""; };
+
+  /** A cable between two devices, with the ports picked or left to the server. Inventory only. */
+  async function openLinkDialog(fromId) {
+    allDevices = await api("GET", "devices");
+    const cabled = allDevices.filter((d) => d.type !== "VIRTUAL")
+      .sort((a, b) => (NETWORK_GEAR.has(b.type) - NETWORK_GEAR.has(a.type)) || a.name.localeCompare(b.name, "ru"));
+    const options = () => cabled.map((d) => new Option(`${d.name}${d.ip ? ` · ${d.ip}` : ""} · ${typeOf(d).label}`, d.id));
+    $("link-a").replaceChildren(new Option("Выберите устройство", ""), ...options());
+    $("link-b").replaceChildren(new Option("Выберите устройство", ""), ...options());
+    $("link-a").value = fromId || "";
+    $("link-b").value = "";
+    linkError(null);
+    fieldError("link-b", null);
+    await Promise.all([fillLinkPorts("a"), fillLinkPorts("b")]);
+    $("link-dialog").showModal();
+  }
+
+  async function fillLinkPorts(end) {
+    const id = $(`link-${end}`).value;
+    const sel = $(`link-${end}-port`);
+    sel.replaceChildren(new Option("Любой свободный", ""));
+    if (!id) return;
+    const ports = (await api("GET", `devices/${id}/ports`)).sort((a, b) => a.number - b.number);
+    for (const p of ports) {
+      const o = new Option(p.connected_device_name ? `${p.name} — занят: ${p.connected_device_name}` : p.name, p.id);
+      o.disabled = !!p.connected_device_name;
+      sel.append(o);
+    }
+  }
+  $("link-a").addEventListener("change", () => fillLinkPorts("a").catch(fail));
+  $("link-b").addEventListener("change", () => fillLinkPorts("b").catch(fail));
+  $("link-cancel").addEventListener("click", () => $("link-dialog").close());
+  $("link-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const a = $("link-a").value, b = $("link-b").value;
+    if (!a) { fieldError("link-a", "Выберите устройство"); return; }
+    if (!b || a === b) { fieldError("link-b", !b ? "Выберите устройство" : "Нужно другое устройство"); return; }
+    fieldError("link-b", null);
+    try {
+      await api("POST", "connections/link", {
+        device_a_id: a, device_b_id: b, cable_type: $("link-cable").value,
+        port_a_id: $("link-a-port").value || null, port_b_id: $("link-b-port").value || null,
+      });
+      $("link-dialog").close();
+      toast("Соединено");
+      await refreshTab();
+    } catch (e) { linkError(e); }
+  });
+  $("topo-new-link").addEventListener("click", () => openLinkDialog(T.selected).catch(fail));
+  $("topo-new-device").addEventListener("click", async () => {
+    // A new device stands in the middle of the first floor; its place is set on the map later.
+    if (!S.floor) { S.floors = await api("GET", "floors"); S.floor = S.floors[0] || null; }
+    openDeviceDialog(null);
+  });
 
   // What admin-more.js (the other tabs) builds on.
   window.NetAdmin = {
