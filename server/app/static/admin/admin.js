@@ -105,9 +105,14 @@
   async function showMode() {
     try {
       const h = await (await fetch("/api/v1/health")).json();
-      $("mode").textContent = h.hal_mode === "emulator"
-        ? "эмулятор оборудования"
-        : `оборудование: ${h.hal_mode} · запись ${h.device_writes_enabled ? "включена" : "выключена"}`;
+      const hal = h.hal_mode === "emulator"
+        ? "коммутаторы: эмулятор"
+        : `коммутаторы: ${h.hal_mode} · запись ${h.device_writes_enabled ? "включена" : "выключена"}`;
+      // Without polling the printer and ping figures are made up: that must be seen at a glance.
+      const monitor = h.monitor_mode === "emulator" ? "опрос устройств выключен" : "опрос устройств включён";
+      $("mode").textContent = `${hal} · ${monitor}`;
+      $("mode").classList.toggle("warn", h.monitor_mode === "emulator");
+      window.NetAdmin.monitorEmulated = h.monitor_mode === "emulator";
     } catch { $("mode").textContent = ""; }
   }
 

@@ -244,6 +244,9 @@
 
     <section id="tab-printers" class="tab" hidden>
       <div class="toolbar"><div class="spacer"></div><button id="printer-reload">Обновить</button></div>
+      <p id="printer-emulated" class="error-box" hidden>Сервер не опрашивает МФУ: в его настройках <code>MONITOR_MODE=emulator</code>,
+        и уровни тонера и счётчики страниц здесь ненастоящие. Поставьте <code>MONITOR_MODE=real</code> в <code>netadmin.env</code>
+        и перезапустите службу NetAdmin.</p>
       <div id="printer-cards" class="cards"></div>
     </section>
 

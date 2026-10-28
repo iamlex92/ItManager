@@ -2,6 +2,8 @@ package com.itmanager.app.ui.printers
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.itmanager.app.core.network.NetAdminApi
+import com.itmanager.app.core.network.runCatchingCancellable
 import com.itmanager.app.core.network.toUserMessage
 import com.itmanager.app.data.model.ALL_DEVICES
 import com.itmanager.app.data.model.LiveEvent
@@ -22,7 +24,12 @@ import javax.inject.Inject
 @HiltViewModel
 class PrintersViewModel @Inject constructor(
     private val repository: DcimRepository,
+    private val api: NetAdminApi,
 ) : ViewModel() {
+
+    /** The server makes the figures up instead of polling (MONITOR_MODE=emulator): the screen says so. */
+    private val _emulated = MutableStateFlow(false)
+    val emulated: StateFlow<Boolean> = _emulated.asStateFlow()
 
     private val _state = MutableStateFlow<UiState<List<Printer>>>(UiState.Loading)
     val state: StateFlow<UiState<List<Printer>>> = _state.asStateFlow()
@@ -35,7 +42,14 @@ class PrintersViewModel @Inject constructor(
     val messages: SharedFlow<String> = _messages.asSharedFlow()
 
     init {
-        viewModelScope.launch { repository.settings.collect { load() } }
+        viewModelScope.launch {
+            repository.settings.collect { settings ->
+                load()
+                if (settings.baseUrl.isNotBlank()) {
+                    _emulated.value = runCatchingCancellable { api.health(settings.baseUrl) }.getOrNull()?.monitorMode == "emulator"
+                }
+            }
+        }
         // The server pushes each SNMP reading as it arrives.
         viewModelScope.launch {
             repository.live(ALL_DEVICES).collect { event ->

@@ -404,6 +404,8 @@ data class ServerHealth(
     /** "emulator" or "real" (AD over LDAPS, folder rights over WinRM). */
     val runbookMode: String? = null,
     val runbookWritesEnabled: Boolean? = null,
+    /** "real": ping and SNMP polling of printers and ports; "emulator": no polling, made-up figures. */
+    val monitorMode: String? = null,
 )
 
 fun parseColorHex(hex: String?, fallback: Long = 0xFF3498DB): Long {

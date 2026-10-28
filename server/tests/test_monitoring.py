@@ -120,6 +120,44 @@ async def test_snmp_printer_driver_against_agent():
     assert set(agent.requests) <= {"get", "next", "bulk"}  # read-only PDUs only
 
 
+async def test_snmp_printer_reads_russian_names_percent_levels_and_any_counter_index():
+    """Seen on real printers: CP1251 supply names, levels in percent with no known capacity,
+    and the page counter under another device index than 1.1."""
+    table = {
+        f"{SUPPLIES}.5.1.1": V2.Integer(3),
+        f"{SUPPLIES}.6.1.1": V2.OctetString("Тонер чёрный".encode("cp1251")),
+        f"{SUPPLIES}.7.1.1": V2.Integer(19),
+        f"{SUPPLIES}.8.1.1": V2.Integer(-2),
+        f"{SUPPLIES}.9.1.1": V2.Integer(42),
+        f"{SUPPLIES}.5.1.2": V2.Integer(9),
+        f"{SUPPLIES}.6.1.2": V2.OctetString("Drum Unit"),
+        f"{SUPPLIES}.7.1.2": V2.Integer(7),
+        f"{SUPPLIES}.8.1.2": V2.Integer(-2),
+        f"{SUPPLIES}.9.1.2": V2.Integer(-3),
+        "1.3.6.1.2.1.43.10.2.1.4.2.1": V2.Counter32(1234),
+    }
+    transport, agent, port = await start_agent(table, community="public")
+    try:
+        driver = SnmpPrinters(make_settings(monitor_mode=MonitorMode.REAL, snmp_timeout_seconds=1, snmp_retries=0))
+        from pysnmp.hlapi.v3arch import asyncio as h
+
+        real_create = h.UdpTransportTarget.create
+
+        async def create(addr, **kw):
+            return await real_create((addr[0], port), **kw)
+
+        h.UdpTransportTarget.create = create
+        try:
+            snap = await driver.poll(PrinterTarget(uuid.uuid4(), "МФУ", "127.0.0.1", "public", {}))
+        finally:
+            h.UdpTransportTarget.create = real_create
+    finally:
+        transport.close()
+    assert snap.total_pages == 1234
+    # The drum says only "some remaining": no percentage to show, so it is left out.
+    assert [(s.name, s.kind, s.level_percent) for s in snap.supplies] == [("Тонер чёрный", "TONER", 42)]
+
+
 # --- heartbeat ---------------------------------------------------------------
 
 
