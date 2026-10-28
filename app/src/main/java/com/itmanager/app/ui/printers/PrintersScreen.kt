@@ -63,8 +63,9 @@ import java.util.Locale
 
 @Composable
 fun PrintersScreen(
-    contentPadding: PaddingValues,
+    onBack: () -> Unit,
     onOpenSettings: () -> Unit,
+    contentPadding: PaddingValues = PaddingValues(),
     viewModel: PrintersViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -87,7 +88,7 @@ fun PrintersScreen(
                         "не отвечают: $silentCount".takeIf { silentCount > 0 },
                     ).joinToString(" · ")
                 },
-                onOpenSettings = onOpenSettings,
+                onBack = onBack,
             )
             when (val s = state) {
                 UiState.Loading -> LoadingView()

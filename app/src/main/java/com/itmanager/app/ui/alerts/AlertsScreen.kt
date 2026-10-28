@@ -54,6 +54,7 @@ import com.itmanager.app.ui.components.EmptyView
 import com.itmanager.app.ui.components.ErrorView
 import com.itmanager.app.ui.components.LoadingView
 import com.itmanager.app.ui.components.StatusDot
+import com.itmanager.app.ui.components.TabTopBar
 import com.itmanager.app.ui.components.UiState
 import com.itmanager.app.ui.components.formatAgo
 import com.itmanager.app.ui.theme.StatusColors
@@ -68,9 +69,9 @@ val AlertSeverity.color: Color
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AlertsScreen(
-    onBack: () -> Unit,
     onOpenDevice: (deviceId: String) -> Unit,
     onOpenSettings: () -> Unit,
+    contentPadding: PaddingValues = PaddingValues(),
     viewModel: AlertsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -84,16 +85,16 @@ fun AlertsScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbar) },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                title = { Text("События", style = MaterialTheme.typography.titleLarge) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Назад") }
+            TabTopBar(
+                title = "События",
+                subtitle = (state as? UiState.Content)?.data?.let { d ->
+                    if (d.openCount > 0) "Открытых: ${d.openCount}" else "Открытых нет"
                 },
                 actions = {
                     IconButton(onClick = viewModel::refresh) { Icon(Icons.Outlined.Refresh, contentDescription = "Обновить") }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
     ) { padding ->
@@ -115,9 +116,11 @@ fun AlertsScreen(
                     ) { Text("Все") }
                 }
                 LazyColumn(
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
+                    contentPadding = PaddingValues(
+                        start = 16.dp, end = 16.dp, top = 4.dp, bottom = contentPadding.calculateBottomPadding() + 24.dp,
+                    ),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.navigationBars),
+                    modifier = Modifier.fillMaxSize(),
                 ) {
                     if (s.data.rows.isEmpty()) {
                         item { EmptyView(if (showResolved) "Событий нет" else "Открытых событий нет, всё работает") }

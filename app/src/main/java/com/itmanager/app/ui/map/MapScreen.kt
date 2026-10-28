@@ -118,7 +118,6 @@ import com.itmanager.app.data.model.FloorMap
 import com.itmanager.app.data.model.MapLayer
 import com.itmanager.app.data.model.Zone
 import com.itmanager.app.data.model.roomAt
-import com.itmanager.app.ui.components.AlertsBell
 import com.itmanager.app.ui.components.ErrorView
 import com.itmanager.app.ui.components.LoadingView
 import com.itmanager.app.ui.components.StatusDot
@@ -141,6 +140,7 @@ import kotlin.math.roundToInt
 fun MapScreen(
     contentPadding: PaddingValues,
     onOpenSwitch: (String) -> Unit,
+    onOpenDevice: (String) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenScanner: () -> Unit,
     onOpenVlans: () -> Unit,
@@ -278,6 +278,15 @@ fun MapScreen(
                             haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
                             viewModel.tapZones(x, y)
                         },
+                        arrowStart = editor.arrowStart,
+                        onTapMarks = { id, x, y ->
+                            haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                            viewModel.tapMarks(id, x, y)
+                        },
+                        onMoveMark = { id, dx, dy ->
+                            haptics.performHapticFeedback(HapticFeedbackType.GestureEnd)
+                            viewModel.moveMark(id, dx, dy)
+                        },
                     ),
                 )
             }
@@ -393,7 +402,7 @@ fun MapScreen(
                     device = device,
                     vlanName = device.vlanId?.let { id -> content?.map?.vlans?.firstOrNull { it.id == id }?.let { "VLAN ${it.id} · ${it.name}" } },
                     tracePath = if (device.id == state.selectedId) state.tracePath else emptyList(),
-                    onOpenSwitch = { onOpenSwitch(device.id) },
+                    onOpenSwitch = { onOpenDevice(device.id) },
                     onBindNfc = { viewModel.bindNfc(device) },
                     onDismiss = { viewModel.select(null) },
                     hostName = device.hostId?.let { content?.allDevices?.get(it)?.name },
@@ -500,6 +509,9 @@ fun MapScreen(
                 onFitPlan = viewModel::fitPlan,
                 onRemovePlan = { confirmRemovePlan = true },
                 onDismissError = viewModel::dismissError,
+                onMarkKind = viewModel::setMarkKind,
+                onMarkColor = viewModel::setMarkColor,
+                onCancelArrow = viewModel::cancelArrow,
             )
         }
 
@@ -517,6 +529,14 @@ fun MapScreen(
                     viewModel.openRack(id)
                 },
                 hosts = content?.allDevices.orEmpty().values.filter { it.type == DeviceType.SERVER }.sortedBy { it.name },
+            )
+        }
+        state.editor.markEdit?.let { edit ->
+            MarkDialog(
+                edit = edit,
+                onSave = viewModel::saveMark,
+                onDelete = viewModel::deleteMark,
+                onDismiss = viewModel::closeMark,
             )
         }
         zoneEdit?.let { edit ->
@@ -795,10 +815,6 @@ private fun MapTopPanel(
                         IconButton(onClick = { searching = true }, enabled = devices.isNotEmpty()) {
                             Icon(Icons.Outlined.Search, contentDescription = "Поиск на карте")
                         }
-                    }
-                    AlertsBell()
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Outlined.Settings, contentDescription = "Настройки")
                     }
                 }
             }
@@ -1128,13 +1144,11 @@ private fun DeviceCard(
                     modifier = Modifier.padding(end = 12.dp),
                 )
             }
-            if (device.type == DeviceType.SWITCH) {
-                Spacer(Modifier.height(14.dp))
-                FilledTonalButton(onClick = onOpenSwitch, modifier = Modifier.padding(end = 12.dp).fillMaxWidth()) {
-                    Text("Открыть панель портов")
-                    Spacer(Modifier.width(8.dp))
-                    Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
-                }
+            Spacer(Modifier.height(14.dp))
+            FilledTonalButton(onClick = onOpenSwitch, modifier = Modifier.padding(end = 12.dp).fillMaxWidth()) {
+                Text("Открыть карточку устройства")
+                Spacer(Modifier.width(8.dp))
+                Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
             }
             if (onOpenRack != null) {
                 Spacer(Modifier.height(14.dp))

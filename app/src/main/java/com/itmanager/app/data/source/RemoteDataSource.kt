@@ -30,6 +30,7 @@ import com.itmanager.app.core.network.UserFacingException
 import com.itmanager.app.core.network.toDomain
 import com.itmanager.app.core.settings.ServerSettings
 import com.itmanager.app.data.model.Alert
+import com.itmanager.app.data.model.Annotation
 import com.itmanager.app.data.model.AuditEntry
 import com.itmanager.app.data.model.AuditKind
 import com.itmanager.app.data.model.AuthMethod
@@ -373,6 +374,9 @@ class RemoteDataSource(
 
     override suspend fun saveZones(plan: FloorPlan, zones: List<Zone>): FloorPlan =
         api.patchFloor(settings, plan.id, FloorPatch.zones(zones)).toPlan(plan)
+
+    override suspend fun saveAnnotations(plan: FloorPlan, annotations: List<Annotation>): FloorPlan =
+        api.patchFloor(settings, plan.id, FloorPatch.annotations(annotations)).toPlan(plan)
 
     override suspend fun peripherals(): List<Peripheral> = api.peripherals(settings).map { it.toDomain() }
 

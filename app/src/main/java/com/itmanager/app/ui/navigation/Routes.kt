@@ -2,15 +2,15 @@ package com.itmanager.app.ui.navigation
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountTree
-import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.outlined.AccountTree
-import androidx.compose.material.icons.outlined.Terminal
+import androidx.compose.material.icons.outlined.Menu
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.Map
-import androidx.compose.material.icons.outlined.Print
 import androidx.compose.ui.graphics.vector.ImageVector
 import kotlinx.serialization.Serializable
 
@@ -29,7 +29,9 @@ import kotlinx.serialization.Serializable
 @Serializable data object ToolsRoute
 @Serializable data object IpamRoute
 @Serializable data object TemplatesRoute
-@Serializable data class ToolRoute(val kind: String)
+@Serializable data class ToolRoute(val kind: String, val host: String = "")
+@Serializable data object MoreRoute
+@Serializable data class DeviceRoute(val deviceId: String)
 @Serializable data class SwitchRoute(val deviceId: String)
 @Serializable data class HistoryRoute(val deviceId: String, val switchName: String)
 @Serializable data class ConfigDiffRoute(val deviceId: String, val switchName: String? = null)
@@ -45,6 +47,6 @@ enum class TopLevelDestination(
     MAP(MapRoute, "Карта", Icons.Filled.Map, Icons.Outlined.Map),
     DEVICES(DevicesRoute, "Устройства", Icons.Filled.Devices, Icons.Outlined.Devices),
     TOPOLOGY(TopologyRoute, "Сеть", Icons.Filled.AccountTree, Icons.Outlined.AccountTree),
-    PRINTERS(PrintersRoute, "МФУ", Icons.Filled.Print, Icons.Outlined.Print),
-    AUTOMATION(AutomationRoute, "Автоматизация", Icons.Filled.Terminal, Icons.Outlined.Terminal),
+    EVENTS(AlertsRoute, "События", Icons.Filled.Notifications, Icons.Outlined.Notifications),
+    MORE(MoreRoute, "Ещё", Icons.Filled.Menu, Icons.Outlined.Menu),
 }

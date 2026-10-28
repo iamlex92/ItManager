@@ -64,6 +64,7 @@ data class FloorDto(
     @SerialName("plan_h") val planH: Float? = null,
     val drawings: List<DrawingDto> = emptyList(),
     val zones: List<ZoneDto> = emptyList(),
+    val annotations: List<AnnotationDto> = emptyList(),
 ) {
     fun info() = FloorInfo(id, buildingName, floorNumber, name)
 }
@@ -291,4 +292,5 @@ fun FloorDto.toDomain(baseUrl: String, fallbackWidth: Float, fallbackHeight: Flo
     imageRect = if (planW != null && planH != null) PlanRect(planX ?: 0f, planY ?: 0f, planW, planH) else null,
     drawings = drawings.map { it.toDomain() },
     zones = zones.map { it.toDomain() },
+    annotations = annotations.map { it.toDomain() },
 )

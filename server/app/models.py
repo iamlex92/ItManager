@@ -55,6 +55,8 @@ class Floor(Base):
     # Zones outlined on the map: [{"id": "z1", "name": "Серверная", "is_room": true, "points": [x, y, ...]}].
     # A device whose icon lies inside a room zone belongs to that room.
     zones: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
+    # Marks on the map: room numbers in circles, captions, pointers. See schemas.Annotation.
+    annotations: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

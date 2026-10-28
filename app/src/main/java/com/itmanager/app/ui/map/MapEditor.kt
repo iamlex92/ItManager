@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.Draw
 import androidx.compose.material.icons.outlined.FitScreen
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.MeetingRoom
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.OpenWith
 import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material.icons.outlined.RemoveCircleOutline
@@ -64,6 +65,7 @@ import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.DEFAULT_RACK_UNITS
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceDraft
+import com.itmanager.app.data.model.AnnotationKind
 import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.model.isMac
 import com.itmanager.app.data.model.FloorInfo
@@ -76,6 +78,7 @@ private val EditTool.icon: ImageVector
         EditTool.LINK -> Icons.Outlined.Cable
         EditTool.DRAW -> Icons.Outlined.Draw
         EditTool.ZONES -> Icons.Outlined.MeetingRoom
+        EditTool.MARKS -> Icons.Outlined.PushPin
         EditTool.PLAN -> Icons.Outlined.Image
     }
 
@@ -115,6 +118,9 @@ fun MapEditToolbar(
     onRemovePlan: () -> Unit,
     onDismissError: () -> Unit,
     modifier: Modifier = Modifier,
+    onMarkKind: (AnnotationKind) -> Unit = {},
+    onMarkColor: (Long) -> Unit = {},
+    onCancelArrow: () -> Unit = {},
 ) {
     Surface(
         shape = RoundedCornerShape(24.dp),
@@ -223,6 +229,31 @@ fun MapEditToolbar(
                             IconButton(onClick = onCancelZone) { Icon(Icons.Outlined.Close, contentDescription = "Снять выбор") }
                         }
                         else -> Text("Касайтесь углов по очереди, затем «Готово»", style = MaterialTheme.typography.bodyMedium)
+                    }
+                    EditTool.MARKS -> if (state.arrowStart != null) {
+                        Text("Коснитесь, куда указывает стрелка", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                        IconButton(onClick = onCancelArrow) { Icon(Icons.Outlined.Close, contentDescription = "Отменить стрелку") }
+                    } else {
+                        AnnotationKind.entries.forEach { kind ->
+                            FilterChip(
+                                selected = state.markKind == kind,
+                                onClick = { onMarkKind(kind) },
+                                label = { Text(kind.label, maxLines = 1) },
+                            )
+                        }
+                        Spacer(Modifier.weight(1f))
+                        // One dot that steps through the colours: the row stays short on a narrow phone.
+                        Box(
+                            Modifier
+                                .size(30.dp)
+                                .border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
+                                .padding(4.dp)
+                                .background(Color(state.markColor), CircleShape)
+                                .clickable {
+                                    val i = MARK_COLORS.indexOf(state.markColor)
+                                    onMarkColor(MARK_COLORS[(i + 1) % MARK_COLORS.size])
+                                },
+                        )
                     }
                     EditTool.PLAN -> if (!hasPlan) {
                         FilledTonalButton(onClick = onPickPlan, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {

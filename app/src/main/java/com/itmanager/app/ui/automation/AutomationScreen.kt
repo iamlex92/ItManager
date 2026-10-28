@@ -56,13 +56,9 @@ import kotlinx.coroutines.launch
 /** Runbook catalog grouped by area, with the audit log one tap away. */
 @Composable
 fun AutomationScreen(
-    contentPadding: PaddingValues,
+    onBack: () -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenAudit: () -> Unit,
-    onOpenScanner: () -> Unit,
-    onOpenTools: () -> Unit,
-    onOpenIpam: () -> Unit,
-    onOpenTemplates: () -> Unit,
+    contentPadding: PaddingValues = PaddingValues(),
     viewModel: AutomationViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -72,7 +68,7 @@ fun AutomationScreen(
     val scope = rememberCoroutineScope()
 
     Column(Modifier.fillMaxSize()) {
-        TabTopBar(title = "Автоматизация", subtitle = "Регламентные операции", onOpenSettings = onOpenSettings)
+        TabTopBar(title = "Сценарии", subtitle = "Регламентные операции: AD, папки, резервные копии", onBack = onBack)
         when (val s = state) {
             UiState.Loading -> LoadingView()
             is UiState.Error -> ErrorView(s.message, viewModel::retry, onOpenSettings, contentPadding = contentPadding)
@@ -87,46 +83,6 @@ fun AutomationScreen(
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     item(key = "note") { EmulationNote(serverMode) }
-                    item(key = "scanner") {
-                        LinkCard(
-                            icon = Icons.Outlined.TravelExplore,
-                            title = "Сканер сети",
-                            subtitle = "Найти устройства в подсетях, построить связи и добавить в учёт",
-                            onClick = onOpenScanner,
-                        )
-                    }
-                    item(key = "tools") {
-                        LinkCard(
-                            icon = Icons.Outlined.Construction,
-                            title = "Сетевые утилиты",
-                            subtitle = "Ping, трассировка, порты, SNMP, iperf3, Wake-on-LAN, MAC и подсети с телефона",
-                            onClick = onOpenTools,
-                        )
-                    }
-                    item(key = "ipam") {
-                        LinkCard(
-                            icon = Icons.Outlined.Dns,
-                            title = "IP-адреса (IPAM)",
-                            subtitle = "Заполнение подсетей, свободные адреса, дубликаты и адреса вне подсетей",
-                            onClick = onOpenIpam,
-                        )
-                    }
-                    item(key = "templates") {
-                        LinkCard(
-                            icon = Icons.Outlined.Dns,
-                            title = "Шаблоны устройств",
-                            subtitle = "Типовые устройства с портами: создать коммутатор или патч-панель в одно касание",
-                            onClick = onOpenTemplates,
-                        )
-                    }
-                    item(key = "audit") {
-                        LinkCard(
-                            icon = Icons.AutoMirrored.Outlined.ManageSearch,
-                            title = "Журнал аудита",
-                            subtitle = "Кто, когда и с какими параметрами запускал сценарии, менял коммутаторы и сканировал сеть",
-                            onClick = onOpenAudit,
-                        )
-                    }
                     s.data.groupBy { it.category }.forEach { (category, runbooks) ->
                         item(key = "cat-$category") { SectionLabel(category, Modifier.padding(top = 16.dp)) }
                         items(runbooks, key = { it.id }) { rb -> RunbookRow(rb) { viewModel.open(rb) } }
@@ -189,26 +145,6 @@ private fun EmulationNote(server: ServerRunbooks?) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onPrimaryContainer,
         )
-    }
-}
-
-@Composable
-private fun LinkCard(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(16.dp))
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(14.dp),
-    ) {
-        Icon(icon, contentDescription = null)
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

@@ -1,5 +1,14 @@
 package com.itmanager.app.ui.map
 
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalDensity
+import kotlin.math.ln
+import kotlin.math.pow
+import com.itmanager.app.data.model.Annotation
+import com.itmanager.app.data.model.AnnotationKind
+import com.itmanager.app.data.model.MapClusters
+import com.itmanager.app.data.model.MarkerCluster
+import com.itmanager.app.data.model.FloorPlan
 import android.graphics.Picture
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
@@ -123,6 +132,10 @@ class MapEditing(
     val zoneDraft: List<Float> = emptyList(),
     val selectedZone: String? = null,
     val onTapZones: (Float, Float) -> Unit = { _, _ -> },
+    /** Marks tool: the tail of an arrow being placed, a tap on a mark (or empty map, null), a mark dragged. */
+    val arrowStart: Offset? = null,
+    val onTapMarks: (id: String?, x: Float, y: Float) -> Unit = { _, _, _ -> },
+    val onMoveMark: (id: String, dx: Float, dy: Float) -> Unit = { _, _, _ -> },
 )
 
 /**
@@ -149,6 +162,8 @@ fun FloorPlanView(
     var planShift by remember { mutableStateOf(Offset.Zero) }
     // A cable route being dragged: its id and bends as they are under the finger.
     var routeDrag by remember { mutableStateOf<Pair<String, List<Waypoint>>?>(null) }
+    // A mark being dragged: its id and how far it has moved, in map pixels.
+    var markDrag by remember { mutableStateOf<Pair<String, Offset>?>(null) }
     val positions = editor?.moved.orEmpty().let { moved -> drag?.let { moved + it } ?: moved }
     @Suppress("NAME_SHADOWING")
     val content = remember(content, positions) { content.withPositions(positions) }
@@ -198,6 +213,10 @@ fun FloorPlanView(
                             e == null -> currentOnSelect(null)
                             e.tool == EditTool.LINK -> e.onTapLink(linkAt(currentRoutes, camera, at, 16.dp.toPx()))
                             e.tool == EditTool.ZONES -> camera.toPlan(at).let { e.onTapZones(it.x, it.y) }
+                            e.tool == EditTool.MARKS -> {
+                                val hit = annotationAt(currentContent.map.plan, camera, at, 24.dp.toPx())
+                                camera.toPlan(at).let { e.onTapMarks(hit?.id, it.x, it.y) }
+                            }
                         }
                     },
                     onDoubleTap = { camera.toggleZoom(it) },
@@ -213,15 +232,48 @@ fun FloorPlanView(
             if (layer == MapLayer.L3) drawSubnets(content, vlans, vlanFilter, camera, textMeasurer, labelStyle)
             if (layer != MapLayer.L3) drawCables(content, routes, layer, vlans, vlanFilter, tracedLinks, camera)
             drawRisers(content, routes, camera, textMeasurer, labelStyle)
+            val marks = markDrag?.let { (id, d) -> plan.annotations.map { if (it.id == id) it.movedBy(d.x, d.y) else it } } ?: plan.annotations
+            drawAnnotations(marks, plan.pixelsPerMeter, camera, textMeasurer, markDrag?.first)
+            editor?.arrowStart?.let { start ->
+                drawCircle(Accent, 6.dp.toPx(), camera.toScreen(start.x, start.y))
+                drawCircle(Color.White, 6.dp.toPx(), camera.toScreen(start.x, start.y), style = Stroke(1.5.dp.toPx()))
+            }
             val selectedRoute = editor?.selectedLink?.let { id -> routes.firstOrNull { it.link.id == id } }
             if (editor?.tool == EditTool.LINK && selectedRoute != null) drawRouteHandles(selectedRoute, editor.selectedPoint, camera)
         }
 
         val showLabels by remember(camera) { derivedStateOf { camera.scale >= camera.fitScale * 1.8f } }
-        content.map.devices.forEach { device ->
-            if (layer == MapLayer.L3 && device.type in PASSIVE) return@forEach
-            // A virtual machine has no cables: the physical layer leaves it out, except in the editor.
-            if (layer == MapLayer.L1 && device.type == DeviceType.VIRTUAL && editor == null) return@forEach
+        // Markers keep their size on screen, so zoomed out they pile up: close ones become one numbered circle.
+        // The zoom is taken in quarter-steps of a doubling, so the groups do not reshuffle on every frame of a pinch.
+        val zoomStep by remember(camera) { derivedStateOf { (ln(camera.scale.coerceAtLeast(1e-4f)) / ln(2f) * 4f).roundToInt() } }
+        val clusterPx = with(LocalDensity.current) { CLUSTER_DISTANCE.toPx() }
+        val shown = content.map.devices.filter { device ->
+            !(layer == MapLayer.L3 && device.type in PASSIVE) &&
+                // A virtual machine has no cables: the physical layer leaves it out, except in the editor.
+                !(layer == MapLayer.L1 && device.type == DeviceType.VIRTUAL && editor == null)
+        }
+        val keepApart = setOfNotNull(selectedId, drag?.first, editor?.linkFrom)
+        val clusters = remember(shown, zoomStep, keepApart) {
+            MapClusters.cluster(shown, clusterPx / 2f.pow(zoomStep / 4f), keepApart)
+        }
+        val byId = remember(shown) { shown.associateBy { it.id } }
+        clusters.forEach { cluster ->
+            if (!cluster.isSingle) {
+                val members = cluster.deviceIds.mapNotNull { byId[it] }
+                val colors = if (layer == MapLayer.L1) emptySet() else members.mapNotNull { m -> m.vlanId?.let { vlans[it] }?.color }.toSet()
+                key(cluster.deviceIds.first(), "cluster") {
+                    ClusterMarker(
+                        cluster = cluster,
+                        members = members,
+                        ringColor = colors.singleOrNull(),
+                        dimmed = vlanFilter != null && members.none { it.vlanId == vlanFilter },
+                        camera = camera,
+                        onClick = { camera.zoomInto(cluster.x, cluster.y) },
+                    )
+                }
+                return@forEach
+            }
+            val device = byId[cluster.deviceIds.first()] ?: return@forEach
             val dimmed = vlanFilter != null && device.vlanId != vlanFilter
             val selected = if (editor != null) device.id == editor.linkFrom || device.id == drag?.first else device.id == selectedId
             key(device.id) {
@@ -321,6 +373,21 @@ fun FloorPlanView(
                     },
                 )
             }
+            EditTool.MARKS -> Box(
+                Modifier.fillMaxSize().pointerInput(Unit) {
+                    detectItemDrag(
+                        itemAt = { at -> annotationAt(currentContent.map.plan, camera, at, 24.dp.toPx())?.id },
+                        onDrag = { id, delta ->
+                            val moved = (markDrag?.takeIf { it.first == id }?.second ?: Offset.Zero) + delta / camera.scale
+                            markDrag = id to moved
+                        },
+                        onEnd = {
+                            markDrag?.let { (id, d) -> currentEditor?.onMoveMark(id, d.x, d.y) }
+                            markDrag = null
+                        },
+                    )
+                },
+            )
             EditTool.PLAN -> if (planRect != null) {
                 Box(
                     Modifier.fillMaxSize().pointerInput(Unit) {
@@ -878,5 +945,189 @@ private fun DeviceMarker(
                     .padding(horizontal = 4.dp, vertical = 1.dp),
             )
         }
+    }
+}
+
+/** Distance at which two markers merge into a group, on screen. */
+private val CLUSTER_DISTANCE = 30.dp
+
+/** Several devices that would cover each other at this zoom: their count, and a tap zooms in on them. */
+@Composable
+private fun ClusterMarker(
+    cluster: MarkerCluster,
+    members: List<Device>,
+    ringColor: Color?,
+    dimmed: Boolean,
+    camera: MapCamera,
+    onClick: () -> Unit,
+) {
+    val size = 36.dp
+    val alpha by animateFloatAsState(if (dimmed) 0.22f else 1f, Motion.smooth(Motion.RESPONSE_SHEET), label = "clusterAlpha")
+    val interaction = remember { MutableInteractionSource() }
+    // The kind most of them are, so a group of PCs still looks like PCs.
+    val type = members.groupingBy { it.type }.eachCount().maxByOrNull { it.value }?.key ?: DeviceType.UNKNOWN
+    val offline = members.count { it.type !in PASSIVE && !it.isOnline }
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .offset {
+                val p = camera.toScreen(cluster.x, cluster.y)
+                IntOffset(p.x.roundToInt() - size.roundToPx() / 2, p.y.roundToInt() - size.roundToPx() / 2)
+            }
+            .size(size)
+            .graphicsLayer { this.alpha = alpha }
+            .background(Ink800, CircleShape)
+            .border(2.dp, ringColor ?: type.tint.copy(alpha = 0.8f), CircleShape)
+            .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick),
+    ) {
+        Icon(type.icon, contentDescription = null, tint = type.tint.copy(alpha = 0.35f), modifier = Modifier.size(22.dp))
+        Text(
+            "${members.size}",
+            style = MaterialTheme.typography.labelLarge,
+            color = Color.White,
+        )
+        if (offline > 0) {
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .size(10.dp)
+                    .background(StatusColors.Offline, CircleShape)
+                    .border(1.5.dp, Ink950, CircleShape),
+            )
+        }
+    }
+}
+
+/** The mark under [at] on screen, or null. Numbers and captions are found by their point, arrows by their line. */
+private fun annotationAt(plan: FloorPlan, camera: MapCamera, at: Offset, slop: Float): Annotation? =
+    plan.annotations.mapNotNull { a ->
+        val p = camera.toScreen(a.x, a.y)
+        val d = if (a.kind == AnnotationKind.ARROW && a.x2 != null && a.y2 != null) {
+            distanceToSegment(at, p, camera.toScreen(a.x2, a.y2))
+        } else {
+            (at - p).getDistance()
+        }
+        if (d <= slop * a.size.coerceAtLeast(1f)) a to d else null
+    }.minByOrNull { it.second }?.first
+
+/**
+ * Marks drawn to the plan's scale, like walls, but never so small they cannot be read: room numbers in circles,
+ * captions with a dark outline, arrows with a head and a caption at the tail.
+ */
+private fun DrawScope.drawAnnotations(
+    marks: List<Annotation>,
+    pixelsPerMeter: Float,
+    camera: MapCamera,
+    textMeasurer: TextMeasurer,
+    draggedId: String?,
+) {
+    val meter = pixelsPerMeter.coerceAtLeast(1f) * camera.scale
+    for (a in marks) {
+        val color = Color(a.colorArgb)
+        val p = camera.toScreen(a.x, a.y)
+        val lifted = a.id == draggedId
+        when (a.kind) {
+            AnnotationKind.BADGE -> {
+                val r = (0.7f * meter * a.size).coerceIn(10.dp.toPx(), 48.dp.toPx())
+                if (lifted) drawCircle(Color.Black.copy(alpha = 0.35f), r * 1.15f, p + Offset(0f, 3.dp.toPx()))
+                drawCircle(color, r, p)
+                drawCircle(Ink950.copy(alpha = 0.6f), r, p, style = Stroke(1.5.dp.toPx()))
+                if (a.text.isNotBlank()) {
+                    val fontPx = r * if (a.text.length <= 3) 0.95f else 0.7f
+                    val style = TextStyle(color = contrastOn(color), fontSize = fontPx.toSp(), fontWeight = FontWeight.Bold)
+                    val t = textMeasurer.measure(a.text, style, maxLines = 1)
+                    drawText(t, topLeft = Offset(p.x - t.size.width / 2f, p.y - t.size.height / 2f))
+                }
+            }
+            AnnotationKind.TEXT -> {
+                if (a.text.isBlank()) continue
+                val fontPx = (0.6f * meter * a.size).coerceIn(11.dp.toPx(), 40.dp.toPx())
+                val style = TextStyle(color = color, fontSize = fontPx.toSp(), fontWeight = FontWeight.SemiBold)
+                val t = textMeasurer.measure(a.text, style, maxLines = 2)
+                val topLeft = Offset(p.x - t.size.width / 2f, p.y - t.size.height / 2f)
+                val pad = 3.dp.toPx()
+                drawRoundRect(
+                    Ink950.copy(alpha = if (lifted) 0.85f else 0.6f),
+                    topLeft - Offset(pad, pad),
+                    Size(t.size.width + 2 * pad, t.size.height + 2 * pad),
+                    CornerRadius(pad * 1.5f),
+                )
+                drawText(t, topLeft = topLeft)
+            }
+            AnnotationKind.ARROW -> {
+                val x2 = a.x2 ?: continue
+                val y2 = a.y2 ?: continue
+                val q = camera.toScreen(x2, y2)
+                val width = (0.12f * meter * a.size).coerceIn(2.5.dp.toPx(), 8.dp.toPx())
+                val dir = q - p
+                val len = dir.getDistance()
+                if (len < 1f) continue
+                val unit = dir / len
+                val head = (width * 4f).coerceAtMost(len * 0.6f)
+                val base = q - unit * head
+                val normal = Offset(-unit.y, unit.x) * (head * 0.55f)
+                drawLine(Ink950.copy(alpha = 0.5f), p, base, width + 2.dp.toPx(), cap = StrokeCap.Round)
+                drawLine(color, p, base, width, cap = StrokeCap.Round)
+                val tip = Path().apply {
+                    moveTo(q.x, q.y)
+                    lineTo(base.x + normal.x, base.y + normal.y)
+                    lineTo(base.x - normal.x, base.y - normal.y)
+                    close()
+                }
+                drawPath(tip, color)
+                if (a.text.isNotBlank()) {
+                    val fontPx = (0.5f * meter * a.size).coerceIn(11.dp.toPx(), 32.dp.toPx())
+                    val style = TextStyle(color = color, fontSize = fontPx.toSp(), fontWeight = FontWeight.SemiBold)
+                    val t = textMeasurer.measure(a.text, style, maxLines = 1)
+                    // The caption sits behind the tail, away from where the arrow points.
+                    val at = p - unit * (t.size.width / 2f + 6.dp.toPx())
+                    val topLeft = Offset(at.x - t.size.width / 2f, at.y - t.size.height / 2f)
+                    val pad = 3.dp.toPx()
+                    drawRoundRect(
+                        Ink950.copy(alpha = 0.6f),
+                        topLeft - Offset(pad, pad),
+                        Size(t.size.width + 2 * pad, t.size.height + 2 * pad),
+                        CornerRadius(pad * 1.5f),
+                    )
+                    drawText(t, topLeft = topLeft)
+                }
+            }
+        }
+    }
+}
+
+/** Black or white, whichever reads better on [background]. */
+private fun contrastOn(background: Color): Color =
+    if (0.299f * background.red + 0.587f * background.green + 0.114f * background.blue > 0.6f) Color.Black else Color.White
+
+/**
+ * One-finger drag of an item under the finger ([itemAt] non-null at the touch); anything else is left to the
+ * map and to taps. A second finger hands the gesture back to the map.
+ */
+private suspend fun PointerInputScope.detectItemDrag(
+    itemAt: (Offset) -> String?,
+    onDrag: (id: String, delta: Offset) -> Unit,
+    onEnd: () -> Unit,
+) = awaitEachGesture {
+    val down = awaitFirstDown(requireUnconsumed = false)
+    val id = itemAt(down.position) ?: return@awaitEachGesture
+    var travelled = Offset.Zero
+    var dragging = false
+    while (true) {
+        val event = awaitPointerEvent()
+        val change = event.changes.firstOrNull { it.id == down.id }
+        if (change == null || !change.pressed || event.changes.count { it.pressed } > 1) {
+            if (dragging) onEnd()
+            return@awaitEachGesture
+        }
+        if (!dragging) {
+            travelled += change.positionChange()
+            if (travelled.getDistance() <= viewConfiguration.touchSlop) continue
+            dragging = true
+            onDrag(id, travelled)
+        } else {
+            onDrag(id, change.positionChange())
+        }
+        change.consume()
     }
 }

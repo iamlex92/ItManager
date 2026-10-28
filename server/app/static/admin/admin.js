@@ -707,6 +707,62 @@
   const toScreen = (x, y) => [x * S.view.scale + S.view.ox, y * S.view.scale + S.view.oy];
   const toPlan = (sx, sy) => [(sx - S.view.ox) / S.view.scale, (sy - S.view.oy) / S.view.scale];
 
+  /** Marks placed in the app: room numbers in circles, captions, arrows. To the plan's scale, never unreadable. */
+  function drawAnnotations() {
+    const marks = (S.floor && S.floor.annotations) || [];
+    const meter = Number((S.floor && S.floor.scale_pixels_per_meter) || 50) * S.view.scale;
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const caption = (text, x, y, px, color) => {
+      ctx.font = `600 ${px}px system-ui, sans-serif`;
+      const w = ctx.measureText(text).width;
+      ctx.fillStyle = "rgba(11,14,19,.6)";
+      ctx.fillRect(x - w / 2 - 3, y - px / 2 - 3, w + 6, px + 6);
+      ctx.fillStyle = color;
+      ctx.fillText(text, x, y);
+    };
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (const a of marks) {
+      const size = a.size || 1;
+      const [x, y] = toScreen(a.x, a.y);
+      if (a.kind === "BADGE") {
+        const r = clamp(0.7 * meter * size, 10, 48);
+        ctx.fillStyle = a.color;
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+        const rgb = parseInt(a.color.slice(1), 16);
+        const light = 0.299 * (rgb >> 16) + 0.587 * ((rgb >> 8) & 255) + 0.114 * (rgb & 255) > 153;
+        ctx.fillStyle = light ? "#000" : "#fff";
+        ctx.font = `700 ${r * (a.text.length <= 3 ? 0.95 : 0.7)}px system-ui, sans-serif`;
+        ctx.fillText(a.text, x, y);
+      } else if (a.kind === "TEXT") {
+        caption(a.text, x, y, clamp(0.6 * meter * size, 11, 40), a.color);
+      } else if (a.kind === "ARROW" && a.x2 != null) {
+        const [x2, y2] = toScreen(a.x2, a.y2);
+        const len = Math.hypot(x2 - x, y2 - y);
+        if (len < 1) continue;
+        const ux = (x2 - x) / len, uy = (y2 - y) / len;
+        const width = clamp(0.12 * meter * size, 2.5, 8);
+        const head = Math.min(width * 4, len * 0.6);
+        const bx = x2 - ux * head, by = y2 - uy * head;
+        ctx.strokeStyle = a.color; ctx.lineWidth = width; ctx.lineCap = "round";
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(bx, by); ctx.stroke();
+        ctx.fillStyle = a.color;
+        ctx.beginPath(); ctx.moveTo(x2, y2);
+        ctx.lineTo(bx - uy * head * 0.55, by + ux * head * 0.55);
+        ctx.lineTo(bx + uy * head * 0.55, by - ux * head * 0.55);
+        ctx.closePath(); ctx.fill();
+        if (a.text) {
+          const px = clamp(0.5 * meter * size, 11, 32);
+          ctx.font = `600 ${px}px system-ui, sans-serif`;
+          const w = ctx.measureText(a.text).width;
+          caption(a.text, x - ux * (w / 2 + 6), y - uy * (w / 2 + 6), px, a.color);
+        }
+      }
+    }
+    ctx.restore();
+  }
+
   function draw() {
     if (currentTab !== "map") return;
     resize();
@@ -737,6 +793,7 @@
     ctx.strokeRect(fx, fy, w * k, h * k);
 
     for (const z of zonesOf(S.floor)) drawZone(z);
+    drawAnnotations();
     if (S.tool === "zones" && !S.zoneDraft) {
       for (const z of zonesOf(S.floor)) {
         for (let i = 0; i + 1 < z.points.length; i += 2) {

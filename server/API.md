@@ -352,3 +352,9 @@ A placeholder port `portN` drawn on the map takes the real name of the N-th inte
 `GET /api/v1/devices` also returns `switch_id`, `switch_port_id`, `switch_port_name`: the switch port a device is
 cabled to. A VLAN's `subnet_cidr` may be null.
 
+## Map marks
+
+Floors carry `annotations: [{id, kind: "BADGE"|"TEXT"|"ARROW", x, y, x2, y2, text, color, size}]`, set with
+`PATCH /api/v1/floors/{id}` like `zones`. BADGE is a room number in a circle, TEXT a caption, ARROW points from
+x, y to x2, y2 (both required). Map pixels; `size` 0.3–5, 1 is normal. Up to 500 per floor.
+

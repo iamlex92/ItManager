@@ -9,6 +9,7 @@ from pydantic import (
     Field,
     field_serializer,
     field_validator,
+    model_validator,
 )
 
 DeviceType = Literal[
@@ -98,6 +99,32 @@ class Zone(BaseModel):
 MAX_ZONES = 200
 
 
+class Annotation(BaseModel):
+    """A mark on the map: a room number in a circle (BADGE), a caption (TEXT) or a pointer (ARROW).
+
+    x, y is where it stands (for an arrow, its tail); an arrow points at x2, y2. Map pixels."""
+
+    id: str = Field(min_length=1, max_length=40)
+    kind: Literal["BADGE", "TEXT", "ARROW"]
+    x: float
+    y: float
+    x2: float | None = None
+    y2: float | None = None
+    text: str = Field(default="", max_length=100)
+    color: str = Field(default="#FFD60A", pattern=r"^#[0-9a-fA-F]{6}$")
+    # How big it is drawn, 1 is normal.
+    size: float = Field(default=1, ge=0.3, le=5)
+
+    @model_validator(mode="after")
+    def _arrow_end(self) -> "Annotation":
+        if self.kind == "ARROW" and (self.x2 is None or self.y2 is None):
+            raise ValueError("an arrow needs x2, y2")
+        return self
+
+
+MAX_ANNOTATIONS = 500
+
+
 class FloorBase(BaseModel):
     building_name: str = Field(max_length=100)
     floor_number: int
@@ -112,6 +139,7 @@ class FloorBase(BaseModel):
     plan_h: float | None = Field(default=None, gt=0)
     drawings: list[Drawing] = Field(default_factory=list, max_length=MAX_DRAWINGS)
     zones: list[Zone] = Field(default_factory=list, max_length=MAX_ZONES)
+    annotations: list[Annotation] = Field(default_factory=list, max_length=MAX_ANNOTATIONS)
 
     @field_validator("name")
     @classmethod
@@ -138,6 +166,7 @@ class FloorUpdate(BaseModel):
     plan_h: float | None = Field(default=None, gt=0)
     drawings: list[Drawing] | None = Field(default=None, max_length=MAX_DRAWINGS)
     zones: list[Zone] | None = Field(default=None, max_length=MAX_ZONES)
+    annotations: list[Annotation] | None = Field(default=None, max_length=MAX_ANNOTATIONS)
 
     @field_validator("name")
     @classmethod

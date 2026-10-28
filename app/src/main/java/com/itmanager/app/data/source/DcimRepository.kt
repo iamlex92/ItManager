@@ -7,6 +7,7 @@ import com.itmanager.app.core.settings.ServerSettings
 import com.itmanager.app.core.settings.SettingsRepository
 import com.itmanager.app.data.model.ALL_DEVICES
 import com.itmanager.app.data.model.Alert
+import com.itmanager.app.data.model.Annotation
 import com.itmanager.app.data.model.AuditEntry
 import com.itmanager.app.data.model.AuditKind
 import com.itmanager.app.data.model.AuthMethod
@@ -168,6 +169,8 @@ class DcimRepository @Inject constructor(
     suspend fun saveDrawings(plan: FloorPlan, drawings: List<Drawing>): Result<FloorPlan> =
         load { saveDrawings(plan, drawings) }
     suspend fun saveZones(plan: FloorPlan, zones: List<Zone>): Result<FloorPlan> = load { saveZones(plan, zones) }
+    suspend fun saveAnnotations(plan: FloorPlan, annotations: List<Annotation>): Result<FloorPlan> =
+        load { saveAnnotations(plan, annotations) }
 
     // Peripherals change only their own list; the map and the device list stay as they are.
     suspend fun peripherals(): Result<List<Peripheral>> = load { peripherals() }
