@@ -8,6 +8,7 @@
 <script src="/static/admin/admin.js?v={{version}}" defer></script>
 <script src="/static/admin/admin-more.js?v={{version}}" defer></script>
 <script src="/static/admin/admin-pcs.js?v={{version}}" defer></script>
+<script src="/static/admin/admin-settings.js?v={{version}}" defer></script>
 </head>
 <body>
 <div id="login" class="login" hidden>
@@ -47,6 +48,7 @@
           <button data-tab="scripts">Свои скрипты</button>
           <button data-tab="audit">Журнал</button>
           <div class="pop-group">Система</div>
+          <button data-tab="settings">Настройки сервера</button>
           <button data-tab="creds">Учётные данные</button>
         </div>
       </div>
@@ -247,9 +249,24 @@
     <section id="tab-printers" class="tab" hidden>
       <div class="toolbar"><div class="spacer"></div><button id="printer-reload">Обновить</button></div>
       <p id="printer-emulated" class="error-box" hidden>Сервер не опрашивает МФУ: в его настройках <code>MONITOR_MODE=emulator</code>,
-        и уровни тонера и счётчики страниц здесь ненастоящие. Поставьте <code>MONITOR_MODE=real</code> в <code>netadmin.env</code>
-        и перезапустите службу NetAdmin.</p>
+        и уровни тонера и счётчики страниц здесь ненастоящие. Включите «Опрос устройств: Настоящие» в
+        «Ещё → Настройки сервера» и перезапустите сервер там же.</p>
       <div id="printer-cards" class="cards"></div>
+    </section>
+
+    <section id="tab-settings" class="tab" hidden>
+      <div class="card">
+        <div class="row wrap">
+          <h2 class="grow">Настройки сервера</h2>
+          <button type="button" id="settings-save" class="primary" disabled>Сохранить</button>
+          <button type="button" id="settings-restart">Перезапустить сервер</button>
+        </div>
+        <p class="muted small">Значения сохраняются на сервере и заменяют <code>netadmin.env</code>; начинают действовать после перезапуска
+          сервера. Адрес базы, API-токен, ключ шифрования и адрес прослушивания остаются в файле.</p>
+        <p id="settings-pending" class="banner warn" hidden>Есть сохранённые изменения, которые ещё не действуют: перезапустите сервер.</p>
+        <p id="settings-error" class="error-box" hidden></p>
+      </div>
+      <div id="settings-groups" class="settings-groups"></div>
     </section>
 
     <section id="tab-creds" class="tab" hidden>

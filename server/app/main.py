@@ -1,7 +1,9 @@
 import asyncio
 import contextlib
 import logging
+import os
 import re
+import signal
 from collections.abc import AsyncIterator
 from pathlib import Path
 from uuid import UUID
@@ -12,7 +14,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 
-from . import __version__, crypto
+from . import __version__, crypto, serversettings
 from .api import (
     alerts,
     audit,
@@ -41,6 +43,9 @@ from .api import (
     vlans,
     ws,
 )
+from .api import (
+    serversettings as serversettings_api,
+)
 from .api.deps import require_token
 from .config import (
     REAL_SWITCH_MIN_POLL_SECONDS,
@@ -56,7 +61,7 @@ from .discovery.manager import ScanManager
 from .hal.base import DeviceWritesDisabled, SwitchError, UnsupportedVendor
 from .hal.emulator import EmulatorDriver
 from .hal.factory import build_driver, build_printer_driver
-from .models import Credential, Device
+from .models import Credential, Device, ServerSetting
 from .pcs.backend import EmulatedPcs, RealPcs
 from .pcs.service import KeyInventory
 from .runbooks.emulator import RunbookEnvironment
@@ -102,7 +107,16 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
             log.warning("SECRET_KEY is not set: SNMP communities and credentials are stored unencrypted")
         # Encrypts leftover plaintext, and refuses to start when stored secrets can't be read.
         async with app.state.sessionmaker() as s:
-            await crypto.encrypt_existing(s, [(Device, "snmp_community"), (Credential, "secret")])
+            await crypto.encrypt_existing(
+                s, [(Device, "snmp_community"), (Credential, "secret"), (ServerSetting, "value")]
+            )
+            # Settings saved in «Настройки сервера» override netadmin.env; everything below is built from them.
+            app.state.settings_file = serversettings.current(settings)
+            serversettings.apply(settings, await serversettings.load(s))
+            app.state.settings_active = serversettings.current(settings)
+        if getattr(app.state, "restart", None) is None and Path("/.dockerenv").exists():
+            # Docker restarts the container (restart: unless-stopped) after a clean stop.
+            app.state.restart = lambda: os.kill(os.getpid(), signal.SIGTERM)
         app.state.driver = build_driver(settings, app.state.sessionmaker)
         if isinstance(app.state.driver, EmulatorDriver):
 
@@ -126,7 +140,7 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
             app.state.runbooks = RunbookEnvironment(step_delay=settings.runbook_step_delay_seconds)
         app.state.discovery = ScanManager(app.state.sessionmaker, settings)
         # Domain computers follow the runbooks' switch: real WinRM, or an emulator that says so.
-        app.state.pcs = RealPcs(settings) if settings.runbook_mode is RunbookMode.REAL else EmulatedPcs()
+        app.state.pcs = RealPcs(settings) if settings.pcs_real else EmulatedPcs()
         app.state.pc_keys = KeyInventory()
         log.warning(
             "HAL mode: %s, device writes %s",
@@ -284,7 +298,7 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
         faceplates,
         topology,
     )
-    for module in (*routers, credentials, notifications, traffic, history):
+    for module in (*routers, credentials, notifications, traffic, history, serversettings_api):
         api.include_router(module.router)
 
     app.include_router(public)

@@ -3900,6 +3900,7 @@
     picked, renderPorts: () => renderPorts(), portsDevice: () => portsDevice,
     openCard: (id) => openCard(id).catch(fail),
     openTab: (name) => openTab(name),
+    showMode: () => showMode(),
   };
 
   // ---------------------------------------------------------------- go

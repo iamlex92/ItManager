@@ -85,6 +85,7 @@ import com.itmanager.app.ui.scanner.ScannerScreen
 import com.itmanager.app.ui.security.AppLockOverlay
 import com.itmanager.app.ui.settings.SettingsScreen
 import com.itmanager.app.ui.pcs.PcsScreen
+import com.itmanager.app.ui.serverconfig.ServerConfigScreen
 import com.itmanager.app.ui.tools.ToolsHubScreen
 import com.itmanager.app.ui.switchdetail.SwitchScreen
 import com.itmanager.app.ui.theme.Motion
@@ -335,6 +336,7 @@ private fun AppNavHost(
                         MoreItem.RUNBOOKS -> AutomationRoute
                         MoreItem.AUDIT -> AuditRoute
                         MoreItem.SETTINGS -> SettingsRoute
+                        MoreItem.SERVER -> ServerConfigRoute
                         MoreItem.CREDENTIALS -> CredentialsRoute
                     }
                     navController.navigate(route) { launchSingleTop = true }
@@ -518,6 +520,14 @@ private fun AppNavHost(
             popExitTransition = { slideOutHorizontally(push) { it } },
         ) { entry ->
             PcsScreen(onBack = back, initialHost = entry.toRoute<PcsRoute>().host)
+        }
+        composable<ServerConfigRoute>(
+            enterTransition = { slideInHorizontally(push) { it } },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { slideOutHorizontally(push) { it } },
+        ) {
+            ServerConfigScreen(onBack = back, onOpenSettings = openSettings)
         }
         composable<CredentialsRoute>(
             enterTransition = { slideInHorizontally(push) { it } },

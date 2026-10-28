@@ -100,6 +100,10 @@ def migrate(database_url: str) -> None:
     command.upgrade(cfg, "head")
 
 
+# Not 0, so the service manager starts the agent again; not 1, so a real crash still reads as one in the logs.
+RESTART_EXIT_CODE = 3
+
+
 def cmd_run(args: argparse.Namespace) -> None:
     _load(args.config)
     import uvicorn
@@ -114,7 +118,21 @@ def cmd_run(args: argparse.Namespace) -> None:
         host = os.environ.get("API_BIND", "0.0.0.0").strip() or "0.0.0.0"
         port = int(os.environ.get("API_PORT", "8000"))
         log.warning("listening on %s:%d", host, port)
-        uvicorn.run(create_app(settings), host=host, port=port, proxy_headers=True, log_level="info")
+        app = create_app(settings)
+        server = uvicorn.Server(uvicorn.Config(app, host=host, port=port, proxy_headers=True, log_level="info"))
+        restart = []
+
+        def request_restart() -> None:
+            # «Настройки сервера» → «Перезапустить»: stop cleanly (the bundled database too), then exit with
+            # RESTART_EXIT_CODE so systemd (Restart=on-failure) or WinSW (onfailure restart) start us again.
+            restart.append(True)
+            server.should_exit = True
+
+        app.state.restart = request_restart
+        server.run()
+    if restart:
+        log.warning("restarting to apply server settings")
+        raise SystemExit(RESTART_EXIT_CODE)
 
 
 def cmd_backup(args: argparse.Namespace) -> None:
