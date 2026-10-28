@@ -106,7 +106,7 @@
     try {
       const h = await (await fetch("/api/v1/health")).json();
       const hal = h.hal_mode === "emulator"
-        ? "коммутаторы: эмулятор"
+        ? (h.monitor_mode === "real" ? "коммутаторы: линки по SNMP, управление эмулируется" : "коммутаторы: эмулятор")
         : `коммутаторы: ${h.hal_mode} · запись ${h.device_writes_enabled ? "включена" : "выключена"}`;
       // Without polling the printer and ping figures are made up: that must be seen at a glance.
       const monitor = h.monitor_mode === "emulator" ? "опрос устройств выключен" : "опрос устройств включён";

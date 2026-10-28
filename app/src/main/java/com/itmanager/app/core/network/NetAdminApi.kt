@@ -456,6 +456,8 @@ class NetAdminApi @Inject constructor(
             "bad_svg", "svg_too_big", "bad_device", "bad_port", "duplicate_port", "kind_required",
             "wrong_port", "port_busy", "invalid_request", "invalid_subnet", "unknown_host", "no_login", "no_ad",
             "ad_failed", "pc_failed", "writes_disabled",
+            "no_switch_login", "switch_unreachable", "switch_login_failed", "switch_timeout", "switch_closed",
+            "switch_rejected", "snmp_failed",
         )
     }
 

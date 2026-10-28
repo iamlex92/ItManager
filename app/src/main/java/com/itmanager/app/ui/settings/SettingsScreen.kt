@@ -314,7 +314,7 @@ private fun ConnectionCheckResult(check: ConnectionCheck) {
                 Text("Сервер отвечает", style = MaterialTheme.typography.titleSmall)
                 val h = check.health
                 val mode = when (h.halMode) {
-                    "emulator" -> "эмулятор оборудования"
+                    "emulator" -> if (h.monitorMode == "real") "коммутаторы: линки по SNMP, управление эмулируется" else "эмулятор оборудования"
                     "real" -> if (h.deviceWritesEnabled == true) "реальное оборудование, изменения разрешены" else "реальное оборудование, только чтение"
                     else -> null
                 }

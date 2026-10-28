@@ -1,6 +1,7 @@
 import difflib
 import hashlib
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
@@ -27,7 +28,7 @@ from ..schemas import (
     TracerouteRequest,
     normalize_nfc_uid,
 )
-from ..services import switches
+from ..services import linkstate, switches
 from ..services.serialize import device_out, port_out
 from ..services.topology import load_graph
 from .deps import DriverDep, HubDep, SessionDep, SettingsDep, conflict, not_found
@@ -240,13 +241,24 @@ async def list_device_ports(device_id: uuid.UUID, session: SessionDep):
 
 
 @router.post("/{device_id}/refresh", response_model=list[PortOut])
-async def refresh_device(device_id: uuid.UUID, session: SessionDep, driver: DriverDep, hub: HubDep):
+async def refresh_device(device_id: uuid.UUID, request: Request, session: SessionDep, driver: DriverDep, hub: HubDep):
     """Re-read live port state from the switch now. Read-only on the device."""
     device = await switches.load_switch(session, device_id)
     if device is None:
         raise not_found("device")
     require_managed_switch(device)
-    await switches.sync_device(session, driver, hub, device)
+    links = request.app.state.links
+    if links is not None:
+        # Links over SNMP (HAL_MODE=emulator, MONITOR_MODE=real): the switch's own answer, not the emulator's.
+        try:
+            readings = await links.read(device, device.ports)
+        except Exception as e:
+            raise HTTPException(
+                502, detail={"code": "snmp_failed", "message": f"{device.name}: SNMP не ответил ({e})"}
+            ) from e
+        await linkstate.apply_readings(session, hub, device, readings, datetime.now(UTC))
+    else:
+        await switches.sync_device(session, driver, hub, device)
     graph = await load_graph(session)
     return [port_out(p, graph) for p in device.ports]
 

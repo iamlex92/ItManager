@@ -42,7 +42,15 @@ from .api import (
     ws,
 )
 from .api.deps import require_token
-from .config import REAL_SWITCH_MIN_POLL_SECONDS, HalMode, MonitorMode, RunbookMode, Settings, get_settings
+from .config import (
+    REAL_SWITCH_MIN_POLL_SECONDS,
+    SNMP_LINK_MIN_POLL_SECONDS,
+    HalMode,
+    MonitorMode,
+    RunbookMode,
+    Settings,
+    get_settings,
+)
 from .db import make_engine, make_sessionmaker
 from .discovery.manager import ScanManager
 from .hal.base import DeviceWritesDisabled, SwitchError, UnsupportedVendor
@@ -54,7 +62,7 @@ from .pcs.service import KeyInventory
 from .runbooks.emulator import RunbookEnvironment
 from .runbooks.real import RealRunbooks
 from .schemas import HealthOut
-from .services import backup, heartbeat, telegram, traps
+from .services import backup, heartbeat, linkstate, telegram, traps
 from .services import printers as printer_service
 from .services import traffic as traffic_service
 from .services.realtime import Hub
@@ -104,6 +112,9 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
 
             app.state.driver.host_lookup = host_lookup
         app.state.hub = Hub()
+        # Switch control emulated but devices monitored for real: port links are read over SNMP.
+        real_links = settings.hal_mode is HalMode.EMULATOR and settings.monitor_mode is MonitorMode.REAL
+        app.state.links = linkstate.SnmpLinks(settings) if real_links else None
         if settings.runbook_mode is RunbookMode.REAL:
             app.state.runbooks = RealRunbooks(settings)
             log.warning(
@@ -130,7 +141,16 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
             if settings.hal_mode is HalMode.REAL:
                 # Each poll is an SSH login per switch: not every 10 s.
                 interval = max(interval, REAL_SWITCH_MIN_POLL_SECONDS)
-            tasks.append(asyncio.create_task(poller(sm, app.state.driver, hub, interval)))
+                tasks.append(asyncio.create_task(poller(sm, app.state.driver, hub, interval)))
+            elif settings.monitor_mode is MonitorMode.REAL:
+                # Switches are not driven over SSH, but their links are real: read them over SNMP
+                # instead of letting the emulator make them up.
+                links = app.state.links
+                interval = max(interval, SNMP_LINK_MIN_POLL_SECONDS)
+                tasks.append(asyncio.create_task(linkstate.poller(sm, links, hub, interval)))
+                log.warning("switch ports: link state over SNMP every %g s (HAL_MODE=emulator)", interval)
+            else:
+                tasks.append(asyncio.create_task(poller(sm, app.state.driver, hub, interval)))
         if settings.printer_poll_interval_seconds > 0:
             tasks.append(
                 asyncio.create_task(

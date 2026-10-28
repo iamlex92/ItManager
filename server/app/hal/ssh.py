@@ -102,13 +102,13 @@ class CliSession:
             left = deadline - loop.time()
             if left <= 0:
                 tail = clean(buf)[-200:]
-                raise SwitchError("switch_timeout", f"the switch did not answer in {timeout:.0f} s: …{tail}")
+                raise SwitchError("switch_timeout", f"коммутатор не ответил за {timeout:.0f} с: …{tail}")
             try:
                 chunk = await asyncio.wait_for(self._p.stdout.read(65536), left)
             except TimeoutError:
                 continue
             if not chunk:
-                raise SwitchError("switch_closed", f"the switch closed the session: …{clean(buf)[-200:]}")
+                raise SwitchError("switch_closed", f"коммутатор закрыл сессию: …{clean(buf)[-200:]}")
             buf += chunk
             tail = clean(buf)[-300:]
             if _MORE.search(tail):
@@ -142,7 +142,7 @@ class CliSession:
                 break
         m = _PROMPT.search(out[-200:])
         if m is None:
-            raise SwitchError("switch_login_failed", "no command prompt after login")
+            raise SwitchError("switch_login_failed", "после входа нет приглашения командной строки")
         self._base = m.group(1)
         if m.group(3) == ">":
             self._p.stdin.write("enable\n")
@@ -154,7 +154,7 @@ class CliSession:
             if m is None or m.group(3) != "#":
                 raise SwitchError(
                     "switch_login_failed",
-                    "enable was refused: set SWITCH_ENABLE_SECRET or give the login privilege 15",
+                    "enable не принят: задайте SWITCH_ENABLE_SECRET или дайте логину privilege 15",
                 )
         paging = "terminal datadump" if self._vendor == "ELTEX" else "terminal length 0"
         await self.run(paging)
@@ -174,7 +174,7 @@ class CliSession:
     async def checked(self, command: str, timeout: float | None = None) -> str:
         out = await self.run(command, timeout)
         if err := cli_error(out):
-            raise SwitchError("switch_rejected", f"{command}: {err}")
+            raise SwitchError("switch_rejected", f"коммутатор отклонил «{command}»: {err}")
         return out
 
     async def configure(self, commands: list[str]) -> None:
@@ -184,7 +184,7 @@ class CliSession:
             if err := cli_error(out):
                 with contextlib.suppress(SwitchError):
                     await self.run("end")
-                raise SwitchError("switch_rejected", f"{cmd}: {err}")
+                raise SwitchError("switch_rejected", f"коммутатор отклонил «{cmd}»: {err}")
 
 
 @contextlib.asynccontextmanager
@@ -219,9 +219,11 @@ async def open_cli(host: str, login: SwitchLogin, vendor: str, options: SshOptio
             options.connect_timeout,
         )
     except asyncssh.PermissionDenied as e:
-        raise SwitchError("switch_login_failed", f"{host}: login refused ({login.username})") from e
+        message = f"{host}: вход отклонён ({login.username}), проверьте логин и пароль"
+        raise SwitchError("switch_login_failed", message) from e
     except (OSError, TimeoutError, asyncssh.Error) as e:
-        raise SwitchError("switch_unreachable", f"{host}: {e or type(e).__name__}") from e
+        message = f"{host}: коммутатор недоступен по SSH ({e or type(e).__name__})"
+        raise SwitchError("switch_unreachable", message) from e
     try:
         process = await conn.create_process(term_type="vt100", term_size=(250, 50), encoding="utf-8", errors="replace")
         cli = CliSession(process, login, vendor, options.command_timeout)

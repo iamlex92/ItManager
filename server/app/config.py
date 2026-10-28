@@ -6,6 +6,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Real switches are polled over SSH (a login per switch), so not more often than this.
 REAL_SWITCH_MIN_POLL_SECONDS = 60.0
+# Link state over SNMP (MONITOR_MODE=real with emulated switch control): three IF-MIB walks per switch.
+SNMP_LINK_MIN_POLL_SECONDS = 15.0
 
 
 class HalMode(StrEnum):
