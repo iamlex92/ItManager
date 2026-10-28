@@ -63,6 +63,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.ui.components.FormSection
+import com.itmanager.app.ui.components.FormSheet
 import com.itmanager.app.data.model.Peripheral
 import com.itmanager.app.data.model.PeripheralDraft
 import com.itmanager.app.data.model.PeripheralKind
@@ -126,30 +128,6 @@ fun PeripheralRow(item: Peripheral, showDevice: Boolean, onClick: () -> Unit, mo
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-            }
-        }
-    }
-}
-
-/**
- * The peripherals of one device, full screen: add a new one, take one from stock, tap one to change,
- * move or detach it.
- */
-@Composable
-fun DevicePeripheralsDialog(device: Device, viewModel: PeripheralsViewModel, all: List<Peripheral>, onDismiss: () -> Unit) {
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column(Modifier.systemBarsPadding()) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 20.dp, end = 8.dp, top = 8.dp)) {
-                    Icon(device.type.icon, contentDescription = null, tint = device.type.tint)
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("Периферия", style = MaterialTheme.typography.titleLarge)
-                        Text(device.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, contentDescription = "Закрыть") }
-                }
-                DevicePeripheralsContent(device, viewModel, all, Modifier.weight(1f))
             }
         }
     }
@@ -305,63 +283,67 @@ fun PeripheralEditorDialog(
 ) {
     val draft = editor.draft
     var pickDevice by remember { mutableStateOf(false) }
-    var confirmDelete by remember { mutableStateOf(false) }
     val deviceName = draft.deviceId?.let { id -> devices.firstOrNull { it.id == id }?.name ?: editor.editing?.deviceName ?: "устройство" }
+    val editing = editor.editing
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (editor.editing == null) "Новая периферия" else editor.editing.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.verticalScroll(rememberScrollState())) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    PeripheralKind.entries.forEach { kind ->
-                        FilterChip(
-                            selected = draft.kind == kind,
-                            onClick = { onChange(draft.copy(kind = kind)) },
-                            label = { Text(kind.label) },
-                            leadingIcon = { Icon(kind.icon, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                        )
-                    }
-                }
-                Field("Производитель", draft.vendor, 50, "Dell") { onChange(draft.copy(vendor = it)) }
-                Field("Модель", draft.model, 100, "P2422H") { onChange(draft.copy(model = it)) }
-                Field("Характеристики", draft.specs, 200, draft.kind.specsHint()) { onChange(draft.copy(specs = it)) }
-                Field("Серийный номер", draft.serialNumber, 100, null) { onChange(draft.copy(serialNumber = it)) }
-                Field("Инвентарный номер", draft.inventoryNumber, 100, null) { onChange(draft.copy(inventoryNumber = it)) }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(10.dp))
-                        .clickable { pickDevice = true }
-                        .padding(12.dp),
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Подключено к", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(deviceName ?: "На складе", style = MaterialTheme.typography.bodyLarge)
-                    }
-                    Text("Изменить", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                }
-                OutlinedTextField(
-                    value = draft.comment.orEmpty(),
-                    onValueChange = { onChange(draft.copy(comment = it.take(4000))) },
-                    label = { Text("Комментарий") },
-                    minLines = 2,
-                    maxLines = 5,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                editor.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-                if (editor.editing != null) {
-                    TextButton(onClick = { confirmDelete = true }, enabled = !editor.busy) {
-                        Text("Удалить из учёта", color = MaterialTheme.colorScheme.error)
-                    }
+    FormSheet(
+        title = editing?.title ?: "Новая периферия",
+        onDismiss = onDismiss,
+        onSave = onSave,
+        busy = editor.busy,
+        error = editor.error,
+        deleteLabel = editing?.let { "Удалить из учёта" },
+        deleteQuestion = editing?.let {
+            "Удалить ${it.title}?" to "Запись пропадёт из учёта. Если вещь просто убрали, лучше верните её на склад."
+        },
+        onDelete = editing?.let { p -> { onDelete(p) } },
+    ) {
+        FormSection("Что это") {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                PeripheralKind.entries.forEach { kind ->
+                    FilterChip(
+                        selected = draft.kind == kind,
+                        onClick = { onChange(draft.copy(kind = kind)) },
+                        label = { Text(kind.label) },
+                        leadingIcon = { Icon(kind.icon, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                    )
                 }
             }
-        },
-        confirmButton = { TextButton(onClick = onSave, enabled = !editor.busy) { Text("Сохранить") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-    )
+            Field("Производитель", draft.vendor, 50, "Dell") { onChange(draft.copy(vendor = it)) }
+            Field("Модель", draft.model, 100, "P2422H") { onChange(draft.copy(model = it)) }
+            Field("Характеристики", draft.specs, 200, draft.kind.specsHint()) { onChange(draft.copy(specs = it)) }
+        }
+        FormSection("Учёт") {
+            Field("Серийный номер", draft.serialNumber, 100, null) { onChange(draft.copy(serialNumber = it)) }
+            Field("Инвентарный номер", draft.inventoryNumber, 100, null) { onChange(draft.copy(inventoryNumber = it)) }
+        }
+        FormSection("Где сейчас") {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(12.dp))
+                    .clickable { pickDevice = true }
+                    .padding(12.dp),
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Подключено к", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(deviceName ?: "На складе", style = MaterialTheme.typography.bodyLarge)
+                }
+                Text("Изменить", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            }
+        }
+        FormSection("Заметки") {
+            OutlinedTextField(
+                value = draft.comment.orEmpty(),
+                onValueChange = { onChange(draft.copy(comment = it.take(4000))) },
+                label = { Text("Комментарий") },
+                minLines = 2,
+                maxLines = 5,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
 
     if (pickDevice) {
         DevicePickerDialog(
@@ -372,20 +354,6 @@ fun PeripheralEditorDialog(
                 onChange(draft.copy(deviceId = d?.id))
             },
             onDismiss = { pickDevice = false },
-        )
-    }
-    if (confirmDelete && editor.editing != null) {
-        AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            title = { Text("Удалить ${editor.editing.title}?") },
-            text = { Text("Запись пропадёт из учёта. Если вещь просто убрали, лучше верните её на склад.") },
-            confirmButton = {
-                TextButton(onClick = { confirmDelete = false; onDelete(editor.editing) }) {
-                    Text("Удалить", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Отмена") } },
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         )
     }
 }

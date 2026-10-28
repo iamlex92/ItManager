@@ -375,7 +375,7 @@ private fun PortSheet(
                 Text("Изменить запись о порте (только база)")
             }
             Text(
-                "Имя, номер, режим, VLAN, скорость, PoE и аплинк как они записаны в базе. Коммутатор не затрагивается.",
+                "Имя, номер, режим, VLAN, скорость, PoE и аплинк как они записаны в учёте. Коммутатор не затрагивается.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 6.dp),

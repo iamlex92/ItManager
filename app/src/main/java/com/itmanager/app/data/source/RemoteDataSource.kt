@@ -31,6 +31,7 @@ import com.itmanager.app.core.network.toDomain
 import com.itmanager.app.core.settings.ServerSettings
 import com.itmanager.app.data.model.Alert
 import com.itmanager.app.data.model.Annotation
+import com.itmanager.app.data.model.MapPoint
 import com.itmanager.app.data.model.AuditEntry
 import com.itmanager.app.data.model.AuditKind
 import com.itmanager.app.data.model.AuthMethod
@@ -180,8 +181,12 @@ class RemoteDataSource(
 
     override suspend fun deleteDeviceTemplate(id: String) = api.deleteDeviceTemplate(settings, id)
 
-    override suspend fun createDeviceFromTemplate(templateId: String, name: String, ip: String?): Device =
-        api.createDeviceFromTemplate(settings, templateId, DeviceFromTemplateBody(name.trim(), ip?.trim()?.ifEmpty { null })).toDomain()
+    override suspend fun createDeviceFromTemplate(templateId: String, name: String, ip: String?, at: MapPoint?): Device =
+        api.createDeviceFromTemplate(
+            settings,
+            templateId,
+            DeviceFromTemplateBody(name.trim(), ip?.trim()?.ifEmpty { null }, at?.floorId, at?.x, at?.y),
+        ).toDomain()
 
     override suspend fun importConfig(switchId: String, text: String, apply: Boolean): ConfigImportResult =
         api.importConfig(settings, switchId, text, apply).toDomain()

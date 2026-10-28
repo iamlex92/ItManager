@@ -249,13 +249,13 @@ class SwitchViewModel @Inject constructor(
     fun savePortRecord(port: SwitchPort?, draft: PortDraft, done: () -> Unit) = runBusy {
         val result = if (port == null) repository.createPort(deviceId, draft) else repository.updatePortRecord(port.id, draft)
         result.onSuccess { done(); refresh() }
-        _messages.emit(result.fold({ "Запись о порте сохранена в базе" }, { it.toUserMessage() }))
+        _messages.emit(result.fold({ "Запись о порте сохранена в учёте" }, { it.toUserMessage() }))
     }
 
     fun deletePortRecord(port: SwitchPort, done: () -> Unit) = runBusy {
         val result = repository.deletePort(port.id)
         result.onSuccess { done(); refresh() }
-        _messages.emit(result.fold({ "Запись о порте ${port.name} удалена из базы" }, { it.toUserMessage() }))
+        _messages.emit(result.fold({ "Запись о порте ${port.name} удалена из учёта" }, { it.toUserMessage() }))
     }
 
     private fun runBusy(block: suspend () -> Unit) {

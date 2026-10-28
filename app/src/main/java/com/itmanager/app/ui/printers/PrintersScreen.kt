@@ -101,7 +101,7 @@ fun PrintersScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    if (s.data.isEmpty()) item { EmptyView("МФУ пока не добавлены") }
+                    if (s.data.isEmpty()) item { EmptyView("МФУ в учёте нет. Добавьте их на карте с типом «МФУ» и IP-адресом: сервер начнёт опрашивать расходники.") }
                     items(s.data, key = { it.id }) { printer ->
                         PrinterCard(
                             printer = printer,

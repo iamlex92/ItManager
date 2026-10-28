@@ -8,6 +8,7 @@ import com.itmanager.app.core.settings.SettingsRepository
 import com.itmanager.app.data.model.ALL_DEVICES
 import com.itmanager.app.data.model.Alert
 import com.itmanager.app.data.model.Annotation
+import com.itmanager.app.data.model.MapPoint
 import com.itmanager.app.data.model.AuditEntry
 import com.itmanager.app.data.model.AuditKind
 import com.itmanager.app.data.model.AuthMethod
@@ -102,8 +103,8 @@ class DcimRepository @Inject constructor(
     suspend fun deviceTemplates() = load { deviceTemplates() }
     suspend fun saveDeviceTemplate(draft: DeviceTemplateDraft) = load { saveDeviceTemplate(draft) }
     suspend fun deleteDeviceTemplate(id: String) = load { deleteDeviceTemplate(id) }
-    suspend fun createDeviceFromTemplate(templateId: String, name: String, ip: String?): Result<Device> =
-        edit { createDeviceFromTemplate(templateId, name, ip) }
+    suspend fun createDeviceFromTemplate(templateId: String, name: String, ip: String?, at: MapPoint? = null): Result<Device> =
+        edit { createDeviceFromTemplate(templateId, name, ip, at) }
     suspend fun importConfig(switchId: String, text: String, apply: Boolean) =
         load { importConfig(switchId, text, apply) }
 

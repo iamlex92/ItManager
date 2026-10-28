@@ -25,6 +25,8 @@ data class VlanEditor(
     val draft: VlanDraft,
     val busy: Boolean = false,
     val error: String? = null,
+    /** Save was pressed: field problems show under their fields from now on. */
+    val triedSave: Boolean = false,
 )
 
 @HiltViewModel
@@ -79,7 +81,10 @@ class VlansViewModel @Inject constructor(
     fun save() {
         val e = _editor.value ?: return
         if (e.busy) return
-        e.draft.problem()?.let { p -> _editor.update { it?.copy(error = p) }; return }
+        if (e.draft.problem() != null) {
+            _editor.update { it?.copy(triedSave = true, error = null) }
+            return
+        }
         _editor.value = e.copy(busy = true, error = null)
         viewModelScope.launch {
             repository.saveVlan(e.isNew, e.draft).fold(

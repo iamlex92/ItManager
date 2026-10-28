@@ -30,12 +30,12 @@
     const [alerts, devices] = await Promise.all([api("GET", `alerts?${q}`), api("GET", "devices")]);
     const deviceName = (id) => (devices.find((d) => d.id === id) || {}).name || "—";
     const rows = $("alert-rows");
-    if (!alerts.length) return empty(rows, 5, "Оповещений нет.");
+    if (!alerts.length) return empty(rows, 5, $("alert-state").value === "false" ? "Открытых событий нет, всё работает." : "Событий нет.");
     rows.replaceChildren(...alerts.map((a) => {
       const tr = el("tr");
       td(tr, when(a.created_at));
       td(tr, el("span", { className: `sev-${a.severity}`, textContent: { CRITICAL: "Критично", WARNING: "Внимание", INFO: "Инфо" }[a.severity] || a.severity }));
-      td(tr, deviceName(a.device_id));
+      td(tr, el("button", { type: "button", className: "link", textContent: deviceName(a.device_id), onclick: () => window.NetAdmin.openCard(a.device_id) }));
       td(tr, a.message);
       const act = td(tr);
       if (!a.is_resolved) {
@@ -136,7 +136,7 @@
   async function loadPrinters() {
     const printers = await api("GET", "printers");
     const box = $("printer-cards");
-    if (!printers.length) { box.replaceChildren(el("p", { className: "muted", textContent: "Принтеров пока нет." })); return; }
+    if (!printers.length) { box.replaceChildren(el("p", { className: "muted", textContent: "МФУ в учёте нет. Добавьте устройство категории «МФУ» с IP-адресом: сервер начнёт опрашивать расходники." })); return; }
     box.replaceChildren(...printers.map((p) => el("div", { className: "card" },
       el("strong", { textContent: p.name }),
       el("span", { className: "muted small", textContent: [p.ip, p.model, p.is_online ? "в сети" : "не отвечает", p.total_pages != null ? `${p.total_pages} стр.` : ""].filter(Boolean).join(" · ") }),
@@ -187,14 +187,15 @@
   const detailError = (e) => { $("detail-error").hidden = !e; $("detail-error").textContent = e ? e.message : ""; };
   let part = "vlan";
 
-  async function openDetails() {
+  async function openDetails(start = "vlan") {
     const d = window.NetAdmin.portsDevice();
     $("detail-heading").textContent = d.name;
     detailError(null);
     $("ports-dialog").close();
-    showPart("vlan");
+    showPart(start);
     $("detail-dialog").showModal();
   }
+  window.NetAdmin.openDetails = (start) => openDetails(start).catch(fail);
 
   function showPart(name) {
     part = name;
@@ -354,7 +355,9 @@
   };
   const importError = (e) => { $("import-error").hidden = !e; $("import-error").textContent = e ? e.message : ""; };
 
-  $("port-import").addEventListener("click", () => {
+  $("port-import").addEventListener("click", () => openImport());
+  window.NetAdmin.openImport = () => openImport();
+  function openImport() {
     $("ports-dialog").close();
     $("import-text").value = "";
     $("import-result").hidden = true;
@@ -362,7 +365,7 @@
     previewed = false;
     importError(null);
     $("import-dialog").showModal();
-  });
+  }
   $("import-text").addEventListener("input", () => { $("import-apply").disabled = true; previewed = false; });
   $("import-cancel").addEventListener("click", () => $("import-dialog").close());
 
@@ -386,7 +389,7 @@
       }
       if (r.unmatched_interfaces.length) lines.push(`Не распознаны: ${r.unmatched_interfaces.join(", ")}`);
       $("import-result").hidden = false;
-      $("import-result").textContent = (apply ? "Применено к инвентарю.\n" : "") + lines.join("\n");
+      $("import-result").textContent = (apply ? "Применено к учёту.\n" : "") + lines.join("\n");
       previewed = !apply;
       $("import-apply").disabled = apply || !(r.changed_ports || newVlans.length);
     } catch (e) { importError(e); }
@@ -411,7 +414,7 @@
         const ids = [...window.NetAdmin.picked].map((id) => `ids=${id}`).join("&");
         download(`export/labels.html${ids ? `?${ids}` : ""}`).catch(fail);
       } }),
-      el("button", { textContent: "NetBox CSV", title: "Выгрузка инвентаря для NetBox", onclick: () => download("export/netbox.zip", "itmanager-netbox.zip").catch(fail) }),
+      el("button", { textContent: "NetBox CSV", title: "Выгрузка учёта для NetBox", onclick: () => download("export/netbox.zip", "itmanager-netbox.zip").catch(fail) }),
     );
   }
 })();

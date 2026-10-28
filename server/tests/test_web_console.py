@@ -29,8 +29,12 @@ def test_console_page_needs_no_token_but_locks_itself_down(seeded):
         # The console knows every device category the app has, and draws racks and room zones.
         assert '"RACK"' in js.text and "zones" in js.text and "rack_units" in js.text
         assert "admin-more.js" in r.text and c.get("/static/admin/admin-more.js").status_code == 200
-        for tab in ("vlans", "devices", "map", "alerts", "audit", "runbooks", "printers", "creds"):
+        tabs = ("vlans", "devices", "map", "alerts", "audit", "runbooks", "printers", "creds", "topology", "templates")
+        for tab in tabs:
             assert f'data-tab="{tab}"' in r.text
+        # As in the app: one device card from everywhere, view and edit modes, layers and marks on the map.
+        for part in ('id="card-dialog"', 'data-mode="edit"', 'data-layer="L2"', 'data-tool="marks"', 'id="more-menu"'):
+            assert part in r.text
         assert c.get("/", follow_redirects=False).headers["location"] == "/admin"
         # The page itself carries no data; everything behind it still needs the token.
         assert c.get("/api/v1/scripts").status_code == 401

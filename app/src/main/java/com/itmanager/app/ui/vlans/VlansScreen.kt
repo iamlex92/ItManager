@@ -59,6 +59,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itmanager.app.data.model.VLAN_COLORS
 import com.itmanager.app.data.model.Vlan
 import com.itmanager.app.ui.components.EmptyView
+import com.itmanager.app.ui.components.FormSection
+import com.itmanager.app.ui.components.FormSheet
 import com.itmanager.app.ui.components.ErrorView
 import com.itmanager.app.ui.components.LoadingView
 import com.itmanager.app.ui.components.UiState
@@ -120,7 +122,7 @@ fun VlansScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    if (s.data.isEmpty()) item { EmptyView("VLAN пока нет. Добавьте кнопкой ниже или импортом конфигурации.") }
+                    if (s.data.isEmpty()) item { EmptyView("VLAN пока нет. Добавьте первый или импортируйте конфигурацию коммутатора.", action = "Добавить первый VLAN", onAction = viewModel::openNew) }
                     items(s.data, key = { it.id }) { vlan -> VlanRow(vlan) { viewModel.openEdit(vlan) } }
                 }
             }
@@ -172,86 +174,81 @@ fun VlanDialog(
     onDismiss: () -> Unit,
 ) {
     val d = editor.draft
-    var confirmDelete by remember { mutableStateOf(false) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (editor.isNew) "Новый VLAN" else "VLAN ${d.id}") },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (editor.isNew) {
-                    OutlinedTextField(
-                        value = if (d.id == 0) "" else d.id.toString(),
-                        onValueChange = { v -> onChange(d.copy(id = v.filter(Char::isDigit).take(4).toIntOrNull() ?: 0)) },
-                        label = { Text("Номер VLAN (1–4094)") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth(),
+    val show = editor.triedSave
+    FormSheet(
+        title = if (editor.isNew) "Новый VLAN" else "VLAN ${d.id}",
+        onDismiss = onDismiss,
+        onSave = onSave,
+        busy = editor.busy,
+        error = editor.error,
+        deleteLabel = if (editor.isNew) null else "Удалить VLAN",
+        deleteQuestion = "Удалить VLAN ${d.id}?" to "VLAN пропадёт из справочника. Если он назначен портам, сервер откажет: сначала переведите порты.",
+        onDelete = { onDelete(d.id) },
+    ) {
+        FormSection("VLAN") {
+            if (editor.isNew) {
+                val idError = d.idProblem().takeIf { show }
+                OutlinedTextField(
+                    value = if (d.id == 0) "" else d.id.toString(),
+                    onValueChange = { v -> onChange(d.copy(id = v.filter(Char::isDigit).take(4).toIntOrNull() ?: 0)) },
+                    label = { Text("Номер VLAN (1–4094)") },
+                    isError = idError != null,
+                    supportingText = if (idError != null) ({ Text(idError) }) else null,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            val nameError = d.nameProblem().takeIf { show }
+            OutlinedTextField(
+                value = d.name,
+                onValueChange = { onChange(d.copy(name = it.take(50))) },
+                label = { Text("Название") },
+                placeholder = { Text("Офис, АСУ ТП, Камеры") },
+                isError = nameError != null,
+                supportingText = if (nameError != null) ({ Text(nameError) }) else null,
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        FormSection("Подсеть (L3)") {
+            val subnetError = d.subnetProblem()
+            OutlinedTextField(
+                value = d.subnet,
+                onValueChange = { onChange(d.copy(subnet = it.trim().take(18))) },
+                label = { Text("Подсеть, если есть") },
+                placeholder = { Text("10.10.20.0/24") },
+                isError = subnetError != null && (show || d.subnet.contains('/')),
+                supportingText = { Text(subnetError?.takeIf { show || d.subnet.contains('/') } ?: "По ней слой «Подсети» собирает устройства, IPAM считает адреса.") },
+                singleLine = true,
+                textStyle = MonoStyle,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        FormSection("Цвет на карте") {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                VLAN_COLORS.forEach { c ->
+                    Box(
+                        Modifier
+                            .size(36.dp)
+                            .border(2.dp, if (c == d.colorArgb) MaterialTheme.colorScheme.onSurface else Color.Transparent, CircleShape)
+                            .padding(4.dp)
+                            .background(Color(c), CircleShape)
+                            .clickable { onChange(d.copy(colorArgb = c)) },
                     )
                 }
-                OutlinedTextField(
-                    value = d.name,
-                    onValueChange = { onChange(d.copy(name = it.take(50))) },
-                    label = { Text("Название") },
-                    placeholder = { Text("Офис, АСУ ТП, Камеры") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = d.subnet,
-                    onValueChange = { onChange(d.copy(subnet = it.trim().take(18))) },
-                    label = { Text("Подсеть (L3), если есть") },
-                    placeholder = { Text("10.10.20.0/24") },
-                    singleLine = true,
-                    textStyle = MonoStyle,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Text("Цвет на карте", style = MaterialTheme.typography.labelLarge)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    VLAN_COLORS.forEach { c ->
-                        Box(
-                            Modifier
-                                .size(30.dp)
-                                .border(2.dp, if (c == d.colorArgb) MaterialTheme.colorScheme.onSurface else Color.Transparent, CircleShape)
-                                .padding(4.dp)
-                                .background(Color(c), CircleShape)
-                                .clickable { onChange(d.copy(colorArgb = c)) },
-                        )
-                    }
-                }
-                OutlinedTextField(
-                    value = d.description.orEmpty(),
-                    onValueChange = { onChange(d.copy(description = it.take(500))) },
-                    label = { Text("Описание") },
-                    minLines = 1,
-                    maxLines = 3,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                editor.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-                if (!editor.isNew) {
-                    TextButton(onClick = { confirmDelete = true }, enabled = !editor.busy) {
-                        Text("Удалить VLAN", color = MaterialTheme.colorScheme.error)
-                    }
-                }
             }
-        },
-        confirmButton = { TextButton(onClick = onSave, enabled = !editor.busy) { Text("Сохранить") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-    )
-    if (confirmDelete) {
-        AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            title = { Text("Удалить VLAN ${d.id}?") },
-            text = { Text("VLAN пропадёт из справочника. Если он назначен портам, сервер откажет: сначала переведите порты.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmDelete = false
-                    onDelete(d.id)
-                }) { Text("Удалить", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Отмена") } },
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        )
+        }
+        FormSection("Заметки") {
+            OutlinedTextField(
+                value = d.description.orEmpty(),
+                onValueChange = { onChange(d.copy(description = it.take(500))) },
+                label = { Text("Описание") },
+                minLines = 1,
+                maxLines = 3,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 }

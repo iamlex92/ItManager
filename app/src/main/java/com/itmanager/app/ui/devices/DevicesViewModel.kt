@@ -9,8 +9,13 @@ import com.itmanager.app.data.export.ExportedFile
 import com.itmanager.app.data.export.InventoryExporter
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceBulkChange
+import com.itmanager.app.data.model.DeviceGroup
+import com.itmanager.app.data.model.DeviceGrouping
 import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.model.FloorInfo
+import com.itmanager.app.data.model.Zone
+import com.itmanager.app.data.model.groupDevices
+import com.itmanager.app.data.model.isDown
 import com.itmanager.app.data.source.DcimRepository
 import com.itmanager.app.ui.components.UiState
 import com.itmanager.app.ui.navigation.MapFocus
@@ -37,6 +42,14 @@ enum class DeviceFilter(val label: String, val types: Set<DeviceType>?) {
     CAMERAS("Камеры", setOf(DeviceType.CAMERA, DeviceType.ACCESS_POINT)),
     PASSIVE("Кабельное", setOf(DeviceType.SOCKET, DeviceType.PATCH_PANEL)),
     OTHER("Прочее", setOf(DeviceType.UPS, DeviceType.PHONE, DeviceType.RACK, DeviceType.UNKNOWN)),
+    /** Not a kind of device: everything active that does not answer right now. */
+    OFFLINE("Не в сети", null),
+    ;
+
+    fun accepts(device: Device): Boolean = when (this) {
+        OFFLINE -> device.isDown
+        else -> types == null || device.type in types
+    }
 }
 
 data class DevicesUiState(
@@ -44,6 +57,11 @@ data class DevicesUiState(
     val query: String = "",
     val filter: DeviceFilter = DeviceFilter.ALL,
     val offlineCount: Int = 0,
+    /** How many devices each chip would show for the current search. */
+    val counts: Map<DeviceFilter, Int> = emptyMap(),
+    val grouping: DeviceGrouping = DeviceGrouping.TYPE,
+    /** The shown devices in sections; empty while loading. */
+    val groups: List<DeviceGroup> = emptyList(),
     /** Devices picked for a group change; not empty means the list is in selection mode. */
     val selected: Set<String> = emptySet(),
 )
@@ -85,6 +103,11 @@ class DevicesViewModel @Inject constructor(
     private val query = MutableStateFlow("")
     private val filter = MutableStateFlow(DeviceFilter.ALL)
     private val selected = MutableStateFlow<Set<String>>(emptySet())
+    private val grouping = MutableStateFlow(DeviceGrouping.TYPE)
+    /** Floors and their rooms, for grouping by floor or room. */
+    private val places = MutableStateFlow(Places())
+
+    private data class Places(val floors: List<FloorInfo> = emptyList(), val zones: Map<String, List<Zone>> = emptyMap())
 
     private val _bulk = MutableStateFlow<BulkEditState?>(null)
     val bulk: StateFlow<BulkEditState?> = _bulk.asStateFlow()
@@ -93,19 +116,27 @@ class DevicesViewModel @Inject constructor(
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val messages: SharedFlow<String> = _messages.asSharedFlow()
 
-    val state: StateFlow<DevicesUiState> = combine(all, query, filter, selected) { devices, q, f, picked ->
+    private val view = combine(query, filter, selected, grouping) { q, f, picked, g -> ViewOptions(q, f, picked, g) }
+
+    private data class ViewOptions(val query: String, val filter: DeviceFilter, val selected: Set<String>, val grouping: DeviceGrouping)
+
+    val state: StateFlow<DevicesUiState> = combine(all, view, places) { devices, v, p ->
+        val found = (devices as? UiState.Content)?.data.orEmpty().filter { it.matches(v.query) }
+        val shown = found.filter { v.filter.accepts(it) }
         val visible = when (devices) {
-            is UiState.Content -> devices.copy(
-                data = devices.data
-                    .filter { f.types == null || it.type in f.types }
-                    .filter { it.matches(q) }
-                    .sortedWith(compareBy<Device> { it.type.ordinal }.thenBy { it.name }),
-            )
+            is UiState.Content -> devices.copy(data = shown.sortedWith(compareBy<Device> { it.type.ordinal }.thenBy { it.name }))
             else -> devices
         }
-        val offline = (devices as? UiState.Content)?.data
-            ?.count { !it.isOnline && it.type != DeviceType.SOCKET && it.type != DeviceType.PATCH_PANEL } ?: 0
-        DevicesUiState(visible, q, f, offline, picked)
+        DevicesUiState(
+            devices = visible,
+            query = v.query,
+            filter = v.filter,
+            offlineCount = (devices as? UiState.Content)?.data?.count { it.isDown } ?: 0,
+            selected = v.selected,
+            counts = DeviceFilter.entries.associateWith { f -> found.count { f.accepts(it) } },
+            grouping = v.grouping,
+            groups = groupDevices(shown, v.grouping, p.floors, p.zones),
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DevicesUiState())
 
     init {
@@ -118,6 +149,7 @@ class DevicesViewModel @Inject constructor(
 
     private suspend fun load() {
         all.update { if (it is UiState.Content) it.copy(isRefreshing = true) else UiState.Loading }
+        if (grouping.value != DeviceGrouping.TYPE) loadPlaces(withRooms = grouping.value == DeviceGrouping.ROOM)
         repository.devices()
             .onSuccess { list -> all.value = UiState.Content(list) }
             .onFailure { e -> all.value = UiState.Error(e.toUserMessage()) }
@@ -129,6 +161,24 @@ class DevicesViewModel @Inject constructor(
 
     fun setFilter(value: DeviceFilter) {
         filter.value = value
+    }
+
+    fun setGrouping(value: DeviceGrouping) {
+        grouping.value = value
+        if (value != DeviceGrouping.TYPE) viewModelScope.launch { loadPlaces(withRooms = value == DeviceGrouping.ROOM) }
+    }
+
+    /** Floors for grouping by floor; with [withRooms] also every floor's rooms, one request per floor. */
+    private suspend fun loadPlaces(withRooms: Boolean) {
+        val first = repository.floorMap().getOrNull() ?: return
+        val zones = if (!withRooms) {
+            places.value.zones
+        } else {
+            first.floors.associate { f ->
+                f.id to if (f.id == first.plan.id) first.plan.zones else repository.floorMap(f.id).getOrNull()?.plan?.zones.orEmpty()
+            }
+        }
+        places.value = Places(first.floors, zones)
     }
 
     fun showOnMap(deviceId: String) = mapFocus.request(deviceId)

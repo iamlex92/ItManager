@@ -116,12 +116,34 @@
   let currentTab = "map";
   $("tabs").addEventListener("click", (ev) => {
     const b = ev.target.closest("button[data-tab]");
-    if (b) openTab(b.dataset.tab);
+    if (b) { closeMenus(); openTab(b.dataset.tab); }
   });
+
+  // Small pop-up menus («Ещё», «+ Добавить»): one open at a time, closed by a click elsewhere or Esc.
+  const MENUS = [["more-toggle", "more-menu"], ["add-toggle", "add-menu"]];
+  function closeMenus(except) {
+    for (const [btn, menu] of MENUS) {
+      if (menu === except) continue;
+      $(menu).hidden = true;
+      $(btn).setAttribute("aria-expanded", "false");
+    }
+  }
+  for (const [btn, menu] of MENUS) {
+    $(btn).addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      closeMenus(menu);
+      $(menu).hidden = !$(menu).hidden;
+      $(btn).setAttribute("aria-expanded", String(!$(menu).hidden));
+    });
+  }
+  document.addEventListener("click", (ev) => { if (!ev.target.closest(".pop")) closeMenus(); });
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") closeMenus(); });
 
   function openTab(name) {
     currentTab = name;
-    for (const b of $("tabs").querySelectorAll("button")) b.classList.toggle("active", b.dataset.tab === name);
+    for (const b of $("tabs").querySelectorAll("button[data-tab]")) b.classList.toggle("active", b.dataset.tab === name);
+    // A section from «Ещё» lights «Ещё» itself, so the user sees where they are.
+    $("more-toggle").classList.toggle("active", !!$("more-menu").querySelector(`[data-tab="${name}"]`));
     for (const s of document.querySelectorAll("main > .tab")) s.hidden = s.id !== `tab-${name}`;
     if (name === "map") loadMap().catch(fail);
     if (name === "devices") loadDevices().catch(fail);
@@ -131,13 +153,28 @@
     if (name === "scripts") loadScripts().catch(fail);
     if (name === "peripherals") loadPeripherals().catch(fail);
     if (name === "topology") loadTopology().catch(fail);
+    if (name === "templates") loadTemplates().catch(fail);
+    if (name === "alerts") refreshAlertCount();
   }
 
+  /** Open events on the «События» tab, as the badge on the phone's bottom bar. */
+  async function refreshAlertCount() {
+    try {
+      const open = await api("GET", "alerts?is_resolved=false");
+      $("alerts-count").textContent = open.length > 99 ? "99+" : String(open.length);
+      $("alerts-count").hidden = !open.length;
+    } catch { /* the badge simply stays as it was */ }
+  }
+
+  let alertTimer = 0;
   function start() {
     $("login").hidden = true;
     $("app").hidden = false;
     showMode();
     openTab(currentTab);
+    refreshAlertCount();
+    clearInterval(alertTimer);
+    alertTimer = setInterval(refreshAlertCount, 60_000);
   }
 
   // ---------------------------------------------------------------- map state
@@ -146,7 +183,14 @@
     floor: null, floors: [], floorId: null, allHere: [], showVms: false, hiddenTypes: new Set(), devices: [], remote: new Map(), links: [], image: null, imageUrl: null,
     // The cable whose route is being edited, its picked bend, and a bend being dragged.
     selLink: null, selPoint: null, routeDrag: null,
-    tool: "move", pen: PENS[0], linkFrom: null, cable: "Cat6",
+    // «view» until «Правка» is on; editTool is the tool «Правка» comes back to.
+    tool: "view", editTool: "move", pen: PENS[0], linkFrom: null, cable: "Cat6",
+    // Layers as in the app: L1 cables, L2 VLAN colours, L3 subnets; a VLAN picked to stand out.
+    layer: "L1", vlanFilter: null, vlans: new Map(),
+    // Marks tool: the kind and colour of the next mark, the tail of an arrow being placed, a mark being dragged.
+    markKind: "BADGE", markColor: "#FFD60A", arrowStart: null, markDrag: null,
+    // A device found by search: ringed until the next click. Clusters drawn at the last frame.
+    focus: null, clusters: [],
     // Zone being outlined (flat x, y list), and the colour for the next cable (null: the usual grey/blue).
     zoneDraft: null, cableColor: null,
     view: { scale: 1, ox: 0, oy: 0 },
@@ -179,8 +223,12 @@
   }
 
   async function loadMap() {
-    const [floors, devices, links] = await Promise.all([api("GET", "floors"), api("GET", "devices"), api("GET", "connections")]);
+    const [floors, devices, links, vlans] = await Promise.all([
+      api("GET", "floors"), api("GET", "devices"), api("GET", "connections"), api("GET", "vlans"),
+    ]);
     S.floors = floors;
+    S.vlans = new Map(vlans.map((v) => [v.vlan_id, v]));
+    renderVlanFilter();
     allDevices = devices;
     const first = floors[0] || null;
     const previous = S.floor && S.floor.id;
@@ -210,6 +258,8 @@
     renderLegend();
     await loadPlanImage();
     if (!S.touched) fit();
+    // A fresh server: say what to do instead of showing an empty grid.
+    $("map-empty").hidden = !(S.tool === "view" && !devices.length && !(S.floor && S.floor.plan_image_url));
     draw();
     hint();
   }
@@ -723,7 +773,10 @@
     ctx.save();
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    for (const a of marks) {
+    for (const m of marks) {
+      // A mark being dragged is drawn where the pointer has taken it.
+      const drag = S.markDrag && S.markDrag.id === m.id ? S.markDrag : null;
+      const a = drag ? { ...m, x: m.x + drag.dx, y: m.y + drag.dy, x2: m.x2 != null ? m.x2 + drag.dx : m.x2, y2: m.y2 != null ? m.y2 + drag.dy : m.y2 } : m;
       const size = a.size || 1;
       const [x, y] = toScreen(a.x, a.y);
       if (a.kind === "BADGE") {
@@ -759,6 +812,13 @@
           caption(a.text, x - ux * (w / 2 + 6), y - uy * (w / 2 + 6), px, a.color);
         }
       }
+    }
+    if (S.arrowStart) {
+      const [x, y] = toScreen(S.arrowStart.x, S.arrowStart.y);
+      ctx.beginPath();
+      ctx.arc(x, y, 6, 0, Math.PI * 2);
+      ctx.fillStyle = S.markColor;
+      ctx.fill();
     }
     ctx.restore();
   }
@@ -824,6 +884,8 @@
     const routes = S.links.map(routeOf).filter(Boolean);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
+    // On the VLAN and subnet layers the cables step back: colour is about the network, not the wire.
+    if (S.layer !== "L1" && S.tool !== "link") ctx.globalAlpha = 0.25;
     for (const r of routes) {
       const pts = screenPath(r);
       if (pts.length < 2) continue;
@@ -846,6 +908,7 @@
       ctx.stroke();
     }
     ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
     // Risers: where cables go up or down to another floor.
     const seen = new Set();
     const labels = [];
@@ -910,38 +973,135 @@
 
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    for (const d of S.devices) {
-      const [sx, sy] = toScreen(d.x, d.y);
-      const passive = PASSIVE.has(d.type);
-      const rad = passive ? 10 : 15;
-      const active = d.id === S.linkFrom || (S.drag && S.drag.id === d.id);
-      // A virtual machine has no cables: a dashed ring says it is not physically there.
-      const virtual = d.type === "VIRTUAL";
-      ctx.beginPath();
-      ctx.arc(sx, sy, rad, 0, Math.PI * 2);
-      ctx.fillStyle = active ? "#4c9eff" : "#1c222c";
-      ctx.fill();
-      ctx.strokeStyle = active ? "#4c9eff" : virtual ? "#8e9bff" : "#6b7686";
-      ctx.lineWidth = 1.5;
-      if (virtual) ctx.setLineDash([3, 3]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      drawGlyph(ctx, d.type, sx, sy, passive ? 12 : 17, active ? "#ffffff" : typeOf(d).color);
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      if (!passive) {
-        ctx.beginPath();
-        ctx.arc(sx + rad * 0.72, sy - rad * 0.72, 4, 0, Math.PI * 2);
-        ctx.fillStyle = d.is_online ? "#30d158" : "#ff6b5e";
-        ctx.fill();
-      }
-      ctx.font = "11px system-ui, sans-serif";
-      ctx.fillStyle = "rgba(11,14,19,.75)";
-      const tw = ctx.measureText(d.name).width;
-      ctx.fillRect(sx - tw / 2 - 3, sy + rad + 3, tw + 6, 15);
-      ctx.fillStyle = "#e6edf5";
-      ctx.fillText(d.name, sx, sy + rad + 11);
+    // Zoomed out in view mode, markers that would overlap gather into one circle with a count.
+    S.clusters = S.tool === "view" ? clusterDevices() : S.devices.map((d) => ({ lead: d, ids: [d.id], x: d.x, y: d.y }));
+    for (const c of S.clusters) {
+      if (c.ids.length > 1) drawCluster(c); else drawDevice(c.lead);
     }
+  }
+
+  const TYPE_RANK = ["SWITCH", "ROUTER", "FIREWALL", "SERVER", "ACCESS_POINT", "PRINTER", "WORKSTATION"];
+  // Markers closer than this on screen overlap: about one marker's width.
+  const CLUSTER_PX = 26;
+
+  /** Greedy grouping by distance on screen; the most important kind leads; the picked device stays alone. */
+  function clusterDevices() {
+    const rank = (d) => { const i = TYPE_RANK.indexOf(d.type); return i < 0 ? TYPE_RANK.length : i; };
+    // Sockets and patch panels sit right by what they serve: they never gather, or every desk would be a «2».
+    const order = S.devices.filter((d) => !PASSIVE.has(d.type)).sort((a, b) => rank(a) - rank(b));
+    const used = new Set();
+    const out = [];
+    for (const d of order) {
+      if (used.has(d.id)) continue;
+      used.add(d.id);
+      const [x, y] = toScreen(d.x, d.y);
+      const group = [d];
+      if (d.id !== S.focus) {
+        for (const o of order) {
+          if (used.has(o.id) || o.id === S.focus) continue;
+          const [ox, oy] = toScreen(o.x, o.y);
+          if (Math.hypot(ox - x, oy - y) < CLUSTER_PX) { group.push(o); used.add(o.id); }
+        }
+      }
+      out.push({
+        lead: d, ids: group.map((g) => g.id), down: group.some((g) => !g.is_online && !PASSIVE.has(g.type)),
+        x: group.reduce((a, g) => a + g.x, 0) / group.length, y: group.reduce((a, g) => a + g.y, 0) / group.length,
+      });
+    }
+    // Passive markers under a gathered circle step aside with it; elsewhere they stay, drawn first, underneath.
+    const groups = out.filter((c) => c.ids.length > 1).map((c) => toScreen(c.x, c.y));
+    const passive = S.devices.filter((d) => PASSIVE.has(d.type)).filter((d) => {
+      const [x, y] = toScreen(d.x, d.y);
+      return !groups.some(([gx, gy]) => Math.hypot(gx - x, gy - y) < CLUSTER_PX * 1.5);
+    }).map((d) => ({ lead: d, ids: [d.id], x: d.x, y: d.y }));
+    return [...passive, ...out];
+  }
+
+  function drawCluster(c) {
+    const [sx, sy] = toScreen(c.x, c.y);
+    ctx.beginPath();
+    ctx.arc(sx, sy, 18, 0, Math.PI * 2);
+    ctx.fillStyle = "#262e3a";
+    ctx.fill();
+    ctx.strokeStyle = typeOf(c.lead).color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    drawGlyph(ctx, c.lead.type, sx, sy - 3, 13, typeOf(c.lead).color);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "600 11px system-ui, sans-serif";
+    ctx.fillStyle = "#e6edf5";
+    ctx.fillText(String(c.ids.length), sx, sy + 9);
+    if (c.down) {
+      ctx.beginPath();
+      ctx.arc(sx + 13, sy - 13, 4.5, 0, Math.PI * 2);
+      ctx.fillStyle = "#ff6b5e";
+      ctx.fill();
+    }
+  }
+
+  /** The colour a device takes on the VLAN and subnet layers: its port's VLAN, grey without one. */
+  const vlanColor = (d) => (S.vlans.get(d.vlan_id) || {}).color_hex || null;
+
+  function drawDevice(d) {
+    const [sx, sy] = toScreen(d.x, d.y);
+    const passive = PASSIVE.has(d.type);
+    const rad = passive ? 10 : 15;
+    const active = d.id === S.linkFrom || (S.drag && S.drag.id === d.id);
+    // A virtual machine has no cables: a dashed ring says it is not physically there.
+    const virtual = d.type === "VIRTUAL";
+    const layered = S.layer !== "L1";
+    // A picked VLAN stands out; everyone else fades.
+    ctx.globalAlpha = S.vlanFilter != null && layered && d.vlan_id !== S.vlanFilter ? 0.2 : 1;
+    if (layered && vlanColor(d)) {
+      ctx.beginPath();
+      ctx.arc(sx, sy, rad + 4, 0, Math.PI * 2);
+      ctx.fillStyle = vlanColor(d);
+      ctx.fill();
+    }
+    if (d.id === S.focus) {
+      ctx.beginPath();
+      ctx.arc(sx, sy, rad + 8, 0, Math.PI * 2);
+      ctx.strokeStyle = "#4c9eff";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.arc(sx, sy, rad, 0, Math.PI * 2);
+    ctx.fillStyle = active ? "#4c9eff" : "#1c222c";
+    ctx.fill();
+    ctx.strokeStyle = active ? "#4c9eff" : virtual ? "#8e9bff" : "#6b7686";
+    ctx.lineWidth = 1.5;
+    if (virtual) ctx.setLineDash([3, 3]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    drawGlyph(ctx, d.type, sx, sy, passive ? 12 : 17, active ? "#ffffff" : typeOf(d).color);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    if (!passive) {
+      ctx.beginPath();
+      ctx.arc(sx + rad * 0.72, sy - rad * 0.72, 4, 0, Math.PI * 2);
+      ctx.fillStyle = d.is_online ? "#30d158" : "#ff6b5e";
+      ctx.fill();
+    }
+    // On the subnet layer the address is what matters.
+    const label = S.layer === "L3" && d.ip ? `${d.name} · ${d.ip}` : d.name;
+    ctx.font = "11px system-ui, sans-serif";
+    ctx.fillStyle = "rgba(11,14,19,.75)";
+    const tw = ctx.measureText(label).width;
+    ctx.fillRect(sx - tw / 2 - 3, sy + rad + 3, tw + 6, 15);
+    ctx.fillStyle = "#e6edf5";
+    ctx.fillText(label, sx, sy + rad + 11);
+    ctx.globalAlpha = 1;
+  }
+
+  /** A gathered circle under the pointer: the click zooms in on it until it falls apart. */
+  function clusterAt(sx, sy) {
+    return S.clusters.find((c) => {
+      if (c.ids.length < 2) return false;
+      const [x, y] = toScreen(c.x, c.y);
+      return Math.hypot(sx - x, sy - y) <= 20;
+    }) || null;
   }
 
   function drawZone(z) {
@@ -983,8 +1143,10 @@
   const devicesById = () => new Map(S.devices.map((d) => [d.id, d]));
 
   function deviceAt(sx, sy) {
+    const gathered = new Set(S.clusters.filter((c) => c.ids.length > 1).flatMap((c) => c.ids));
     for (let i = S.devices.length - 1; i >= 0; i--) {
       const d = S.devices[i];
+      if (gathered.has(d.id)) continue;
       const [x, y] = toScreen(d.x, d.y);
       if (Math.hypot(sx - x, sy - y) <= (PASSIVE.has(d.type) ? 13 : 18)) return d;
     }
@@ -1010,6 +1172,10 @@
 
   function hint() {
     const texts = {
+      view: "Щелчок по устройству открывает его карточку, по кругу с числом приближает группу. Колесо мыши масштабирует, перетаскивание двигает карту. Чтобы что-то поменять, включите «Правка».",
+      marks: S.arrowStart
+        ? "Щёлкните, куда указывает стрелка (Esc — отмена)."
+        : "Щёлкните по плану, чтобы поставить метку выбранного вида; стрелка ставится двумя щелчками: откуда и куда. Метку можно перетащить, щелчок открывает её.",
       move: "Перетащите объект мышью, щёлкните по нему, чтобы изменить. Двойной щелчок по пустому месту добавляет объект. Колесо мыши масштабирует, перетаскивание пустого места двигает карту.",
       link: S.linkFrom
         ? `От ${devicesById().get(S.linkFrom)?.name || "?"}: щёлкните второе устройство (Esc — отмена).`
@@ -1054,6 +1220,10 @@
     } else if (S.tool === "link" && linkAt(sx, sy)) {
       gesture.kind = "link-cable";
       gesture.link = linkAt(sx, sy);
+    } else if (S.tool === "marks" && !S.arrowStart && annotationAt(sx, sy)) {
+      gesture.kind = "mark";
+      gesture.mark = annotationAt(sx, sy);
+      S.markDrag = { id: gesture.mark.id, dx: 0, dy: 0 };
     } else if (S.tool === "zones" && !S.zoneDraft && zoneVertexAt(sx, sy)) {
       gesture.kind = "zone-vertex";
       gesture.vertex = zoneVertexAt(sx, sy);
@@ -1086,6 +1256,10 @@
         d.y = Math.max(0, Math.min(h, d.y + dy / k));
         break;
       }
+      case "mark":
+        S.markDrag.dx += dx / k;
+        S.markDrag.dy += dy / k;
+        break;
       case "zone-vertex": {
         const [x, y] = toPlan(sx, sy);
         const { zone, index } = gesture.vertex;
@@ -1175,6 +1349,19 @@
         const r = planRect();
         placePlan({ x: r.x + shift.x, y: r.y + shift.y, w: r.w, h: r.h }).catch(fail);
       }
+    } else if (g.kind === "mark") {
+      const drag = S.markDrag;
+      S.markDrag = null;
+      if (g.moved && drag) moveMark(g.mark, drag.dx, drag.dy).catch(fail);
+      else openMarkDialog(g.mark, false);
+    } else if (g.kind === "pan" && !g.moved && S.tool === "marks") {
+      markTap(...toPlan(g.sx, g.sy));
+    } else if (g.kind === "pan" && !g.moved && S.tool === "view") {
+      // View mode: a device opens its card, a gathered circle zooms in, empty map drops the search ring.
+      const cluster = clusterAt(g.sx, g.sy);
+      if (g.device) openCard(g.device.id);
+      else if (cluster) zoomAt(g.sx, g.sy, 2.2);
+      else if (S.focus) S.focus = null;
     } else if (g.kind === "pan" && !g.moved && S.tool === "zones") {
       zoneClick(g.sx, g.sy);
     } else if (g.kind === "pan" && !g.moved && S.tool === "link" && (S.linkFrom || S.selLink)) {
@@ -1210,21 +1397,25 @@
     openDeviceDialog(null, { x, y });
   });
 
-  canvas.addEventListener("wheel", (ev) => {
-    ev.preventDefault();
+  function zoomAt(sx, sy, factor) {
     S.touched = true;
-    const factor = Math.exp(-ev.deltaY * 0.0015);
     const scale = Math.max(0.02, Math.min(20, S.view.scale * factor));
     const f = scale / S.view.scale;
-    S.view.ox = ev.offsetX - (ev.offsetX - S.view.ox) * f;
-    S.view.oy = ev.offsetY - (ev.offsetY - S.view.oy) * f;
+    S.view.ox = sx - (sx - S.view.ox) * f;
+    S.view.oy = sy - (sy - S.view.oy) * f;
     S.view.scale = scale;
     draw();
+  }
+
+  canvas.addEventListener("wheel", (ev) => {
+    ev.preventDefault();
+    zoomAt(ev.offsetX, ev.offsetY, Math.exp(-ev.deltaY * 0.0015));
   }, { passive: false });
 
   document.addEventListener("keydown", (ev) => {
     if (ev.key === "Escape" && S.zoneDraft && !ev.target.closest("dialog")) cancelZone();
     if (ev.key === "Escape" && (S.linkFrom || S.selLink)) { S.linkFrom = null; S.selLink = null; S.selPoint = null; hint(); draw(); }
+    if (ev.key === "Escape" && S.arrowStart && !ev.target.closest("dialog")) { S.arrowStart = null; hint(); draw(); }
     const typing = ev.target.closest && ev.target.closest("input, textarea, select, dialog");
     if ((ev.key === "Delete" || ev.key === "Backspace") && !typing && S.tool === "link" && S.selLink && S.selPoint != null) {
       ev.preventDefault();
@@ -1343,19 +1534,86 @@
     catch (e) { fail(e); }
   });
 
-  $("tools").addEventListener("click", (ev) => {
-    const b = ev.target.closest("button[data-tool]");
-    if (!b) return;
-    S.tool = b.dataset.tool;
+  function setTool(tool) {
+    S.tool = tool;
+    if (tool !== "view") S.editTool = tool;
     S.linkFrom = null;
     S.selLink = null;
     S.selPoint = null;
     S.zoneDraft = null;
+    S.arrowStart = null;
     fitDraftButtons();
-    for (const x of $("tools").querySelectorAll("button")) x.classList.toggle("active", x === b);
-    for (const o of document.querySelectorAll(".tool-opts")) o.hidden = o.dataset.for !== S.tool;
+    for (const x of $("tools").querySelectorAll("button")) x.classList.toggle("active", x.dataset.tool === tool);
+    for (const o of document.querySelectorAll(".tool-opts")) o.hidden = o.dataset.for !== tool;
     hint();
     draw();
+  }
+  $("tools").addEventListener("click", (ev) => {
+    const b = ev.target.closest("button[data-tool]");
+    if (b) setTool(b.dataset.tool);
+  });
+
+  /** «Просмотр» opens cards and gathers crowded markers; «Правка» shows the tools and changes the map. */
+  function setMode(mode) {
+    for (const b of $("mode-seg").children) b.classList.toggle("active", b.dataset.mode === mode);
+    $("edit-bar").hidden = mode !== "edit";
+    $("map-empty").hidden = true;
+    setTool(mode === "edit" ? S.editTool : "view");
+  }
+  $("mode-seg").addEventListener("click", (ev) => {
+    const b = ev.target.closest("button[data-mode]");
+    if (b) setMode(b.dataset.mode);
+  });
+  $("empty-edit").addEventListener("click", () => setMode("edit"));
+  $("empty-scan").addEventListener("click", () => openTab("scan"));
+
+  $("layer-seg").addEventListener("click", (ev) => {
+    const b = ev.target.closest("button[data-layer]");
+    if (!b) return;
+    S.layer = b.dataset.layer;
+    if (S.layer === "L1") S.vlanFilter = null;
+    for (const x of $("layer-seg").children) x.classList.toggle("active", x === b);
+    renderVlanFilter();
+    draw();
+  });
+  /** On the VLAN and subnet layers: one list to pick a VLAN, and the way to the VLAN reference book. */
+  function renderVlanFilter() {
+    const sel = $("vlan-filter");
+    const layered = S.layer !== "L1";
+    sel.hidden = !layered || !S.vlans.size;
+    $("vlans-open").hidden = !layered;
+    $("vlans-open").textContent = S.vlans.size ? "VLAN и подсети…" : "Добавить VLAN и подсети…";
+    sel.replaceChildren(new Option("Все VLAN", ""), ...[...S.vlans.values()].map((v) =>
+      new Option(`${v.vlan_id} · ${v.name}${S.layer === "L3" && v.subnet_cidr ? ` · ${v.subnet_cidr}` : ""}`, String(v.vlan_id))));
+    sel.value = S.vlanFilter == null ? "" : String(S.vlanFilter);
+  }
+  $("vlan-filter").addEventListener("change", (ev) => {
+    S.vlanFilter = ev.target.value ? Number(ev.target.value) : null;
+    draw();
+  });
+  $("vlans-open").addEventListener("click", () => openTab("vlans"));
+
+  // ---------------------------------------------------------------- search on the map
+
+  $("map-search").addEventListener("input", () => {
+    const q = $("map-search").value.trim().toLowerCase();
+    const box = $("search-results");
+    if (!q) { box.hidden = true; return; }
+    const norm = (v) => (v || "").toLowerCase().replaceAll("-", ":");
+    const found = allDevicesOrMap().filter((d) => [d.name, d.ip, d.model].some((v) => (v || "").toLowerCase().includes(q))
+      || norm(d.mac).includes(q.replaceAll("-", ":"))).slice(0, 8);
+    box.replaceChildren(...(found.length ? found.map((d) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.append(glyphCanvas(d.type), `${d.name}${d.ip ? ` · ${d.ip}` : ""}`);
+      b.addEventListener("click", () => { box.hidden = true; $("map-search").value = ""; showOnMap(d.id).catch(fail); });
+      return b;
+    }) : [Object.assign(document.createElement("div"), { className: "muted small", textContent: "Ничего не найдено" })]));
+    box.hidden = false;
+  });
+  $("map-search").addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") $("search-results").querySelector("button")?.click();
+    if (ev.key === "Escape") { $("search-results").hidden = true; ev.target.value = ""; }
   });
 
   for (const color of PENS) {
@@ -1376,11 +1634,269 @@
   $("clear-lines").addEventListener("click", () => {
     if ((S.floor?.drawings || []).length && confirm("Стереть все линии карандаша на этаже?")) saveDrawings([]).catch(fail);
   });
-  $("add-device").addEventListener("click", () => {
+  /** The middle of what is on screen, kept inside the floor: where «Добавить» puts things. */
+  function screenCentre() {
     const [x, y] = toPlan(canvas.clientWidth / 2, canvas.clientHeight / 2);
     const { w, h } = floorSize();
-    openDeviceDialog(null, { x: Math.max(0, Math.min(w, x)), y: Math.max(0, Math.min(h, y)) });
+    return { x: Math.max(0, Math.min(w, x)), y: Math.max(0, Math.min(h, y)) };
+  }
+  $("add-menu").addEventListener("click", (ev) => {
+    const b = ev.target.closest("button[data-add]");
+    if (!b) return;
+    closeMenus();
+    const at = screenCentre();
+    if (b.dataset.add === "device") { dialogType = dialogType === "RACK" ? "SWITCH" : dialogType; openDeviceDialog(null, at); }
+    if (b.dataset.add === "rack") { dialogType = "RACK"; openDeviceDialog(null, at); }
+    if (b.dataset.add === "template") openPlaceDialog(at).catch(fail);
+    if (b.dataset.add === "mark") {
+      setTool("marks");
+      setMarkKind("BADGE");
+      markTap(at.x, at.y);
+    }
   });
+
+  // ---------------------------------------------------------------- marks: room numbers, captions, arrows
+
+  const MARK_COLORS = ["#FFD60A", "#FF453A", "#30D158", "#0A84FF", "#BF5AF2", "#FFFFFF"];
+  const marksOf = () => (S.floor && S.floor.annotations) || [];
+  let markEditing = null;
+
+  function setMarkKind(kind) {
+    S.markKind = kind;
+    S.arrowStart = null;
+    for (const b of $("mark-kinds").children) b.classList.toggle("active", b.dataset.kind === kind);
+    hint();
+  }
+  $("mark-kinds").addEventListener("click", (ev) => {
+    const b = ev.target.closest("button[data-kind]");
+    if (b) setMarkKind(b.dataset.kind);
+  });
+  for (const color of MARK_COLORS) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.style.background = color;
+    b.title = color;
+    b.className = color === S.markColor ? "active" : "";
+    b.addEventListener("click", () => {
+      S.markColor = color;
+      for (const x of $("mark-colors").children) x.classList.toggle("active", x === b);
+    });
+    $("mark-colors").appendChild(b);
+  }
+
+  /** The mark under the pointer: within its circle, its caption box or near its arrow line. */
+  function annotationAt(sx, sy) {
+    const meter = Number((S.floor && S.floor.scale_pixels_per_meter) || 50) * S.view.scale;
+    for (const a of [...marksOf()].reverse()) {
+      const [x, y] = toScreen(a.x, a.y);
+      const r = Math.max(10, Math.min(48, 0.7 * meter * (a.size || 1)));
+      if (a.kind === "ARROW" && a.x2 != null) {
+        const [x2, y2] = toScreen(a.x2, a.y2);
+        const dx = x2 - x, dy = y2 - y, len2 = dx * dx + dy * dy;
+        const t = len2 ? Math.max(0, Math.min(1, ((sx - x) * dx + (sy - y) * dy) / len2)) : 0;
+        if (Math.hypot(sx - (x + dx * t), sy - (y + dy * t)) <= 8) return a;
+      } else if (Math.hypot(sx - x, sy - y) <= r) return a;
+    }
+    return null;
+  }
+
+  /** A click on empty map with the marks tool: a new number or caption, or one end of an arrow. */
+  function markTap(x, y) {
+    if (marksOf().length >= 500) { toast("На этаже уже 500 меток: удалите лишние.", true); return; }
+    const id = `m${Math.random().toString(36).slice(2, 10)}`;
+    if (S.markKind !== "ARROW") {
+      openMarkDialog({ id, kind: S.markKind, x: round1(x), y: round1(y), text: "", color: S.markColor, size: 1 }, true);
+    } else if (!S.arrowStart) {
+      S.arrowStart = { x: round1(x), y: round1(y) };
+      hint();
+      draw();
+    } else {
+      const start = S.arrowStart;
+      S.arrowStart = null;
+      hint();
+      draw();
+      openMarkDialog({ id, kind: "ARROW", x: start.x, y: start.y, x2: round1(x), y2: round1(y), text: "", color: S.markColor, size: 1 }, true);
+    }
+  }
+
+  function openMarkDialog(mark, isNew) {
+    markEditing = { mark, isNew };
+    $("mark-heading").textContent = { BADGE: "Номер кабинета", TEXT: "Подпись", ARROW: "Стрелка" }[mark.kind];
+    $("mark-text").value = mark.text || "";
+    $("mark-text").placeholder = mark.kind === "BADGE" ? "201" : mark.kind === "TEXT" ? "Серверная" : "Можно пусто";
+    $("mark-color").value = (mark.color || "#FFD60A").toLowerCase();
+    $("mark-size").value = mark.size || 1;
+    $("mark-delete").hidden = isNew;
+    fieldError("mark-text", null);
+    $("mark-dialog").showModal();
+    $("mark-text").focus();
+  }
+  $("mark-cancel").addEventListener("click", () => $("mark-dialog").close());
+  $("mark-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const { mark } = markEditing;
+    const text = $("mark-text").value.trim();
+    if (mark.kind !== "ARROW" && !text) { fieldError("mark-text", mark.kind === "BADGE" ? "Укажите номер" : "Укажите текст"); return; }
+    const saved = { ...mark, text, color: $("mark-color").value.toUpperCase(), size: Number($("mark-size").value) };
+    const list = marksOf().filter((a) => a.id !== saved.id).concat(saved);
+    try { await saveAnnotations(list); $("mark-dialog").close(); } catch (e) { fieldError("mark-text", e.message); }
+  });
+  $("mark-delete").addEventListener("click", async () => {
+    const { mark } = markEditing;
+    try { await saveAnnotations(marksOf().filter((a) => a.id !== mark.id)); $("mark-dialog").close(); } catch (e) { fail(e); }
+  });
+
+  async function moveMark(mark, dx, dy) {
+    const moved = { ...mark, x: round1(mark.x + dx), y: round1(mark.y + dy) };
+    if (mark.x2 != null) Object.assign(moved, { x2: round1(mark.x2 + dx), y2: round1(mark.y2 + dy) });
+    await saveAnnotations(marksOf().map((a) => (a.id === mark.id ? moved : a)));
+  }
+
+  async function saveAnnotations(annotations) {
+    const floor = await ensureFloor();
+    floor.annotations = annotations;
+    draw();
+    S.floor = await api("PATCH", `floors/${floor.id}`, { annotations });
+    draw();
+  }
+
+  // ---------------------------------------------------------------- device templates
+
+  let placeAt = null, templates = [];
+
+  async function openPlaceDialog(at) {
+    placeAt = at;
+    templates = await api("GET", "device-templates");
+    const sel = $("place-template");
+    sel.replaceChildren(...templates.map((t) => new Option(`${t.name}${t.port_count ? ` · ${t.port_count} портов` : ""}`, t.id)));
+    $("place-empty").hidden = templates.length > 0;
+    sel.closest("label").hidden = !templates.length;
+    $("place-save").disabled = !templates.length;
+    $("place-name").value = "";
+    $("place-ip").value = "";
+    fieldError("place-name", null);
+    $("place-error").hidden = true;
+    $("place-dialog").showModal();
+  }
+  $("place-cancel").addEventListener("click", () => $("place-dialog").close());
+  $("place-templates").addEventListener("click", () => { $("place-dialog").close(); openTab("templates"); });
+  $("place-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const name = $("place-name").value.trim();
+    if (!name) { fieldError("place-name", "Укажите имя"); return; }
+    try {
+      const floor = await ensureFloor();
+      await api("POST", `device-templates/${$("place-template").value}/create-device`, {
+        name, ip: $("place-ip").value.trim() || null, floor_id: floor.id, x: round1(placeAt.x), y: round1(placeAt.y),
+      });
+      $("place-dialog").close();
+      await loadMap();
+    } catch (e) {
+      $("place-error").hidden = false;
+      $("place-error").textContent = e.status === 409 ? "Устройство с таким именем или IP уже есть." : e.message;
+    }
+  });
+
+  async function loadTemplates() {
+    templates = await api("GET", "device-templates");
+    const rows = $("template-rows");
+    if (!templates.length) {
+      rows.replaceChildren(emptyRow(6, "Шаблонов пока нет. Шаблон хранит тип, модель и порты типового устройства.", "Создать первый шаблон", () => openTemplate(null)));
+      return;
+    }
+    rows.replaceChildren(...templates.map((t) => {
+      const tr = document.createElement("tr");
+      cell(tr, t.name);
+      cell(tr, "").append(glyphCanvas(t.device_type), (TYPE[t.device_type] || TYPE.UNKNOWN).label);
+      cell(tr, t.vendor);
+      cell(tr, t.model);
+      cell(tr, String(t.port_count));
+      const act = cell(tr, "");
+      act.className = "actions";
+      const edit = document.createElement("button");
+      edit.textContent = "Изменить";
+      edit.addEventListener("click", () => openTemplate(t));
+      act.append(edit);
+      return tr;
+    }));
+  }
+
+  let templateEditing = null;
+  {
+    const sel = $("template-type");
+    for (const [id, label] of TYPES) sel.append(new Option(label, id));
+  }
+  function openTemplate(t) {
+    templateEditing = t;
+    $("template-heading").textContent = t ? t.name : "Новый шаблон";
+    $("template-name").value = t ? t.name : "";
+    $("template-type").value = t ? t.device_type : "SWITCH";
+    $("template-vendor").value = (t && t.vendor) || "";
+    $("template-model").value = (t && t.model) || "";
+    $("template-ports").value = t ? t.port_count : 24;
+    $("template-prefix").value = t ? t.port_prefix : "Gi0/";
+    $("template-rack-h").value = (t && t.rack_h) || "";
+    $("template-delete").hidden = !t;
+    $("template-error").hidden = true;
+    fieldError("template-name", null);
+    $("template-dialog").showModal();
+  }
+  $("template-new").addEventListener("click", () => openTemplate(null));
+  $("template-cancel").addEventListener("click", () => $("template-dialog").close());
+  $("template-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const name = $("template-name").value.trim();
+    if (!name) { fieldError("template-name", "Укажите название"); return; }
+    const body = {
+      name, device_type: $("template-type").value, vendor: $("template-vendor").value.trim() || null,
+      model: $("template-model").value.trim() || null, port_count: Number.parseInt($("template-ports").value, 10) || 0,
+      port_prefix: $("template-prefix").value || "Port", rack_h: Number.parseInt($("template-rack-h").value, 10) || null,
+    };
+    try {
+      if (templateEditing) await api("PATCH", `device-templates/${templateEditing.id}`, body);
+      else await api("POST", "device-templates", body);
+      $("template-dialog").close();
+      await loadTemplates();
+    } catch (e) {
+      $("template-error").hidden = false;
+      $("template-error").textContent = e.status === 409 ? "Шаблон с таким названием уже есть." : e.message;
+    }
+  });
+  $("template-delete").addEventListener("click", async () => {
+    if (!templateEditing || !confirm(`Удалить шаблон «${templateEditing.name}»? Созданные из него устройства останутся.`)) return;
+    try { await api("DELETE", `device-templates/${templateEditing.id}`); $("template-dialog").close(); await loadTemplates(); }
+    catch (e) { $("template-error").hidden = false; $("template-error").textContent = e.message; }
+  });
+
+  // ---------------------------------------------------------------- shared form helpers
+
+  /** An error under one field (null clears it): the field turns red and says what is wrong. */
+  function fieldError(id, message) {
+    const input = $(id), note = $(`${id}-error`);
+    input.classList.toggle("invalid", !!message);
+    if (note) { note.hidden = !message; note.textContent = message || ""; }
+    if (message) input.focus();
+  }
+
+  /** A table with nothing in it: why, and the next step as a button. */
+  function emptyRow(cols, text, action, onAction) {
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = cols;
+    const box = document.createElement("div");
+    box.className = "empty-state";
+    box.append(Object.assign(document.createElement("span"), { className: "muted", textContent: text }));
+    if (action) {
+      const b = document.createElement("button");
+      b.className = "primary";
+      b.textContent = action;
+      b.addEventListener("click", onAction);
+      box.append(b);
+    }
+    td.append(box);
+    tr.append(td);
+    return tr;
+  }
   $("map-fit").addEventListener("click", () => { S.touched = false; fit(); draw(); });
   $("route-point-delete").addEventListener("click", deleteSelectedPoint);
   $("route-straight").addEventListener("click", () => {
@@ -1579,15 +2095,18 @@
     $("device-mount").hidden = id === "RACK" || id === "VIRTUAL";
     $("device-ports").hidden = !dialogDevice || id === "RACK" || id === "VIRTUAL";
     $("device-rack-open").hidden = !dialogDevice || id !== "RACK";
+    $("device-net").hidden = id === "RACK" || id === "SOCKET" || id === "PATCH_PANEL";
     for (const b of $("device-types").children) b.classList.toggle("active", b.dataset.type === id);
   }
 
   function openDeviceDialog(device, at) {
     dialogDevice = device;
     dialogAt = at || null;
-    $("device-heading").textContent = device ? device.name : "Новый объект";
+    $("device-heading").textContent = device ? device.name : "Новое устройство";
     $("device-name").value = device ? device.name : "";
     $("device-ip").value = (device && device.ip) || "";
+    $("device-mac").value = (device && device.mac) || "";
+    for (const f of ["device-name", "device-ip", "device-mac"]) fieldError(f, null);
     $("device-vendor").value = (device && device.vendor) || "";
     $("device-model").value = (device && device.model) || "";
     $("device-delete").hidden = !device;
@@ -1617,12 +2136,25 @@
   }
 
   $("device-cancel").addEventListener("click", () => $("device-dialog").close());
+  const IPV4 = /^((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/;
+  const MAC = /^[0-9a-f]{2}([:-][0-9a-f]{2}){5}$/i;
   $("device-form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
+    const ip = $("device-ip").value.trim(), mac = $("device-mac").value.trim();
+    const passive = $("device-net").hidden;
+    // Errors under their fields, the first one focused; nothing goes to the server until they are fixed.
+    const problems = [
+      ["device-mac", !passive && mac && !MAC.test(mac) ? "Нужен адрес вида aa:bb:cc:dd:ee:ff" : null],
+      ["device-ip", !passive && ip && !IPV4.test(ip) && !ip.includes(":") ? "Нужен адрес вида 10.0.0.1" : null],
+      ["device-name", $("device-name").value.trim() ? null : "Укажите имя"],
+    ];
+    for (const [f, m] of problems) fieldError(f, m);
+    if (problems.some(([, m]) => m)) return;
     const body = {
       name: $("device-name").value.trim(),
       type: dialogType,
-      ip: $("device-ip").value.trim() || null,
+      ip: passive ? null : ip || null,
+      mac: passive ? null : mac.replaceAll("-", ":").toLowerCase() || null,
       vendor: $("device-vendor").value.trim() || null,
       model: $("device-model").value.trim() || null,
       host_id: dialogType === "VIRTUAL" ? $("device-host").value || null : null,
@@ -1663,8 +2195,13 @@
     }
   });
   $("device-delete").addEventListener("click", async () => {
-    if (!dialogDevice || !confirm(`Удалить ${dialogDevice.name} и его кабели из инвентаря? Само оборудование это не затрагивает.`)) return;
-    try { await api("DELETE", `devices/${dialogDevice.id}`); $("device-dialog").close(); await refreshTab(); }
+    if (!dialogDevice || !confirm(`Удалить ${dialogDevice.name}, его порты и кабели из учёта? Само оборудование это не затрагивает.`)) return;
+    try {
+      await api("DELETE", `devices/${dialogDevice.id}`);
+      if (cardId === dialogDevice.id) { cardId = null; $("card-dialog").close(); }
+      $("device-dialog").close();
+      await refreshTab();
+    }
     catch (e) { $("device-error").hidden = false; $("device-error").textContent = e.message; }
   });
 
@@ -1674,6 +2211,10 @@
 
   async function loadVlans() {
     const vlans = await api("GET", "vlans");
+    if (!vlans.length) {
+      $("vlan-rows").replaceChildren(emptyRow(6, "VLAN пока нет. Добавьте первый в строке ниже или импортируйте конфигурацию коммутатора (Порты… → Импорт конфига)."));
+      return;
+    }
     $("vlan-rows").replaceChildren(...vlans.map((v) => {
       const tr = document.createElement("tr");
       const td = (el) => { const c = document.createElement("td"); c.append(el); tr.append(c); return el; };
@@ -1706,8 +2247,18 @@
     }));
   }
 
+  const CIDR = /^((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\/(3[0-2]|[12]?\d)$/;
   $("vlan-form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
+    const id = Number.parseInt($("vlan-id").value, 10);
+    const subnet = $("vlan-subnet").value.trim();
+    const problems = [
+      ["vlan-subnet", subnet && !CIDR.test(subnet) ? "Подсеть пишется так: 10.10.20.0/24" : null],
+      ["vlan-name", $("vlan-name").value.trim() ? null : "Укажите название"],
+      ["vlan-id", id >= 1 && id <= 4094 ? null : "Номер от 1 до 4094"],
+    ];
+    for (const [f, m] of problems) fieldError(f, m);
+    if (problems.some(([, m]) => m)) return;
     try {
       vlanError(null);
       await api("POST", "vlans", {
@@ -1778,7 +2329,7 @@
       };
       for (const el of [name, uplink, mode, access, tagged, speed, poe]) el.addEventListener("change", () => { tr.classList.add("picked"); save(); });
       del.addEventListener("click", async () => {
-        if (!confirm(`Удалить порт ${p.number} (${p.name}) из инвентаря? Кабель на нём тоже уйдёт. Оборудование это не затрагивает.`)) return;
+        if (!confirm(`Удалить порт ${p.number} (${p.name}) из учёта? Кабель на нём тоже уйдёт. Оборудование это не затрагивает.`)) return;
         try { portsError(null); await api("DELETE", `ports/${p.id}`); await renderPorts(); } catch (e) { portsError(e); }
       });
       return tr;
@@ -1962,12 +2513,56 @@
     renderDevices();
   }
 
+  const isDown = (d) => !d.is_online && !PASSIVE.has(d.type) && d.type !== "RACK";
+  const matchesQuery = (d, q) => !q || [d.name, d.ip, d.mac, typeOf(d).label, d.vendor, d.model, (roomOf(d) || {}).name, d.comment]
+    .join(" ").toLowerCase().includes(q);
+  const matchesType = (d, f) => !f || (f === "OFFLINE" ? isDown(d) : d.type === f);
+
   function visibleDevices() {
     const q = $("device-filter").value.trim().toLowerCase();
-    return allDevices.filter((d) => {
-      if (typeFilter && d.type !== typeFilter) return false;
-      return !q || [d.name, d.ip, typeOf(d).label, d.vendor, d.model].join(" ").toLowerCase().includes(q);
-    });
+    return allDevices.filter((d) => matchesType(d, typeFilter) && matchesQuery(d, q));
+  }
+
+  /** The filter list with how many each choice would show for the current search; empty kinds are left out. */
+  function renderTypeFilter() {
+    const q = $("device-filter").value.trim().toLowerCase();
+    const found = allDevices.filter((d) => matchesQuery(d, q));
+    const sel = $("type-filter");
+    const opts = [new Option(`Все категории · ${found.length}`, "")];
+    const down = found.filter(isDown).length;
+    if (down || typeFilter === "OFFLINE") opts.push(new Option(`● Не в сети · ${down}`, "OFFLINE"));
+    for (const [id, label] of TYPES) {
+      const n = found.filter((d) => d.type === id).length;
+      if (n || typeFilter === id) opts.push(new Option(`${label} · ${n}`, id));
+    }
+    sel.replaceChildren(...opts);
+    sel.value = typeFilter;
+  }
+
+  /** Sections of the list, as in the app: by kind, by floor (bottom to top) or by room on the floor's plan. */
+  function groupsOf(list, by) {
+    const byName = (a, b) => a.name.localeCompare(b.name, "ru");
+    if (by === "type") {
+      return TYPES.map(([id, label]) => ({ title: label, items: list.filter((d) => d.type === id).sort(byName) })).filter((g) => g.items.length);
+    }
+    const out = [];
+    for (const f of S.floors) {
+      const here = list.filter((d) => d.floor_id === f.id);
+      if (!here.length) continue;
+      if (by === "floor") { out.push({ title: floorTitle(f), items: here.sort(byName) }); continue; }
+      const rooms = new Map();
+      for (const d of here) {
+        const z = d.x != null ? zoneAtPoint(f, d.x, d.y, true) : null;
+        const key = z ? z.name : "";
+        (rooms.get(key) || rooms.set(key, []).get(key)).push(d);
+      }
+      const keys = [...rooms.keys()].sort((a, b) => (a === "") - (b === "") || a.localeCompare(b, "ru"));
+      for (const k of keys) out.push({ title: `${floorTitle(f)} · ${k || "вне помещений"}`, items: rooms.get(k).sort(byName) });
+    }
+    const known = new Set(S.floors.map((f) => f.id));
+    const loose = list.filter((d) => !d.floor_id || !known.has(d.floor_id));
+    if (loose.length) out.push({ title: "Не на карте", items: loose.sort(byName) });
+    return out;
   }
 
   function togglePick(id, on) {
@@ -1985,9 +2580,8 @@
 
   {
     const sel = $("type-filter");
-    sel.append(new Option("Все категории", ""));
-    for (const [id, label] of TYPES) sel.append(new Option(label, id));
     sel.addEventListener("change", () => { typeFilter = sel.value; renderDevices(); });
+    $("group-by").addEventListener("change", renderDevices);
     $("pick-all").addEventListener("change", (ev) => {
       for (const d of visibleDevices()) { if (ev.target.checked) picked.add(d.id); else picked.delete(d.id); }
       renderDevices();
@@ -2003,67 +2597,64 @@
   }
 
   function renderDevices() {
-    const q = $("device-filter").value.trim().toLowerCase();
+    renderTypeFilter();
     const rows = $("device-rows");
     rows.replaceChildren();
-    for (const d of allDevices) {
-      const label = typeOf(d).label;
-      const hay = [d.name, d.ip, label, d.vendor, d.model, (roomOf(d) || {}).name, d.comment].join(" ").toLowerCase();
-      if (q && !hay.includes(q)) continue;
-      if (typeFilter && d.type !== typeFilter) continue;
-      const tr = document.createElement("tr");
-      tr.classList.toggle("picked", picked.has(d.id));
-      const pickCell = document.createElement("td");
-      pickCell.className = "pick";
-      const box = document.createElement("input");
-      box.type = "checkbox";
-      box.checked = picked.has(d.id);
-      box.addEventListener("change", () => { togglePick(d.id, box.checked); tr.classList.toggle("picked", box.checked); });
-      pickCell.appendChild(box);
-      tr.appendChild(pickCell);
-      cell(tr, d.name);
-      const typeCell = cell(tr, "");
-      typeCell.append(glyphCanvas(d.type), label);
-      cell(tr, d.ip);
-      cell(tr, d.vendor);
-      cell(tr, d.model);
-      cell(tr, (roomOf(d) || {}).name);
-      cell(tr, d.rack_id ? `${(allDevices.find((h) => h.id === d.rack_id) || {}).name || "?"}${d.rack_u ? ` · U${d.rack_u}` : ""}` : null);
-      cell(tr, d.host_id ? (allDevices.find((h) => h.id === d.host_id) || {}).name : null);
-      cell(tr, d.x != null ? "да" : "нет");
-      const actions = cell(tr, "");
-      actions.className = "actions";
-      const edit = document.createElement("button");
-      edit.textContent = "Изменить";
-      edit.addEventListener("click", () => openDeviceDialog(d));
-      const show = document.createElement("button");
-      show.textContent = "На карте";
-      show.addEventListener("click", () => showOnMap(d.id));
-      actions.append(edit, " ", show);
-      if (!NO_PERIPHERALS.has(d.type)) {
-        const per = document.createElement("button");
-        per.textContent = "Периферия";
-        per.title = "Добавить монитор, клавиатуру и другое к этому устройству";
-        per.addEventListener("click", () => openPeripheral(null, d.id));
-        actions.append(" ", per);
-      }
-      if (d.type !== "RACK" && d.type !== "SOCKET") {
-        const plate = document.createElement("button");
-        plate.textContent = "Схема";
-        plate.title = "Схема лицевой панели (SVG) и места портов на ней";
-        plate.addEventListener("click", () => openFaceplate(d));
-        actions.append(" ", plate);
-      }
-      rows.appendChild(tr);
+    const shown = visibleDevices();
+    $("device-count").textContent = `Показано: ${shown.length}`;
+    const byId = new Map(allDevices.map((x) => [x.id, x]));
+    for (const group of groupsOf(shown, $("group-by").value)) {
+      const head = document.createElement("tr");
+      head.className = "group";
+      const ht = cell(head, `${group.title} · ${group.items.length}`);
+      ht.colSpan = 10;
+      rows.appendChild(head);
+      for (const d of group.items) rows.appendChild(deviceRow(d, byId));
     }
-    if (!rows.children.length) {
-      const tr = document.createElement("tr");
-      const td = cell(tr, allDevices.length ? "Ничего не найдено" : "Устройств пока нет: добавьте их здесь или найдите сканером сети.");
-      td.colSpan = 11;
-      td.className = "muted";
-      rows.appendChild(tr);
+    if (!shown.length) {
+      rows.appendChild(allDevices.length
+        ? emptyRow(10, "Ничего не найдено.", "Сбросить поиск и фильтр", () => { $("device-filter").value = ""; typeFilter = ""; renderDevices(); })
+        : emptyRow(10, "В учёте пока нет устройств. Найдите их сканером сети или добавьте вручную.", "Сканер сети", () => openTab("scan")));
     }
     renderBulkBar();
+  }
+
+  /** One row: a click opens the device card; the tick box picks it for a group change. */
+  function deviceRow(d, byId) {
+    const tr = document.createElement("tr");
+    tr.className = "clickable";
+    tr.classList.toggle("picked", picked.has(d.id));
+    tr.addEventListener("click", (ev) => { if (!ev.target.closest("input, button")) openCard(d.id).catch(fail); });
+    const pickCell = document.createElement("td");
+    pickCell.className = "pick";
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = picked.has(d.id);
+    box.addEventListener("change", () => { togglePick(d.id, box.checked); tr.classList.toggle("picked", box.checked); });
+    pickCell.appendChild(box);
+    tr.appendChild(pickCell);
+    const name = cell(tr, d.name);
+    if (isDown(d)) name.append(Object.assign(document.createElement("span"), { className: "down-mark", textContent: "не в сети" }));
+    cell(tr, "").append(glyphCanvas(d.type), typeOf(d).label);
+    cell(tr, d.ip);
+    cell(tr, d.vendor);
+    cell(tr, d.model);
+    cell(tr, (roomOf(d) || {}).name);
+    cell(tr, d.rack_id ? `${(byId.get(d.rack_id) || {}).name || "?"}${d.rack_u ? ` · U${d.rack_u}` : ""}` : null);
+    cell(tr, d.host_id ? (byId.get(d.host_id) || {}).name : null);
+    const actions = cell(tr, "");
+    actions.className = "actions";
+    const edit = document.createElement("button");
+    edit.textContent = "Изменить";
+    edit.addEventListener("click", () => openDeviceDialog(d));
+    actions.append(edit);
+    if (d.x != null && d.type !== "VIRTUAL") {
+      const show = document.createElement("button");
+      show.textContent = "На карте";
+      show.addEventListener("click", () => showOnMap(d.id).catch(fail));
+      actions.append(" ", show);
+    }
+    return tr;
   }
   $("device-filter").addEventListener("input", renderDevices);
 
@@ -2125,7 +2716,7 @@
     }
   });
   $("bulk-delete").addEventListener("click", async () => {
-    if (!confirm(`Удалить устройств: ${picked.size}? Они пропадут из инвентаря и с карты вместе с портами и кабелями. Само оборудование это не затрагивает.`)) return;
+    if (!confirm(`Удалить устройств: ${picked.size}? Они пропадут из учёта и с карты вместе с портами и кабелями. Само оборудование это не затрагивает.`)) return;
     try {
       await api("POST", "devices/bulk-delete", { ids: [...picked] });
       picked.clear();
@@ -2135,10 +2726,15 @@
   $("device-new").addEventListener("click", () => openDeviceDialog(null));
 
   async function showOnMap(id) {
+    // Another floor, a hidden kind or a virtual machine: switch to where it is and make it visible first.
+    const known = allDevices.find((x) => x.id === id);
+    if (known && known.floor_id) S.floorId = known.floor_id;
+    if (known) { S.hiddenTypes.delete(known.type); if (known.type === "VIRTUAL") { S.showVms = true; $("show-vms").checked = true; } }
+    S.focus = id;
     openTab("map");
     await loadMap();
     const d = devicesById().get(id);
-    if (!d) return;
+    if (!d) { toast("Этого устройства нет на карте: оно не расставлено на плане."); return; }
     S.touched = true;
     S.view.scale = Math.max(S.view.scale, 1);
     S.view.ox = canvas.clientWidth / 2 - d.x * S.view.scale;
@@ -2432,11 +3028,9 @@
       rows.appendChild(tr);
     }
     if (!shown.length) {
-      const tr = document.createElement("tr");
-      const td = cell(tr, peripherals.length ? "Ничего не найдено" : "Периферии пока нет: добавьте мониторы, клавиатуры, док-станции.");
-      td.colSpan = 8;
-      td.className = "muted";
-      rows.appendChild(tr);
+      rows.appendChild(peripherals.length
+        ? emptyRow(8, "Ничего не найдено.")
+        : emptyRow(8, "Периферии пока нет: мониторы, клавиатуры, док-станции и прочее, что стоит у компьютеров.", "Добавить первую", () => openPeripheral(null)));
     }
   }
 
@@ -2707,6 +3301,20 @@
       row.addEventListener("click", () => selectNode(other, true));
       card.append(row);
     }
+    const actions = document.createElement("div");
+    actions.className = "row";
+    const open = document.createElement("button");
+    open.className = "primary";
+    open.textContent = "Карточка устройства";
+    open.addEventListener("click", () => openCard(n.id).catch(fail));
+    actions.append(open);
+    if (n.type !== "VIRTUAL") {
+      const map = document.createElement("button");
+      map.textContent = "На карте";
+      map.addEventListener("click", () => showOnMap(n.id).catch(fail));
+      actions.append(map);
+    }
+    card.append(actions);
   }
 
   function selectNode(id, centre) {
@@ -2928,10 +3536,247 @@
   });
   $("plate-close").addEventListener("click", () => $("plate-dialog").close());
 
+  // ---------------------------------------------------------------- the device card
+
+  // One card for a device, the same from the map, the list, the network and the events, as in the app.
+  let cardId = null, cardPart = "overview";
+  const PORTED = new Set(["SWITCH", "ROUTER", "FIREWALL", "PATCH_PANEL"]);
+  const node = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
+  const linkTo = (text, onClick) => node("button", { type: "button", className: "link", textContent: text, onclick: onClick });
+
+  /** [refresh]: redraw the card that is open now, and nothing at all if it was closed meanwhile. */
+  async function openCard(id, refresh = false) {
+    const [devices, floors, vlans, alerts] = await Promise.all([
+      api("GET", "devices"), api("GET", "floors"), api("GET", "vlans"), api("GET", "alerts?is_resolved=false"),
+    ]);
+    allDevices = devices;
+    S.floors = floors;
+    const d = devices.find((x) => x.id === id);
+    if (refresh && (cardId !== id || !$("card-dialog").open)) return;
+    if (!d) { cardId = null; $("card-dialog").close(); toast("Устройство уже удалено из учёта.", true); return; }
+    cardId = id;
+    const byId = new Map(devices.map((x) => [x.id, x]));
+    const vlanById = new Map(vlans.map((v) => [v.vlan_id, v]));
+    const c = {
+      d, byId, vlanById, vlans, floors,
+      alerts: alerts.filter((a) => a.device_id === id),
+      ports: PORTED.has(d.type) ? (await api("GET", `devices/${id}/ports`)).sort((a, b) => a.number - b.number) : [],
+      printer: d.type === "PRINTER" ? (await api("GET", "printers")).find((p) => p.id === id) || null : null,
+      peripherals: NO_PERIPHERALS.has(d.type) || d.type === "VIRTUAL" ? null : (await api("GET", "peripherals")).filter((p) => p.device_id === id),
+    };
+    if (refresh && (cardId !== id || !$("card-dialog").open)) return;
+    renderCardHead(c);
+    const parts = { overview: true, ports: PORTED.has(d.type), peripherals: c.peripherals != null, config: d.type === "SWITCH" };
+    for (const b of $("card-tabs").children) b.hidden = !parts[b.dataset.part];
+    if (!parts[cardPart]) cardPart = "overview";
+    renderCardOverview(c);
+    renderCardPorts(c);
+    if (c.peripherals) renderCardPeripherals(c);
+    renderCardConfig(c);
+    showCardPart(cardPart);
+    if (!$("card-dialog").open) $("card-dialog").showModal();
+  }
+
+  function renderCardHead({ d }) {
+    const g = $("card-glyph").getContext("2d");
+    g.clearRect(0, 0, 36, 36);
+    drawGlyph(g, d.type, 18, 18, 26, typeOf(d).color);
+    $("card-name").textContent = d.name;
+    $("card-sub").textContent = [typeOf(d).label, d.vendor, d.model].filter(Boolean).join(" · ");
+    const passive = PASSIVE.has(d.type) || d.type === "RACK";
+    $("card-online").textContent = passive ? "пассивное оборудование" : d.is_online ? "● в сети" : "● не отвечает";
+    $("card-online").className = passive ? "muted" : d.is_online ? "online" : "offline";
+    $("card-addr").textContent = [d.ip, d.mac].filter(Boolean).join("  ·  ");
+    $("card-map").hidden = d.type === "VIRTUAL";
+    // Ping runs on the switch the device is cabled to: the console itself is not in the plant network.
+    $("card-ping").hidden = !(d.ip && d.switch_id);
+    $("card-plate").hidden = d.type === "RACK" || d.type === "SOCKET";
+  }
+
+  function kv(rows) {
+    const box = node("div", { className: "kv" });
+    for (const [k, v] of rows) if (v != null && v !== "") box.append(node("span", { textContent: k }), typeof v === "string" ? node("span", { textContent: v }) : v);
+    return box;
+  }
+
+  function renderCardOverview(c) {
+    const { d, byId, vlanById } = c;
+    const out = [];
+    if (c.alerts.length) {
+      out.push(node("div", { className: "card" }, node("h3", { textContent: `Открытые события · ${c.alerts.length}` }),
+        ...c.alerts.map((a) => node("div", {}, node("span", { className: `sev-${a.severity}`, textContent: "● " }), a.message))));
+    }
+    const floor = c.floors.find((f) => f.id === d.floor_id);
+    const room = floor && d.x != null ? zoneAtPoint(floor, d.x, d.y, true) : null;
+    const rack = d.rack_id && byId.get(d.rack_id);
+    const host = d.host_id && byId.get(d.host_id);
+    const place = d.type === "VIRTUAL"
+      ? [["Хост", host ? linkTo(host.name, () => openCard(host.id).catch(fail)) : "не указан"]]
+      : [
+        ["Этаж", floor ? floorTitle(floor) : "не на карте"],
+        ["Помещение", room ? room.name : null],
+        ["Стойка", rack ? linkTo(`${rack.name}${d.rack_u ? ` · U${d.rack_u}${(d.rack_h || 1) > 1 ? `–${d.rack_u + d.rack_h - 1}` : ""}` : ""}`, () => openCard(rack.id).catch(fail)) : null],
+      ];
+    const where = node("div", { className: "card" }, node("h3", { textContent: "Расположение" }), kv(place));
+    if (d.type === "RACK") where.append(node("div", { className: "row" }, node("button", { textContent: "Вид стойки…", onclick: () => openRack(d) })));
+    out.push(where);
+
+    if (!["VIRTUAL", "RACK", "SWITCH"].includes(d.type)) {
+      const sw = d.switch_id && byId.get(d.switch_id);
+      const box = node("div", { className: "card" }, node("h3", { textContent: "Подключение" }));
+      if (!sw) {
+        box.append(node("span", { className: "muted small", textContent: "Кабель до коммутатора не проложен. Соедините устройство на карте (инструмент «Кабели» в правке) или в разделе «Сеть»." }));
+      } else {
+        const v = vlanById.get(d.vlan_id);
+        const pick = node("select", { title: "Сменить VLAN порта (запись в учёте, на коммутатор ничего не уходит)" });
+        pick.append(new Option(d.vlan_id == null ? "VLAN не задан" : `VLAN ${d.vlan_id}${v ? ` · ${v.name}` : ""}`, ""));
+        for (const x of c.vlans) if (x.vlan_id !== d.vlan_id) pick.append(new Option(`→ ${x.vlan_id} · ${x.name}`, String(x.vlan_id)));
+        pick.addEventListener("change", () => { if (pick.value) setPortVlan(d, Number(pick.value)).catch(fail); });
+        box.append(kv([
+          ["Коммутатор", linkTo(`${sw.name}${d.switch_port_name ? ` · порт ${d.switch_port_name}` : ""}`, () => openCard(sw.id).catch(fail))],
+          ["VLAN", pick],
+          ["Подсеть", v && v.subnet_cidr ? v.subnet_cidr : null],
+        ]), node("div", { className: "row" }, linkTo(c.vlans.length ? "Справочник VLAN и подсетей" : "Добавить VLAN и подсети", () => { $("card-dialog").close(); openTab("vlans"); })));
+      }
+      out.push(box);
+    }
+
+    const note = node("textarea", { rows: 3, maxLength: 4000, value: d.comment || "", placeholder: "За кем закреплено, особенности, где ключ от шкафа" });
+    const saveNote = node("button", { textContent: "Сохранить комментарий", disabled: true });
+    note.addEventListener("input", () => { saveNote.disabled = note.value.trim() === (d.comment || ""); });
+    saveNote.addEventListener("click", async () => {
+      try { await api("PATCH", `devices/${d.id}`, { comment: note.value.trim() || null }); toast("Комментарий сохранён"); await openCard(d.id); } catch (e) { fail(e); }
+    });
+    out.push(node("div", { className: "card" }, node("h3", { textContent: "Комментарий" }), note, node("div", { className: "row" }, saveNote)));
+
+    if (c.printer) {
+      const p = c.printer;
+      out.push(node("div", { className: "card" }, node("h3", { textContent: "Расходники" }),
+        node("span", { className: "muted small", textContent: [p.total_pages != null ? `${p.total_pages} стр.` : "", p.polled_at ? `опрошен ${new Date(p.polled_at).toLocaleString("ru-RU")}` : "ещё не опрашивался"].filter(Boolean).join(" · ") }),
+        ...p.consumables.map((x) => node("div", {}, node("div", { className: "small", textContent: `${x.name}: ${x.level_percent}%` }),
+          node("div", { className: "bar" }, (() => { const i = node("i"); i.style.width = `${x.level_percent}%`; i.style.background = x.color_hex; return i; })()))),
+        node("div", { className: "row" }, node("button", { textContent: "Опросить сейчас", onclick: async () => { try { await api("POST", `printers/${p.id}/refresh`); await openCard(d.id); } catch (e) { fail(e); } } }))));
+    }
+    const members = [...byId.values()].filter((x) => x.rack_id === d.id).sort((a, b) => (b.rack_u || 0) - (a.rack_u || 0));
+    if (members.length) {
+      out.push(node("div", { className: "card" }, node("h3", { textContent: "В стойке" }),
+        ...members.map((m) => node("div", {}, node("span", { className: "muted", textContent: m.rack_u ? `U${m.rack_u}  ` : "" }), linkTo(m.name, () => openCard(m.id).catch(fail))))));
+    }
+    const guests = [...byId.values()].filter((x) => x.host_id === d.id);
+    if (guests.length) {
+      out.push(node("div", { className: "card" }, node("h3", { textContent: "Виртуальные машины" }),
+        ...guests.map((m) => node("div", {}, linkTo(m.name, () => openCard(m.id).catch(fail)), node("span", { className: "muted", textContent: m.ip ? `  ${m.ip}` : "" })))));
+    }
+    $("card-overview").replaceChildren(node("div", { className: "info" }, ...out), node("pre", { id: "card-ping-out", className: "output", hidden: true }));
+  }
+
+  /** The port the device is cabled to moves to access [vlanId]: the inventory record only. */
+  async function setPortVlan(d, vlanId) {
+    const port = (await api("GET", `devices/${d.switch_id}/ports`)).find((p) => p.id === d.switch_port_id);
+    if (!port) throw new Error("Порт не найден на сервере");
+    await api("PATCH", `ports/${port.id}`, { mode: "ACCESS", access_vlan: vlanId, tagged_vlans: [] });
+    toast(`Порт ${port.name} переведён в VLAN ${vlanId}`);
+    await openCard(d.id);
+  }
+
+  function renderCardPorts(c) {
+    const { d, ports, vlanById } = c;
+    const table = node("table", { className: "grid" });
+    table.append(node("thead", {}, node("tr", {}, ...["№", "Порт", "Статус", "Режим и VLAN", "Подключено"].map((t) => node("th", { textContent: t })))));
+    const body = node("tbody");
+    for (const p of ports) {
+      const status = !p.is_admin_up ? "выключен" : !p.is_oper_up ? "нет линка" : `${p.speed_mbps >= 1000 ? `${p.speed_mbps / 1000} Гбит/с` : `${p.speed_mbps} Мбит/с`}`;
+      const vlan = p.mode === "TRUNK" ? `trunk ${p.tagged_vlans.join(",") || "все"}` : p.access_vlan != null ? `${p.access_vlan} ${(vlanById.get(p.access_vlan) || {}).name || ""}` : "—";
+      body.append(node("tr", {}, node("td", { textContent: String(p.number) }), node("td", { textContent: `${p.name}${p.is_uplink ? " · uplink" : ""}` }),
+        node("td", { textContent: status, className: p.is_oper_up && p.is_admin_up ? "online" : "muted" }), node("td", { textContent: vlan }),
+        node("td", { textContent: p.connected_device_name || "" })));
+    }
+    if (!ports.length) body.append(emptyRow(5, "Портов в учёте пока нет.", "Добавить порты", () => openPorts(d).catch(fail)));
+    table.append(body);
+    $("card-ports").replaceChildren(
+      node("div", { className: "row" }, node("button", { className: "primary", textContent: "Изменить порты…", onclick: () => openPorts(d).catch(fail) }),
+        node("span", { className: "muted small", textContent: "Записи учёта; на оборудование ничего не отправляется." })),
+      node("div", { className: "table-wrap" }, table));
+  }
+
+  function renderCardPeripherals(c) {
+    const { d } = c;
+    const stock = () => peripherals.filter((p) => !p.device_id);
+    const rows = c.peripherals.map((p) => node("tr", { className: "clickable", onclick: () => openPeripheral(p, d.id) },
+      node("td", { textContent: KIND[p.kind] || p.kind }), node("td", { textContent: [p.vendor, p.model].filter(Boolean).join(" ") || "—" }),
+      node("td", { textContent: p.specs || "" }), node("td", { textContent: p.inventory_number || "" })));
+    const body = node("tbody", {}, ...rows);
+    if (!rows.length) body.append(emptyRow(4, `К ${d.name} ничего не подключено.`, "Добавить монитор или клавиатуру", () => openPeripheral(null, d.id)));
+    const fromStock = node("select");
+    fromStock.addEventListener("change", async () => {
+      if (!fromStock.value) return;
+      try { await api("PATCH", `peripherals/${fromStock.value}`, { device_id: d.id }); await loadPeripherals(); await openCard(d.id); } catch (e) { fail(e); }
+    });
+    const fillStock = async () => {
+      peripherals = await api("GET", "peripherals");
+      const free = stock();
+      fromStock.replaceChildren(new Option(free.length ? `Со склада (${free.length})…` : "Склад пуст", ""),
+        ...free.map((p) => new Option(`${KIND[p.kind] || p.kind} ${[p.vendor, p.model].filter(Boolean).join(" ")}${p.inventory_number ? ` · ${p.inventory_number}` : ""}`, p.id)));
+      fromStock.disabled = !free.length;
+    };
+    fillStock().catch(() => {});
+    $("card-peripherals").replaceChildren(
+      node("div", { className: "row" }, node("button", { className: "primary", textContent: "+ Добавить", onclick: () => openPeripheral(null, d.id) }), fromStock),
+      node("div", { className: "table-wrap" }, node("table", { className: "grid" },
+        node("thead", {}, node("tr", {}, ...["Вид", "Модель", "Характеристики", "Инв. №"].map((t) => node("th", { textContent: t })))), body)));
+  }
+
+  function renderCardConfig({ d }) {
+    const action = (title, sub, onClick) => node("button", { type: "button", className: "config-action", onclick: onClick },
+      node("strong", { textContent: title }), node("span", { className: "muted small", textContent: sub }));
+    const withPorts = (fn) => () => { portsDevice = d; fn(); };
+    $("card-config").replaceChildren(node("div", { className: "info" },
+      action("История", "Изменения портов и снятые копии конфигурации", withPorts(() => window.NetAdmin.openDetails("history"))),
+      action("Конфигурация", "Снять копию, сравнить с коммутатором или две копии", withPorts(() => window.NetAdmin.openDetails("configs"))),
+      action("Трафик", "Загрузка портов за час, сутки, неделю", withPorts(() => window.NetAdmin.openDetails("traffic"))),
+      action("Порты по VLAN", "Какие порты несут какой VLAN", withPorts(() => window.NetAdmin.openDetails("vlan"))),
+      action("Импорт конфигурации", "Порты и VLAN из текста running-config", withPorts(() => window.NetAdmin.openImport())),
+      action("Порты в учёте", "Номера, имена, режимы, VLAN, PoE", () => openPorts(d).catch(fail))));
+  }
+
+  function showCardPart(name) {
+    cardPart = name;
+    for (const b of $("card-tabs").children) b.classList.toggle("active", b.dataset.part === name);
+    for (const part of ["overview", "ports", "peripherals", "config"]) $(`card-${part}`).hidden = part !== name;
+  }
+  $("card-tabs").addEventListener("click", (ev) => { const b = ev.target.closest("button[data-part]"); if (b) showCardPart(b.dataset.part); });
+  $("card-close").addEventListener("click", () => $("card-dialog").close());
+  $("card-dialog").addEventListener("close", () => { cardId = null; });
+  const cardDevice = () => allDevices.find((x) => x.id === cardId);
+  $("card-edit").addEventListener("click", () => { const d = cardDevice(); if (d) openDeviceDialog(d); });
+  $("card-map").addEventListener("click", () => {
+    const id = cardId;
+    $("card-dialog").close();
+    showOnMap(id).catch(fail);
+  });
+  $("card-plate").addEventListener("click", () => { const d = cardDevice(); if (d) openFaceplate(d); });
+  $("card-ping").addEventListener("click", async () => {
+    const d = cardDevice();
+    const out = $("card-ping-out");
+    if (!d || !out) return;
+    showCardPart("overview");
+    out.hidden = false;
+    out.textContent = `Ping ${d.ip} с коммутатора ${(allDevices.find((x) => x.id === d.switch_id) || {}).name || ""}…`;
+    try {
+      const r = await api("POST", `devices/${d.switch_id}/ping`, { target: d.ip, count: 4 });
+      out.textContent = `${r.success ? "Отвечает" : "Не отвечает"}\n\n${r.command}\n${r.output}`;
+    } catch (e) { out.textContent = e.message; }
+  });
+  // Whatever was changed in a form opened from the card shows in the card when the form closes.
+  for (const id of ["device-dialog", "per-dialog", "ports-dialog", "rack-dialog", "plate-dialog", "import-dialog", "detail-dialog"]) {
+    $(id).addEventListener("close", () => { if (cardId && $("card-dialog").open) openCard(cardId, true).catch(() => {}); });
+  }
+
   // What admin-more.js (the other tabs) builds on.
   window.NetAdmin = {
     $, api, toast, fail, typeOf, glyphCanvas, OPERATOR, tabs: {},
     picked, renderPorts: () => renderPorts(), portsDevice: () => portsDevice,
+    openCard: (id) => openCard(id).catch(fail),
   };
 
   // ---------------------------------------------------------------- go

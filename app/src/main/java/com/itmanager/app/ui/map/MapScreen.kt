@@ -55,11 +55,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.CenterFocusStrong
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.EditLocationAlt
 import androidx.compose.material.icons.outlined.MeetingRoom
-import androidx.compose.material.icons.outlined.Keyboard
-import androidx.compose.material.icons.outlined.Lan
-import androidx.compose.material.icons.outlined.Nfc
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.TravelExplore
@@ -128,11 +124,6 @@ import com.itmanager.app.ui.theme.Ink950
 import com.itmanager.app.ui.theme.MonoStyle
 import com.itmanager.app.ui.theme.Motion
 import com.itmanager.app.ui.theme.StatusColors
-import com.itmanager.app.data.model.takesPeripherals
-import com.itmanager.app.ui.peripherals.DevicePeripheralsDialog
-import com.itmanager.app.ui.peripherals.PeripheralEditorDialog
-import com.itmanager.app.ui.peripherals.PeripheralsViewModel
-import com.itmanager.app.ui.peripherals.peripheralSummary
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -144,24 +135,14 @@ fun MapScreen(
     onOpenSettings: () -> Unit,
     onOpenScanner: () -> Unit,
     onOpenVlans: () -> Unit,
+    onOpenTemplates: () -> Unit = {},
     viewModel: MapViewModel = hiltViewModel(),
-    peripherals: PeripheralsViewModel = hiltViewModel(),
     faceplates: FaceplateViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val peripheralState by peripherals.state.collectAsStateWithLifecycle()
-    val peripheralDevices by peripherals.devices.collectAsStateWithLifecycle()
-    val peripheralEditor by peripherals.editor.collectAsStateWithLifecycle()
-    val allPeripherals = (peripheralState as? UiState.Content)?.data.orEmpty()
-    var peripheralsFor by remember { mutableStateOf<Device?>(null) }
-    var vlanFor by remember { mutableStateOf<Device?>(null) }
-    var vlanError by remember { mutableStateOf<String?>(null) }
     val rackPlates by faceplates.rackPlates.collectAsStateWithLifecycle()
     val faceplateEditor by faceplates.editor.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    LaunchedEffect(peripherals) {
-        peripherals.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
-    }
     val focusRequest by viewModel.focusRequest.collectAsStateWithLifecycle()
     val camera = rememberMapCamera()
     val haptics = LocalHapticFeedback.current
@@ -174,9 +155,8 @@ fun MapScreen(
     var showFloors by remember { mutableStateOf(false) }
     var zoneEdit by remember { mutableStateOf<ZoneEdit?>(null) }
     var showRooms by remember { mutableStateOf(false) }
-    var commentFor by remember { mutableStateOf<Device?>(null) }
-    var commentError by remember { mutableStateOf<String?>(null) }
     var showLegend by remember { mutableStateOf(false) }
+    var templatePicker by remember { mutableStateOf(false) }
     // Kinds switched off in the legend: they and their cables leave the map until switched back on.
     var hiddenTypes by remember { mutableStateOf(emptySet<DeviceType>()) }
     val scope = rememberCoroutineScope()
@@ -295,7 +275,7 @@ fun MapScreen(
         MapTopPanel(
             title = content?.map?.plan?.title ?: "Карта",
             subtitle = if (state.editing) {
-                "Редактор карты · только инвентарь"
+                "Правка карты · меняется только учёт"
             } else {
                 content?.let { "${it.map.devices.count { d -> d.type != DeviceType.SOCKET && d.type != DeviceType.PATCH_PANEL }} устройств" }
             },
@@ -403,7 +383,6 @@ fun MapScreen(
                     vlanName = device.vlanId?.let { id -> content?.map?.vlans?.firstOrNull { it.id == id }?.let { "VLAN ${it.id} · ${it.name}" } },
                     tracePath = if (device.id == state.selectedId) state.tracePath else emptyList(),
                     onOpenSwitch = { onOpenDevice(device.id) },
-                    onBindNfc = { viewModel.bindNfc(device) },
                     onDismiss = { viewModel.select(null) },
                     hostName = device.hostId?.let { content?.allDevices?.get(it)?.name },
                     roomName = content?.map?.plan?.zones?.roomAt(device.x, device.y)?.name,
@@ -412,24 +391,11 @@ fun MapScreen(
                         "${rack?.name ?: "Стойка"} · U${device.rackU}${if ((device.rackH ?: 1) > 1) "–${device.rackTop}" else ""}"
                     },
                     onOpenRack = if (device.type == DeviceType.RACK) ({ viewModel.openRack(device.id) }) else null,
-                    onEditComment = {
-                        commentError = null
-                        commentFor = device
-                    },
-                    peripheralText = if (device.type.takesPeripherals) {
-                        peripheralSummary(allPeripherals.filter { it.deviceId == device.id }) ?: "Добавить периферию"
-                    } else {
-                        null
-                    },
-                    onOpenPeripherals = { peripheralsFor = device },
                     onEdit = { viewModel.openDevice(device.id) },
                     portText = device.switchPortId?.let {
                         val switchName = device.switchId?.let { id -> content?.allDevices?.get(id)?.name } ?: "коммутатор"
-                        val vlan = device.vlanId?.let { id -> content?.map?.vlans?.firstOrNull { it.id == id } }
-                        "Порт $switchName ${device.switchPortName.orEmpty()} · " +
-                            (vlan?.let { "VLAN ${it.id} ${it.name}" } ?: device.vlanId?.let { "VLAN $it" } ?: "VLAN не задан")
+                        "Порт $switchName ${device.switchPortName.orEmpty()}".trim()
                     },
-                    onChangeVlan = { vlanFor = device },
                 )
             }
         }
@@ -493,6 +459,17 @@ fun MapScreen(
                         DeviceType.RACK,
                     )
                 },
+                onAddFromTemplate = {
+                    viewModel.loadTemplates()
+                    templatePicker = true
+                },
+                onAddMark = {
+                    val at = camera.visibleCentreOnPlan()
+                    viewModel.addMarkAt(
+                        at.x.coerceIn(0f, plan?.widthPx ?: at.x),
+                        at.y.coerceIn(0f, plan?.heightPx ?: at.y),
+                    )
+                },
                 onCable = viewModel::setCable,
                 onCancelLink = viewModel::cancelLink,
                 onDeletePoint = viewModel::deletePoint,
@@ -512,6 +489,29 @@ fun MapScreen(
                 onMarkKind = viewModel::setMarkKind,
                 onMarkColor = viewModel::setMarkColor,
                 onCancelArrow = viewModel::cancelArrow,
+            )
+        }
+
+        if (templatePicker) {
+            val templates by viewModel.templates.collectAsStateWithLifecycle()
+            TemplatePlaceDialog(
+                templates = templates,
+                busy = state.editor.busy,
+                onCreate = { template, name, ip, done ->
+                    val at = camera.visibleCentreOnPlan()
+                    val plan = content?.map?.plan
+                    viewModel.createFromTemplate(
+                        template, name, ip,
+                        at.x.coerceIn(0f, plan?.widthPx ?: at.x),
+                        at.y.coerceIn(0f, plan?.heightPx ?: at.y),
+                        done,
+                    )
+                },
+                onManageTemplates = {
+                    templatePicker = false
+                    onOpenTemplates()
+                },
+                onDismiss = { templatePicker = false },
             )
         }
 
@@ -566,53 +566,6 @@ fun MapScreen(
                     }
                 },
                 onDismiss = { showRooms = false },
-            )
-        }
-        vlanFor?.let { device ->
-            PortVlanDialog(
-                device = device,
-                vlans = content?.map?.vlans.orEmpty(),
-                busy = state.editor.busy,
-                error = vlanError,
-                onPick = { vlanId ->
-                    vlanError = null
-                    viewModel.setPortVlan(device, vlanId) { error -> if (error == null) vlanFor = null else vlanError = error }
-                },
-                onManageVlans = {
-                    vlanFor = null
-                    onOpenVlans()
-                },
-                onDismiss = {
-                    vlanFor = null
-                    vlanError = null
-                },
-            )
-        }
-        peripheralsFor?.let { device ->
-            DevicePeripheralsDialog(device, peripherals, allPeripherals, onDismiss = { peripheralsFor = null })
-        }
-        peripheralEditor?.let { e ->
-            PeripheralEditorDialog(
-                editor = e,
-                devices = peripheralDevices,
-                onChange = peripherals::updateDraft,
-                onSave = peripherals::save,
-                onDelete = peripherals::delete,
-                onDismiss = peripherals::closeEditor,
-            )
-        }
-        commentFor?.let { device ->
-            CommentDialog(
-                device = device,
-                busy = state.editor.busy,
-                error = commentError,
-                onSave = { text ->
-                    commentError = null
-                    viewModel.saveComment(device, text) { error ->
-                        if (error == null) commentFor = null else commentError = error
-                    }
-                },
-                onDismiss = { commentFor = null },
             )
         }
         // The panel drawings follow the devices mounted in the open rack.
@@ -804,16 +757,23 @@ private fun MapTopPanel(
                             )
                         }
                     }
-                    if (editing) {
-                        TextButton(onClick = { onToggleEdit?.invoke() }) { Text("Готово") }
-                    } else {
-                        if (onToggleEdit != null) {
-                            IconButton(onClick = onToggleEdit) {
-                                Icon(Icons.Outlined.EditLocationAlt, contentDescription = "Редактировать карту")
-                            }
-                        }
+                    if (!editing) {
                         IconButton(onClick = { searching = true }, enabled = devices.isNotEmpty()) {
                             Icon(Icons.Outlined.Search, contentDescription = "Поиск на карте")
+                        }
+                    }
+                    // View or edit, always in sight: the mode is never a guess.
+                    if (onToggleEdit != null) {
+                        SingleChoiceSegmentedButtonRow(Modifier.padding(end = 12.dp)) {
+                            listOf(false to "Просмотр", true to "Правка").forEachIndexed { index, (mode, label) ->
+                                SegmentedButton(
+                                    selected = editing == mode,
+                                    onClick = { if (editing != mode) onToggleEdit() },
+                                    shape = SegmentedButtonDefaults.itemShape(index, 2),
+                                    icon = {},
+                                    label = { Text(label, maxLines = 1, style = MaterialTheme.typography.labelMedium) },
+                                )
+                            }
                         }
                     }
                 }
@@ -846,7 +806,7 @@ private fun MapTopPanel(
                     onClick = { onLayerChange(item) },
                     shape = SegmentedButtonDefaults.itemShape(index, MapLayer.entries.size),
                     icon = {},
-                    label = { Text("${item.short} ${item.title}", maxLines = 1) },
+                    label = { Text(item.title, maxLines = 1) },
                 )
             }
         }
@@ -870,21 +830,43 @@ private fun MapTopPanel(
                 }
                 if (vlans.isNotEmpty()) {
                     item {
-                        FilterChip(selected = vlanFilter == null, onClick = { onVlanFilter(null) }, label = { Text("Все VLAN") })
+                        // One chip with a list instead of a row of chips that runs off the screen.
+                        var vlanMenu by remember { mutableStateOf(false) }
+                        val current = vlans.firstOrNull { it.first == vlanFilter }
+                        Box {
+                            FilterChip(
+                                selected = current != null,
+                                onClick = { vlanMenu = true },
+                                label = { Text(current?.let { "VLAN ${it.first} · ${it.second.first}" } ?: "Все VLAN", maxLines = 1) },
+                                leadingIcon = if (current != null) ({ StatusDot(current.second.second, size = 10.dp) }) else null,
+                                trailingIcon = { Icon(Icons.Outlined.ArrowDropDown, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = (current?.second?.second ?: Color.Transparent).copy(alpha = 0.22f),
+                                    selectedLabelColor = MaterialTheme.colorScheme.onSurface,
+                                ),
+                            )
+                            DropdownMenu(expanded = vlanMenu, onDismissRequest = { vlanMenu = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("Все VLAN") },
+                                    onClick = {
+                                        vlanMenu = false
+                                        onVlanFilter(null)
+                                    },
+                                )
+                                vlans.forEach { (id, info) ->
+                                    val (name, color) = info
+                                    DropdownMenuItem(
+                                        text = { Text("$id · $name") },
+                                        leadingIcon = { StatusDot(color, size = 10.dp) },
+                                        onClick = {
+                                            vlanMenu = false
+                                            onVlanFilter(id)
+                                        },
+                                    )
+                                }
+                            }
+                        }
                     }
-                }
-                items(vlans, key = { it.first }) { (id, info) ->
-                    val (name, color) = info
-                    FilterChip(
-                        selected = vlanFilter == id,
-                        onClick = { onVlanFilter(if (vlanFilter == id) null else id) },
-                        label = { Text("$id · $name") },
-                        leadingIcon = { StatusDot(color, size = 10.dp) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = color.copy(alpha = 0.22f),
-                            selectedLabelColor = MaterialTheme.colorScheme.onSurface,
-                        ),
-                    )
                 }
             }
         }
@@ -987,20 +969,14 @@ private fun DeviceCard(
     vlanName: String?,
     tracePath: List<String>,
     onOpenSwitch: () -> Unit,
-    onBindNfc: () -> Unit,
     onDismiss: () -> Unit,
     hostName: String? = null,
     roomName: String? = null,
     rackText: String? = null,
     onOpenRack: (() -> Unit)? = null,
-    onEditComment: () -> Unit = {},
-    /** The device's peripherals in a line, or «add» when it has none; null for a device that takes none. */
-    peripheralText: String? = null,
-    onOpenPeripherals: () -> Unit = {},
     onEdit: () -> Unit = {},
-    /** The switch port the device is cabled to and its VLAN; null when it is cabled to no switch. */
+    /** The switch port the device is cabled to; null when it is cabled to no switch. */
     portText: String? = null,
-    onChangeVlan: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val drag = remember { Animatable(0f) }
@@ -1074,94 +1050,40 @@ private fun DeviceCard(
                     Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            hostName?.let {
-                Spacer(Modifier.height(10.dp))
-                Text("Работает на хосте $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-            }
-            roomName?.let {
-                Spacer(Modifier.height(10.dp))
-                Text("Помещение: $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-            }
-            rackText?.let {
-                Spacer(Modifier.height(6.dp))
-                Text("В стойке: $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-            }
-            Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth().clickable(onClick = onEditComment).padding(end = 12.dp)) {
-                Icon(
-                    Icons.Outlined.Edit, contentDescription = "Изменить комментарий",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp).padding(top = 2.dp),
-                )
-                Spacer(Modifier.width(8.dp))
+            // Where it is and what it hangs off, in one or two lines: the rest lives in the device card.
+            val place = listOfNotNull(hostName?.let { "на хосте $it" }, roomName, rackText?.let { "стойка $it" }, portText)
+            if (place.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
                 Text(
-                    device.comment ?: "Добавить комментарий",
+                    place.joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (device.comment == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-                    maxLines = 4,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(end = 12.dp),
                 )
-            }
-            portText?.let { text ->
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth().clickable(onClick = onChangeVlan).padding(end = 12.dp)) {
-                    Icon(
-                        Icons.Outlined.Lan, contentDescription = "Порт и VLAN",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp).padding(top = 2.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        "$text · изменить VLAN",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-            peripheralText?.let { text ->
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenPeripherals).padding(end = 12.dp)) {
-                    Icon(
-                        Icons.Outlined.Keyboard, contentDescription = "Периферия",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp).padding(top = 2.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
             }
             if (tracePath.isNotEmpty()) {
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(8.dp))
                 Text(
                     tracePath.joinToString("  →  "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(end = 12.dp),
                 )
             }
             Spacer(Modifier.height(14.dp))
-            FilledTonalButton(onClick = onOpenSwitch, modifier = Modifier.padding(end = 12.dp).fillMaxWidth()) {
-                Text("Открыть карточку устройства")
-                Spacer(Modifier.width(8.dp))
-                Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
-            }
-            if (onOpenRack != null) {
-                Spacer(Modifier.height(14.dp))
-                FilledTonalButton(onClick = onOpenRack, modifier = Modifier.padding(end = 12.dp).fillMaxWidth()) {
-                    Text("Открыть стойку")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(end = 12.dp).fillMaxWidth()) {
+                Button(onClick = onOpenSwitch, modifier = Modifier.weight(1f)) {
+                    Text("Открыть")
                     Spacer(Modifier.width(8.dp))
                     Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
                 }
-            }
-            TextButton(onClick = onBindNfc, modifier = Modifier.padding(top = 4.dp)) {
-                Icon(Icons.Outlined.Nfc, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Привязать NFC-метку")
+                if (onOpenRack != null) {
+                    FilledTonalButton(onClick = onOpenRack, modifier = Modifier.weight(1f)) { Text("Вид стойки") }
+                }
             }
         }
     }
@@ -1204,59 +1126,4 @@ private fun EmptyMapView(
             TextButton(onClick = onOpenSettings) { Text("Настройки") }
         }
     }
-}
-
-/** The VLAN of the switch port a device is cabled to. Inventory only: the switch itself is not changed. */
-@Composable
-private fun PortVlanDialog(
-    device: Device,
-    vlans: List<com.itmanager.app.data.model.Vlan>,
-    busy: Boolean,
-    error: String?,
-    onPick: (Int) -> Unit,
-    onManageVlans: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("VLAN порта ${device.switchPortName.orEmpty()}") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    "Порт коммутатора, к которому подключено ${device.name}, станет access в выбранном VLAN. " +
-                        "Меняется учёт; на коммутатор настройка отправляется с панели портов.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (vlans.isEmpty()) {
-                    Text("VLAN ещё нет.", style = MaterialTheme.typography.bodyMedium)
-                }
-                LazyColumn(Modifier.heightIn(max = 320.dp)) {
-                    items(vlans, key = { it.id }) { v ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(
-                                    if (v.id == device.vlanId) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                                    RoundedCornerShape(10.dp),
-                                )
-                                .clickable(enabled = !busy) { onPick(v.id) }
-                                .padding(horizontal = 8.dp, vertical = 10.dp),
-                        ) {
-                            StatusDot(Color(v.colorArgb), size = 12.dp)
-                            Spacer(Modifier.width(10.dp))
-                            Text("${v.id} · ${v.name}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                            Text(v.subnet, style = MonoStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                }
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-                TextButton(onClick = onManageVlans) { Text("Добавить или изменить VLAN…") }
-            }
-        },
-        confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Закрыть") } },
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-    )
 }

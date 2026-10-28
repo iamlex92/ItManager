@@ -101,7 +101,7 @@ fun TemplatesScreen(
                 is UiState.Error -> ErrorView(s.message, viewModel::load, onOpenSettings)
                 is UiState.Content ->
                     if (s.data.isEmpty()) {
-                        EmptyView("Шаблонов пока нет. Нажмите +, чтобы сохранить типовое устройство с портами.")
+                        EmptyView("Шаблонов пока нет. Шаблон хранит тип, модель и порты типового устройства.", action = "Создать первый шаблон", onAction = { creating = true })
                     } else {
                         LazyColumn(
                             contentPadding = PaddingValues(16.dp),
@@ -215,7 +215,7 @@ private fun UseDialog(t: DeviceTemplate, onDismiss: () -> Unit, onCreate: (Strin
                 OutlinedTextField(name, { name = it }, label = { Text("Имя устройства") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(ip, { ip = it }, label = { Text("IP-адрес (необязательно)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 Text(
-                    "Устройство попадёт в инвентарь без места на карте; расставить его можно на плане этажа.",
+                    "Устройство попадёт в учёт без места на карте; расставить его можно на плане этажа.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

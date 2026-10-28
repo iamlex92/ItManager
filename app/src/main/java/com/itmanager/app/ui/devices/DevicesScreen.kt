@@ -57,6 +57,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Clear
+import androidx.compose.material.icons.outlined.ArrowDropDown
+import com.itmanager.app.data.model.isPassive
+import com.itmanager.app.data.model.isDown
+import com.itmanager.app.data.model.DeviceGrouping
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.TravelExplore
@@ -147,7 +151,7 @@ fun DevicesScreen(
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text("Удалить устройств: ${state.selected.size}?") },
-            text = { Text("Они пропадут из инвентаря и с карты вместе со своими портами и кабелями. Само оборудование это не затрагивает.") },
+            text = { Text("Они пропадут из учёта и с карты вместе со своими портами и кабелями. Само оборудование это не затрагивает.") },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
@@ -200,11 +204,24 @@ fun DevicesScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(horizontal = 16.dp),
         ) {
-            items(DeviceFilter.entries) { f ->
-                FilterChip(selected = state.filter == f, onClick = { viewModel.setFilter(f) }, label = { Text(f.label) })
+            // Kinds that are not there are left out; the chosen one stays so it can be switched off.
+            val chips = DeviceFilter.entries.filter { f -> f == DeviceFilter.ALL || f == state.filter || (state.counts[f] ?: 0) > 0 }
+            items(chips, key = { it.name }) { f ->
+                val count = state.counts[f] ?: 0
+                FilterChip(
+                    selected = state.filter == f,
+                    onClick = { viewModel.setFilter(if (state.filter == f) DeviceFilter.ALL else f) },
+                    label = { Text("${f.label} $count") },
+                    leadingIcon = if (f == DeviceFilter.OFFLINE) ({ StatusDot(StatusColors.Offline) }) else null,
+                )
             }
         }
-        Spacer(Modifier.height(8.dp))
+        GroupingRow(
+            shown = (state.devices as? UiState.Content)?.data?.size,
+            grouping = state.grouping,
+            onGrouping = viewModel::setGrouping,
+            modifier = Modifier.padding(start = 20.dp, end = 8.dp),
+        )
 
         when (val devices = state.devices) {
             UiState.Loading -> LoadingView()
@@ -219,24 +236,36 @@ fun DevicesScreen(
             ) {
                 if (devices.data.isEmpty()) {
                     item {
-                        EmptyView(if (state.query.isBlank()) "Устройств нет. Найдите их сканером сети: значок поиска сверху." else "Ничего не найдено")
+                        when {
+                            state.query.isNotBlank() || state.filter != DeviceFilter.ALL ->
+                                EmptyView("Ничего не найдено", action = "Сбросить поиск и фильтр") {
+                                    viewModel.setQuery("")
+                                    viewModel.setFilter(DeviceFilter.ALL)
+                                }
+                            else -> EmptyView("В учёте пока нет устройств. Найдите их сканером сети или добавьте на карте.", action = "Сканер сети", onAction = onOpenScanner)
+                        }
                     }
                 }
-                items(devices.data, key = { it.id }) { device ->
-                    DeviceRow(
-                        device = device,
-                        selecting = selecting,
-                        checked = device.id in state.selected,
-                        onClick = {
-                            when {
-                                selecting -> viewModel.toggle(device.id)
-                                else -> onOpenDevice(device.id)
-                            }
-                        },
-                        onLongClick = { viewModel.toggle(device.id) },
-                        onShowOnMap = { showOnMap(device.id) },
-                        modifier = Modifier.animateItem(),
-                    )
+                state.groups.forEach { group ->
+                    item(key = "h-${group.key}", contentType = "header") {
+                        GroupHeader(group.title, group.devices.size, Modifier.animateItem())
+                    }
+                    items(group.devices, key = { it.id }) { device ->
+                        DeviceRow(
+                            device = device,
+                            selecting = selecting,
+                            checked = device.id in state.selected,
+                            onClick = {
+                                when {
+                                    selecting -> viewModel.toggle(device.id)
+                                    else -> onOpenDevice(device.id)
+                                }
+                            },
+                            onLongClick = { viewModel.toggle(device.id) },
+                            onShowOnMap = { showOnMap(device.id) }.takeIf { device.floorId != null },
+                            modifier = Modifier.animateItem(),
+                        )
+                    }
                 }
             }
         }
@@ -341,11 +370,11 @@ private fun DeviceRow(
     checked: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
-    onShowOnMap: () -> Unit,
+    onShowOnMap: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val passive = device.type == DeviceType.SOCKET || device.type == DeviceType.PATCH_PANEL
+    val passive = device.isPassive
     val haptics = LocalHapticFeedback.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -389,7 +418,17 @@ private fun DeviceRow(
                     StatusDot(if (device.isOnline) StatusColors.Online else StatusColors.Offline)
                     Spacer(Modifier.width(6.dp))
                 }
-                Text(device.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    device.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (device.isDown) {
+                    Spacer(Modifier.width(8.dp))
+                    Text("не в сети", style = MaterialTheme.typography.labelSmall, color = StatusColors.Offline, maxLines = 1)
+                }
             }
             Text(
                 listOfNotNull(device.vendor, device.model).joinToString(" ").ifEmpty { device.type.label },
@@ -402,7 +441,7 @@ private fun DeviceRow(
                 Text(it, style = MonoStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        if (!selecting) {
+        if (!selecting && onShowOnMap != null) {
             IconButton(onClick = onShowOnMap) {
                 Icon(Icons.Outlined.Place, contentDescription = "Показать на карте")
             }
@@ -414,6 +453,46 @@ private fun DeviceRow(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(end = 8.dp),
             )
+        }
+    }
+}
+
+@Composable
+private fun GroupHeader(title: String, count: Int, modifier: Modifier = Modifier) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier.fillMaxWidth().padding(start = 4.dp, top = 8.dp, bottom = 2.dp)) {
+        Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+        Text("$count", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** How many are shown and how they are split into sections. */
+@Composable
+private fun GroupingRow(shown: Int?, grouping: DeviceGrouping, onGrouping: (DeviceGrouping) -> Unit, modifier: Modifier = Modifier) {
+    var open by remember { mutableStateOf(false) }
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier.fillMaxWidth()) {
+        Text(
+            shown?.let { "Показано: $it" }.orEmpty(),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        Box {
+            TextButton(onClick = { open = true }) {
+                Text(grouping.label)
+                Icon(Icons.Outlined.ArrowDropDown, contentDescription = "Группировка")
+            }
+            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                DeviceGrouping.entries.forEach { g ->
+                    DropdownMenuItem(
+                        text = { Text(g.label) },
+                        onClick = {
+                            open = false
+                            onGrouping(g)
+                        },
+                        trailingIcon = if (g == grouping) ({ Icon(Icons.Outlined.Check, contentDescription = null) }) else null,
+                    )
+                }
+            }
         }
     }
 }
