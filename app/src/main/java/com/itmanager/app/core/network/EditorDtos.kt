@@ -134,6 +134,7 @@ data class DeviceBody(
     @SerialName("rack_h") val rackH: Int? = null,
     @SerialName("rack_units") val rackUnits: Int? = null,
     val mac: String? = null,
+    @SerialName("ssh_credential_id") val sshCredentialId: String? = null,
 )
 
 @Serializable
@@ -153,6 +154,7 @@ fun DeviceDraft.toPatch(): JsonObject = buildJsonObject {
     put("rack_h", rackH?.let { JsonPrimitive(it) } ?: JsonNull)
     put("rack_units", rackUnits?.let { JsonPrimitive(it) } ?: JsonNull)
     put("mac", mac?.trim()?.takeIf { it.isNotEmpty() }?.let { JsonPrimitive(it) } ?: JsonNull)
+    put("ssh_credential_id", sshCredentialId?.let { JsonPrimitive(it) } ?: JsonNull)
     metadata?.let { put("metadata", JsonObject(it)) }
 }
 

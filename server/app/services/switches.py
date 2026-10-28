@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
-from ..hal.base import DeviceTarget, PortRef, PortStatus, SwitchDriver
+from ..hal.base import DeviceTarget, PortRef, PortStatus, SwitchDriver, SwitchError
 from ..hal.commands import SUPPORTED_VENDORS
 from ..models import Device, DeviceAlert, Port
 from . import alerts
@@ -48,6 +48,7 @@ def device_target(d: Device) -> DeviceTarget:
         vendor=(d.vendor or "").upper(),
         ip=str(d.ip_address) if d.ip_address is not None else None,
         model=d.model,
+        credential_id=d.ssh_credential_id,
         ports=tuple(port_ref(p) for p in d.ports),
     )
 
@@ -166,6 +167,12 @@ async def poll_once(sm: async_sessionmaker[AsyncSession], driver: SwitchDriver, 
                 await sync_device(session, driver, hub, device)
             except NotImplementedError:
                 raise
+            except SwitchError as e:
+                await session.rollback()
+                log.warning("polling %s: %s", device.name, e)
+                # Without a login the switch is not known to be down: leave its state alone.
+                if e.code != "no_switch_login":
+                    await mark_unreachable(session, hub, device)
             except Exception:
                 log.exception("polling %s failed", device.name)
                 await session.rollback()

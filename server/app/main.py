@@ -42,10 +42,10 @@ from .api import (
     ws,
 )
 from .api.deps import require_token
-from .config import MonitorMode, RunbookMode, Settings, get_settings
+from .config import REAL_SWITCH_MIN_POLL_SECONDS, HalMode, MonitorMode, RunbookMode, Settings, get_settings
 from .db import make_engine, make_sessionmaker
 from .discovery.manager import ScanManager
-from .hal.base import DeviceWritesDisabled, UnsupportedVendor
+from .hal.base import DeviceWritesDisabled, SwitchError, UnsupportedVendor
 from .hal.emulator import EmulatorDriver
 from .hal.factory import build_driver, build_printer_driver
 from .models import Credential, Device
@@ -95,7 +95,7 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
         # Encrypts leftover plaintext, and refuses to start when stored secrets can't be read.
         async with app.state.sessionmaker() as s:
             await crypto.encrypt_existing(s, [(Device, "snmp_community"), (Credential, "secret")])
-        app.state.driver = build_driver(settings)
+        app.state.driver = build_driver(settings, app.state.sessionmaker)
         if isinstance(app.state.driver, EmulatorDriver):
 
             async def host_lookup(ip: str) -> bool | None:
@@ -126,7 +126,11 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
         sm, hub = app.state.sessionmaker, app.state.hub
         tasks: list[asyncio.Task] = []
         if settings.poll_interval_seconds > 0:
-            tasks.append(asyncio.create_task(poller(sm, app.state.driver, hub, settings.poll_interval_seconds)))
+            interval = settings.poll_interval_seconds
+            if settings.hal_mode is HalMode.REAL:
+                # Each poll is an SSH login per switch: not every 10 s.
+                interval = max(interval, REAL_SWITCH_MIN_POLL_SECONDS)
+            tasks.append(asyncio.create_task(poller(sm, app.state.driver, hub, interval)))
         if settings.printer_poll_interval_seconds > 0:
             tasks.append(
                 asyncio.create_task(
@@ -209,6 +213,11 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
     @app.exception_handler(UnsupportedVendor)
     async def _unsupported(_: Request, exc: UnsupportedVendor):
         return JSONResponse(status_code=422, content={"detail": {"code": "unsupported_vendor", "message": str(exc)}})
+
+    @app.exception_handler(SwitchError)
+    async def _switch_failed(_: Request, exc: SwitchError):
+        status = {"no_switch_login": 409, "switch_rejected": 422}.get(exc.code, 502)
+        return JSONResponse(status_code=status, content={"detail": {"code": exc.code, "message": str(exc)}})
 
     @app.exception_handler(NotImplementedError)
     async def _not_impl(_: Request, exc: NotImplementedError):

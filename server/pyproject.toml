@@ -20,6 +20,8 @@ dependencies = [
     # Real-mode runbooks: AD over LDAPS, folder rights over WinRM.
     "ldap3>=2.9",
     "pywinrm>=0.5",
+    # Real switches: Cisco IOS and Eltex MES over SSH.
+    "asyncssh>=2.14",
 ]
 
 [project.scripts]

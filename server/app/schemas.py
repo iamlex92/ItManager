@@ -235,6 +235,8 @@ class DeviceBase(BaseModel):
     rack_u: int | None = Field(default=None, ge=1, le=60)
     rack_h: int | None = Field(default=None, ge=1, le=60)
     rack_units: int | None = Field(default=None, ge=1, le=60)
+    # A switch's SSH login for the real driver (None: SWITCH_CREDENTIAL).
+    ssh_credential_id: uuid.UUID | None = None
 
     @field_validator("mac")
     @classmethod
@@ -291,7 +293,7 @@ class DeviceUpdate(BaseModel):
     mac: str | None = Field(default=None, pattern=_MAC_RE)
     nfc_tag_uid: str | None = Field(default=None, max_length=50)
     snmp_community: str | None = None
-    # A stored SSH credential the (future) real switch driver logs in with.
+    # A stored SSH credential the real switch driver logs in with (None: SWITCH_CREDENTIAL).
     ssh_credential_id: uuid.UUID | None = None
     is_active: bool | None = None
     metadata: dict[str, Any] | None = None

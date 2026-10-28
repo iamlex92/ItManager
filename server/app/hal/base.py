@@ -25,6 +25,8 @@ class DeviceTarget:
     vendor: str
     ip: str | None
     model: str | None = None
+    # The device's own SSH login (stored credential); None: the server's SWITCH_CREDENTIAL.
+    credential_id: uuid.UUID | None = None
     # Last known port state from the database. The emulator seeds itself
     # from it; real drivers ignore it.
     ports: tuple[PortRef, ...] = field(default_factory=tuple)
@@ -94,3 +96,12 @@ class SwitchDriver(ABC):
 
     async def close(self) -> None:
         return None
+
+
+class SwitchError(Exception):
+    """A real switch could not be reached, refused the login or refused a command.
+    [code]: no_switch_login, switch_unreachable, switch_login_failed, switch_timeout, switch_closed, switch_rejected."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code

@@ -78,8 +78,11 @@ BACKUP_KEEP_DAYS=14
 PG_BIN_DIR={pg_bin or ""}
 
 # Коммутаторы по умолчанию эмулируются: на них ничего не уходит.
-# HAL_MODE=real: работа с боевыми коммутаторами (драйвер ещё не готов).
+# HAL_MODE=real: работа с Cisco IOS и Eltex MES по SSH (состояние портов, конфигурация, ping с коммутатора).
+# Логин SSH — в карточке коммутатора или общий: SWITCH_CREDENTIAL (имя из «Учётные данные»).
 HAL_MODE=emulator
+# SWITCH_CREDENTIAL=switch-admin
+# SWITCH_ENABLE_SECRET=
 # Важно только при HAL_MODE=real. Оставьте false, пока не решено разрешить серверу менять
 # конфигурацию коммутаторов; даже тогда каждое изменение подтверждается в приложении.
 ALLOW_DEVICE_WRITES=false

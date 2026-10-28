@@ -11,7 +11,9 @@ The only switches this will ever see are production ones, so:
 - **`HAL_MODE=emulator` is the default.** Switches are emulated in memory;
   nothing leaves the server. The database starts empty: the inventory is
   built with the network scanner, the map editor or the web console.
-- **`HAL_MODE=real` is read-only by default.** The real driver is always
+- **`HAL_MODE=real` talks to Cisco IOS and Eltex MES over SSH** (asyncssh, app/hal/real.py):
+  port state, running-config, ping and traceroute from the switch. The SSH login is the device's
+  stored credential or `SWITCH_CREDENTIAL`. It is read-only by default: the real driver is always
   wrapped in a write guard. Port mode/VLAN changes, shutdown, port bounce
   and `write memory` return 403 unless `ALLOW_DEVICE_WRITES=true`.
 - **Every write needs `"confirm": true`** in the request body, and uplink
@@ -107,6 +109,10 @@ pytest
 | `DATABASE_URL` | `postgresql+asyncpg://netadmin:netadmin@localhost:5432/netadmin` | |
 | `HAL_MODE` | `emulator` | `emulator` or `real` |
 | `ALLOW_DEVICE_WRITES` | `false` | only matters for `real` |
+| `SWITCH_CREDENTIAL` | empty | stored SSH credential (by name) for switches without their own |
+| `SWITCH_ENABLE_SECRET` | empty | `enable` password when it differs from the login password |
+| `SWITCH_SSH_PORT` | `22` | |
+| `SWITCH_KNOWN_HOSTS` | empty | known_hosts file to check switch host keys; empty accepts any |
 | `POLL_INTERVAL_SECONDS` | `10` | port status polling; `0` disables |
 | `EMULATOR_FLAP_PROBABILITY` | `0.1` | chance per switch per poll that a port drops for a few polls |
 | `EMULATOR_BOUNCE_DELAY_SECONDS` | `2` | |

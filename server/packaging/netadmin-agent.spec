@@ -22,6 +22,7 @@ hiddenimports = (
     + collect_submodules("uvicorn")
     + collect_submodules("pysnmp")
     + collect_submodules("asyncpg")
+    + collect_submodules("asyncssh")
     + ["alembic.ddl.postgresql"]
 )
 
