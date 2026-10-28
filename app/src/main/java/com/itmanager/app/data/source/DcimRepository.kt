@@ -8,6 +8,11 @@ import com.itmanager.app.core.settings.SettingsRepository
 import com.itmanager.app.data.model.ALL_DEVICES
 import com.itmanager.app.data.model.Alert
 import com.itmanager.app.data.model.Annotation
+import com.itmanager.app.data.model.PcSweepHit
+import com.itmanager.app.data.model.PcStatus
+import com.itmanager.app.data.model.PcResult
+import com.itmanager.app.data.model.PcKeyJob
+import com.itmanager.app.data.model.PcAction
 import com.itmanager.app.data.model.MapPoint
 import com.itmanager.app.data.model.AuditEntry
 import com.itmanager.app.data.model.AuditKind
@@ -174,6 +179,13 @@ class DcimRepository @Inject constructor(
         load { saveAnnotations(plan, annotations) }
 
     // Peripherals change only their own list; the map and the device list stay as they are.
+    suspend fun pcStatus(): Result<PcStatus> = load { pcStatus() }
+    suspend fun pcSweep(prefix: String): Result<List<PcSweepHit>> = load { pcSweep(prefix) }
+    suspend fun pcAction(host: String, action: PcAction, arg: String?, authMethod: AuthMethod): Result<PcResult> =
+        load { pcAction(host, action, arg, authMethod) }
+    suspend fun pcKeysStart(source: String, prefix: String?): Result<PcKeyJob> = load { pcKeysStart(source, prefix) }
+    suspend fun pcKeys(id: String): Result<PcKeyJob> = load { pcKeys(id) }
+    suspend fun pcKeysCsv(id: String): Result<ByteArray> = load { pcKeysCsv(id) }
     suspend fun peripherals(): Result<List<Peripheral>> = load { peripherals() }
     suspend fun savePeripheral(id: String?, draft: PeripheralDraft): Result<Peripheral> =
         load { savePeripheral(id, draft) }.onSuccess { peripheralVersion.value++ }

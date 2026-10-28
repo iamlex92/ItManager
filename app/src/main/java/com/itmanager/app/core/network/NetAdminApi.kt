@@ -454,6 +454,8 @@ class NetAdminApi @Inject constructor(
             "invalid_subnets", "scan_running", "name_taken",
             "already_linked", "no_free_port", "same_device", "plan_type", "plan_too_big", "empty_plan",
             "bad_svg", "svg_too_big", "bad_device", "bad_port", "duplicate_port", "kind_required",
+            "wrong_port", "port_busy", "invalid_request", "invalid_subnet", "unknown_host", "no_login", "no_ad",
+            "ad_failed", "pc_failed", "writes_disabled",
         )
     }
 
@@ -489,6 +491,20 @@ class NetAdminApi @Inject constructor(
 
     suspend fun createDeviceFromTemplate(s: ServerSettings, id: String, body: DeviceFromTemplateBody): DeviceDto =
         post(s, "device-templates/${id.encodeURLPathPart()}/create-device", body)
+
+    // --- domain computers (server/API.md «Domain computers») ---
+
+    suspend fun pcStatus(s: ServerSettings): PcStatusDto = newerFeature("управление компьютерами домена") { guarded { fetch(s, "pcs/status") } }
+
+    suspend fun pcSweep(s: ServerSettings, body: PcSweepBody): List<PcSweepHitDto> = post(s, "pcs/sweep", body)
+
+    /** One action on one computer; changes that need it carry confirm = true, sent only after the fingerprint. */
+    suspend fun pcAction(s: ServerSettings, host: String, action: String, body: PcActionBody): PcActionDto =
+        post(s, "pcs/${host.encodeURLPathPart()}/$action", body)
+
+    suspend fun pcKeysStart(s: ServerSettings, body: PcKeysBody): PcKeyJobDto = post(s, "pcs/keys", body)
+
+    suspend fun pcKeys(s: ServerSettings, id: String): PcKeyJobDto = guarded { fetch(s, "pcs/keys/$id") }
 
     /** A file the server builds (NetBox archive, label page). Reads only. */
     suspend fun download(s: ServerSettings, path: String): ByteArray =

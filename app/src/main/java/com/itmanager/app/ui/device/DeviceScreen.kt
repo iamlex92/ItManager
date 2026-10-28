@@ -36,6 +36,7 @@ import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Lan
 import androidx.compose.material.icons.outlined.Map
+import androidx.compose.material.icons.outlined.Computer
 import androidx.compose.material.icons.outlined.NetworkPing
 import androidx.compose.material.icons.outlined.Nfc
 import androidx.compose.material.icons.outlined.Refresh
@@ -121,6 +122,7 @@ fun DeviceScreen(
     onOpenDiff: (String, String) -> Unit,
     onOpenImport: (String, String) -> Unit,
     onOpenTool: (String, String) -> Unit,
+    onOpenPc: (String) -> Unit,
     onOpenVlans: () -> Unit,
     viewModel: DeviceViewModel = hiltViewModel(),
     peripherals: PeripheralsViewModel = hiltViewModel(),
@@ -179,6 +181,7 @@ fun DeviceScreen(
                                 onShowOnMap()
                             }.takeIf { d.device.floorId != null && d.device.type != DeviceType.VIRTUAL },
                             onPing = d.device.ip?.let { ip -> { onOpenTool("ping", ip) } },
+                            onManagePc = { onOpenPc(d.device.name) }.takeIf { d.device.type in PC_TYPES },
                             onNfc = viewModel::bindNfc,
                         )
                         if (tabs.size > 1) {
@@ -279,9 +282,18 @@ fun DeviceScreen(
 
 // --- Header ---
 
+/** Windows computers the server can reach over WinRM (Connect-DomainPC.ps1's tools). */
+private val PC_TYPES = setOf(DeviceType.WORKSTATION, DeviceType.SERVER, DeviceType.VIRTUAL)
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun StatusHeader(device: Device, onShowOnMap: (() -> Unit)?, onPing: (() -> Unit)?, onNfc: () -> Unit) {
+private fun StatusHeader(
+    device: Device,
+    onShowOnMap: (() -> Unit)?,
+    onPing: (() -> Unit)?,
+    onManagePc: (() -> Unit)?,
+    onNfc: () -> Unit,
+) {
     Column(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -314,6 +326,7 @@ private fun StatusHeader(device: Device, onShowOnMap: (() -> Unit)?, onPing: (()
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (onShowOnMap != null) ActionChip(Icons.Outlined.Map, "На карте", onShowOnMap)
             if (onPing != null) ActionChip(Icons.Outlined.NetworkPing, "Ping", onPing)
+            if (onManagePc != null) ActionChip(Icons.Outlined.Computer, "Управление ПК", onManagePc)
             ActionChip(Icons.Outlined.Nfc, "NFC-метка", onNfc)
         }
     }
