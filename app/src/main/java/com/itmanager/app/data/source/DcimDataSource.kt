@@ -8,6 +8,13 @@ import com.itmanager.app.data.model.PcResult
 import com.itmanager.app.data.model.PcKeyJob
 import com.itmanager.app.data.model.PcAction
 import com.itmanager.app.data.model.ServerConfig
+import com.itmanager.app.data.model.GpoOverview
+import com.itmanager.app.data.model.GpoOu
+import com.itmanager.app.data.model.GpoDetail
+import com.itmanager.app.data.model.GpoScope
+import com.itmanager.app.data.model.GpoAppliedOnPc
+import com.itmanager.app.data.model.GpoChange
+import com.itmanager.app.data.model.GpoApplyJob
 import kotlinx.serialization.json.JsonElement
 import com.itmanager.app.data.model.MapPoint
 import com.itmanager.app.data.model.AuditEntry
@@ -237,4 +244,15 @@ interface DcimDataSource {
     suspend fun serverConfig(): ServerConfig
     suspend fun saveServerConfig(values: Map<String, JsonElement>, reset: List<String>): ServerConfig
     suspend fun restartServer()
+
+    // --- Group Policy ---
+    suspend fun gpos(): GpoOverview
+    suspend fun gpoOus(): List<GpoOu>
+    suspend fun gpo(id: String): GpoDetail
+    suspend fun gpoComputers(id: String): GpoScope
+    suspend fun gpoApplied(host: String): GpoAppliedOnPc
+    suspend fun gpoChange(method: String, path: String, change: GpoChange, authMethod: AuthMethod): GpoDetail
+    suspend fun gpoDelete(id: String, authMethod: AuthMethod)
+    suspend fun gpoApply(id: String, computers: List<String>?, authMethod: AuthMethod): GpoApplyJob
+    suspend fun gpoApplyJob(id: String): GpoApplyJob
 }

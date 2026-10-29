@@ -9,6 +9,7 @@
 <script src="/static/admin/admin-more.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-pcs.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-settings.js?v={{asset}}" defer></script>
+<script src="/static/admin/admin-gpo.js?v={{asset}}" defer></script>
 </head>
 <body>
 <div id="login" class="login" hidden>
@@ -44,6 +45,7 @@
           <div class="pop-group">Инструменты</div>
           <button data-tab="scan">Сканер сети</button>
           <button data-tab="pcs">Компьютеры домена</button>
+          <button data-tab="gpo">Групповые политики</button>
           <button data-tab="runbooks">Сценарии</button>
           <button data-tab="scripts">Свои скрипты</button>
           <button data-tab="audit">Журнал</button>
@@ -326,6 +328,39 @@
       </div>
     </section>
 
+    <section id="tab-gpo" class="tab" hidden>
+      <div class="toolbar">
+        <input id="gpo-search" type="search" placeholder="Найти политику" autocomplete="off">
+        <select id="gpo-filter">
+          <option value="">Все</option>
+          <option value="active">Действующие</option>
+          <option value="inactive">Не действуют</option>
+        </select>
+        <button type="button" id="gpo-new">+ Политика</button>
+        <div class="spacer"></div>
+        <span id="gpo-mode" class="badge"></span>
+      </div>
+      <div class="columns">
+        <div class="card narrow gpo-list">
+          <div class="table-wrap"><table class="grid">
+            <thead><tr><th>Политика</th><th>Состояние</th><th>Связи</th></tr></thead>
+            <tbody id="gpo-rows"></tbody>
+          </table></div>
+        </div>
+        <div class="card grow" id="gpo-detail">
+          <p class="muted">Выберите политику слева: её связи, параметры, компьютеры, на которые она действует.</p>
+        </div>
+      </div>
+    </section>
+
+    <dialog id="gpo-report-dialog" class="wide-dialog">
+      <div class="dialog">
+        <div class="dialog-head"><h2 id="gpo-report-title">Отчёт</h2><div class="spacer"></div>
+          <button type="button" id="gpo-report-close">Закрыть</button></div>
+        <iframe id="gpo-report-frame" sandbox title="Отчёт групповой политики"></iframe>
+      </div>
+    </dialog>
+
     <section id="tab-pcs" class="tab" hidden>
       <div class="toolbar">
         <form id="pc-open-form" class="row">
@@ -361,6 +396,7 @@
             <button data-pc="folders">Крупные папки на C:</button>
             <button data-pc="processes">Процессы</button>
             <button data-pc="gpupdate">Обновить групповые политики</button>
+            <button type="button" id="pc-gpresult">Политики на ПК</button>
             <button data-pc="cleanup">Очистить Temp и кэш обновлений</button>
             <button data-pc="reboot" class="danger">Перезагрузить</button>
           </div>

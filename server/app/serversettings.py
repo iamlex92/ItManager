@@ -109,6 +109,10 @@ GROUPS: tuple[Group, ...] = (
             Spec("ad_start_tls", "LDAP со StartTLS", "Для адреса ldap://.", "bool"),
             Spec("ad_base_dn", "Корень поиска в AD", "Пусто — берётся с контроллера."),
             Spec("runbook_file_servers", "Файловые серверы", "Через запятую: fs01,fs02."),
+            Spec("gpo_host", "Сервер групповых политик",
+                 "Контроллер домена или сервер с GPMC. Пусто — контроллер домена выше."),
+            Spec("gpo_backup_path", "Резервные копии GPO", "Папка на этом сервере, например C:\\GPOBackup: "
+                 "копия политики перед каждым изменением."),
             Spec("winrm_https", "WinRM по HTTPS", "Порт 5986, на ПК нужен сертификат.", "bool"),
             Spec("winrm_port", "Порт WinRM", "0 — 5985 или 5986 для HTTPS.", "int"),
         ),

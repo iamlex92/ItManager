@@ -228,3 +228,16 @@ dialog.card-dialog { width: min(980px, calc(100% - 32px)); height: min(760px, ca
 .setting .tag { font-size: 11px; color: var(--muted); margin-left: 6px; }
 .setting input[type=checkbox] { justify-self: start; width: 20px; height: 20px; }
 @media (max-width: 520px) { .settings-groups { grid-template-columns: 1fr; } .setting { grid-template-columns: 1fr; } }
+
+/* Group Policy */
+.gpo-list { max-width: 460px; }
+.gpo-list tr.picked td { background: rgba(76, 158, 255, .14); }
+.gpo-list tr { cursor: pointer; }
+.gpo-section { border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.gpo-form { display: grid; grid-template-columns: 2fr 1fr 120px 1fr auto; gap: 8px; align-items: end; }
+.gpo-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.wide-dialog { width: min(1100px, 96vw); }
+#gpo-report-frame { width: 100%; height: 70vh; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.badge.ok { color: var(--ok, #30d158); border-color: var(--ok, #30d158); }
+@media (max-width: 760px) { .gpo-list { max-width: none; } .gpo-form { grid-template-columns: 1fr; } }
+.gpo-list .badge { white-space: nowrap; }

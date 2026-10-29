@@ -84,6 +84,7 @@ import com.itmanager.app.ui.printers.PrintersScreen
 import com.itmanager.app.ui.scanner.ScannerScreen
 import com.itmanager.app.ui.security.AppLockOverlay
 import com.itmanager.app.ui.settings.SettingsScreen
+import com.itmanager.app.ui.gpo.GpoScreen
 import com.itmanager.app.ui.pcs.PcsScreen
 import com.itmanager.app.ui.serverconfig.ServerConfigScreen
 import com.itmanager.app.ui.tools.ToolsHubScreen
@@ -333,6 +334,7 @@ private fun AppNavHost(
                         MoreItem.SCANNER -> ScannerRoute
                         MoreItem.TOOLS -> ToolsRoute
                         MoreItem.PCS -> PcsRoute()
+                        MoreItem.GPO -> GpoRoute
                         MoreItem.RUNBOOKS -> AutomationRoute
                         MoreItem.AUDIT -> AuditRoute
                         MoreItem.SETTINGS -> SettingsRoute
@@ -520,6 +522,14 @@ private fun AppNavHost(
             popExitTransition = { slideOutHorizontally(push) { it } },
         ) { entry ->
             PcsScreen(onBack = back, initialHost = entry.toRoute<PcsRoute>().host)
+        }
+        composable<GpoRoute>(
+            enterTransition = { slideInHorizontally(push) { it } },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { slideOutHorizontally(push) { it } },
+        ) {
+            GpoScreen(onBack = back, onOpenSettings = openSettings)
         }
         composable<ServerConfigRoute>(
             enterTransition = { slideInHorizontally(push) { it } },

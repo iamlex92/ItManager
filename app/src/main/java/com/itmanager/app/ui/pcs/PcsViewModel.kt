@@ -7,6 +7,7 @@ import com.itmanager.app.data.export.ExportedFile
 import com.itmanager.app.data.export.InventoryExporter
 import com.itmanager.app.data.model.AuthMethod
 import com.itmanager.app.data.model.PcAction
+import com.itmanager.app.data.model.GpoAppliedOnPc
 import com.itmanager.app.data.model.PcInfo
 import com.itmanager.app.data.model.PcKeyJob
 import com.itmanager.app.data.model.PcOutcome
@@ -36,6 +37,9 @@ data class PcSession(
     val error: String? = null,
     /** The console: each command with its output, newest last. */
     val console: List<Pair<String, String>> = emptyList(),
+    /** What the computer really applied (gpresult), once asked. */
+    val applied: GpoAppliedOnPc? = null,
+    val appliedLoading: Boolean = false,
 )
 
 data class PcSweep(val prefix: String, val running: Boolean = false, val hits: List<PcSweepHit>? = null, val error: String? = null)
@@ -143,6 +147,17 @@ class PcsViewModel @Inject constructor(
     }
 
     fun fail(message: String) = _session.update { it?.copy(error = message) }
+
+    /** Group policies the computer applied at its last refresh (gpresult over WinRM). */
+    fun loadApplied() {
+        val host = _session.value?.host ?: return
+        _session.update { it?.copy(appliedLoading = true, error = null) }
+        viewModelScope.launch {
+            repository.gpoApplied(host)
+                .onSuccess { a -> _session.update { if (it?.host == host) it.copy(applied = a, appliedLoading = false) else it } }
+                .onFailure { e -> _session.update { if (it?.host == host) it.copy(appliedLoading = false, error = e.toUserMessage()) else it } }
+        }
+    }
 
     fun clearConsole() = _session.update { it?.copy(console = emptyList()) }
 

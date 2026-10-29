@@ -126,6 +126,11 @@ class Settings(BaseSettings):
     ad_base_dn: str = ""
     # Comma-separated file servers the folder-rights runbook may connect to over WinRM: fs01,fs02.
     runbook_file_servers: str = ""
+    # Group Policy: the Windows host with the GroupPolicy module (a domain controller or an admin server with
+    # GPMC) the server runs the GPO cmdlets on over WinRM. Empty: the domain controller of AD_LDAP_URL.
+    gpo_host: str = ""
+    # A folder on that host: Backup-GPO before every change, so the previous state can be restored in GPMC.
+    gpo_backup_path: str = ""
     winrm_https: bool = False
     # 0: 5985 (HTTP, NTLM-encrypted) or 5986 (HTTPS).
     winrm_port: int = 0

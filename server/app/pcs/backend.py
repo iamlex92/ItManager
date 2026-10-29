@@ -154,6 +154,16 @@ class RealPcs:
             data = as_list(data)
         return PcResult(True, data=data)
 
+    async def run_script(self, host: str, script: str, login: Login | None) -> PcResult:
+        """A read-only script of another module (gpresult for Group Policy) on one computer."""
+        if login is None:
+            raise PcError("Не выбрана учётная запись домена: «Настройки сервера» → «Учётная запись домена».")
+        assert self.shell_factory is not None
+        code, out, err = await asyncio.to_thread(self.shell_factory(login), host, script)
+        if code != 0 and not out.strip():
+            return PcResult(False, error=(err.strip() or f"код {code}")[:2000])
+        return PcResult(True, data=parse_output(out))
+
     async def keys(self, host: str, login: Login | None) -> PcResult:
         if login is None:
             raise PcError("Не задана учётная запись RUNBOOK_CREDENTIAL")
