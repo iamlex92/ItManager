@@ -60,3 +60,17 @@ data class RestartDto(val restarting: Boolean = false)
 
 @Serializable
 class EmptyBody
+
+@Serializable
+data class CertificateRequestBody(val url: String = "")
+
+/** The certificate a domain controller presents, read without trusting it, to be checked by its fingerprint. */
+@Serializable
+data class ControllerCertificateDto(
+    val pem: String,
+    val subject: String = "",
+    val issuer: String = "",
+    @SerialName("self_signed") val selfSigned: Boolean = false,
+    @SerialName("not_after") val notAfter: String = "",
+    val sha256: String = "",
+)

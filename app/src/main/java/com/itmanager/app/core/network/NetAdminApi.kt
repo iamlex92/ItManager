@@ -563,6 +563,9 @@ class NetAdminApi @Inject constructor(
 
     suspend fun restartServer(s: ServerSettings): RestartDto = post(s, "server-settings/restart", EmptyBody())
 
+    suspend fun controllerCertificate(s: ServerSettings, url: String): ControllerCertificateDto =
+        post(s, "server-settings/controller-certificate", CertificateRequestBody(url))
+
     /** A file the server builds (NetBox archive, label page). Reads only. */
     suspend fun download(s: ServerSettings, path: String): ByteArray =
         guarded { client.get("${requireBase(s)}/api/v1/$path") { auth(s) }.body() }

@@ -32,11 +32,21 @@ def test_saved_settings_apply_from_the_next_start(seeded):
 
         r = c.put(
             "/api/v1/server-settings",
-            json={"values": {"hal_mode": "real", "pc_mode": "real", "switch_enable_secret": "en-pass",
-                             "poll_interval_seconds": "30"}},
-        ).json()  # fmt: skip
+            json={
+                "values": {
+                    "hal_mode": "real",
+                    "pc_mode": "real",
+                    "switch_enable_secret": "en-pass",
+                    "poll_interval_seconds": "30",
+                }
+            },
+        ).json()
         assert _field(r, "hal_mode") | {"choices": None} == _field(r, "hal_mode") | {
-            "value": "real", "source": "ui", "restart_required": True, "choices": None}  # fmt: skip
+            "value": "real",
+            "source": "ui",
+            "restart_required": True,
+            "choices": None,
+        }
         assert _field(r, "poll_interval_seconds")["value"] == 30.0
         secret = _field(r, "switch_enable_secret")
         assert secret["is_set"] is True and secret["value"] is None
@@ -74,3 +84,101 @@ def test_restart_goes_through_the_service(seeded):
                 break
             time.sleep(0.1)
         assert called == [True]
+
+
+def _test_cert() -> str:
+    """A throwaway self-signed certificate, made here so no key material lives in the repository."""
+    import datetime
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Samba test CA")])
+    now = datetime.datetime.now(datetime.UTC)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(1)
+        .not_valid_before(now)
+        .not_valid_after(now + datetime.timedelta(days=1))
+        .sign(key, hashes.SHA256())
+    )
+    return cert.public_bytes(serialization.Encoding.PEM).decode()
+
+
+def test_ca_certificate_survives_a_mangled_paste(seeded):
+    import ssl
+
+    from app.runbooks.real import normalize_pem
+
+    pem = _test_cert()
+    for mangled in (pem.replace("\n", " "), pem.replace("\n", "\r\n"), "﻿" + pem, "  " + pem.replace("\n", "\n  ")):
+        ssl.create_default_context().load_verify_locations(cadata=normalize_pem(mangled))
+    with TestClient(create_app(make_settings()), headers=AUTH) as c:
+        r = c.put("/api/v1/server-settings", json={"values": {"ad_ca_pem": pem.replace("\n", " ")}})
+        assert r.status_code == 200, r.text
+        bad = c.put(
+            "/api/v1/server-settings",
+            json={"values": {"ad_ca_pem": "-----BEGIN CERTIFICATE----- !!! -----END CERTIFICATE-----"}},
+        )
+        assert bad.status_code == 422 and bad.json()["detail"]["key"] == "ad_ca_pem"
+    with TestClient(create_app(make_settings()), headers=AUTH) as c:
+        stored = c.app.state.settings.ad_ca_pem
+        assert stored.startswith("-----BEGIN CERTIFICATE-----\n") and "\n-----END CERTIFICATE-----" in stored
+
+
+def test_controller_certificate_is_read_for_the_operator_to_check(seeded, tmp_path):
+    import datetime
+    import socket
+    import ssl
+    import threading
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "rukrsrvdc01.ecotehs.local")])
+    now = datetime.datetime.now(datetime.UTC)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(7)
+        .not_valid_before(now)
+        .not_valid_after(now + datetime.timedelta(days=1))
+        .sign(key, hashes.SHA256())
+    )
+    (tmp_path / "c.pem").write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    (tmp_path / "k.pem").write_bytes(
+        key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
+    )
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ctx.load_cert_chain(tmp_path / "c.pem", tmp_path / "k.pem")
+    srv = socket.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(1)
+
+    def serve():
+        conn, _ = srv.accept()
+        try:
+            ctx.wrap_socket(conn, server_side=True).close()
+        except OSError:
+            pass
+
+    threading.Thread(target=serve, daemon=True).start()
+    with TestClient(create_app(make_settings()), headers=AUTH) as c:
+        url = f"ldaps://127.0.0.1:{srv.getsockname()[1]}"
+        r = c.post("/api/v1/server-settings/controller-certificate", json={"url": url}).json()
+        assert r["self_signed"] and "rukrsrvdc01" in r["subject"] and r["sha256"].count(":") == 31
+        assert r["pem"].startswith("-----BEGIN CERTIFICATE-----")
+        bad = c.post("/api/v1/server-settings/controller-certificate", json={"url": "ldap://x"})
+        assert bad.status_code == 409 and bad.json()["detail"]["code"] == "certificate_failed"
+    srv.close()

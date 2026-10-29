@@ -14,6 +14,7 @@ import com.itmanager.app.data.model.PcResult
 import com.itmanager.app.data.model.PcKeyJob
 import com.itmanager.app.data.model.PcAction
 import com.itmanager.app.data.model.ServerConfig
+import com.itmanager.app.core.network.ControllerCertificateDto
 import com.itmanager.app.data.model.GpoOverview
 import com.itmanager.app.data.model.GpoOu
 import com.itmanager.app.data.model.GpoDetail
@@ -212,6 +213,7 @@ class DcimRepository @Inject constructor(
     suspend fun saveServerConfig(values: Map<String, JsonElement>, reset: List<String>): Result<ServerConfig> =
         load { saveServerConfig(values, reset) }
     suspend fun restartServer(): Result<Unit> = load { restartServer() }
+    suspend fun controllerCertificate(url: String): Result<ControllerCertificateDto> = load { controllerCertificate(url) }
     suspend fun peripherals(): Result<List<Peripheral>> = load { peripherals() }
     suspend fun savePeripheral(id: String?, draft: PeripheralDraft): Result<Peripheral> =
         load { savePeripheral(id, draft) }.onSuccess { peripheralVersion.value++ }

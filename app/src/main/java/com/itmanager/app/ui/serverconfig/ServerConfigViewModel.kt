@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import com.itmanager.app.core.network.ControllerCertificateDto
 import javax.inject.Inject
 
 /** What the operator changed and has not saved yet. */
@@ -47,6 +49,10 @@ class ServerConfigViewModel @Inject constructor(private val repository: DcimRepo
     private val _restarting = MutableStateFlow(false)
     val restarting: StateFlow<Boolean> = _restarting.asStateFlow()
 
+    /** A certificate read from the controller, waiting for the operator to check its fingerprint. */
+    private val _certificate = MutableStateFlow<ControllerCertificateDto?>(null)
+    val certificate: StateFlow<ControllerCertificateDto?> = _certificate.asStateFlow()
+
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
     val messages: SharedFlow<String> = _messages.asSharedFlow()
 
@@ -71,6 +77,28 @@ class ServerConfigViewModel @Inject constructor(private val repository: DcimRepo
     }
 
     fun reset(key: String) = _edits.update { it.copy(values = it.values - key, reset = it.reset + key) }
+
+    /** Reads the LDAPS certificate from [url] (the edited controller address, or the saved one when empty). */
+    fun fetchCertificate(url: String) {
+        viewModelScope.launch {
+            _busy.value = true
+            repository.controllerCertificate(url)
+                .onSuccess { _certificate.value = it }
+                .onFailure { _messages.tryEmit(it.toUserMessage()) }
+            _busy.value = false
+        }
+    }
+
+    fun acceptCertificate(key: String) {
+        val c = _certificate.value ?: return
+        set(key, JsonPrimitive(c.pem))
+        _certificate.value = null
+        _messages.tryEmit("Сертификат вставлен — нажмите «Сохранить»")
+    }
+
+    fun dismissCertificate() {
+        _certificate.value = null
+    }
 
     fun fail(message: String) {
         _messages.tryEmit(message)

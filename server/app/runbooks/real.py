@@ -428,6 +428,42 @@ class RealRunbooks:
 # --- real backends -------------------------------------------------------------------------
 
 
+_PEM_BLOCK = re.compile(r"-----BEGIN CERTIFICATE-----(.*?)-----END CERTIFICATE-----", re.DOTALL)
+
+
+def normalize_pem(text: str) -> str:
+    """Certificates as OpenSSL wants them, whatever the copy did to the text: line breaks turned into spaces
+    (a terminal, a one-line field), Windows line ends, a BOM. Raises ValueError when no certificate is in it."""
+    import binascii
+
+    from cryptography import x509
+
+    blocks = []
+    for inner in _PEM_BLOCK.findall(text or ""):
+        body = re.sub(r"[^A-Za-z0-9+/=]", "", inner)
+        try:
+            x509.load_der_x509_certificate(base64.b64decode(body, validate=True))
+        except (binascii.Error, ValueError) as e:
+            raise ValueError("сертификат повреждён: текст между BEGIN и END не читается") from e
+        lines = "\n".join(body[i : i + 64] for i in range(0, len(body), 64))
+        blocks.append(f"-----BEGIN CERTIFICATE-----\n{lines}\n-----END CERTIFICATE-----\n")
+    if not blocks:
+        raise ValueError("в тексте нет сертификата: нужен блок от -----BEGIN CERTIFICATE----- до END CERTIFICATE")
+    return "".join(blocks)
+
+
+def _tls_hint(error: str) -> str:
+    """What to do about the usual LDAPS certificate failures."""
+    e = error.lower()
+    untrusted = ("certificate verify failed", "unable to get local issuer", "self-signed", "self signed")
+    if any(x in e for x in untrusted):
+        return (". Сертификату контроллера нет доверия: «Настройки сервера» → «Сертификат контроллера» → "
+                "«Получить с контроллера», сверьте отпечаток и сохраните.")
+    if "doesn't match" in e or "hostname" in e and "match" in e:
+        return ". Имя в адресе не совпадает с сертификатом: укажите в «Контроллер домена» полное имя из сертификата."
+    return ""
+
+
 class LdapDirectory:
     """Active Directory over ldap3. Opened per run and closed by the garbage collector."""
 
@@ -451,9 +487,13 @@ class LdapDirectory:
             raise RunbookConfigError(
                 "AD_LDAP_URL без TLS: нужен ldaps:// или AD_START_TLS=true, пароль не отправляется открытым текстом."
             )
-        tls = ldap3.Tls(
-            validate=ssl.CERT_REQUIRED, ca_certs_file=s.ad_ca_file or None, ca_certs_data=s.ad_ca_pem.strip() or None
-        )
+        ca_data = None
+        if s.ad_ca_pem.strip():
+            try:
+                ca_data = normalize_pem(s.ad_ca_pem)
+            except ValueError as e:
+                raise RunbookConfigError(f"Сертификат контроллера в «Настройках сервера»: {e}") from None
+        tls = ldap3.Tls(validate=ssl.CERT_REQUIRED, ca_certs_file=s.ad_ca_file or None, ca_certs_data=ca_data)
         server = ldap3.Server(
             url.hostname,
             port=url.port or (636 if url.scheme == "ldaps" else 389),
@@ -471,7 +511,7 @@ class LdapDirectory:
         except ldap3.core.exceptions.LDAPBindError:
             raise RunbookConfigError("AD отклонил вход RUNBOOK_CREDENTIAL: проверьте логин и пароль.") from None
         except ldap3.core.exceptions.LDAPException as e:
-            raise RunbookConfigError(f"Нет связи с AD ({url.hostname}): {e}") from None
+            raise RunbookConfigError(f"Нет связи с AD ({url.hostname}): {e}{_tls_hint(str(e))}") from None
 
     def _default_naming_context(self) -> str:
         info = getattr(self.conn.server, "info", None)
@@ -535,3 +575,43 @@ def winrm_shell(settings: Settings, login: Login) -> Shell:
         return r.status_code, r.std_out.decode("utf-8", "replace"), r.std_err.decode("utf-8", "replace")
 
     return run
+
+
+def fetch_controller_certificate(url_text: str, timeout: float = 5.0) -> dict[str, Any]:
+    """The certificate the controller presents on LDAPS, read without trusting it, to be confirmed by its
+    fingerprint and then trusted. The top of the chain when Python can see it (a CA), else the server's own one
+    (Samba's self-signed certificate is its own anchor)."""
+    import hashlib
+    import socket
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import serialization
+
+    url = urlparse(url_text.strip())
+    if url.scheme != "ldaps" or not url.hostname:
+        raise RunbookConfigError("Сертификат получается по адресу ldaps://… — укажите «Контроллер домена».")
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    try:
+        with socket.create_connection((url.hostname, url.port or 636), timeout=timeout) as raw:
+            with ctx.wrap_socket(raw, server_hostname=url.hostname) as tls:
+                # Python 3.13+ shows what else the server sent; older ones only its own certificate.
+                chain = getattr(tls, "get_unverified_chain", lambda: None)()
+                top = chain[-1] if chain else None
+                if top is not None and not isinstance(top, bytes):
+                    top = top.public_bytes(ssl._ssl.ENCODING_DER)
+                der = top or tls.getpeercert(binary_form=True)
+    except OSError as e:
+        raise RunbookConfigError(f"Не удалось подключиться к {url.hostname}:{url.port or 636}: {e}") from None
+    cert = x509.load_der_x509_certificate(der)
+    pem = cert.public_bytes(serialization.Encoding.PEM).decode()
+    sha = hashlib.sha256(der).hexdigest().upper()
+    return {
+        "pem": pem,
+        "subject": cert.subject.rfc4514_string(),
+        "issuer": cert.issuer.rfc4514_string(),
+        "self_signed": cert.subject == cert.issuer,
+        "not_after": cert.not_valid_after_utc.isoformat(),
+        "sha256": ":".join(sha[i : i + 2] for i in range(0, len(sha), 2)),
+    }

@@ -170,8 +170,13 @@ def validate(key: str, value: Any) -> Any:
         value = value.strip()
     if key == "ad_ldap_url" and value and not re.match(r"^ldaps?://[A-Za-z0-9.-]+(:\d+)?/?$", str(value)):
         raise SettingError(key, "нужен адрес вида ldaps://dc01.ecotehs.local")
-    if key == "ad_ca_pem" and value and "-----BEGIN CERTIFICATE-----" not in str(value):
-        raise SettingError(key, "вставьте сертификат целиком: от -----BEGIN CERTIFICATE----- до END CERTIFICATE")
+    if key == "ad_ca_pem" and value:
+        from .runbooks.real import normalize_pem
+
+        try:
+            value = normalize_pem(str(value))  # stored the way OpenSSL reads it
+        except ValueError as e:
+            raise SettingError(key, str(e)) from e
     try:
         return _adapter(key).validate_python(value)
     except ValidationError as e:
