@@ -102,6 +102,7 @@ fun GpoScreen(
     BackHandler(enabled = page != null) { viewModel.close() }
 
     val writes = (overview as? UiState.Content)?.data?.writesEnabled == true
+    val canCreate = (overview as? UiState.Content)?.data?.canCreate != false
     fun confirm(title: String, question: String, run: (AuthMethod) -> Unit) {
         if (!writes) return viewModel.fail("Изменения выключены на сервере: «Настройки сервера» → «Разрешить изменения».")
         ask = Ask(title, question, run)
@@ -128,7 +129,7 @@ fun GpoScreen(
                 subtitle = (overview as? UiState.Content)?.data?.let { if (it.real) it.host else "Эмуляция: данные ненастоящие" },
                 onBack = onBack,
             ) {
-                if (writes) IconButton(onClick = { creating = true }) { Icon(Icons.Outlined.Add, contentDescription = "Новая политика") }
+                if (writes && canCreate) IconButton(onClick = { creating = true }) { Icon(Icons.Outlined.Add, contentDescription = "Новая политика") }
             }
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             when (val s = overview) {
@@ -139,7 +140,7 @@ fun GpoScreen(
         } else {
             val d = p.detail
             TabTopBar(title = d?.gpo?.name ?: "Политика", subtitle = d?.let { if (it.gpo.active) "Действует" else "Не действует" }, onBack = viewModel::close) {
-                if (d != null && writes) {
+                if (d != null && writes && canCreate) {
                     IconButton(onClick = {
                         confirm("Удалить политику", "Удалить «${d.gpo.name}» из домена? Отменить можно только из резервной копии GPO.") {
                             viewModel.delete(it)

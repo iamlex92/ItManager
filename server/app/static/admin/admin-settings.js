@@ -78,6 +78,10 @@
         placeholder: f.is_set ? "задано — пусто, чтобы не менять" : "не задано",
         oninput: (ev) => { if (ev.target.value) set(ev.target.value); else { delete edits[f.key]; dirty(); } } });
     }
+    if (f.kind === "pem") {
+      return el("textarea", { id, rows: 4, className: "mono small", value: f.value ?? "",
+        placeholder: "-----BEGIN CERTIFICATE-----", oninput: (ev) => set(ev.target.value) });
+    }
     const number = f.kind === "int" || f.kind === "float";
     return el("input", { id, type: number ? "number" : "text", step: f.kind === "float" ? "any" : "1",
       value: f.value ?? "", oninput: (ev) => set(number && ev.target.value !== "" ? Number(ev.target.value) : ev.target.value) });

@@ -122,6 +122,8 @@ class Settings(BaseSettings):
     ad_start_tls: bool = False
     # CA certificate (PEM) of the domain controllers, when the system store does not have it.
     ad_ca_file: str = ""
+    # The same certificate pasted as text (Samba makes its own: /var/lib/samba/private/tls/ca.pem on the DC).
+    ad_ca_pem: str = ""
     # Empty: read from the domain controller.
     ad_base_dn: str = ""
     # Comma-separated file servers the folder-rights runbook may connect to over WinRM: fs01,fs02.

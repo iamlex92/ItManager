@@ -34,6 +34,7 @@
       ? `${status.host} · ${status.writes_enabled ? "изменения разрешены" : "только просмотр"}`
       : "эмуляция · данные ненастоящие";
     $("gpo-mode").classList.toggle("warn", status.mode !== "real" || !status.writes_enabled);
+    $("gpo-new").hidden = !status.can_create;
     ous = await api("GET", "gpo/ous").catch(() => []);
     renderList();
     if (picked) openGpo(picked).catch(fail);
@@ -98,7 +99,7 @@
         el("div", { className: "grow" }, el("h2", { textContent: g.name }),
           el("div", { className: "muted small", textContent: [g.description, g.modified ? `изменена ${new Date(g.modified).toLocaleString("ru-RU")}` : "", g.wmi_filter ? `WMI-фильтр: ${g.wmi_filter}` : ""].filter(Boolean).join(" · ") })),
         el("button", { type: "button", textContent: "Отчёт", onclick: () => report(g).catch(fail) }),
-        el("button", { type: "button", className: "danger", textContent: "Удалить", disabled: !canWrite(), onclick: () => remove(g) })),
+        status.can_create ? el("button", { type: "button", className: "danger", textContent: "Удалить", disabled: !canWrite(), onclick: () => remove(g) }) : ""),
       d.simulated ? el("p", { className: "muted small", textContent: "Эмуляция: настоящий домен не затрагивается. Включается в «Настройки сервера» → «Компьютеры домена»." }) : "",
       el("label", { className: "row" }, "Состояние ", sel),
       links(g), registry(g, d.registry), security(d.security_filter), computers(g));

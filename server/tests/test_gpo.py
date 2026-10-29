@@ -102,6 +102,8 @@ def test_view_edit_and_apply_in_the_emulated_domain(client):
 
     audit = client.get("/api/v1/audit", params={"kind": "runbook"}).json()
     titles = {a["title"] for a in audit}
+    removed = next(a for a in audit if a["action"] == "gpo:registry_remove")
+    assert removed["parameters"]["before"] == {"type": "DWord", "value": "1"}
     assert {
         "GPO: параметр реестра",
         "GPO: состояние",

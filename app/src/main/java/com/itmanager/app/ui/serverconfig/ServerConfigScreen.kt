@@ -260,10 +260,13 @@ private fun FieldRow(
             )
             else -> {
                 val number = field.kind == "int" || field.kind == "float"
+                val pem = field.kind == "pem"
                 OutlinedTextField(
                     value = value.text(),
-                    onValueChange = { onChange(JsonPrimitive(it.trim())) },
-                    singleLine = true,
+                    onValueChange = { onChange(JsonPrimitive(if (pem) it else it.trim())) },
+                    singleLine = !pem,
+                    minLines = if (pem) 4 else 1,
+                    placeholder = if (pem) ({ Text("-----BEGIN CERTIFICATE-----") }) else null,
                     keyboardOptions = KeyboardOptions(keyboardType = if (number) KeyboardType.Decimal else KeyboardType.Uri),
                     modifier = Modifier.fillMaxWidth(),
                 )

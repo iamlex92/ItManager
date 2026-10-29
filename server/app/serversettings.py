@@ -8,6 +8,7 @@ never sent back, only whether they are set.
 """
 
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Annotated, Any
 
@@ -30,7 +31,7 @@ class Spec:
     key: str
     label: str
     help: str = ""
-    # bool, int, float, text, choice, secret, credential
+    # bool, int, float, text, pem (several lines), choice, secret, credential
     kind: str = "text"
     choices: tuple[Choice, ...] = ()
     # For kind=credential: which stored logins fit (ssh, winrm).
@@ -105,14 +106,19 @@ GROUPS: tuple[Group, ...] = (
                  "Каждое изменение подтверждается.", "bool"),
             Spec("runbook_credential", "Учётная запись домена", "Администратор ПК и AD (вид WinRM).",
                  "credential", credential_kind="winrm"),
-            Spec("ad_ldap_url", "Контроллер домена", "ldaps://dc01.factory.local — для «все ПК из AD» и сценариев."),
+            Spec("ad_ldap_url", "Контроллер домена", "ldaps://dc01.ecotehs.local (Samba или Windows): AD, групповые "
+                 "политики, «все ПК из AD», сценарии."),
             Spec("ad_start_tls", "LDAP со StartTLS", "Для адреса ldap://.", "bool"),
+            Spec("ad_ca_pem", "Сертификат контроллера (ЦС)",
+                 "Если сертификат LDAPS выдан своим ЦС или самоподписан. Samba: содержимое "
+                 "/var/lib/samba/private/tls/ca.pem на контроллере. Windows: сертификат корпоративного ЦС.", "pem"),
             Spec("ad_base_dn", "Корень поиска в AD", "Пусто — берётся с контроллера."),
             Spec("runbook_file_servers", "Файловые серверы", "Через запятую: fs01,fs02."),
-            Spec("gpo_host", "Сервер групповых политик",
-                 "Контроллер домена или сервер с GPMC. Пусто — контроллер домена выше."),
-            Spec("gpo_backup_path", "Резервные копии GPO", "Папка на этом сервере, например C:\\GPOBackup: "
-                 "копия политики перед каждым изменением."),
+            Spec("gpo_host", "Сервер GPMC (необязательно)",
+                 "Пусто — политики правятся напрямую через LDAP и SYSVOL контроллера (Samba и Windows). "
+                 "Windows-сервер с GPMC и WinRM — если нужен PowerShell GroupPolicy (создание и удаление политик)."),
+            Spec("gpo_backup_path", "Резервные копии GPO", "Только с сервером GPMC: папка на нём, например "
+                 "C:\\GPOBackup — копия политики перед каждым изменением."),
             Spec("winrm_https", "WinRM по HTTPS", "Порт 5986, на ПК нужен сертификат.", "bool"),
             Spec("winrm_port", "Порт WinRM", "0 — 5985 или 5986 для HTTPS.", "int"),
         ),
@@ -162,6 +168,10 @@ def validate(key: str, value: Any) -> Any:
         raise SettingError(key, "эту настройку нельзя менять здесь")
     if isinstance(value, str):
         value = value.strip()
+    if key == "ad_ldap_url" and value and not re.match(r"^ldaps?://[A-Za-z0-9.-]+(:\d+)?/?$", str(value)):
+        raise SettingError(key, "нужен адрес вида ldaps://dc01.ecotehs.local")
+    if key == "ad_ca_pem" and value and "-----BEGIN CERTIFICATE-----" not in str(value):
+        raise SettingError(key, "вставьте сертификат целиком: от -----BEGIN CERTIFICATE----- до END CERTIFICATE")
     try:
         return _adapter(key).validate_python(value)
     except ValidationError as e:

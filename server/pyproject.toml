@@ -22,6 +22,8 @@ dependencies = [
     "pywinrm>=0.5",
     # Real switches: Cisco IOS and Eltex MES over SSH.
     "asyncssh>=2.14",
+    # Group Policy straight from the controller: Registry.pol in SYSVOL over SMB.
+    "smbprotocol>=1.13",
 ]
 
 [project.scripts]

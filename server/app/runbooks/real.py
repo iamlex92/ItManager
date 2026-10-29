@@ -451,7 +451,9 @@ class LdapDirectory:
             raise RunbookConfigError(
                 "AD_LDAP_URL без TLS: нужен ldaps:// или AD_START_TLS=true, пароль не отправляется открытым текстом."
             )
-        tls = ldap3.Tls(validate=ssl.CERT_REQUIRED, ca_certs_file=s.ad_ca_file or None)
+        tls = ldap3.Tls(
+            validate=ssl.CERT_REQUIRED, ca_certs_file=s.ad_ca_file or None, ca_certs_data=s.ad_ca_pem.strip() or None
+        )
         server = ldap3.Server(
             url.hostname,
             port=url.port or (636 if url.scheme == "ldaps" else 389),
