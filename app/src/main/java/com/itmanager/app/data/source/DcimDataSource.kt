@@ -8,6 +8,7 @@ import com.itmanager.app.data.model.PcResult
 import com.itmanager.app.data.model.PcKeyJob
 import com.itmanager.app.data.model.PcAction
 import com.itmanager.app.data.model.ServerConfig
+import com.itmanager.app.core.network.ControllerCertificateDto
 import com.itmanager.app.data.model.GpoOverview
 import com.itmanager.app.data.model.GpoOu
 import com.itmanager.app.data.model.GpoDetail
@@ -244,6 +245,7 @@ interface DcimDataSource {
     suspend fun serverConfig(): ServerConfig
     suspend fun saveServerConfig(values: Map<String, JsonElement>, reset: List<String>): ServerConfig
     suspend fun restartServer()
+    suspend fun controllerCertificate(url: String): ControllerCertificateDto
 
     // --- Group Policy ---
     suspend fun gpos(): GpoOverview

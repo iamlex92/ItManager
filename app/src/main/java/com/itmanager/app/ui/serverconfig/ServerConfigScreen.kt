@@ -76,6 +76,7 @@ fun ServerConfigScreen(
     val credentials by viewModel.credentials.collectAsStateWithLifecycle()
     val busy by viewModel.busy.collectAsStateWithLifecycle()
     val restarting by viewModel.restarting.collectAsStateWithLifecycle()
+    val certificate by viewModel.certificate.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var askRestart by remember { mutableStateOf(false) }
@@ -167,6 +168,9 @@ fun ServerConfigScreen(
                                     credentials = credentials,
                                     onChange = { viewModel.set(f.key, it) },
                                     onReset = { viewModel.reset(f.key) },
+                                    onFetchCertificate = {
+                                        viewModel.fetchCertificate((edits.values["ad_ldap_url"] as? JsonPrimitive)?.contentOrNull.orEmpty())
+                                    },
                                 )
                             }
                         }
@@ -179,6 +183,22 @@ fun ServerConfigScreen(
                 }
             }
         }
+    }
+
+    certificate?.let { c ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = viewModel::dismissCertificate,
+            title = { Text("Сертификат контроллера") },
+            text = {
+                Text(
+                    "Кому: ${c.subject}\nКем выдан: ${c.issuer}${if (c.selfSigned) " (самоподписанный)" else ""}\n" +
+                        "Действует до: ${c.notAfter.take(10)}\n\nОтпечаток SHA-256:\n${c.sha256}\n\n" +
+                        "Сверьте на контроллере: openssl x509 -in /var/lib/samba/private/tls/cert.pem -noout -fingerprint -sha256",
+                )
+            },
+            confirmButton = { TextButton(onClick = { viewModel.acceptCertificate("ad_ca_pem") }) { Text("Доверять") } },
+            dismissButton = { TextButton(onClick = viewModel::dismissCertificate) { Text("Отмена") } },
+        )
     }
 
     if (askRestart) {
@@ -205,6 +225,7 @@ private fun FieldRow(
     credentials: List<Credential>,
     onChange: (JsonElement?) -> Unit,
     onReset: () -> Unit,
+    onFetchCertificate: () -> Unit,
 ) {
     val value = edited ?: field.value
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -272,6 +293,7 @@ private fun FieldRow(
                 )
             }
         }
+        if (field.kind == "pem") TextButton(onClick = onFetchCertificate) { Text("Получить с контроллера") }
         if (field.help.isNotBlank()) {
             Text(field.help, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

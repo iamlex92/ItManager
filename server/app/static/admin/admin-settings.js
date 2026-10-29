@@ -79,8 +79,23 @@
         oninput: (ev) => { if (ev.target.value) set(ev.target.value); else { delete edits[f.key]; dirty(); } } });
     }
     if (f.kind === "pem") {
-      return el("textarea", { id, rows: 4, className: "mono small", value: f.value ?? "",
+      const area = el("textarea", { id, rows: 4, className: "mono small", value: f.value ?? "",
         placeholder: "-----BEGIN CERTIFICATE-----", oninput: (ev) => set(ev.target.value) });
+      // Read the certificate the controller presents, show who it is, and take it only if the fingerprint fits.
+      const fetchBtn = el("button", { type: "button", textContent: "Получить с контроллера", onclick: async () => {
+        try {
+          const url = typeof edits.ad_ldap_url === "string" ? edits.ad_ldap_url : "";
+          const c = await api("POST", "server-settings/controller-certificate", { url });
+          const ok = confirm(`Сертификат контроллера:\n\nКому: ${c.subject}\nКем выдан: ${c.issuer}${c.self_signed ? " (самоподписанный)" : ""}\n`
+            + `Действует до: ${new Date(c.not_after).toLocaleDateString("ru-RU")}\n\nОтпечаток SHA-256:\n${c.sha256}\n\n`
+            + "Сверьте отпечаток на контроллере:\nopenssl x509 -in /var/lib/samba/private/tls/cert.pem -noout -fingerprint -sha256\n\nДоверять этому сертификату?");
+          if (!ok) return;
+          area.value = c.pem;
+          set(c.pem);
+          toast("Сертификат вставлен — нажмите «Сохранить»");
+        } catch (e) { fail(e); }
+      } });
+      return el("div", { className: "stack" }, area, fetchBtn);
     }
     const number = f.kind === "int" || f.kind === "float";
     return el("input", { id, type: number ? "number" : "text", step: f.kind === "float" ? "any" : "1",

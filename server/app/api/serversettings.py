@@ -102,6 +102,22 @@ async def put_server_settings(body: ServerSettingsIn, request: Request, session:
     return await _describe(request, session)
 
 
+@router.post("/controller-certificate")
+async def controller_certificate(body: dict, request: Request, session: SessionDep):
+    """The certificate the domain controller presents on LDAPS, read without trusting it, for the administrator to
+    check by its fingerprint and save as «Сертификат контроллера». Nothing is saved here."""
+    from ..runbooks.real import RunbookConfigError, fetch_controller_certificate
+
+    url = str(body.get("url") or "").strip()
+    if not url:
+        overrides = await ss.load(session)
+        url = str(overrides.get("ad_ldap_url") or request.app.state.settings_file.get("ad_ldap_url") or "")
+    try:
+        return await asyncio.to_thread(fetch_controller_certificate, url)
+    except RunbookConfigError as e:
+        raise HTTPException(409, detail={"code": "certificate_failed", "message": str(e)}) from e
+
+
 @router.post("/restart", status_code=202)
 async def restart_server(request: Request, session: SessionDep):
     restart = getattr(request.app.state, "restart", None)

@@ -50,6 +50,7 @@ import com.itmanager.app.data.model.GpoApplyJob
 import com.itmanager.app.core.network.GpoChangeBody
 import kotlinx.serialization.json.JsonElement
 import com.itmanager.app.core.network.ServerConfigBody
+import com.itmanager.app.core.network.ControllerCertificateDto
 import com.itmanager.app.data.model.MapPoint
 import com.itmanager.app.data.model.AuditEntry
 import com.itmanager.app.data.model.AuditKind
@@ -496,6 +497,8 @@ class RemoteDataSource(
 
     override suspend fun saveServerConfig(values: Map<String, JsonElement>, reset: List<String>): ServerConfig =
         api.saveServerConfig(settings, ServerConfigBody(values, reset, operator = Build.MODEL)).toDomain()
+
+    override suspend fun controllerCertificate(url: String): ControllerCertificateDto = api.controllerCertificate(settings, url)
 
     override suspend fun restartServer() {
         api.restartServer(settings)
