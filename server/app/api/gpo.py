@@ -28,7 +28,6 @@ from fastapi.responses import HTMLResponse
 
 from ..gpo import scripts
 from ..gpo.backend import EmulatedGpo, GpoError, RealGpo, check_id
-from ..gpo.native import NativeGpo
 from ..gpo.service import ApplyJob, run_apply
 from ..models import ScriptAuditLog
 from ..pcs.backend import PcError, RealPcs, as_list, valid_host
@@ -137,7 +136,7 @@ async def list_gpos(request: Request, session: SessionDep):
         host=backend.host,
         writes_enabled=backend.writes_enabled,
         login_configured=backend.simulated or login is not None,
-        can_create=not isinstance(backend, NativeGpo),
+        can_create=True,
         gpos=gpos,
     )
 

@@ -116,7 +116,7 @@ GROUPS: tuple[Group, ...] = (
             Spec("runbook_file_servers", "Файловые серверы", "Через запятую: fs01,fs02."),
             Spec("gpo_host", "Сервер GPMC (необязательно)",
                  "Пусто — политики правятся напрямую через LDAP и SYSVOL контроллера (Samba и Windows). "
-                 "Windows-сервер с GPMC и WinRM — если нужен PowerShell GroupPolicy (создание и удаление политик)."),
+                 "Windows-сервер с GPMC и WinRM — если нужны PowerShell GroupPolicy и резервные копии."),
             Spec("gpo_backup_path", "Резервные копии GPO", "Только с сервером GPMC: папка на нём, например "
                  "C:\\GPOBackup — копия политики перед каждым изменением."),
             Spec("winrm_https", "WinRM по HTTPS", "Порт 5986, на ПК нужен сертификат.", "bool"),

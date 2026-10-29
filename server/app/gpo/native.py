@@ -27,7 +27,7 @@ from urllib.parse import urlparse
 
 from ..config import Settings
 from ..runbooks.real import LdapDirectory, Login, RunbookConfigError
-from .backend import GpoError, check_id, check_registry, check_status, check_target
+from .backend import GpoError, check_id, check_name, check_registry, check_status, check_target
 
 # The registry client-side extension and the Administrative Templates tool, as GPMC writes them.
 CSE_REGISTRY = "{35378EAC-683F-11D2-A89A-00C04FBBCFA2}"
@@ -235,6 +235,11 @@ def apply_trustees(sd: bytes) -> list[str]:
     return out
 
 
+def dns_name(base_dn: str) -> str:
+    """DC=ecotehs,DC=local -> ecotehs.local"""
+    return ".".join(p.split("=", 1)[1] for p in base_dn.split(",") if p.strip().lower().startswith("dc="))
+
+
 def canonical(dn: str) -> str:
     """OU=Бух,OU=ПК,DC=ecotehs,DC=local → ecotehs.local/ПК/Бух."""
     parts = [p.split("=", 1) for p in re.split(r"(?<!\\),", dn) if "=" in p]
@@ -275,11 +280,19 @@ class Directory(Protocol):
 
     def replace(self, dn: str, attr: str, values: list[Any]) -> None: ...
 
+    def add(self, dn: str, object_class: str, attrs: dict[str, Any]) -> None: ...
+
+    def delete(self, dn: str) -> None: ...
+
 
 class Sysvol(Protocol):
     def read(self, path: str) -> bytes | None: ...
 
     def write(self, path: str, data: bytes) -> None: ...
+
+    def mkdir(self, path: str) -> None: ...
+
+    def remove_tree(self, path: str) -> None: ...
 
 
 class LdapDomain:
@@ -317,13 +330,21 @@ class LdapDomain:
             )
         return out
 
+    def _refused(self, what: str) -> GpoError:
+        r = self.conn.result
+        return GpoError(f"Контроллер не принял {what}: {r.get('description')} {r.get('message', '')}".strip())
+
     def replace(self, dn: str, attr: str, values: list[Any]) -> None:
-        ok = self.conn.modify(dn, {attr: [(self._ldap3.MODIFY_REPLACE, values)]})
-        if not ok:
-            raise GpoError(
-                f"Контроллер не принял изменение {attr}: {self.conn.result.get('description')} "
-                f"{self.conn.result.get('message', '')}".strip()
-            )
+        if not self.conn.modify(dn, {attr: [(self._ldap3.MODIFY_REPLACE, values)]}):
+            raise self._refused(f"изменение {attr}")
+
+    def add(self, dn: str, object_class: str, attrs: dict[str, Any]) -> None:
+        if not self.conn.add(dn, object_class, attrs):
+            raise self._refused(f"создание {dn}")
+
+    def delete(self, dn: str) -> None:
+        if not self.conn.delete(dn):
+            raise self._refused(f"удаление {dn}")
 
 
 class SmbSysvol:
@@ -357,6 +378,21 @@ class SmbSysvol:
                 f.write(data)
         except OSError as e:
             raise GpoError(f"Не удалось записать {path}: {e}") from e
+
+    def mkdir(self, path: str) -> None:
+        try:
+            self._smb.makedirs(path, exist_ok=True)
+        except OSError as e:
+            raise GpoError(f"Не удалось создать папку {path}: {e}") from e
+
+    def remove_tree(self, path: str) -> None:
+        from smbclient.shutil import rmtree
+
+        try:
+            rmtree(path)
+        except OSError as e:
+            if e.errno != errno.ENOENT:
+                raise GpoError(f"Не удалось удалить папку {path}: {e}") from e
 
 
 # --- the backend -----------------------------------------------------------------------------------------------
@@ -733,13 +769,72 @@ class NativeGpo:
         await self._call(self._relink, login, gpo_id, target, edit)
 
     async def create(self, name: str, comment: str, login: Login | None) -> str:
-        raise GpoError(
-            'Новую политику создайте в GPMC или на контроллере: samba-tool gpo create "Имя" -U administrator. '
-            "Здесь её сразу можно будет связать и настроить."
-        )
+        """What samba-tool gpo create and GPMC do: the folder in SYSVOL (GPT.INI, Machine, User), then the
+        groupPolicyContainer with its User and Machine containers. Its security descriptor is the schema default:
+        Authenticated Users read and apply it, the folder inherits the Policies folder's rights. The comment is
+        not kept: GPMC stores it in a file of its own that the controller does not need."""
+        n = check_name(name)
+
+        def work() -> str:
+            d = self._dir(login)
+            if any(_one(r["attrs"], "displayName").lower() == n.lower() for r in self._gpo_rows(d)):
+                raise GpoError("Политика с таким именем уже есть")
+            gid = str(uuid.uuid4())
+            cn = f"{{{gid.upper()}}}"
+            domain = dns_name(d.base_dn)
+            dn = f"CN={cn},{self._policies(d)}"
+            folder = f"\\\\{self.host}\\SysVol\\{domain}\\Policies\\{cn}"
+            assert self.sysvol_factory is not None
+            sysvol = self.sysvol_factory(self.host, login)
+            sysvol.write(f"{folder}\\GPT.INI", b"[General]\r\nVersion=0\r\n")
+            sysvol.mkdir(f"{folder}\\Machine")
+            sysvol.mkdir(f"{folder}\\User")
+            try:
+                d.add(
+                    dn,
+                    "groupPolicyContainer",
+                    {
+                        "displayName": n,
+                        "gPCFileSysPath": f"\\\\{domain}\\SysVol\\{domain}\\Policies\\{cn}",
+                        "gPCFunctionalityVersion": "2",
+                        "flags": "0",
+                        "versionNumber": "0",
+                    },
+                )
+                d.add(f"CN=User,{dn}", "container", {})
+                d.add(f"CN=Machine,{dn}", "container", {})
+            except Exception:
+                self._drop(d, dn)
+                sysvol.remove_tree(folder)
+                raise
+            return gid
+
+        return await self._call(work)
+
+    def _drop(self, d: Directory, dn: str) -> None:
+        """The object and what is under it (User, Machine and whatever GPMC put there), deepest first."""
+        under = d.search(dn, "(objectClass=*)", ["cn"])
+        for row in sorted(under, key=lambda r: r["dn"].count(","), reverse=True):
+            d.delete(row["dn"])
 
     async def delete(self, gpo_id: str, login: Login | None) -> None:
-        raise GpoError(
-            "Политику удаляют в GPMC или на контроллере: samba-tool gpo del {GUID} -U administrator. "
-            "Здесь можно убрать её связи, и она перестанет действовать."
-        )
+        """Like samba-tool gpo del: its links go first, so no computer keeps pointing at a missing policy."""
+
+        def work() -> None:
+            d = self._dir(login)
+            row = self._row(d, gpo_id)
+            gid = guid_of(row["dn"])
+            for target in d.search(d.base_dn, "(gPLink=*)", ["gPLink"]):
+                links = parse_gplink(_one(target["attrs"], "gPLink"))
+                kept = [lk for lk in links if guid_of(lk.gpo_dn) != gid]
+                if len(kept) != len(links):
+                    d.replace(target["dn"], "gPLink", [build_gplink(kept)] if kept else [])
+            folder = self._folder(row)
+            self._drop(d, row["dn"])
+            assert self.sysvol_factory is not None
+            try:
+                self.sysvol_factory(self.host, login).remove_tree(folder)
+            except GpoError as e:
+                raise GpoError(f"Политика удалена из AD, но её папка в SYSVOL осталась. {e}") from e
+
+        await self._call(work)
