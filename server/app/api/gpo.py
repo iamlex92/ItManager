@@ -28,6 +28,7 @@ from fastapi.responses import HTMLResponse
 
 from ..gpo import scripts
 from ..gpo.backend import EmulatedGpo, GpoError, RealGpo, check_id
+from ..gpo.native import NativeGpo
 from ..gpo.service import ApplyJob, run_apply
 from ..models import ScriptAuditLog
 from ..pcs.backend import PcError, RealPcs, as_list, valid_host
@@ -136,6 +137,7 @@ async def list_gpos(request: Request, session: SessionDep):
         host=backend.host,
         writes_enabled=backend.writes_enabled,
         login_configured=backend.simulated or login is not None,
+        can_create=not isinstance(backend, NativeGpo),
         gpos=gpos,
     )
 
@@ -213,6 +215,17 @@ async def gpo_computers(gpo_id: str, request: Request, session: SessionDep):
     login = await runbook_login(session, request.app.state.settings)
     scope = await _read(backend.scope(gpo_id, login, await _inventory(session)))
     return GpoScopeOut(**scope, simulated=backend.simulated)
+
+
+async def _previous(request, session, gpo_id: str, key: str, name: str) -> dict | None:
+    """What a registry setting was before the change, for the audit log (so it can be put back by hand)."""
+    try:
+        d = await _detail(request, session, gpo_id)
+    except HTTPException:
+        return None
+    k = key.strip().lower().replace("hkey_local_machine", "hklm").replace("hkey_current_user", "hkcu")
+    r = next((r for r in d.registry if r.key.lower() == k and r.name.lower() == name.strip().lower()), None)
+    return {"type": r.type, "value": r.value} if r else None
 
 
 async def _name(request, session, gpo_id: str) -> str:
@@ -308,7 +321,8 @@ async def set_registry(gpo_id: str, body: GpoRegistryIn, request: Request, sessi
     _gate(request, body)
     backend = _backend(request)
     name = await _name(request, session, gpo_id)
-    params = {"gpo": name, "gpo_id": gpo_id, "key": body.key, "name": body.name, "type": body.type, "value": body.value}
+    params = {"gpo": name, "gpo_id": gpo_id, "key": body.key, "name": body.name, "type": body.type, "value": body.value,
+              "before": await _previous(request, session, gpo_id, body.key, body.name)}  # fmt: skip
     await _write(
         request,
         session,
@@ -330,7 +344,8 @@ async def remove_registry(gpo_id: str, body: GpoRegistryRemoveIn, request: Reque
         session,
         body,
         "registry_remove",
-        {"gpo": name, "gpo_id": gpo_id, "key": body.key, "name": body.name},
+        {"gpo": name, "gpo_id": gpo_id, "key": body.key, "name": body.name,
+         "before": await _previous(request, session, gpo_id, body.key, body.name)},  # fmt: skip
         lambda login: backend.registry_remove(gpo_id, body.key, body.name, login),
     )
     return await _detail(request, session, gpo_id)

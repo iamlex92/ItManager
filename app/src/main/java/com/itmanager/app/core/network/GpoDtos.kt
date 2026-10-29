@@ -50,9 +50,10 @@ data class GpoListDto(
     val mode: String,
     val host: String = "",
     @SerialName("writes_enabled") val writesEnabled: Boolean = false,
+    @SerialName("can_create") val canCreate: Boolean = true,
     val gpos: List<GpoDto> = emptyList(),
 ) {
-    fun toDomain() = GpoOverview(mode == "real", host, writesEnabled, gpos.map { it.toDomain() })
+    fun toDomain() = GpoOverview(mode == "real", host, writesEnabled, canCreate, gpos.map { it.toDomain() })
 }
 
 @Serializable

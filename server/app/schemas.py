@@ -1306,6 +1306,8 @@ class GpoListOut(BaseModel):
     host: str
     writes_enabled: bool
     login_configured: bool
+    # Straight over LDAP and SYSVOL new GPOs are made with samba-tool or GPMC.
+    can_create: bool = True
     gpos: list[GpoOut]
 
 

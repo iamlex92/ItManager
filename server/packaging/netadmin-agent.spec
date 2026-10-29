@@ -23,6 +23,8 @@ hiddenimports = (
     + collect_submodules("pysnmp")
     + collect_submodules("asyncpg")
     + collect_submodules("asyncssh")
+    + collect_submodules("smbclient")
+    + collect_submodules("smbprotocol")
     + ["alembic.ddl.postgresql"]
 )
 
