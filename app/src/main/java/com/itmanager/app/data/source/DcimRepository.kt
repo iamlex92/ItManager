@@ -14,6 +14,13 @@ import com.itmanager.app.data.model.PcResult
 import com.itmanager.app.data.model.PcKeyJob
 import com.itmanager.app.data.model.PcAction
 import com.itmanager.app.data.model.ServerConfig
+import com.itmanager.app.data.model.GpoOverview
+import com.itmanager.app.data.model.GpoOu
+import com.itmanager.app.data.model.GpoDetail
+import com.itmanager.app.data.model.GpoScope
+import com.itmanager.app.data.model.GpoAppliedOnPc
+import com.itmanager.app.data.model.GpoChange
+import com.itmanager.app.data.model.GpoApplyJob
 import kotlinx.serialization.json.JsonElement
 import com.itmanager.app.data.model.MapPoint
 import com.itmanager.app.data.model.AuditEntry
@@ -188,6 +195,18 @@ class DcimRepository @Inject constructor(
     suspend fun pcKeysStart(source: String, prefix: String?): Result<PcKeyJob> = load { pcKeysStart(source, prefix) }
     suspend fun pcKeys(id: String): Result<PcKeyJob> = load { pcKeys(id) }
     suspend fun pcKeysCsv(id: String): Result<ByteArray> = load { pcKeysCsv(id) }
+
+    suspend fun gpos(): Result<GpoOverview> = load { gpos() }
+    suspend fun gpoOus(): Result<List<GpoOu>> = load { gpoOus() }
+    suspend fun gpo(id: String): Result<GpoDetail> = load { gpo(id) }
+    suspend fun gpoComputers(id: String): Result<GpoScope> = load { gpoComputers(id) }
+    suspend fun gpoApplied(host: String): Result<GpoAppliedOnPc> = load { gpoApplied(host) }
+    suspend fun gpoChange(method: String, path: String, change: GpoChange, authMethod: AuthMethod): Result<GpoDetail> =
+        load { gpoChange(method, path, change, authMethod) }
+    suspend fun gpoDelete(id: String, authMethod: AuthMethod): Result<Unit> = load { gpoDelete(id, authMethod) }
+    suspend fun gpoApply(id: String, computers: List<String>?, authMethod: AuthMethod): Result<GpoApplyJob> =
+        load { gpoApply(id, computers, authMethod) }
+    suspend fun gpoApplyJob(id: String): Result<GpoApplyJob> = load { gpoApplyJob(id) }
 
     suspend fun serverConfig(): Result<ServerConfig> = load { serverConfig() }
     suspend fun saveServerConfig(values: Map<String, JsonElement>, reset: List<String>): Result<ServerConfig> =

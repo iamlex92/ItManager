@@ -43,8 +43,24 @@ PC_ACTIONS = {
 }
 
 
+GPO_PREFIX = "gpo:"
+GPO_ACTIONS = {
+    "status": "GPO: состояние",
+    "link_add": "GPO: связь с подразделением",
+    "link_set": "GPO: изменение связи",
+    "link_remove": "GPO: удаление связи",
+    "registry_set": "GPO: параметр реестра",
+    "registry_remove": "GPO: удаление параметра",
+    "create": "GPO: создание политики",
+    "delete": "GPO: удаление политики",
+    "apply": "GPO: применение на компьютерах",
+}
+
+
 def audit_out(row: ScriptAuditLog) -> AuditOut:
-    if row.script_name.startswith(PC_PREFIX):
+    if row.script_name.startswith(GPO_PREFIX):
+        kind, title = "runbook", GPO_ACTIONS.get(row.script_name.removeprefix(GPO_PREFIX), row.script_name)
+    elif row.script_name.startswith(PC_PREFIX):
         action = row.script_name.removeprefix(PC_PREFIX)
         kind, title = "runbook", PC_ACTIONS.get(action, row.script_name)
     elif row.script_name.startswith(AUDIT_PREFIX):
@@ -82,7 +98,9 @@ async def list_audit(
     stmt = select(ScriptAuditLog).order_by(ScriptAuditLog.executed_at.desc(), ScriptAuditLog.id)
     if kind == "runbook":
         stmt = stmt.where(
-            ScriptAuditLog.script_name.startswith(AUDIT_PREFIX) | ScriptAuditLog.script_name.startswith(PC_PREFIX)
+            ScriptAuditLog.script_name.startswith(AUDIT_PREFIX)
+            | ScriptAuditLog.script_name.startswith(PC_PREFIX)
+            | ScriptAuditLog.script_name.startswith(GPO_PREFIX)
         )
     elif kind == "network":
         stmt = stmt.where(ScriptAuditLog.script_name.in_(NETWORK_ACTIONS))
@@ -92,6 +110,7 @@ async def list_audit(
         stmt = stmt.where(
             ~ScriptAuditLog.script_name.startswith(AUDIT_PREFIX),
             ~ScriptAuditLog.script_name.startswith(PC_PREFIX),
+            ~ScriptAuditLog.script_name.startswith(GPO_PREFIX),
             ScriptAuditLog.script_name.not_in([*NETWORK_ACTIONS, *SECURITY_ACTIONS]),
         )
     rows = (await session.scalars(stmt.limit(limit).offset(offset))).all()

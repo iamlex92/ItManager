@@ -27,6 +27,7 @@ from .api import (
     discovery,
     faceplates,
     floors,
+    gpo,
     history,
     ipam,
     misc,
@@ -59,6 +60,7 @@ from .config import (
 )
 from .db import make_engine, make_sessionmaker
 from .discovery.manager import ScanManager
+from .gpo.backend import EmulatedGpo, RealGpo
 from .hal.base import DeviceWritesDisabled, SwitchError, UnsupportedVendor
 from .hal.emulator import EmulatorDriver
 from .hal.factory import build_driver, build_printer_driver
@@ -143,6 +145,9 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
         # Domain computers follow the runbooks' switch: real WinRM, or an emulator that says so.
         app.state.pcs = RealPcs(settings) if settings.pcs_real else EmulatedPcs()
         app.state.pc_keys = KeyInventory()
+        # Group Policy follows the domain computers: the same WinRM login, the same switch.
+        app.state.gpo = RealGpo(settings) if settings.pcs_real else EmulatedGpo()
+        app.state.gpo_jobs = KeyInventory()
         log.warning(
             "HAL mode: %s, device writes %s",
             settings.hal_mode.value,
@@ -291,6 +296,7 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
         printers,
         nfc,
         pcs,
+        gpo,
         runbooks,
         scripts,
         audit,

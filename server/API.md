@@ -396,3 +396,21 @@ Settings saved here override `netadmin.env` from the next start of the service.
   `database_url`, ...) and values that do not fit → 422 `bad_setting` with `key`. Audited as `server_settings`.
 - `POST /api/v1/server-settings/restart` → 202; the service stops cleanly and its manager starts it again
   (the agent exits with code 3; in Docker the container restarts). Not run as a service → 409 `cannot_restart`.
+
+## Group Policy
+
+Real mode runs the GroupPolicy cmdlets over WinRM on `GPO_HOST` (default: the host of `AD_LDAP_URL`) with the
+`RUNBOOK_CREDENTIAL` login; it follows `PC_MODE` (or `RUNBOOK_MODE`). The emulator keeps sample GPOs in memory.
+
+- `GET /api/v1/gpo` → `{mode, host, writes_enabled, login_configured, gpos: [{id, name, status, description, modified,
+  wmi_filter, links: [{target, target_name, enabled, enforced, order}]}]}`; `GET /api/v1/gpo/ous`.
+- `GET /api/v1/gpo/{id}` → `{gpo, registry: [{key, name, type, value, state}], security_filter, simulated}`;
+  `GET /api/v1/gpo/{id}/report` (GPMC HTML, scripts blocked); `GET /api/v1/gpo/{id}/computers` → `{computers, filtered}`.
+- `GET /api/v1/gpo/computer/{host}` → what the computer applied (gpresult).
+- Changes, each with `"confirm": true` (403 `writes_disabled` without `ALLOW_RUNBOOK_WRITES`, audited `gpo:<action>`):
+  `POST /gpo {name, comment}`, `PUT /gpo/{id}/status {status}`, `POST /gpo/{id}/links {target, enforced}`,
+  `PATCH /gpo/{id}/links {target, enabled?, enforced?}`, `POST /gpo/{id}/links/remove {target}`,
+  `PUT /gpo/{id}/registry {key, name, type, value}`, `POST /gpo/{id}/registry/remove {key, name}`,
+  `POST /gpo/{id}/delete`, `POST /gpo/{id}/apply {computers?}` → 202 job, `GET /gpo/apply/{job}`.
+  `key`: `HKLM\...` or `HKCU\...`; `type`: String, ExpandString, DWord, QWord, MultiString; `target`: an OU or domain DN.
+  Arguments reach PowerShell only as base64 JSON. With `GPO_BACKUP_PATH` set, `Backup-GPO` runs before each change.

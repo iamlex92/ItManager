@@ -464,7 +464,7 @@ class NetAdminApi @Inject constructor(
             "wrong_port", "port_busy", "invalid_request", "invalid_subnet", "unknown_host", "no_login", "no_ad",
             "ad_failed", "pc_failed", "writes_disabled",
             "no_switch_login", "switch_unreachable", "switch_login_failed", "switch_timeout", "switch_closed",
-            "switch_rejected", "snmp_failed", "bad_setting", "cannot_restart",
+            "switch_rejected", "snmp_failed", "bad_setting", "cannot_restart", "gpo_failed", "not_found",
         )
     }
 
@@ -514,6 +514,45 @@ class NetAdminApi @Inject constructor(
     suspend fun pcKeysStart(s: ServerSettings, body: PcKeysBody): PcKeyJobDto = post(s, "pcs/keys", body)
 
     suspend fun pcKeys(s: ServerSettings, id: String): PcKeyJobDto = guarded { fetch(s, "pcs/keys/$id") }
+
+    // --- Group Policy (server/API.md «Group Policy») ---
+
+    suspend fun gpos(s: ServerSettings): GpoListDto = newerFeature("управлять групповыми политиками") { guarded { fetch(s, "gpo") } }
+
+    suspend fun gpoOus(s: ServerSettings): List<GpoOuDto> = guarded { fetch(s, "gpo/ous") }
+
+    suspend fun gpo(s: ServerSettings, id: String): GpoDetailDto = guarded { fetch(s, "gpo/${id.encodeURLPathPart()}") }
+
+    suspend fun gpoComputers(s: ServerSettings, id: String): GpoScopeDto = guarded { fetch(s, "gpo/${id.encodeURLPathPart()}/computers") }
+
+    suspend fun gpoApplied(s: ServerSettings, host: String): GpoAppliedDto =
+        newerFeature("показывать групповые политики") { guarded { fetch(s, "gpo/computer/${host.encodeURLPathPart()}") } }
+
+    suspend fun gpoApplyJob(s: ServerSettings, id: String): GpoApplyJobDto = guarded { fetch(s, "gpo/apply/${id.encodeURLPathPart()}") }
+
+    /** A change to a GPO: [path] under gpo/, [method] PUT, PATCH or POST. Answers with the GPO as it is now. */
+    suspend fun gpoChange(s: ServerSettings, method: String, path: String, body: GpoChangeBody): GpoDetailDto {
+        // An empty path creates a GPO (POST /gpo).
+        val full = if (path.isEmpty()) "gpo" else "gpo/$path"
+        return when (method) {
+            "PUT" -> put(s, full, body)
+            "PATCH" -> patch(s, full, body)
+            else -> post(s, full, body)
+        }
+    }
+
+    suspend fun gpoDelete(s: ServerSettings, id: String, body: GpoChangeBody) {
+        guarded {
+            client.post("${requireBase(s)}/api/v1/gpo/${id.encodeURLPathPart()}/delete") {
+                auth(s)
+                contentType(ContentType.Application.Json)
+                setBody(body)
+            }
+        }
+    }
+
+    suspend fun gpoApply(s: ServerSettings, id: String, body: GpoChangeBody): GpoApplyJobDto =
+        post(s, "gpo/${id.encodeURLPathPart()}/apply", body)
 
     // --- server settings («Настройки сервера», server/API.md) ---
 

@@ -40,6 +40,14 @@ import com.itmanager.app.data.model.PcResult
 import com.itmanager.app.data.model.PcKeyJob
 import com.itmanager.app.data.model.PcAction
 import com.itmanager.app.data.model.ServerConfig
+import com.itmanager.app.data.model.GpoOverview
+import com.itmanager.app.data.model.GpoOu
+import com.itmanager.app.data.model.GpoDetail
+import com.itmanager.app.data.model.GpoScope
+import com.itmanager.app.data.model.GpoAppliedOnPc
+import com.itmanager.app.data.model.GpoChange
+import com.itmanager.app.data.model.GpoApplyJob
+import com.itmanager.app.core.network.GpoChangeBody
 import kotlinx.serialization.json.JsonElement
 import com.itmanager.app.core.network.ServerConfigBody
 import com.itmanager.app.data.model.MapPoint
@@ -458,6 +466,31 @@ class RemoteDataSource(
     override suspend fun pcKeys(id: String): PcKeyJob = api.pcKeys(settings, id).toDomain()
 
     override suspend fun pcKeysCsv(id: String): ByteArray = api.download(settings, "pcs/keys/$id/csv")
+
+    override suspend fun gpos(): GpoOverview = api.gpos(settings).toDomain()
+
+    override suspend fun gpoOus(): List<GpoOu> = api.gpoOus(settings).map { it.toDomain() }
+
+    override suspend fun gpo(id: String): GpoDetail = api.gpo(settings, id).toDomain()
+
+    override suspend fun gpoComputers(id: String): GpoScope = api.gpoComputers(settings, id).toDomain()
+
+    override suspend fun gpoApplied(host: String): GpoAppliedOnPc = api.gpoApplied(settings, host).toDomain()
+
+    private fun gpoBody(c: GpoChange, authMethod: AuthMethod, computers: List<String>? = null) = GpoChangeBody(
+        authMethod = authMethod.wire, operator = Build.MODEL, status = c.status, target = c.target, enabled = c.enabled,
+        enforced = c.enforced, key = c.key, name = c.name, type = c.type, value = c.value, comment = c.comment, computers = computers,
+    )
+
+    override suspend fun gpoChange(method: String, path: String, change: GpoChange, authMethod: AuthMethod): GpoDetail =
+        api.gpoChange(settings, method, path, gpoBody(change, authMethod)).toDomain()
+
+    override suspend fun gpoDelete(id: String, authMethod: AuthMethod) = api.gpoDelete(settings, id, gpoBody(GpoChange(), authMethod))
+
+    override suspend fun gpoApply(id: String, computers: List<String>?, authMethod: AuthMethod): GpoApplyJob =
+        api.gpoApply(settings, id, gpoBody(GpoChange(), authMethod, computers)).toDomain()
+
+    override suspend fun gpoApplyJob(id: String): GpoApplyJob = api.gpoApplyJob(settings, id).toDomain()
 
     override suspend fun serverConfig(): ServerConfig = api.serverConfig(settings).toDomain()
 

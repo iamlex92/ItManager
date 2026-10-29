@@ -1275,3 +1275,143 @@ class ServerSettingsIn(BaseModel):
     # Back to netadmin.env (or the built-in default).
     reset: list[str] = Field(default_factory=list)
     operator: str | None = Field(default=None, max_length=100)
+
+
+# --- Group Policy ---
+
+
+class GpoLinkOut(BaseModel):
+    target: str
+    target_name: str
+    enabled: bool
+    enforced: bool
+    order: int = 1
+
+
+class GpoOut(BaseModel):
+    id: str
+    name: str
+    # AllSettingsEnabled, UserSettingsDisabled, ComputerSettingsDisabled, AllSettingsDisabled
+    status: str
+    description: str | None = None
+    owner: str | None = None
+    created: str | None = None
+    modified: str | None = None
+    wmi_filter: str | None = None
+    links: list[GpoLinkOut] = Field(default_factory=list)
+
+
+class GpoListOut(BaseModel):
+    mode: str
+    host: str
+    writes_enabled: bool
+    login_configured: bool
+    gpos: list[GpoOut]
+
+
+class GpoRegistryOut(BaseModel):
+    key: str
+    name: str
+    type: str
+    value: str | None = None
+    state: str | None = None
+
+
+class GpoTrusteeOut(BaseModel):
+    name: str | None = None
+    type: str | None = None
+
+
+class GpoDetailOut(BaseModel):
+    gpo: GpoOut
+    registry: list[GpoRegistryOut]
+    security_filter: list[GpoTrusteeOut]
+    simulated: bool = False
+
+
+class GpoOuOut(BaseModel):
+    dn: str
+    name: str
+
+
+class GpoComputerOut(BaseModel):
+    name: str
+    dns: str | None = None
+    ou: str | None = None
+    enabled: bool | None = None
+
+
+class GpoScopeOut(BaseModel):
+    computers: list[GpoComputerOut]
+    # Security filtering narrows the GPO to some groups or computers.
+    filtered: bool = False
+    simulated: bool = False
+
+
+class GpoAppliedOut(BaseModel):
+    host: str
+    read_at: str | None = None
+    site: str | None = None
+    gpos: list[dict[str, Any]]
+    simulated: bool = False
+
+
+class GpoWriteIn(BaseModel):
+    confirm: bool = False
+    auth_method: str | None = Field(default=None, max_length=40)
+    operator: str | None = Field(default=None, max_length=100)
+
+
+class GpoStatusIn(GpoWriteIn):
+    status: str
+
+
+class GpoLinkIn(GpoWriteIn):
+    target: str = Field(max_length=500)
+    enforced: bool = False
+
+
+class GpoLinkPatchIn(GpoWriteIn):
+    target: str = Field(max_length=500)
+    enabled: bool | None = None
+    enforced: bool | None = None
+
+
+class GpoRegistryIn(GpoWriteIn):
+    key: str = Field(max_length=2000)
+    name: str = Field(max_length=255)
+    type: str = "String"
+    value: str | None = None
+
+
+class GpoRegistryRemoveIn(GpoWriteIn):
+    key: str = Field(max_length=2000)
+    name: str = Field(max_length=255)
+
+
+class GpoCreateIn(GpoWriteIn):
+    name: str = Field(max_length=200)
+    comment: str = Field(default="", max_length=1000)
+
+
+class GpoApplyIn(GpoWriteIn):
+    # Empty: every computer the GPO reaches.
+    computers: list[str] | None = None
+
+
+class GpoApplyRowOut(BaseModel):
+    host: str
+    ok: bool
+    error: str = ""
+
+
+class GpoApplyJobOut(BaseModel):
+    id: uuid.UUID
+    gpo_id: str
+    gpo_name: str
+    status: str
+    total: int
+    done: int
+    simulated: bool
+    started_at: datetime
+    rows: list[GpoApplyRowOut]

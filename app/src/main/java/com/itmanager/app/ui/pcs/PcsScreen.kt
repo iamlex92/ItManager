@@ -163,7 +163,7 @@ fun PcsScreen(
                 subtitle = s.info?.let { it.user ?: "Нет активного сеанса" } ?: "Подключение…",
                 onBack = if (initialHost.isBlank()) viewModel::close else onBack,
             )
-            PcPage(s, status, onRun = ::ask, onClearConsole = viewModel::clearConsole)
+            PcPage(s, status, onRun = ::ask, onClearConsole = viewModel::clearConsole, onApplied = viewModel::loadApplied)
         }
     }
 
@@ -393,6 +393,7 @@ private fun PcPage(
     status: PcStatus?,
     onRun: (PcAction, String?) -> Unit,
     onClearConsole: () -> Unit,
+    onApplied: () -> Unit,
 ) {
     var command by rememberSaveable(session.host) { mutableStateOf("") }
     val readOnly = status?.writesEnabled == false
@@ -406,6 +407,7 @@ private fun PcPage(
                 ACTION_ICONS.forEach { (action, icon) ->
                     ActionChip(icon, action.title, enabled = session.running == null && !(action.changes && readOnly)) { onRun(action, null) }
                 }
+                ActionChip(Icons.Outlined.Policy, "Политики на ПК", enabled = !session.appliedLoading) { onApplied() }
             }
             if (session.running != null) {
                 Text("${session.running.title}: выполняется на ${session.host}…", style = MaterialTheme.typography.bodySmall)
@@ -423,6 +425,29 @@ private fun PcPage(
                 )
             }
         } }
+        if (session.appliedLoading || session.applied != null) {
+            item(key = "applied") {
+                Card("Групповые политики на ПК") {
+                    val a = session.applied
+                    if (session.appliedLoading || a == null) {
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                    } else {
+                        Text(
+                            "По gpresult${a.readAt?.let { ", обновлено $it" } ?: ""}${if (a.simulated) " · эмуляция" else ""}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        if (a.gpos.isEmpty()) Text("Политики не применены")
+                        a.gpos.forEach { g ->
+                            Column(Modifier.padding(vertical = 3.dp)) {
+                                Text(g.name + if (g.applied) "" else " — ${g.reason}", style = MaterialTheme.typography.bodyMedium)
+                                g.link?.let { Text(it, style = MonoStyle, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         val r = session.result
         if (r != null) {
             if (r.simulated) {

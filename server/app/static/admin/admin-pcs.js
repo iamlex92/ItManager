@@ -120,6 +120,8 @@
     if (action in ASK && ASK[action] && !confirm(`${ASK[action]} на ${host}?`)) return;
     run(action, null, action === "cleanup" || action === "reboot");
   });
+  // What the computer really applied (gpresult), drawn by admin-gpo.js.
+  $("pc-gpresult").addEventListener("click", () => { if (host) window.NetAdmin.showAppliedGpo(host, $("pc-result")); });
   $("pc-open-form").addEventListener("submit", (ev) => { ev.preventDefault(); openPc($("pc-host").value).catch(fail); });
   $("pc-console").addEventListener("submit", (ev) => {
     ev.preventDefault();
