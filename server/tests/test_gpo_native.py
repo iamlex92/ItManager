@@ -239,3 +239,27 @@ async def test_scope_follows_links_and_the_security_filter():
     assert s["filtered"] is True and [c["name"] for c in s["computers"]] == ["PC-BUH-01"]
     narrowed.members = ""
     assert (await _backend(narrowed, FakeSysvol()).scope(GID, LOGIN, []))["computers"] == []
+
+
+def test_smb_sysvol_reads_a_missing_file_as_empty():
+    """A policy with no user settings has no User\\Registry.pol; smbprotocol reports it as SMBOSError, not
+    FileNotFoundError, and opening the policy must not fail on it."""
+    from smbprotocol.exceptions import SMBOSError
+    from smbprotocol.header import NtStatus
+
+    from app.gpo.native import SmbSysvol
+
+    class Smb:
+        def __init__(self, status):
+            self.status = status
+
+        def open_file(self, path, mode):
+            raise SMBOSError(self.status, path)
+
+    sysvol = SmbSysvol.__new__(SmbSysvol)
+    for status in (NtStatus.STATUS_OBJECT_NAME_NOT_FOUND, NtStatus.STATUS_OBJECT_PATH_NOT_FOUND):
+        sysvol._smb = Smb(status)
+        assert sysvol.read(r"\\dc\SysVol\d\Policies\{X}\User\Registry.pol") is None
+    sysvol._smb = Smb(NtStatus.STATUS_ACCESS_DENIED)
+    with pytest.raises(GpoError):
+        sysvol.read(r"\\dc\SysVol\d\Policies\{X}\User\Registry.pol")

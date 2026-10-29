@@ -15,6 +15,7 @@ left to them.
 """
 
 import asyncio
+import errno
 import html
 import re
 import struct
@@ -341,10 +342,10 @@ class SmbSysvol:
         try:
             with self._smb.open_file(path, mode="rb") as f:
                 return f.read()
-        except FileNotFoundError:
-            return None
         except OSError as e:
-            if "STATUS_OBJECT_NAME_NOT_FOUND" in str(e) or "STATUS_OBJECT_PATH_NOT_FOUND" in str(e):
+            # smbprotocol's SMBOSError is not a FileNotFoundError but carries ENOENT for a missing file or folder:
+            # a policy with no settings of that part simply has no Registry.pol.
+            if e.errno == errno.ENOENT:
                 return None
             raise GpoError(f"Не удалось прочитать {path}: {e}") from e
 
