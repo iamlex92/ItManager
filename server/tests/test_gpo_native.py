@@ -142,6 +142,16 @@ class FakeDomain:
         else:
             a.pop(attr, None)
 
+    def add(self, dn, object_class, attrs):
+        assert dn.lower() not in self.objects
+        cn = dn.split(",", 1)[0].split("=", 1)[1]
+        a = {"objectClass": [object_class], "cn": [cn], **{k: [str(v)] for k, v in attrs.items()}}
+        self.objects[dn.lower()] = {"dn": dn, "attrs": a, "raw": {}}
+
+    def delete(self, dn):
+        assert not [k for k in self.objects if k.endswith("," + dn.lower())], "children first"
+        del self.objects[dn.lower()]
+
 
 class FakeSysvol:
     def __init__(self) -> None:
@@ -152,6 +162,13 @@ class FakeSysvol:
 
     def write(self, path, data):
         self.files[path.lower()] = data
+
+    def mkdir(self, path):
+        self.files[path.lower() + "\\"] = b""
+
+    def remove_tree(self, path):
+        for k in [k for k in self.files if k.startswith(path.lower() + "\\")]:
+            del self.files[k]
 
 
 def _backend(domain: FakeDomain, sysvol: FakeSysvol, writes: bool = True) -> NativeGpo:
@@ -225,8 +242,33 @@ async def test_reads_and_edits_like_gpmc():
     assert "gPLink" not in domain.objects[OU.lower()]["attrs"]
     await gpo.link_add(GID, BASE, False, LOGIN)
     assert domain.objects[BASE.lower()]["attrs"]["gPLink"] == [f"[LDAP://{GPO_DN};0]"]
-    with pytest.raises(GpoError, match="samba-tool gpo create"):
-        await gpo.create("Новая", "", LOGIN)
+
+
+async def test_creates_and_deletes_like_samba_tool():
+    domain, sysvol = FakeDomain(), FakeSysvol()
+    gpo = _backend(domain, sysvol)
+    with pytest.raises(GpoError, match="уже есть"):
+        await gpo.create("бухгалтерия", "", LOGIN)
+
+    gid = await gpo.create("Цех: экран блокировки", "", LOGIN)
+    cn = f"{{{gid.upper()}}}"
+    dn = f"CN={cn},CN=Policies,CN=System,{BASE}"
+    a = domain.objects[dn.lower()]["attrs"]
+    assert a["objectClass"] == ["groupPolicyContainer"] and a["displayName"] == ["Цех: экран блокировки"]
+    assert a["gPCFileSysPath"] == [f"\\\\ecotehs.local\\SysVol\\ecotehs.local\\Policies\\{cn}"]
+    assert {f"cn=user,{dn}".lower(), f"cn=machine,{dn}".lower()} <= domain.objects.keys()
+    folder = f"\\\\rukrsrvdc01.ecotehs.local\\SysVol\\ecotehs.local\\Policies\\{cn}".lower()
+    assert sysvol.files[f"{folder}\\gpt.ini"] == b"[General]\r\nVersion=0\r\n"
+
+    # It works at once: settings, a link, then gone with its link and folder.
+    await gpo.registry_set(gid, "HKCU\\Software\\Policies\\X", "A", "DWord", 1, LOGIN)
+    assert (await gpo.detail(gid, LOGIN))["registry"][0]["name"] == "A"
+    await gpo.link_add(gid, OU, False, LOGIN)
+    await gpo.delete(gid, LOGIN)
+    assert not [k for k in domain.objects if cn.lower() in k]
+    assert not [k for k in sysvol.files if k.startswith(folder)]
+    assert domain.objects[OU.lower()]["attrs"]["gPLink"] == [f"[LDAP://{GPO_DN};0]"]
+    assert [g["id"] for g in await gpo.gpos(LOGIN)] == [GID]
 
 
 async def test_scope_follows_links_and_the_security_filter():
@@ -239,3 +281,27 @@ async def test_scope_follows_links_and_the_security_filter():
     assert s["filtered"] is True and [c["name"] for c in s["computers"]] == ["PC-BUH-01"]
     narrowed.members = ""
     assert (await _backend(narrowed, FakeSysvol()).scope(GID, LOGIN, []))["computers"] == []
+
+
+def test_smb_sysvol_reads_a_missing_file_as_empty():
+    """A policy with no user settings has no User\\Registry.pol; smbprotocol reports it as SMBOSError, not
+    FileNotFoundError, and opening the policy must not fail on it."""
+    from smbprotocol.exceptions import SMBOSError
+    from smbprotocol.header import NtStatus
+
+    from app.gpo.native import SmbSysvol
+
+    class Smb:
+        def __init__(self, status):
+            self.status = status
+
+        def open_file(self, path, mode):
+            raise SMBOSError(self.status, path)
+
+    sysvol = SmbSysvol.__new__(SmbSysvol)
+    for status in (NtStatus.STATUS_OBJECT_NAME_NOT_FOUND, NtStatus.STATUS_OBJECT_PATH_NOT_FOUND):
+        sysvol._smb = Smb(status)
+        assert sysvol.read(r"\\dc\SysVol\d\Policies\{X}\User\Registry.pol") is None
+    sysvol._smb = Smb(NtStatus.STATUS_ACCESS_DENIED)
+    with pytest.raises(GpoError):
+        sysvol.read(r"\\dc\SysVol\d\Policies\{X}\User\Registry.pol")

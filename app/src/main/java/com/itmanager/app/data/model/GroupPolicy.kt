@@ -27,7 +27,7 @@ data class Gpo(
     val active: Boolean get() = status != GpoStatus.DISABLED && links.any { it.enabled }
 }
 
-/** [canCreate]: false when the server edits the controller straight over LDAP and SYSVOL (samba-tool creates GPOs). */
+/** [canCreate]: false only from older servers that could not create GPOs straight over LDAP and SYSVOL. */
 data class GpoOverview(val real: Boolean, val host: String, val writesEnabled: Boolean, val canCreate: Boolean, val gpos: List<Gpo>)
 
 val GPO_TYPES = listOf("String", "ExpandString", "DWord", "QWord", "MultiString")
