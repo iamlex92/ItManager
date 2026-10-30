@@ -34,6 +34,13 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/json" />
             </intent-filter>
+            <!-- Cisco Secure Client comes back here after connecting the factory VPN (onsuccess / onerror). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="itmanager" android:host="vpn" />
+            </intent-filter>
         </activity>
 
         <!-- Hands exported reports to the share sheet; nothing else is exposed. -->

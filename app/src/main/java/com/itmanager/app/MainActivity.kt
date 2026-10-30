@@ -9,10 +9,18 @@ import android.os.SystemClock
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import android.widget.Toast
 import androidx.core.content.IntentCompat
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.itmanager.app.core.nfc.NfcController
 import com.itmanager.app.core.security.AppLock
+import com.itmanager.app.core.security.LockState
+import com.itmanager.app.core.vpn.FactoryVpn
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import com.itmanager.app.ui.navigation.AppRoot
 import com.itmanager.app.ui.theme.ItManagerTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -23,6 +31,7 @@ import javax.inject.Inject
 class MainActivity : FragmentActivity() {
     @Inject lateinit var nfc: NfcController
     @Inject lateinit var appLock: AppLock
+    @Inject lateinit var vpn: FactoryVpn
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // The app is dark-only, so system bar icons stay light regardless of the system theme.
@@ -37,11 +46,23 @@ class MainActivity : FragmentActivity() {
             }
         }
         // A tag that launched the app; not again after rotation.
-        if (savedInstanceState == null) handleNfcIntent(intent)
+        if (savedInstanceState == null) {
+            handleNfcIntent(intent)
+            vpn.onCallback(intent?.data)
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch { vpn.messages.collect { Toast.makeText(this@MainActivity, it, Toast.LENGTH_LONG).show() } }
+                // Each time the app comes to the front and is unlocked: the factory VPN, if the server does not answer.
+                appLock.state.first { it == LockState.UNLOCKED }
+                vpn.connectIfNeeded(this@MainActivity)
+            }
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (vpn.onCallback(intent.data)) return
         handleNfcIntent(intent)
     }
 
