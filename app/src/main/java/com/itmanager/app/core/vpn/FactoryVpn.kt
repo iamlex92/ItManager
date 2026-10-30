@@ -2,11 +2,13 @@ package com.itmanager.app.core.vpn
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.SystemClock
 import com.itmanager.app.core.settings.SettingsRepository
 import com.itmanager.app.data.source.DcimRepository
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -31,11 +33,15 @@ import javax.inject.Singleton
 class FactoryVpn @Inject constructor(
     private val settings: SettingsRepository,
     private val inventory: DcimRepository,
+    @ApplicationContext private val context: Context,
 ) {
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
     val messages: SharedFlow<String> = _messages.asSharedFlow()
 
     private var lastAttempt = 0L
+
+    /** «Отключать при выходе» as read on the last connect: then a notification can disconnect after Home too. */
+    private var noticeWanted = false
 
     /** The tunnel is up because this app asked for it (AnyConnect said so); a manual one is left alone. */
     private val connectedByApp = MutableStateFlow(false)
@@ -47,6 +53,7 @@ class FactoryVpn @Inject constructor(
     /** Leaving the app: disconnect, and AnyConnect hands back only so the app can go to the background. */
     fun disconnectAndLeave(activity: Activity) {
         connectedByApp.value = false
+        VpnNotice.cancel(context)
         lastAttempt = SystemClock.elapsedRealtime()
         open(activity, AnyConnect.disconnectUri(leaving = true))
     }
@@ -60,6 +67,7 @@ class FactoryVpn @Inject constructor(
         val server = serverEndpoint(settings.current().baseUrl) ?: return
         if (reachable(server)) return
         lastAttempt = now
+        noticeWanted = vpn.disconnectOnExit
         _messages.tryEmit("Сервер не отвечает — подключаю VPN завода")
         connect(activity, vpn)
     }
@@ -71,6 +79,7 @@ class FactoryVpn @Inject constructor(
             return
         }
         lastAttempt = SystemClock.elapsedRealtime()
+        noticeWanted = vpn.disconnectOnExit
         connect(activity, vpn)
     }
 
@@ -78,6 +87,7 @@ class FactoryVpn @Inject constructor(
         // Not again on the next return to the app: the person switched it off on purpose.
         lastAttempt = SystemClock.elapsedRealtime() + DISCONNECT_PAUSE_MS
         connectedByApp.value = false
+        VpnNotice.cancel(context)
         open(activity, AnyConnect.disconnectUri())
     }
 
@@ -87,14 +97,19 @@ class FactoryVpn @Inject constructor(
         when (result) {
             VpnResult.CONNECTED -> {
                 connectedByApp.value = true
+                if (noticeWanted) VpnNotice.show(context)
                 _messages.tryEmit("VPN завода подключён")
                 inventory.inventoryChanged() // every screen loads again
             }
             VpnResult.FAILED -> _messages.tryEmit(
                 "AnyConnect не подключился. Проверьте вход в Cisco Secure Client; повторить — «Подключить» в настройках.",
             )
-            VpnResult.DISCONNECTED -> _messages.tryEmit("VPN завода отключён — можно включить свой")
-            VpnResult.LEFT -> _messages.tryEmit("VPN завода отключён")
+            VpnResult.DISCONNECTED, VpnResult.LEFT -> {
+                // LEFT also comes from the notification's button, after Home: the app is no longer the one connected.
+                connectedByApp.value = false
+                VpnNotice.cancel(context)
+                _messages.tryEmit(if (result == VpnResult.LEFT) "VPN завода отключён" else "VPN завода отключён — можно включить свой")
+            }
         }
         return result
     }
