@@ -66,8 +66,9 @@ from .hal.base import DeviceWritesDisabled, SwitchError, UnsupportedVendor
 from .hal.emulator import EmulatorDriver
 from .hal.factory import build_driver, build_printer_driver
 from .models import Credential, Device, ServerSetting
+from .pcs.astra import AstraPcs, EmulatedAstra
 from .pcs.backend import EmulatedPcs, RealPcs
-from .pcs.service import KeyInventory
+from .pcs.service import KeyInventory, port_open
 from .runbooks.emulator import RunbookEnvironment
 from .runbooks.real import RealRunbooks
 from .schemas import HealthOut
@@ -145,6 +146,10 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
         app.state.discovery = ScanManager(app.state.sessionmaker, settings)
         # Domain computers follow the runbooks' switch: real WinRM, or an emulator that says so.
         app.state.pcs = RealPcs(settings) if settings.pcs_real else EmulatedPcs()
+        app.state.astra = AstraPcs(settings) if settings.pcs_real else EmulatedAstra()
+        # Which computers answered WinRM and which SSH: host -> (platform, when).
+        app.state.pc_platforms = {}
+        app.state.pc_probe = port_open
         app.state.pc_keys = KeyInventory()
         # Group Policy follows the domain computers: the same WinRM login, the same switch.
         # Real: straight over LDAP and SYSVOL (Samba or Windows controllers); GPO_HOST set: PowerShell GPMC there.

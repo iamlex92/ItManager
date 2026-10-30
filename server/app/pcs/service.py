@@ -60,6 +60,51 @@ def matches(device: Device, host: str) -> bool:
     return name == h or name == h.split(".")[0] or (device.ip_address is not None and str(device.ip_address) == h)
 
 
+PLATFORM_TTL = 600.0
+
+
+async def port_open(host: str, port: int, timeout: float = 2.5) -> bool:
+    try:
+        _, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout)
+    except (OSError, TimeoutError):
+        return False
+    writer.close()
+    return True
+
+
+async def detect_platform(
+    host: str,
+    settings: Settings,
+    emulated: bool,
+    cache: dict[str, tuple[str, float]],
+    probe: Callable[[str, int], Awaitable[bool]] = port_open,
+) -> str:
+    """«windows» when WinRM answers, «astra» when only SSH does; remembered for ten minutes."""
+    import re
+    import time
+
+    key = host.lower()
+    hit = cache.get(key)
+    if hit and time.monotonic() - hit[1] < PLATFORM_TTL:
+        return hit[0]
+    if emulated:
+        platform = "astra" if re.search(r"astra|lnx|linux", host, re.IGNORECASE) else "windows"
+    else:
+        winrm_port = settings.winrm_port or (5986 if settings.winrm_https else 5985)
+        winrm, ssh = await asyncio.gather(probe(host, winrm_port), probe(host, settings.linux_ssh_port))
+        if winrm:
+            platform = "windows"
+        elif ssh:
+            platform = "astra"
+        else:
+            raise PcError(
+                f"{host} не отвечает ни по WinRM (порт {winrm_port}), ни по SSH (порт {settings.linux_ssh_port}): "
+                "выключен, не в сети или порты закрыты брандмауэром"
+            )
+    cache[key] = (platform, time.monotonic())
+    return platform
+
+
 async def allowed_host(session: AsyncSession, settings: Settings, login: Login | None, host: str) -> bool:
     """The domain login goes only to a computer the plant knows: one in the inventory, or one in AD."""
     if any(matches(d, host) for d in await inventory_pcs(session)):
@@ -80,9 +125,7 @@ class SweepHit:
     device_name: str | None = None
 
 
-async def sweep(
-    session: AsyncSession, prefix: str, pinger: Pinger | None, emulated: bool
-) -> list[SweepHit]:
+async def sweep(session: AsyncSession, prefix: str, pinger: Pinger | None, emulated: bool) -> list[SweepHit]:
     """Ping every address of the subnet, then ask DNS for the names of those that answered. Read-only."""
     net = subnet_of(prefix)
     pcs = await inventory_pcs(session)

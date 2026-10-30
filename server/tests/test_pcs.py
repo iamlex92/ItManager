@@ -75,9 +75,14 @@ def test_sweep_and_key_inventory(client):
     assert ad["source"] == "ad"
 
 
+async def winrm_only(host, port):
+    return port == 5985
+
+
 def test_real_mode_sends_the_login_only_to_known_computers(seeded):
     settings = make_settings(runbook_mode=RunbookMode.REAL, runbook_credential="domain-admin")
     with TestClient(create_app(settings), headers=AUTH) as c:
+        c.app.state.pc_probe = winrm_only
         no_login = c.post("/api/v1/pcs/PC-BUH-01/info", json={})
         assert no_login.status_code == 409 and "RUNBOOK_CREDENTIAL" in no_login.json()["detail"]["message"]
         c.post("/api/v1/credentials", json={"name": "domain-admin", "kind": "winrm", "username": "FACTORY\\adm",
