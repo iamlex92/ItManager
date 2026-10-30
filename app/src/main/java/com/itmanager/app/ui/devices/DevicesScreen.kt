@@ -51,7 +51,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -88,6 +87,7 @@ import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.ui.components.EmptyView
 import com.itmanager.app.ui.components.ErrorView
 import com.itmanager.app.ui.components.LoadingView
+import com.itmanager.app.ui.components.StatusBadge
 import com.itmanager.app.ui.components.StatusDot
 import com.itmanager.app.ui.components.TabTopBar
 import com.itmanager.app.ui.components.UiState
@@ -406,7 +406,7 @@ private fun DeviceRow(
                 .size(40.dp)
                 .background(
                     if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
-                    CircleShape,
+                    RoundedCornerShape(10.dp),
                 ),
         ) {
             if (checked) {
@@ -431,7 +431,7 @@ private fun DeviceRow(
                 )
                 if (device.isDown) {
                     Spacer(Modifier.width(8.dp))
-                    Text("не в сети", style = MaterialTheme.typography.labelSmall, color = StatusColors.Offline, maxLines = 1)
+                    StatusBadge("не в сети", StatusColors.Offline, StatusColors.DangerContainer)
                 }
             }
             Text(

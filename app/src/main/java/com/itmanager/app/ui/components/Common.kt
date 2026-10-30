@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.Settings
@@ -114,4 +115,17 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = modifier.padding(bottom = 8.dp),
     )
+}
+
+/** A state as dot and word on a tinted fill, so it never rests on color alone. */
+@Composable
+fun StatusBadge(text: String, color: Color, container: Color, modifier: Modifier = Modifier) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier.background(container, RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 3.dp),
+    ) {
+        StatusDot(color, size = 6.dp)
+        Spacer(Modifier.size(6.dp))
+        Text(text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+    }
 }

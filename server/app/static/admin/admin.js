@@ -124,6 +124,17 @@
     if (b) { closeMenus(); openTab(b.dataset.tab); }
   });
 
+  // Theme: follows the system until the toggle is used; the choice is kept in this browser.
+  {
+    const root = document.documentElement;
+    try { const saved = localStorage.getItem("netadmin-theme"); if (saved) root.dataset.theme = saved; } catch { /* private mode */ }
+    $("theme-toggle").addEventListener("click", () => {
+      const light = root.dataset.theme ? root.dataset.theme === "light" : matchMedia("(prefers-color-scheme: light)").matches;
+      root.dataset.theme = light ? "dark" : "light";
+      try { localStorage.setItem("netadmin-theme", root.dataset.theme); } catch { /* private mode */ }
+    });
+  }
+
   // «Сервер и доступ» is one section with two views; sections with no menu entry light the one they belong to.
   const TAB_HOME = { creds: "settings", printers: "devices" };
   document.addEventListener("click", (ev) => {
