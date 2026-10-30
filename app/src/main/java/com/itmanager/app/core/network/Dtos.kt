@@ -39,13 +39,12 @@ data class HealthDto(
     @SerialName("hal_mode") val halMode: String? = null,
     @SerialName("device_writes_enabled") val deviceWritesEnabled: Boolean? = null,
     @SerialName("secrets_encrypted") val secretsEncrypted: Boolean? = null,
-    @SerialName("telegram_alerts") val telegramAlerts: Boolean? = null,
     @SerialName("runbook_mode") val runbookMode: String? = null,
     @SerialName("runbook_writes_enabled") val runbookWritesEnabled: Boolean? = null,
     @SerialName("monitor_mode") val monitorMode: String? = null,
 ) {
     fun toDomain() = ServerHealth(
-        status, version, halMode, deviceWritesEnabled, secretsEncrypted, telegramAlerts, runbookMode, runbookWritesEnabled,
+        status, version, halMode, deviceWritesEnabled, secretsEncrypted, runbookMode, runbookWritesEnabled,
         monitorMode,
     )
 }

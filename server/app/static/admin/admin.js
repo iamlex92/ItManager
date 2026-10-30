@@ -3046,8 +3046,8 @@
   const WHERE = {
     emulator: () => "Только показ: при запуске виден текст с подставленными параметрами, ничего не выполняется.",
     pc: (sh) => ({
-      powershell: "PowerShell — на Windows по WinRM от учётной записи домена (до 8000 символов, до 30 с).",
-      cmd: "cmd — на Windows по WinRM (до 4000 символов, до 30 с). Значения параметров — без & | < > ^ % и кавычек.",
+      powershell: "PowerShell — на Windows по WinRM от учётной записи домена (до 8000 символов; время — «Тайм-аут команды WinRM» в настройках сервера).",
+      cmd: "cmd — на Windows по WinRM (до 4000 символов). Значения параметров — без & | < > ^ % и кавычек.",
       python: "Python — на Windows (нужен py или python в PATH) или на Astra Linux (python3 от root).",
       bash: "bash — на Astra Linux по SSH от root (sudo).",
     })[sh],

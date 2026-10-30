@@ -40,6 +40,7 @@
             <div class="pop-group">Учёт</div>
             <button data-tab="topology">Схема сети</button>
             <button data-tab="vlans">VLAN и подсети</button>
+            <button data-tab="ipam">IP-адреса</button>
             <button data-tab="templates">Шаблоны устройств</button>
             <button data-tab="peripherals">Периферия и склад</button>
           </div>
@@ -225,6 +226,18 @@
         <thead><tr><th>Время</th><th>Важность</th><th>Устройство</th><th>Что случилось</th><th></th></tr></thead>
         <tbody id="alert-rows"></tbody>
       </table></div>
+    </section>
+
+    <section id="tab-ipam" class="tab" hidden>
+      <div class="card">
+        <div class="row wrap"><h2 class="grow">IP-адреса</h2>
+          <form id="ipam-check-form" class="row"><input id="ipam-check-ip" placeholder="Проверить адрес, например 10.10.20.15" autocomplete="off"><button type="submit">Проверить</button></form>
+        </div>
+        <p class="muted small">По подсетям из «VLAN и подсети» и адресам устройств в учёте: сколько занято, ближайшие свободные и конфликты. Только просмотр: адреса здесь не назначаются.</p>
+        <div id="ipam-check-result"></div>
+        <div id="ipam-conflicts"></div>
+        <div id="ipam-subnets" class="stack"></div>
+      </div>
     </section>
 
     <section id="tab-audit" class="tab" hidden>

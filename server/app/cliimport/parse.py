@@ -79,7 +79,7 @@ def expand_interface_range(spec: str) -> list[str]:
 
 
 def parse_vlan_ids(text: str, limit: int = 4094) -> list[int]:
-    """"10,20,30-32" -> [10, 20, 30, 31, 32]. Bad pieces are skipped."""
+    """ "10,20,30-32" -> [10, 20, 30, 31, 32]. Bad pieces are skipped."""
     out: list[int] = []
     for piece in re.split(r"[,\s;]+", text.strip()):
         if not piece:

@@ -8,10 +8,7 @@ Nothing here takes text from the phone into the script except through the checke
 
 import base64
 
-_PRELUDE = (
-    "$ErrorActionPreference = 'SilentlyContinue'\n"
-    "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n"
-)
+_PRELUDE = "$ErrorActionPreference = 'SilentlyContinue'\n[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n"
 
 # The licences block: Windows (BIOS, registry), Office (last five characters), 1C (.lic files). Shared by the
 # system information and the key inventory, like in the script.
@@ -53,7 +50,10 @@ _LICENCE_FIELDS = (
     "office_installed = $officeInstalled; office_keys = @($officeKeys); one_c = @($oneC)"
 )
 
-INFO = _PRELUDE + _LICENCES + r"""
+INFO = (
+    _PRELUDE
+    + _LICENCES
+    + r"""
 $os = Get-CimInstance Win32_OperatingSystem
 $cpu = (Get-CimInstance Win32_Processor | Select-Object -First 1).Name
 $uptime = (Get-Date) - $os.LastBootUpTime
@@ -61,20 +61,35 @@ $uptime = (Get-Date) - $os.LastBootUpTime
   computer = $env:COMPUTERNAME; os = $os.Caption; architecture = $os.OSArchitecture; build = $os.Version;
   uptime_minutes = [int]$uptime.TotalMinutes; cpu = $cpu;
   ram_gb = [math]::Round($os.TotalVisibleMemorySize / 1MB, 2);
-""" + "  " + _LICENCE_FIELDS + "\n} | ConvertTo-Json -Compress -Depth 4\n"
+"""
+    + "  "
+    + _LICENCE_FIELDS
+    + "\n} | ConvertTo-Json -Compress -Depth 4\n"
+)
 
-KEYS = _PRELUDE + _LICENCES + r"""
+KEYS = (
+    _PRELUDE
+    + _LICENCES
+    + r"""
 $os = (Get-CimInstance Win32_OperatingSystem).Caption
-@{ computer = $env:COMPUTERNAME; os = $os; """ + _LICENCE_FIELDS + " } | ConvertTo-Json -Compress -Depth 4\n"
+@{ computer = $env:COMPUTERNAME; os = $os; """
+    + _LICENCE_FIELDS
+    + " } | ConvertTo-Json -Compress -Depth 4\n"
+)
 
-DISKS = _PRELUDE + r"""
+DISKS = (
+    _PRELUDE
+    + r"""
 @(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' | ForEach-Object {
   @{ drive = $_.DeviceID; label = $_.VolumeName; free_gb = [math]::Round($_.FreeSpace / 1GB, 2);
      total_gb = [math]::Round($_.Size / 1GB, 2) }
 }) | ConvertTo-Json -Compress -Depth 3
 """
+)
 
-FOLDERS = _PRELUDE + r"""
+FOLDERS = (
+    _PRELUDE
+    + r"""
 $fso = New-Object -ComObject Scripting.FileSystemObject
 $rows = @(Get-ChildItem -Path 'C:\' -Directory -Force | ForEach-Object {
   $size = 0
@@ -83,15 +98,21 @@ $rows = @(Get-ChildItem -Path 'C:\' -Directory -Force | ForEach-Object {
 } | Where-Object { $_.size_gb -gt 0.1 } | Sort-Object { $_.size_gb } -Descending)
 ConvertTo-Json -InputObject $rows -Compress -Depth 3
 """
+)
 
-PROCESSES = _PRELUDE + r"""
+PROCESSES = (
+    _PRELUDE
+    + r"""
 $rows = @(Get-Process | Sort-Object WorkingSet -Descending | Select-Object -First 20 | ForEach-Object {
   @{ id = $_.Id; name = $_.ProcessName; ram_mb = [math]::Round($_.WorkingSet / 1MB, 1) }
 })
 ConvertTo-Json -InputObject $rows -Compress -Depth 3
 """
+)
 
-CLEANUP = _PRELUDE + r"""
+CLEANUP = (
+    _PRELUDE
+    + r"""
 $before = (Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'").FreeSpace
 Remove-Item -Path 'C:\Windows\Temp\*' -Recurse -Force
 Get-ChildItem -Path 'C:\Users\*\AppData\Local\Temp\*' -Recurse -Force | Remove-Item -Recurse -Force
@@ -103,19 +124,26 @@ $after = (Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'").FreeSpace
 @{ freed_mb = [math]::Round(($after - $before) / 1MB, 1); free_gb = [math]::Round($after / 1GB, 2) } |
   ConvertTo-Json -Compress
 """
+)
 
 # gpupdate writes in the OEM code page: read it as CP866, hand it on as UTF-8.
-GPUPDATE = _PRELUDE + r"""
+GPUPDATE = (
+    _PRELUDE
+    + r"""
 [Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding(866)
 $out = (gpupdate /force 2>&1 | Out-String)
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 @{ output = $out.Trim() } | ConvertTo-Json -Compress
 """
+)
 
-REBOOT = _PRELUDE + r"""
+REBOOT = (
+    _PRELUDE
+    + r"""
 Restart-Computer -Force
 @{ output = 'Компьютер отправлен в перезагрузку' } | ConvertTo-Json -Compress
 """
+)
 
 
 def _b64(text: str) -> str:

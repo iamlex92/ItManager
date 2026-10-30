@@ -62,7 +62,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * «Настройки сервера»: switch control, monitoring and SNMP, domain computers, Telegram, backups — everything that
+ * «Настройки сервера»: switch control, monitoring and SNMP, domain computers, backups — everything that
  * used to be edited in netadmin.env. Saving is confirmed with biometrics; values act after the server restarts.
  */
 @Composable

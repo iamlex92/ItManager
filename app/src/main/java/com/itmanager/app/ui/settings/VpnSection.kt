@@ -1,5 +1,10 @@
 package com.itmanager.app.ui.settings
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -22,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -66,6 +72,8 @@ fun VpnSection(viewModel: VpnViewModel = hiltViewModel()) {
     val v = form ?: return
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    // The notification that disconnects after Home needs this permission; asked when the switch is turned on.
+    val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier
@@ -90,14 +98,21 @@ fun VpnSection(viewModel: VpnViewModel = hiltViewModel()) {
             Column(Modifier.weight(1f)) {
                 Text("Отключать при выходе", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Выход кнопкой «Назад» с главного экрана отключает VPN завода, если его подключало приложение, " +
-                        "и телефон возвращается к вашему VPN.",
+                    "Выход кнопкой «Назад» с главного экрана отключает VPN завода, если его подключало приложение. " +
+                        "После «Домой» — кнопка «Отключить» в уведомлении «VPN завода подключён».",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             Spacer(Modifier.width(12.dp))
-            Switch(checked = v.disconnectOnExit, onCheckedChange = { on -> viewModel.edit { it.copy(disconnectOnExit = on) } })
+            Switch(checked = v.disconnectOnExit, onCheckedChange = { on ->
+                viewModel.edit { it.copy(disconnectOnExit = on) }
+                if (on && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    notifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            })
         }
         OutlinedTextField(
             value = v.name,

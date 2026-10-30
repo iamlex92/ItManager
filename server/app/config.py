@@ -122,7 +122,7 @@ class Settings(BaseSettings):
     ad_start_tls: bool = False
     # CA certificate (PEM) of the domain controllers, when the system store does not have it.
     ad_ca_file: str = ""
-    # The same certificate pasted as text (Samba makes its own: /var/lib/samba/private/tls/ca.pem on the DC).
+    # The same certificate pasted as text: what the DC presents on 636 («Получить с контроллера»); Samba self-signs.
     ad_ca_pem: str = ""
     # Empty: read from the domain controller.
     ad_base_dn: str = ""
@@ -136,6 +136,8 @@ class Settings(BaseSettings):
     winrm_https: bool = False
     # 0: 5985 (HTTP, NTLM-encrypted) or 5986 (HTTPS).
     winrm_port: int = 0
+    # The longest a command may run on a computer over WinRM before it is stopped.
+    winrm_timeout_seconds: int = Field(default=300, ge=10, le=3600)
     # Astra Linux computers (SSH, sudo): the stored credential; empty uses RUNBOOK_CREDENTIAL.
     linux_credential: str = ""
     linux_ssh_port: int = Field(default=22, ge=1, le=65535)
@@ -150,21 +152,6 @@ class Settings(BaseSettings):
     snmp_v3_priv_key: str = ""
     snmp_v3_auth_protocol: SnmpAuthProtocol = SnmpAuthProtocol.SHA
     snmp_v3_priv_protocol: SnmpPrivProtocol = SnmpPrivProtocol.AES
-
-    # --- Telegram alerts ---
-    # Both set: alerts go to this chat. Either empty: Telegram is off (the default).
-    telegram_bot_token: str = ""
-    telegram_chat_id: str = ""
-    # Lowest severity sent: INFO, WARNING or CRITICAL.
-    telegram_min_severity: str = Field(default="WARNING", pattern="^(INFO|WARNING|CRITICAL)$")
-    # An alert is sent only if it is still open after this many seconds, so a port that flaps
-    # and comes back at once does not wake anyone. 0 sends at once.
-    telegram_delay_seconds: float = 60.0
-    telegram_notify_resolved: bool = True
-    # Messages per minute; the rest are counted and mentioned in the next message.
-    telegram_max_per_minute: int = 20
-    # Optional HTTP(S) proxy when the server has no direct internet access: http://proxy.local:3128
-    telegram_proxy: str = ""
 
     # --- built-in database backups (the Debian and Windows agents; Docker uses its own backup service) ---
     # Folder for pg_dump files. Empty: no built-in backups.
@@ -190,10 +177,6 @@ class Settings(BaseSettings):
         if v and not valid_key(v):
             raise ValueError("SECRET_KEY must be 32 url-safe base64 bytes: openssl rand -base64 32 | tr '+/' '-_'")
         return v
-
-    @property
-    def telegram_enabled(self) -> bool:
-        return bool(self.telegram_bot_token.strip() and self.telegram_chat_id.strip())
 
     @property
     def runbook_writes_enabled(self) -> bool:

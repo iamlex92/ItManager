@@ -3,7 +3,7 @@
 netadmin.env (or the environment) stays the base; a value saved here overrides it from the next start of the
 service, because drivers, pollers and listeners are built once at start. What cannot be changed here: the database
 address, API_TOKEN, SECRET_KEY and the listening address — without them the server cannot start or be reached, so
-they stay in the file. Secrets (the enable password, SNMPv3 keys, the Telegram token) are stored encrypted and are
+they stay in the file. Secrets (the enable password, SNMPv3 keys) are stored encrypted and are
 never sent back, only whether they are set.
 """
 
@@ -52,45 +52,88 @@ GROUPS: tuple[Group, ...] = (
         "Коммутаторы",
         "Управление Cisco IOS и Eltex MES по SSH. Изменения на коммутаторах отдельно разрешаются ниже.",
         (
-            Spec("hal_mode", "Работа с коммутаторами", "Эмуляция: на коммутаторы ничего не уходит. "
-                 "Настоящие: состояние портов, конфигурация, ping по SSH.", "choice",
-                 (Choice("emulator", "Эмуляция"), Choice("real", "Настоящие (SSH)"))),
-            Spec("allow_device_writes", "Разрешить изменения на коммутаторах",
-                 "VLAN и режим портов, выключение, перезапуск порта, сохранение конфигурации. "
-                 "Каждое изменение всё равно подтверждается.", "bool"),
-            Spec("switch_credential", "Общий логин SSH",
-                 "Для коммутаторов, у которых в карточке логин не выбран.", "credential", credential_kind="ssh"),
+            Spec(
+                "hal_mode",
+                "Работа с коммутаторами",
+                "Эмуляция: на коммутаторы ничего не уходит. Настоящие: состояние портов, конфигурация, ping по SSH.",
+                "choice",
+                (Choice("emulator", "Эмуляция"), Choice("real", "Настоящие (SSH)")),
+            ),
+            Spec(
+                "allow_device_writes",
+                "Разрешить изменения на коммутаторах",
+                "VLAN и режим портов, выключение, перезапуск порта, сохранение конфигурации. "
+                "Каждое изменение всё равно подтверждается.",
+                "bool",
+            ),
+            Spec(
+                "switch_credential",
+                "Общий логин SSH",
+                "Для коммутаторов, у которых в карточке логин не выбран.",
+                "credential",
+                credential_kind="ssh",
+            ),
             Spec("switch_enable_secret", "Пароль enable", "Если отличается от пароля входа.", "secret"),
             Spec("switch_ssh_port", "Порт SSH", kind="int"),
-            Spec("poll_interval_seconds", "Опрос портов, с",
-                 "Настоящие коммутаторы по SSH — не чаще раза в минуту, по SNMP — раза в 15 с. 0 — выключен.",
-                 "float"),
+            Spec(
+                "poll_interval_seconds",
+                "Опрос портов, с",
+                "Настоящие коммутаторы по SSH — не чаще раза в минуту, по SNMP — раза в 15 с. 0 — выключен.",
+                "float",
+            ),
         ),
     ),
     Group(
         "Мониторинг и SNMP",
         "Только чтение: ping, SNMP GET. На устройствах ничего не меняется.",
         (
-            Spec("monitor_mode", "Опрос устройств", "Настоящие: ping, линк портов, тонер и счётчики МФУ, "
-                 "загрузка портов. Эмуляция: цифры придумываются.", "choice", EMU_REAL),
-            Spec("discovery_mode", "Сканер сети", "Настоящие: ping, порты и SNMP к подсетям, только по кнопке.",
-                 "choice", EMU_REAL),
+            Spec(
+                "monitor_mode",
+                "Опрос устройств",
+                "Настоящие: ping, линк портов, тонер и счётчики МФУ, загрузка портов. Эмуляция: цифры придумываются.",
+                "choice",
+                EMU_REAL,
+            ),
+            Spec(
+                "discovery_mode",
+                "Сканер сети",
+                "Настоящие: ping, порты и SNMP к подсетям, только по кнопке.",
+                "choice",
+                EMU_REAL,
+            ),
             Spec("heartbeat_interval_seconds", "Ping устройств, с", "0 — выключен.", "float"),
             Spec("printer_poll_interval_seconds", "Опрос МФУ, с", "0 — выключен.", "float"),
             Spec("traffic_interval_seconds", "Загрузка портов, с", "0 — выключена.", "float"),
             Spec("traffic_keep_days", "Хранить загрузку портов, дней", kind="int"),
-            Spec("snmp_version", "Версия SNMP", "2c: community из карточки устройства. 3: пользователь ниже.",
-                 "choice", (Choice("2c", "v2c"), Choice("3", "v3"))),
+            Spec(
+                "snmp_version",
+                "Версия SNMP",
+                "2c: community из карточки устройства. 3: пользователь ниже.",
+                "choice",
+                (Choice("2c", "v2c"), Choice("3", "v3")),
+            ),
             Spec("snmp_timeout_seconds", "Тайм-аут SNMP, с", kind="float"),
             Spec("snmp_v3_user", "SNMPv3: пользователь"),
-            Spec("snmp_v3_auth_protocol", "SNMPv3: аутентификация", kind="choice",
-                 choices=(Choice("MD5", "MD5"), Choice("SHA", "SHA"), Choice("SHA256", "SHA-256"))),
+            Spec(
+                "snmp_v3_auth_protocol",
+                "SNMPv3: аутентификация",
+                kind="choice",
+                choices=(Choice("MD5", "MD5"), Choice("SHA", "SHA"), Choice("SHA256", "SHA-256")),
+            ),
             Spec("snmp_v3_auth_key", "SNMPv3: ключ аутентификации", kind="secret"),
-            Spec("snmp_v3_priv_protocol", "SNMPv3: шифрование", kind="choice",
-                 choices=(Choice("AES", "AES"), Choice("DES", "DES"))),
+            Spec(
+                "snmp_v3_priv_protocol",
+                "SNMPv3: шифрование",
+                kind="choice",
+                choices=(Choice("AES", "AES"), Choice("DES", "DES")),
+            ),
             Spec("snmp_v3_priv_key", "SNMPv3: ключ шифрования", kind="secret"),
-            Spec("trap_listen_port", "Порт приёма трапов",
-                 "linkDown/linkUp от коммутаторов. 0 — выключен; 162 — стандартный.", "int"),
+            Spec(
+                "trap_listen_port",
+                "Порт приёма трапов",
+                "linkDown/linkUp от коммутаторов. 0 — выключен; 162 — стандартный.",
+                "int",
+            ),
             Spec("trap_community", "Community трапов"),
         ),
     ),
@@ -98,47 +141,73 @@ GROUPS: tuple[Group, ...] = (
         "Компьютеры домена и сценарии",
         "WinRM к компьютерам и AD по LDAPS от учётной записи из «Учётных данных».",
         (
-            Spec("pc_mode", "Компьютеры домена", "Сведения, ключи, обслуживание ПК по WinRM.", "choice",
-                 (Choice("", "Как сценарии"), Choice("emulator", "Эмуляция"), Choice("real", "Настоящие (WinRM)"))),
+            Spec(
+                "pc_mode",
+                "Компьютеры домена",
+                "Сведения, ключи, обслуживание ПК по WinRM.",
+                "choice",
+                (Choice("", "Как сценарии"), Choice("emulator", "Эмуляция"), Choice("real", "Настоящие (WinRM)")),
+            ),
             Spec("runbook_mode", "Сценарии", "Сброс пароля AD, права на папки.", "choice", EMU_REAL),
-            Spec("allow_runbook_writes", "Разрешить изменения",
-                 "Очистка, перезагрузка, процессы и консоль на ПК; сброс паролей и блокировки в AD. "
-                 "Каждое изменение подтверждается.", "bool"),
-            Spec("runbook_credential", "Учётная запись домена", "Администратор ПК и AD (вид WinRM).",
-                 "credential", credential_kind="winrm"),
-            Spec("ad_ldap_url", "Контроллер домена", "ldaps://dc01.ecotehs.local (Samba или Windows): AD, групповые "
-                 "политики, «все ПК из AD», сценарии."),
+            Spec(
+                "allow_runbook_writes",
+                "Разрешить изменения",
+                "Очистка, перезагрузка, процессы и консоль на ПК; сброс паролей и блокировки в AD. "
+                "Каждое изменение подтверждается.",
+                "bool",
+            ),
+            Spec(
+                "runbook_credential",
+                "Учётная запись домена",
+                "Администратор ПК и AD (вид WinRM).",
+                "credential",
+                credential_kind="winrm",
+            ),
+            Spec(
+                "ad_ldap_url",
+                "Контроллер домена",
+                "ldaps://dc01.ecotehs.local (Samba или Windows): AD, групповые политики, «все ПК из AD», сценарии.",
+            ),
             Spec("ad_start_tls", "LDAP со StartTLS", "Для адреса ldap://.", "bool"),
-            Spec("ad_ca_pem", "Сертификат контроллера (ЦС)",
-                 "Если сертификат LDAPS выдан своим ЦС или самоподписан. Samba: содержимое "
-                 "/var/lib/samba/private/tls/ca.pem на контроллере. Windows: сертификат корпоративного ЦС.", "pem"),
+            Spec(
+                "ad_ca_pem",
+                "Сертификат контроллера (ЦС)",
+                "Если сертификат LDAPS самоподписан (Samba) или выдан своим ЦС. Проще всего — «Получить с "
+                "контроллера» и сверить отпечаток. Вручную: у Samba тот файл, что в `testparm -sv | grep "
+                "'tls certfile'` (обычно /var/lib/samba/private/tls/cert.pem), у Windows — сертификат ЦС.",
+                "pem",
+            ),
             Spec("ad_base_dn", "Корень поиска в AD", "Пусто — берётся с контроллера."),
             Spec("runbook_file_servers", "Файловые серверы", "Через запятую: fs01,fs02."),
-            Spec("gpo_host", "Сервер GPMC (необязательно)",
-                 "Пусто — политики правятся напрямую через LDAP и SYSVOL контроллера (Samba и Windows). "
-                 "Windows-сервер с GPMC и WinRM — если нужны PowerShell GroupPolicy и резервные копии."),
-            Spec("gpo_backup_path", "Резервные копии GPO", "Только с сервером GPMC: папка на нём, например "
-                 "C:\\GPOBackup — копия политики перед каждым изменением."),
+            Spec(
+                "gpo_host",
+                "Сервер GPMC (необязательно)",
+                "Пусто — политики правятся напрямую через LDAP и SYSVOL контроллера (Samba и Windows). "
+                "Windows-сервер с GPMC и WinRM — если нужны PowerShell GroupPolicy и резервные копии.",
+            ),
+            Spec(
+                "gpo_backup_path",
+                "Резервные копии GPO",
+                "Только с сервером GPMC: папка на нём, например "
+                "C:\\GPOBackup — копия политики перед каждым изменением.",
+            ),
             Spec("winrm_https", "WinRM по HTTPS", "Порт 5986, на ПК нужен сертификат.", "bool"),
             Spec("winrm_port", "Порт WinRM", "0 — 5985 или 5986 для HTTPS.", "int"),
-            Spec("linux_credential", "Учётная запись для Astra Linux",
-                 "SSH и sudo на ПК с Astra Linux. Пусто — «Учётная запись домена» (с winbind она входит по SSH, "
-                 "если ей разрешён sudo).", "credential", credential_kind="ssh"),
+            Spec(
+                "winrm_timeout_seconds",
+                "Тайм-аут команды WinRM, с",
+                "Сколько может идти команда или скрипт на компьютере, потом она останавливается. 10–3600.",
+                "int",
+            ),
+            Spec(
+                "linux_credential",
+                "Учётная запись для Astra Linux",
+                "SSH и sudo на ПК с Astra Linux. Пусто — «Учётная запись домена» (с winbind она входит по SSH, "
+                "если ей разрешён sudo).",
+                "credential",
+                credential_kind="ssh",
+            ),
             Spec("linux_ssh_port", "Порт SSH на ПК с Astra Linux", kind="int"),
-        ),
-    ),
-    Group(
-        "Уведомления в Telegram",
-        "Нужны и токен бота, и чат; без них уведомления выключены.",
-        (
-            Spec("telegram_bot_token", "Токен бота", kind="secret"),
-            Spec("telegram_chat_id", "Чат"),
-            Spec("telegram_min_severity", "С какой важности", kind="choice",
-                 choices=(Choice("INFO", "Все"), Choice("WARNING", "Предупреждения"), Choice("CRITICAL", "Критичные"))),
-            Spec("telegram_delay_seconds", "Задержка, с",
-                 "Событие уходит, только если ещё не закрылось: мигающий порт не будит.", "float"),
-            Spec("telegram_notify_resolved", "Сообщать о закрытии", kind="bool"),
-            Spec("telegram_proxy", "Прокси", "http://proxy.local:3128, если у сервера нет прямого выхода."),
         ),
     ),
     Group(

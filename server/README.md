@@ -125,12 +125,6 @@ pytest
 | `TRAP_COMMUNITY` | `public` | traps with another community are dropped |
 | `TRAFFIC_INTERVAL_SECONDS` | `300` | port load sampling for the charts (SNMP counters in real mode); 0 disables |
 | `TRAFFIC_KEEP_DAYS` | `7` | how long load samples are kept |
-| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | empty | alerts to a Telegram chat; off unless both are set (DEPLOY.md, section 9) |
-| `TELEGRAM_MIN_SEVERITY` | `WARNING` | lowest severity sent |
-| `TELEGRAM_DELAY_SECONDS` | `60` | send only alerts still open after this delay |
-| `TELEGRAM_NOTIFY_RESOLVED` | `true` | also send "resolved" for alerts that were sent |
-| `TELEGRAM_MAX_PER_MINUTE` | `20` | rate limit; dropped ones are counted in the next message |
-| `TELEGRAM_PROXY` | empty | HTTP(S) proxy to reach api.telegram.org |
 | `BACKUP_DIR` | empty (off) | built-in `pg_dump` backups (the packages set it; Docker uses its `backup` service) |
 | `BACKUP_INTERVAL_HOURS`, `BACKUP_KEEP_DAYS` | `24`, `14` | |
 | `PG_BIN_DIR` | empty (PATH) | folder with `pg_dump`/`pg_restore` (and `initdb`/`pg_ctl` for the bundled database) |
