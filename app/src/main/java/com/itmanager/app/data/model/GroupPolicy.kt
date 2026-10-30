@@ -1,5 +1,7 @@
 package com.itmanager.app.data.model
 
+import kotlinx.serialization.json.JsonElement
+
 /** Group Policy: what GPMC shows and changes, through the server (WinRM on a domain controller). */
 enum class GpoStatus(val wire: String, val title: String) {
     ENABLED("AllSettingsEnabled", "Включена"),
@@ -62,4 +64,43 @@ data class GpoChange(
     val type: String? = null,
     val value: String? = null,
     val comment: String? = null,
+    /** A template («Шаблоны»): its state and form values. */
+    val state: String? = null,
+    val values: Map<String, JsonElement>? = null,
+)
+
+/** A ready-made setting: an Administrative Templates policy as the registry values gpedit writes for it. */
+enum class GpoTemplateState(val wire: String, val title: String) {
+    NOT_CONFIGURED("not_configured", "Не задано"),
+    ENABLED("enabled", "Включено"),
+    DISABLED("disabled", "Отключено");
+
+    companion object {
+        fun parse(raw: String?): GpoTemplateState? = entries.firstOrNull { it.wire == raw }
+    }
+}
+
+/** [kind]: bool, int, choice, list (one per line) or text. */
+data class GpoTemplateField(
+    val id: String,
+    val label: String,
+    val kind: String,
+    val default: JsonElement?,
+    val help: String,
+    val choices: List<Pair<String, String>>,
+    val min: Int?,
+    val max: Int?,
+)
+
+/** [state] and [values]: what the GPO holds now. */
+data class GpoTemplate(
+    val id: String,
+    val title: String,
+    val path: String,
+    val help: String,
+    val forUsers: Boolean,
+    val canDisable: Boolean,
+    val fields: List<GpoTemplateField>,
+    val state: GpoTemplateState,
+    val values: Map<String, JsonElement>,
 )

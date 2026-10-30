@@ -10,8 +10,7 @@ Windows — no Windows host, no PowerShell. What GPMC stores, this reads and wri
   format; after a change the version goes up in GPT.INI and in versionNumber, so computers fetch it again;
 - who it applies to is the «Apply Group Policy» right in the GPO's nTSecurityDescriptor.
 
-Creating and deleting GPOs needs the SYSVOL permissions only samba-tool or GPMC set up right, so those two are
-left to them.
+New GPOs are made the way samba-tool gpo create makes them; deleting one drops its links first.
 """
 
 import asyncio
@@ -679,15 +678,11 @@ class NativeGpo:
         sysvol.write(path, text.encode("utf-16") if utf16 else text.encode("latin-1"))
         d.replace(row["dn"], "versionNumber", [str(new)])
 
-    def _edit_pol(self, gpo_id: str, login: Login | None, key: str, change: Callable[[list[PolEntry], str, str], None]):
-        d = self._dir(login)
-        row = self._row(d, gpo_id)
-        part, rel = split_key(key)
-        assert self.sysvol_factory is not None
-        sysvol = self.sysvol_factory(self.host, login)
+    def _edit_part(self, d: Directory, sysvol: Sysvol, row: dict, part: str, change: Callable[[list[PolEntry]], None]):
+        """One read-change-write of a part's Registry.pol, then its extension names and a new version."""
         path = f"{self._folder(row)}\\{part}\\Registry.pol"
         entries = parse_pol(sysvol.read(path))
-        change(entries, part, rel)
+        change(entries)
         sysvol.write(path, build_pol(entries))
         attr = "gPCMachineExtensionNames" if part == "Machine" else "gPCUserExtensionNames"
         names = _one(row["attrs"], attr)
@@ -695,6 +690,14 @@ class NativeGpo:
         if merged != names:
             d.replace(row["dn"], attr, [merged])
         self._bump(d, sysvol, row, part)
+
+    def _edit_pol(self, gpo_id: str, login: Login | None, key: str, change: Callable[[list[PolEntry], str, str], None]):
+        d = self._dir(login)
+        row = self._row(d, gpo_id)
+        part, rel = split_key(key)
+        assert self.sysvol_factory is not None
+        sysvol = self.sysvol_factory(self.host, login)
+        self._edit_part(d, sysvol, row, part, lambda entries: change(entries, part, rel))
 
     async def registry_set(self, gpo_id: str, key: str, name: str, kind: str, value: Any, login: Login | None) -> None:
         k, n, t, v = check_registry(key, name, kind, value)
@@ -718,6 +721,43 @@ class NativeGpo:
                 raise GpoError("Такого параметра в политике нет")
 
         await self._call(self._edit_pol, gpo_id, login, k, change)
+
+    async def registry_batch(self, gpo_id: str, ops: list[tuple], login: Login | None) -> None:
+        """Several settings at once (a template): one write and one new version per part, not one per value.
+        ops: ("set", key, name, type, value) or ("remove", key, name); a missing value to remove is no error."""
+        checked: list[tuple[str, str, str, PolEntry | None]] = []
+        for op in ops:
+            if op[0] == "set":
+                k, n, t, v = check_registry(op[1], op[2], op[3], op[4])
+                part, rel = split_key(k)
+                checked.append((part, rel, n, PolEntry(rel, n, *encode_value(t, v))))
+            else:
+                k, n, _, _ = check_registry(op[1], op[2], "String", "")
+                part, rel = split_key(k)
+                checked.append((part, rel, n, None))
+
+        def work() -> None:
+            d = self._dir(login)
+            assert self.sysvol_factory is not None
+            sysvol = self.sysvol_factory(self.host, login)
+            for part in ("Machine", "User"):
+                mine = [c for c in checked if c[0] == part]
+                if not mine:
+                    continue
+
+                def change(entries: list[PolEntry], mine=mine) -> None:
+                    for _, rel, n, entry in mine:
+                        same = {n.lower(), f"**del.{n}".lower()}
+                        entries[:] = [
+                            e for e in entries if not (e.key.lower() == rel.lower() and e.name.lower() in same)
+                        ]
+                        if entry is not None:
+                            entries.append(entry)
+
+                # Read afresh for each part: the first one's new version is in versionNumber now.
+                self._edit_part(d, sysvol, self._row(d, gpo_id), part, change)
+
+        await self._call(work)
 
     async def set_status(self, gpo_id: str, status: str, login: Login | None) -> None:
         flags = FLAGS_BY_STATUS[check_status(status)]
