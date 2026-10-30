@@ -103,6 +103,7 @@ fun DevicesScreen(
     onShowOnMap: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenScanner: () -> Unit,
+    onOpenPrinters: () -> Unit,
     viewModel: DevicesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -215,6 +216,9 @@ fun DevicesScreen(
                     leadingIcon = if (f == DeviceFilter.OFFLINE) ({ StatusDot(StatusColors.Offline) }) else null,
                 )
             }
+        }
+        if (state.filter == DeviceFilter.PRINTERS) {
+            TextButton(onClick = onOpenPrinters, modifier = Modifier.padding(start = 8.dp)) { Text("Тонер, барабаны и счётчики страниц") }
         }
         GroupingRow(
             shown = (state.devices as? UiState.Content)?.data?.size,

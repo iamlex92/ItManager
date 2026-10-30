@@ -124,6 +124,14 @@
     if (b) { closeMenus(); openTab(b.dataset.tab); }
   });
 
+  // «Сервер и доступ» is one section with two views; sections with no menu entry light the one they belong to.
+  const TAB_HOME = { creds: "settings", printers: "devices" };
+  document.addEventListener("click", (ev) => {
+    const b = ev.target.closest(".subnav button[data-tab]");
+    if (b) openTab(b.dataset.tab);
+  });
+  $("printers-link").addEventListener("click", () => openTab("printers"));
+
   // Small pop-up menus («Ещё», «+ Добавить»): one open at a time, closed by a click elsewhere or Esc.
   const MENUS = [["more-toggle", "more-menu"], ["add-toggle", "add-menu"]];
   function closeMenus(except) {
@@ -146,9 +154,11 @@
 
   function openTab(name) {
     currentTab = name;
-    for (const b of $("tabs").querySelectorAll("button[data-tab]")) b.classList.toggle("active", b.dataset.tab === name);
+    const home = TAB_HOME[name] || name;
+    for (const b of $("tabs").querySelectorAll("button[data-tab]")) b.classList.toggle("active", b.dataset.tab === home);
     // A section from «Ещё» lights «Ещё» itself, so the user sees where they are.
-    $("more-toggle").classList.toggle("active", !!$("more-menu").querySelector(`[data-tab="${name}"]`));
+    $("more-toggle").classList.toggle("active", !!$("more-menu").querySelector(`[data-tab="${home}"]`));
+    for (const b of document.querySelectorAll(".subnav button[data-tab]")) b.classList.toggle("active", b.dataset.tab === name);
     for (const s of document.querySelectorAll("main > .tab")) s.hidden = s.id !== `tab-${name}`;
     if (name === "map") loadMap().catch(fail);
     if (name === "devices") loadDevices().catch(fail);
@@ -2565,6 +2575,7 @@
     }
     sel.replaceChildren(...opts);
     sel.value = typeFilter;
+    $("printers-link").hidden = typeFilter !== "PRINTER";
   }
 
   /** Sections of the list, as in the app: by kind, by floor (bottom to top) or by room on the floor's plan. */

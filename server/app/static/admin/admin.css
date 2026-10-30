@@ -241,3 +241,14 @@ dialog.card-dialog { width: min(980px, calc(100% - 32px)); height: min(760px, ca
 .badge.ok { color: var(--ok, #30d158); border-color: var(--ok, #30d158); }
 @media (max-width: 760px) { .gpo-list { max-width: none; } .gpo-form { grid-template-columns: 1fr; } }
 .gpo-list .badge { white-space: nowrap; }
+
+/* --- «Ещё»: four columns by task (Учёт · Диагностика · Windows · Система) --- */
+.top { position: relative; }
+.top .more { position: static; }
+.pop.more-menu { left: 16px; right: auto; flex-direction: row; gap: 8px; padding: 10px; width: max-content; max-width: calc(100vw - 32px); }
+.more-menu .pop-col { display: flex; flex-direction: column; gap: 2px; min-width: 190px; }
+.more-menu .pop-col > button { justify-content: flex-start; background: transparent; border-color: transparent; text-align: left; }
+.more-menu .pop-col > button:hover, .more-menu .pop-col > button.active { background: var(--raised); }
+.more-menu[hidden] { display: none; }
+@media (max-width: 900px) { .pop.more-menu { flex-direction: column; width: auto; right: 16px; } }
+.subnav { align-self: flex-start; }

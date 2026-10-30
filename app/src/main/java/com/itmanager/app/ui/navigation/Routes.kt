@@ -28,6 +28,7 @@ import kotlinx.serialization.Serializable
 @Serializable data object AuditRoute
 @Serializable data object ScannerRoute
 @Serializable data object CredentialsRoute
+@Serializable data object AccessRoute
 @Serializable data object ServerConfigRoute
 @Serializable data object GpoRoute
 @Serializable data object ToolsRoute
