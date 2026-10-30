@@ -21,6 +21,63 @@
     return `${v} бит/с`;
   };
 
+  // ---------------------------------------------------------------- IP addresses
+
+  const CONFLICT = {
+    duplicate: "Один адрес у нескольких устройств",
+    outside_subnets: "Адрес вне известных подсетей",
+    network_address: "Адрес сети вместо адреса узла",
+    broadcast_address: "Широковещательный адрес",
+  };
+
+  async function loadIpam() {
+    const r = await api("GET", "ipam");
+    const box = $("ipam-conflicts");
+    box.replaceChildren(r.conflicts.length ? el("div", { className: "error-box" },
+      el("strong", { textContent: `Конфликты: ${r.conflicts.length}` }),
+      el("ul", {}, ...r.conflicts.map((c) => el("li", {},
+        el("span", { className: "mono", textContent: c.ip }), ` — ${CONFLICT[c.kind] || c.kind}: ${c.devices.join(", ")}`,
+        c.detail ? el("span", { className: "muted small", textContent: ` (${c.detail})` }) : ""))))
+      : el("p", { className: "muted small", textContent: "Конфликтов адресов нет." }));
+    const subnets = $("ipam-subnets");
+    if (!r.subnets.length) {
+      subnets.replaceChildren(el("p", { className: "muted", textContent: "Подсетей нет: укажите их у VLAN в «Ещё → VLAN и подсети»." }));
+      return;
+    }
+    subnets.replaceChildren(...r.subnets.map((s) => {
+      const pct = s.total ? Math.round((s.used / s.total) * 100) : 0;
+      return el("details", { className: "card ipam-subnet" },
+        el("summary", {},
+          el("div", { className: "row" }, el("strong", { textContent: `VLAN ${s.vlan_id} · ${s.name}` }), el("div", { className: "spacer" }),
+            el("span", { className: "mono", textContent: s.cidr })),
+          el("div", { className: `ipam-bar${pct >= 90 ? " full" : ""}` }, el("span", { style: `width:${pct}%` })),
+          el("div", { className: "muted small", textContent: `Занято ${s.used} из ${s.total} (${pct} %), свободно ${s.free}` +
+            (s.next_free.length ? ` · ближайшие свободные: ${s.next_free.slice(0, 5).join(", ")}${s.next_free.length > 5 ? "…" : ""}` : "") })),
+        s.hosts.length ? el("div", { className: "table-wrap" }, el("table", { className: "grid" },
+          el("thead", {}, el("tr", {}, el("th", { textContent: "Адрес" }), el("th", { textContent: "Устройство" }))),
+          el("tbody", {}, ...s.hosts.map((h) => el("tr", { className: "clickable", onclick: () => window.NetAdmin.openCard(h.device_id) },
+            el("td", { className: "mono", textContent: h.ip }), el("td", { textContent: h.name }))))))
+          : el("p", { className: "muted small", textContent: "В учёте нет устройств с адресами из этой подсети." }));
+    }));
+  }
+  tabs.ipam = loadIpam;
+
+  $("ipam-check-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const ip = $("ipam-check-ip").value.trim();
+    if (!ip) return;
+    const out = $("ipam-check-result");
+    try {
+      const r = await api("GET", `ipam/check?ip=${encodeURIComponent(ip)}`);
+      const text = !r.valid ? `${ip}: ${r.problems.join("; ")}`
+        : r.free ? `${ip} свободен${r.vlan_id != null ? ` (VLAN ${r.vlan_id})` : ""}.`
+          : `${ip} занят: ${r.owners.join(", ")}.`;
+      const rest = r.problems.filter((p) => p !== "адрес уже занят");
+      const problems = r.valid && rest.length ? ` Внимание: ${rest.join("; ")}.` : "";
+      out.replaceChildren(el("p", { className: r.valid && r.free && !rest.length ? "ok-box" : "error-box", textContent: text + problems }));
+    } catch (e) { out.replaceChildren(el("p", { className: "error-box", textContent: e.message })); }
+  });
+
   // ---------------------------------------------------------------- alerts
 
   async function loadAlerts() {

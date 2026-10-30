@@ -284,6 +284,13 @@ dialog.card-dialog { width: min(980px, calc(100% - 32px)); height: min(760px, ca
 .subnav { align-self: flex-start; }
 
 .gpo-templates td:first-child { width: 100%; }
+/* IP addresses */
+.ok-box { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--ok-container); color: var(--text); border: 1px solid var(--ok); }
+.ipam-bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.ipam-bar > span { display: block; height: 100%; background: var(--accent); }
+.ipam-bar.full > span { background: var(--bad, #ff453a); }
+.ipam-subnet summary { cursor: pointer; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.ipam-subnet summary::-webkit-details-marker { display: none; }
 .gpo-templates .badge { white-space: nowrap; }
 #gpo-template-dialog { width: min(600px, 96vw); }
 #gpo-template-form { width: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; }
