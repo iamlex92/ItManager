@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
@@ -46,11 +47,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -66,6 +69,8 @@ import com.itmanager.app.data.model.GpoDetail
 import com.itmanager.app.data.model.GpoOu
 import com.itmanager.app.data.model.GpoRegistryValue
 import com.itmanager.app.data.model.GpoStatus
+import com.itmanager.app.data.model.GpoTemplate
+import com.itmanager.app.data.model.GpoTemplateState
 import com.itmanager.app.ui.components.ErrorView
 import com.itmanager.app.ui.components.LoadingView
 import com.itmanager.app.ui.components.SectionLabel
@@ -74,6 +79,10 @@ import com.itmanager.app.ui.components.UiState
 import com.itmanager.app.ui.theme.MonoStyle
 import com.itmanager.app.ui.theme.StatusColors
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 /** A change waiting for «Да» and then the fingerprint. */
 private class Ask(val title: String, val question: String, val run: (AuthMethod) -> Unit)
@@ -254,6 +263,7 @@ private fun GpoPageView(
     val g = d.gpo
     var editing by remember { mutableStateOf<GpoRegistryValue?>(null) }
     var linking by remember { mutableStateOf(false) }
+    var template by remember { mutableStateOf<GpoTemplate?>(null) }
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
         if (d.simulated) {
             item(key = "sim") {
@@ -314,6 +324,38 @@ private fun GpoPageView(
                     }
                 }
                 if (writes) FilledTonalButton(onClick = { linking = true }) { Text("Связать с подразделением") }
+            }
+        }
+        item(key = "templates") {
+            Card("Готовые шаблоны") {
+                Text(
+                    "Частые политики без поиска ключей реестра: выберите «Включено» и заполните поля.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                val items = page.templates
+                when {
+                    page.templatesError != null -> Text(page.templatesError, color = MaterialTheme.colorScheme.error)
+                    items == null -> LinearProgressIndicator(Modifier.fillMaxWidth())
+                    else -> items.forEachIndexed { i, t ->
+                        if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                        Row(
+                            Modifier.fillMaxWidth().clickable(enabled = writes) { template = t }.padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(t.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                                Text(t.path, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            }
+                            Text(
+                                t.state.title,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (t.state == GpoTemplateState.ENABLED) StatusColors.Online else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 8.dp),
+                            )
+                        }
+                    }
+                }
             }
         }
         item(key = "registry") {
@@ -380,6 +422,18 @@ private fun GpoPageView(
         }
     }
 
+    template?.let { t ->
+        TemplateDialog(
+            template = t,
+            onDismiss = { template = null },
+            onSave = { state, values ->
+                template = null
+                confirm("Шаблон политики", "«${t.title}» в «${g.name}»: ${state.title}?") {
+                    viewModel.setTemplate(t, state, values, it)
+                }
+            },
+        )
+    }
     editing?.let { r ->
         RegistryDialog(
             value = r,
@@ -464,6 +518,88 @@ private fun RegistryDialog(
         },
         confirmButton = {
             TextButton(enabled = key.isNotBlank() && name.isNotBlank(), onClick = { onSave(key.trim(), name.trim(), type, text) }) { Text("Записать") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+    )
+}
+
+/** The form value of a template field as text ("true"/"false" for a switch, one per line for a list). */
+private fun formText(v: JsonElement?): String = when (v) {
+    is JsonArray -> v.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.joinToString("\n")
+    is JsonPrimitive -> v.contentOrNull.orEmpty()
+    else -> ""
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TemplateDialog(
+    template: GpoTemplate,
+    onDismiss: () -> Unit,
+    onSave: (GpoTemplateState, Map<String, JsonElement>) -> Unit,
+) {
+    var state by remember { mutableStateOf(template.state) }
+    val form = remember {
+        mutableStateMapOf<String, String>().apply {
+            template.fields.forEach { f -> put(f.id, formText(template.values[f.id] ?: f.default)) }
+        }
+    }
+    val states = GpoTemplateState.entries.filter { it != GpoTemplateState.DISABLED || template.canDisable }
+    val on = state == GpoTemplateState.ENABLED
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(template.title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    "${template.path} · ${if (template.forUsers) "для пользователей" else "для компьютеров"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(template.help, style = MaterialTheme.typography.bodyMedium)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    states.forEach { s -> FilterChip(selected = state == s, onClick = { state = s }, label = { Text(s.title) }) }
+                }
+                template.fields.forEach { f ->
+                    val value = form[f.id].orEmpty()
+                    when (f.kind) {
+                        "bool" -> Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = value == "true", enabled = on, onCheckedChange = { form[f.id] = it.toString() })
+                            Text(f.label, modifier = Modifier.weight(1f))
+                        }
+                        "choice" -> Column {
+                            Text(f.label, style = MaterialTheme.typography.labelMedium)
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                f.choices.forEach { (v, label) ->
+                                    FilterChip(selected = value == v, enabled = on, onClick = { form[f.id] = v }, label = { Text(label) })
+                                }
+                            }
+                        }
+                        else -> OutlinedTextField(
+                            value = value,
+                            onValueChange = { form[f.id] = it },
+                            enabled = on,
+                            label = { Text(f.label) },
+                            placeholder = { if (f.kind == "list") Text("ECOTEHS\\kharca01") },
+                            singleLine = f.kind != "list",
+                            minLines = if (f.kind == "list") 3 else 1,
+                            keyboardOptions = if (f.kind == "int") KeyboardOptions(keyboardType = KeyboardType.Number) else KeyboardOptions.Default,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    if (f.help.isNotBlank()) {
+                        Text(f.help, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val values = template.fields.associate { f ->
+                    val v = form[f.id].orEmpty()
+                    f.id to (if (f.kind == "bool") JsonPrimitive(v == "true") else JsonPrimitive(v))
+                }
+                onSave(state, values)
+            }) { Text("Записать") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
     )
