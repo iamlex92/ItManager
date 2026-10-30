@@ -24,6 +24,7 @@ DESKTOP = "HKCU\\Software\\Policies\\Microsoft\\Windows\\Control Panel\\Desktop"
 STORAGE = "HKLM\\Software\\Policies\\Microsoft\\Windows\\RemovableStorageDevices"
 STORAGE_DISKS = f"{STORAGE}\\{{53f5630d-b6bf-11d0-94f2-00a0c91efb8b}}"
 EXPLORER = "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer"
+SYSTEM = "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System"
 
 STATES = ("enabled", "disabled", "not_configured")
 
@@ -169,7 +170,7 @@ RA_OFFER = Template(
     title="Предлагать удалённую помощь",
     path="Компьютер → Административные шаблоны → Система → Удалённый помощник",
     help="Помощник подключается сам: msra /offerra ИМЯ-ПК. Нужны ещё «Запрос удалённой помощи» и правила "
-    "брандмауэра «Удалённый помощник» (шаблон ниже).",
+    "брандмауэра «Удалённый помощник»; чтобы видеть запросы UAC — «Запросы UAC во время удалённой помощи».",
     fields=(
         Field(
             "control",
@@ -197,6 +198,64 @@ RA_OFFER = Template(
             "helpers": r.names(RA_HELPERS),
         },
     ),
+)
+
+
+# --- UAC prompts in a Remote Assistance session ------------------------------------------------------------------
+# Security options («Параметры безопасности» → «Контроль учётных записей») are values under ...\Policies\System;
+# Registry.pol sets them the same way, and Group Policy removes them with the GPO like any other policy value.
+
+
+def _uac(v: dict) -> list[Op]:
+    if not v["uia_toggle"] and not v["no_secure_desktop"]:
+        raise GpoError("Отметьте хотя бы один параметр")
+    ops = []
+    if v["uia_toggle"]:
+        ops.append(_dword(SYSTEM, "EnableUIADesktopToggle", 1))
+    if v["no_secure_desktop"]:
+        ops.append(_dword(SYSTEM, "PromptOnSecureDesktop", 0))
+    return ops
+
+
+def _read_uac(r: Reg) -> tuple[str, dict]:
+    uia, secure = r.get(SYSTEM, "EnableUIADesktopToggle"), r.get(SYSTEM, "PromptOnSecureDesktop")
+    values = {"uia_toggle": uia == "1", "no_secure_desktop": secure == "0"}
+    if uia == "1" or secure == "0":
+        return "enabled", values
+    if uia == "0" or secure == "1":
+        return "disabled", {"uia_toggle": True, "no_secure_desktop": False}
+    return "not_configured", {"uia_toggle": True, "no_secure_desktop": False}
+
+
+RA_UAC = Template(
+    id="ra_uac",
+    title="Запросы UAC во время удалённой помощи",
+    path="Компьютер → Конфигурация Windows → Параметры безопасности → Локальные политики → Параметры безопасности",
+    help="Без этого галочка «Позволить отвечать на запросы UAC» в msra просит у сотрудника пароль администратора: "
+    "окно UAC открывается на безопасном рабочем столе, которого помощник не видит. С политикой помощник видит "
+    "запрос и сам вводит учётные данные администратора.",
+    fields=(
+        Field(
+            "uia_toggle",
+            "Удалённому помощнику — без безопасного рабочего стола",
+            "bool",
+            True,
+            "«Контроль учётных записей: разрешать UIAccess-приложениям запрашивать повышение прав, не используя "
+            "безопасный рабочий стол». Затрагивает только сеансы удалённой помощи — рекомендуется.",
+        ),
+        Field(
+            "no_secure_desktop",
+            "Всем запросам — без безопасного рабочего стола",
+            "bool",
+            False,
+            "«Контроль учётных записей: переключение к безопасному рабочему столу при выдаче запроса на повышение "
+            "прав» — Отключен. Экран не затемняется ни при каком запросе UAC; слабее защищает от подмены окна.",
+        ),
+    ),
+    owns=((SYSTEM, "EnableUIADesktopToggle"), (SYSTEM, "PromptOnSecureDesktop")),
+    enable=_uac,
+    disable=lambda v: [_dword(SYSTEM, "EnableUIADesktopToggle", 0), _dword(SYSTEM, "PromptOnSecureDesktop", 1)],
+    read=_read_uac,
 )
 
 
@@ -476,7 +535,8 @@ AUTOPLAY = Template(
 
 
 TEMPLATES: dict[str, Template] = {
-    t.id: t for t in (RA_SOLICIT, RA_OFFER, FIREWALL_IN, RDP, WINDOWS_UPDATE, SCREEN_LOCK, REMOVABLE_STORAGE, AUTOPLAY)
+    t.id: t
+    for t in (RA_SOLICIT, RA_OFFER, RA_UAC, FIREWALL_IN, RDP, WINDOWS_UPDATE, SCREEN_LOCK, REMOVABLE_STORAGE, AUTOPLAY)
 }
 
 

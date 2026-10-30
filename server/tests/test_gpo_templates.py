@@ -119,3 +119,15 @@ def test_templates_through_the_api(client):
     audit = client.get("/api/v1/audit", params={"kind": "runbook"}).json()
     entry = next(a for a in audit if a["action"] == "gpo:template")
     assert entry["title"] == "GPO: шаблон" and "kharca01" in str(entry["parameters"])
+
+
+def test_uac_prompts_reach_the_helper():
+    t = TEMPLATES["ra_uac"]
+    system = "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System"
+    assert plan(t, "enabled", {}, []) == [("set", system, "EnableUIADesktopToggle", "DWord", 1)]
+    both = plan(t, "enabled", {"uia_toggle": True, "no_secure_desktop": True}, [])
+    assert ("set", system, "PromptOnSecureDesktop", "DWord", 0) in both
+    rows = [{"key": op[1], "name": op[2], "type": "DWord", "value": str(op[4]), "state": "Set"} for op in both]
+    assert describe(t, rows)["values"] == {"uia_toggle": True, "no_secure_desktop": True}
+    # Back to the remote-assistance-only setting: the secure desktop comes back for everything else.
+    assert ("remove", system, "PromptOnSecureDesktop") in plan(t, "enabled", {"no_secure_desktop": False}, rows)
