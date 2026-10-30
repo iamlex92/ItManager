@@ -107,11 +107,6 @@ ALLOW_RUNBOOK_WRITES=false
 TRAP_LISTEN_PORT={trap_port}
 TRAP_COMMUNITY=public
 
-# Уведомления в Telegram: включаются, когда заданы оба значения (см. DEPLOY.md).
-TELEGRAM_BOT_TOKEN=
-TELEGRAM_CHAT_ID=
-# TELEGRAM_PROXY=http://proxy.factory.local:3128
-
 SNMP_VERSION=2c
 """
 

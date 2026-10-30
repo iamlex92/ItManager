@@ -408,7 +408,6 @@ data class ServerHealth(
     val deviceWritesEnabled: Boolean?,
     /** Null on a server from before credential encryption. */
     val secretsEncrypted: Boolean? = null,
-    val telegramAlerts: Boolean? = null,
     /** "emulator" or "real" (AD over LDAPS, folder rights over WinRM). */
     val runbookMode: String? = null,
     val runbookWritesEnabled: Boolean? = null,

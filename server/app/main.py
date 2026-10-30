@@ -7,9 +7,7 @@ import re
 import signal
 from collections.abc import AsyncIterator
 from pathlib import Path
-from uuid import UUID
 
-import httpx
 from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -33,7 +31,6 @@ from .api import (
     misc,
     netbox,
     nfc,
-    notifications,
     pcs,
     peripherals,
     ports,
@@ -72,7 +69,7 @@ from .pcs.service import KeyInventory, port_open
 from .runbooks.emulator import RunbookEnvironment
 from .runbooks.real import RealRunbooks
 from .schemas import HealthOut
-from .services import backup, heartbeat, linkstate, telegram, traps
+from .services import backup, heartbeat, linkstate, traps
 from .services import printers as printer_service
 from .services import traffic as traffic_service
 from .services.realtime import Hub
@@ -98,7 +95,7 @@ ADMIN_HEADERS = {
 }
 
 
-def create_app(settings: Settings | None = None, telegram_transport: httpx.AsyncBaseTransport | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
 
     @contextlib.asynccontextmanager
@@ -204,23 +201,6 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
         if settings.backup_dir:
             tasks.append(asyncio.create_task(backup.backup_loop(settings)))
             log.warning("database backups: every %g h to %s", settings.backup_interval_hours, settings.backup_dir)
-        app.state.telegram = None
-        if settings.telegram_enabled:
-            bot = telegram.BotApi(
-                settings.telegram_bot_token, settings.telegram_chat_id, settings.telegram_proxy, telegram_transport
-            )
-            app.state.telegram = bot
-
-            async def device_name(device_id: str) -> str | None:
-                async with sm() as s:
-                    return await s.scalar(select(Device.name).where(Device.id == UUID(device_id)))
-
-            notifier = telegram.TelegramNotifier(settings, hub, bot.send, device_name)
-            app.state.telegram_notifier = notifier
-            tasks.append(asyncio.create_task(notifier.run()))
-            log.warning("Telegram alerts: on, from %s", settings.telegram_min_severity)
-        else:
-            log.warning("Telegram alerts: off (TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID not set)")
         trap_transport = None
         if settings.trap_listen_port > 0:
             trap_transport = await traps.start_trap_listener(
@@ -238,8 +218,6 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
             for task in tasks:
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
-            if app.state.telegram:
-                await app.state.telegram.aclose()
             await app.state.discovery.close()
             await app.state.driver.close()
             await engine.dispose()
@@ -287,7 +265,6 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
             runbook_mode=settings.runbook_mode.value,
             runbook_writes_enabled=settings.runbook_writes_enabled,
             secrets_encrypted=crypto.box().enabled,
-            telegram_alerts=settings.telegram_enabled,
         )
 
     api = APIRouter(prefix="/api/v1", dependencies=[Depends(require_token)])
@@ -315,7 +292,7 @@ def create_app(settings: Settings | None = None, telegram_transport: httpx.Async
         faceplates,
         topology,
     )
-    for module in (*routers, credentials, notifications, traffic, history, serversettings_api):
+    for module in (*routers, credentials, traffic, history, serversettings_api):
         api.include_router(module.router)
 
     app.include_router(public)

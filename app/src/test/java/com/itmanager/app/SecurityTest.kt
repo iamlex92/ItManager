@@ -74,9 +74,8 @@ class SecurityTest {
     @Test
     fun `security audit kind and health flag parse`() {
         assertEquals(AuditKind.SECURITY, AuditKind.parse("security"))
-        val health = json.decodeFromString(HealthDto.serializer(), """{"status":"ok","secrets_encrypted":true,"telegram_alerts":true}""").toDomain()
+        val health = json.decodeFromString(HealthDto.serializer(), """{"status":"ok","secrets_encrypted":true}""").toDomain()
         assertEquals(true, health.secretsEncrypted)
-        assertEquals(true, health.telegramAlerts)
         val old = json.decodeFromString(HealthDto.serializer(), """{"status":"ok"}""").toDomain()
         assertNull(old.secretsEncrypted)
     }

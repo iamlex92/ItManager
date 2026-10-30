@@ -89,7 +89,7 @@ private val GROUPS = listOf(
 /** The parts of «Сервер и доступ»; each opens the screen that already existed for it. */
 enum class AccessItem(val title: String, val subtitle: String, val icon: ImageVector) {
     CONNECTION("Подключение и безопасность", "Адрес сервера, ключ, QR-код, вход по биометрии", Icons.Outlined.Settings),
-    SERVER("Параметры сервера", "Коммутаторы, SNMP, компьютеры домена, Telegram — без правки файла", Icons.Outlined.Tune),
+    SERVER("Параметры сервера", "Коммутаторы, SNMP, компьютеры домена, резервные копии — без правки файла", Icons.Outlined.Tune),
     CREDENTIALS("Учётные данные", "Логины SSH, SNMPv3 и WinRM на сервере", Icons.Outlined.Key),
 }
 
