@@ -1,12 +1,10 @@
 package com.itmanager.app.ui.navigation
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Devices
@@ -45,7 +43,8 @@ import kotlinx.serialization.Serializable
 /** [fromSwitch]: take a copy of the running-config at once and show what it changes in the inventory. */
 @Serializable data class ConfigImportRoute(val deviceId: String, val switchName: String? = null, val fromSwitch: Boolean = false)
 
-/** Bottom bar tabs. Labels name what is inside, not generic "Home"-style umbrellas. */
+/** Bottom bar tabs. Labels name what is inside, not generic "Home"-style umbrellas. The network diagram is not one:
+ * it is looked at now and then, so it lives in «Ещё». */
 enum class TopLevelDestination(
     val route: Any,
     val label: String,
@@ -54,7 +53,6 @@ enum class TopLevelDestination(
 ) {
     MAP(MapRoute, "Карта", Icons.Filled.Map, Icons.Outlined.Map),
     DEVICES(DevicesRoute, "Устройства", Icons.Filled.Devices, Icons.Outlined.Devices),
-    TOPOLOGY(TopologyRoute, "Сеть", Icons.Filled.AccountTree, Icons.Outlined.AccountTree),
     EVENTS(AlertsRoute, "События", Icons.Filled.Notifications, Icons.Outlined.Notifications),
     MORE(MoreRoute, "Ещё", Icons.Filled.Menu, Icons.Outlined.Menu),
 }

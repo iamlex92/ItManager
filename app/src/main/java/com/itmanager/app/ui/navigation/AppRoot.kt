@@ -319,6 +319,7 @@ private fun AppNavHost(
                 onOpenDevice = openDevice,
                 onShowOnMap = openMapTab,
                 onOpenSettings = openSettings,
+                onBack = { navController.popBackStack() },
             )
         }
         composable<AlertsRoute> {
@@ -329,6 +330,7 @@ private fun AppNavHost(
                 contentPadding = contentPadding,
                 onOpen = { item ->
                     val route: Any = when (item) {
+                        MoreItem.TOPOLOGY -> TopologyRoute
                         MoreItem.VLANS -> VlansRoute
                         MoreItem.IPAM -> IpamRoute
                         MoreItem.TEMPLATES -> TemplatesRoute
