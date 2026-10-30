@@ -194,6 +194,12 @@ GROUPS: tuple[Group, ...] = (
             Spec("winrm_https", "WinRM по HTTPS", "Порт 5986, на ПК нужен сертификат.", "bool"),
             Spec("winrm_port", "Порт WinRM", "0 — 5985 или 5986 для HTTPS.", "int"),
             Spec(
+                "winrm_timeout_seconds",
+                "Тайм-аут команды WinRM, с",
+                "Сколько может идти команда или скрипт на компьютере, потом она останавливается. 10–3600.",
+                "int",
+            ),
+            Spec(
                 "linux_credential",
                 "Учётная запись для Astra Linux",
                 "SSH и sudo на ПК с Astra Linux. Пусто — «Учётная запись домена» (с winbind она входит по SSH, "

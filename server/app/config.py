@@ -136,6 +136,8 @@ class Settings(BaseSettings):
     winrm_https: bool = False
     # 0: 5985 (HTTP, NTLM-encrypted) or 5986 (HTTPS).
     winrm_port: int = 0
+    # The longest a command may run on a computer over WinRM before it is stopped.
+    winrm_timeout_seconds: int = Field(default=300, ge=10, le=3600)
     # Astra Linux computers (SSH, sudo): the stored credential; empty uses RUNBOOK_CREDENTIAL.
     linux_credential: str = ""
     linux_ssh_port: int = Field(default=22, ge=1, le=65535)

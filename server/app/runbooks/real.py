@@ -457,8 +457,10 @@ def _tls_hint(error: str) -> str:
     e = error.lower()
     untrusted = ("certificate verify failed", "unable to get local issuer", "self-signed", "self signed")
     if any(x in e for x in untrusted):
-        return (". Сертификату контроллера нет доверия: «Настройки сервера» → «Сертификат контроллера» → "
-                "«Получить с контроллера», сверьте отпечаток и сохраните.")
+        return (
+            ". Сертификату контроллера нет доверия: «Настройки сервера» → «Сертификат контроллера» → "
+            "«Получить с контроллера», сверьте отпечаток и сохраните."
+        )
     if "doesn't match" in e or "hostname" in e and "match" in e:
         return ". Имя в адресе не совпадает с сертификатом: укажите в «Контроллер домена» полное имя из сертификата."
     return ""
@@ -569,12 +571,53 @@ def winrm_shell(settings: Settings, login: Login) -> Shell:
             read_timeout_sec=30,
         )
         try:
-            r = session.run_ps(script)
+            return _run_ps(session, script, settings.winrm_timeout_seconds)
         except Exception as e:  # network, auth: one readable line, never the login
             return 1, "", f"нет связи по WinRM: {type(e).__name__}: {e}"
-        return r.status_code, r.std_out.decode("utf-8", "replace"), r.std_err.decode("utf-8", "replace")
 
     return run
+
+
+def _run_ps(session, script: str, timeout: float) -> tuple[int, str, str]:
+    """session.run_ps with a deadline: pywinrm waits for a command as long as it runs, so a hung script would hold
+    the request forever. Past [timeout] the command is stopped on the computer and what it printed is returned."""
+    import base64
+    import time
+
+    from winrm.exceptions import WinRMOperationTimeoutError
+
+    encoded = base64.b64encode(script.encode("utf_16_le")).decode("ascii")
+    protocol = session.protocol
+    shell_id = protocol.open_shell()
+    command_id = protocol.run_command(shell_id, f"powershell -encodedcommand {encoded}")
+    out: list[bytes] = []
+    err: list[bytes] = []
+    code, done = -1, False
+    deadline = time.monotonic() + timeout
+    try:
+        while not done:
+            if time.monotonic() > deadline:
+                return (
+                    124,
+                    b"".join(out).decode("utf-8", "replace"),
+                    f"Команда не закончилась за {timeout:g} с и остановлена",
+                )
+            try:
+                o, e, code, done = protocol.get_command_output_raw(shell_id, command_id)
+                out.append(o)
+                err.append(e)
+            except WinRMOperationTimeoutError:
+                continue  # still running: WinRM answers «nothing yet» every operation timeout
+    finally:
+        try:
+            protocol.cleanup_command(shell_id, command_id)
+            protocol.close_shell(shell_id)
+        except Exception:  # the computer went away; nothing left to stop
+            pass
+    stderr = b"".join(err)
+    if stderr:
+        stderr = session._clean_error_msg(stderr)  # PowerShell's CLIXML, made readable as run_ps does
+    return code, b"".join(out).decode("utf-8", "replace"), stderr.decode("utf-8", "replace")
 
 
 def fetch_controller_certificate(url_text: str, timeout: float = 5.0) -> dict[str, Any]:
