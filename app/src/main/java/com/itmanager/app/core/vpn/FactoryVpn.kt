@@ -8,9 +8,12 @@ import android.os.SystemClock
 import com.itmanager.app.core.settings.SettingsRepository
 import com.itmanager.app.data.source.DcimRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.withContext
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -33,6 +36,20 @@ class FactoryVpn @Inject constructor(
     val messages: SharedFlow<String> = _messages.asSharedFlow()
 
     private var lastAttempt = 0L
+
+    /** The tunnel is up because this app asked for it (AnyConnect said so); a manual one is left alone. */
+    private val connectedByApp = MutableStateFlow(false)
+
+    /** Back on the main screen should disconnect first: the setting is on and the app brought the tunnel up. */
+    val disconnectOnExit: Flow<Boolean> =
+        combine(settings.vpnSettings, connectedByApp) { s, mine -> s.disconnectOnExit && mine }
+
+    /** Leaving the app: disconnect, and AnyConnect hands back only so the app can go to the background. */
+    fun disconnectAndLeave(activity: Activity) {
+        connectedByApp.value = false
+        lastAttempt = SystemClock.elapsedRealtime()
+        open(activity, AnyConnect.disconnectUri(leaving = true))
+    }
 
     /** On the app's start or return, once it is unlocked. */
     suspend fun connectIfNeeded(activity: Activity) {
@@ -60,14 +77,16 @@ class FactoryVpn @Inject constructor(
     fun disconnect(activity: Activity) {
         // Not again on the next return to the app: the person switched it off on purpose.
         lastAttempt = SystemClock.elapsedRealtime() + DISCONNECT_PAUSE_MS
+        connectedByApp.value = false
         open(activity, AnyConnect.disconnectUri())
     }
 
-    /** itmanager://vpn/… from AnyConnect; true when it was one. */
-    fun onCallback(uri: Uri?): Boolean {
-        val result = uri?.toString()?.let(AnyConnect::result) ?: return false
+    /** itmanager://vpn/… from AnyConnect; null when it was not one. */
+    fun onCallback(uri: Uri?): VpnResult? {
+        val result = uri?.toString()?.let(AnyConnect::result) ?: return null
         when (result) {
             VpnResult.CONNECTED -> {
+                connectedByApp.value = true
                 _messages.tryEmit("VPN завода подключён")
                 inventory.inventoryChanged() // every screen loads again
             }
@@ -75,8 +94,9 @@ class FactoryVpn @Inject constructor(
                 "AnyConnect не подключился. Проверьте вход в Cisco Secure Client; повторить — «Подключить» в настройках.",
             )
             VpnResult.DISCONNECTED -> _messages.tryEmit("VPN завода отключён — можно включить свой")
+            VpnResult.LEFT -> _messages.tryEmit("VPN завода отключён")
         }
-        return true
+        return result
     }
 
     private fun connect(activity: Activity, vpn: VpnSettings) = open(activity, AnyConnect.connectUri(vpn))

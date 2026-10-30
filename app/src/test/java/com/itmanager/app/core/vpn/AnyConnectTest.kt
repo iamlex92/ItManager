@@ -26,6 +26,8 @@ class AnyConnectTest {
         assertEquals(VpnResult.CONNECTED, AnyConnect.result("itmanager://vpn/connected"))
         assertEquals(VpnResult.FAILED, AnyConnect.result("itmanager://vpn/error?reason=x"))
         assertEquals(VpnResult.DISCONNECTED, AnyConnect.result("itmanager://vpn/disconnected"))
+        assertEquals(VpnResult.LEFT, AnyConnect.result("itmanager://vpn/left"))
+        assertEquals("anyconnect://disconnect/?onsuccess=itmanager%3A%2F%2Fvpn%2Fleft", AnyConnect.disconnectUri(leaving = true))
         assertNull(AnyConnect.result("itmanager://other/connected"))
         assertNull(AnyConnect.result("https://vpn/connected"))
     }

@@ -10,6 +10,7 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.core.content.IntentCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
@@ -19,6 +20,7 @@ import com.itmanager.app.core.nfc.NfcController
 import com.itmanager.app.core.security.AppLock
 import com.itmanager.app.core.security.LockState
 import com.itmanager.app.core.vpn.FactoryVpn
+import com.itmanager.app.core.vpn.VpnResult
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import com.itmanager.app.ui.navigation.AppRoot
@@ -40,6 +42,14 @@ class MainActivity : FragmentActivity() {
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
+        // Back on the main screen: disconnect the factory VPN on the way out, when the setting asks for it and the app
+        // brought the tunnel up. Added before the UI and without a lifecycle, so it stays below every screen's own
+        // Back handling (those re-register on each start) and only sees a Back nothing else wants.
+        val leave = object : OnBackPressedCallback(false) {
+            override fun handleOnBackPressed() = vpn.disconnectAndLeave(this@MainActivity)
+        }
+        onBackPressedDispatcher.addCallback(leave)
+        lifecycleScope.launch { vpn.disconnectOnExit.collect { leave.isEnabled = it } }
         setContent {
             ItManagerTheme {
                 AppRoot()
@@ -48,8 +58,9 @@ class MainActivity : FragmentActivity() {
         // A tag that launched the app; not again after rotation.
         if (savedInstanceState == null) {
             handleNfcIntent(intent)
-            vpn.onCallback(intent?.data)
+            if (vpn.onCallback(intent?.data) == VpnResult.LEFT) moveTaskToBack(true)
         }
+
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch { vpn.messages.collect { Toast.makeText(this@MainActivity, it, Toast.LENGTH_LONG).show() } }
@@ -62,8 +73,11 @@ class MainActivity : FragmentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        if (vpn.onCallback(intent.data)) return
-        handleNfcIntent(intent)
+        when (vpn.onCallback(intent.data)) {
+            null -> handleNfcIntent(intent)
+            VpnResult.LEFT -> moveTaskToBack(true)
+            else -> Unit
+        }
     }
 
     override fun onStart() {
