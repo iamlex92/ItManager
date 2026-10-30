@@ -63,7 +63,7 @@ val AlertSeverity.color: Color
     get() = when (this) {
         AlertSeverity.CRITICAL -> StatusColors.Offline
         AlertSeverity.WARNING -> StatusColors.Warning
-        AlertSeverity.INFO -> Color(0xFF64D2FF)
+        AlertSeverity.INFO -> StatusColors.Info
     }
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -54,6 +54,7 @@ import com.itmanager.app.ui.components.StatusDot
 import com.itmanager.app.ui.components.pressScale
 import com.itmanager.app.ui.theme.Ink950
 import com.itmanager.app.ui.theme.Motion
+import com.itmanager.app.ui.theme.LineStrong
 import com.itmanager.app.ui.theme.StatusColors
 
 val PortStatus.color: Color
@@ -211,8 +212,8 @@ private fun PortCell(port: SwitchPort, selected: Boolean, sfp: Boolean, look: Po
                 RoundedCornerShape(5.dp),
             )
             .border(
-                width = if (selected) 2.dp else 0.dp,
-                color = if (selected) Color.White else Color.Transparent,
+                width = if (selected) 2.dp else if (!byVlan && !byLoad && port.status == PortStatus.DOWN) 1.dp else 0.dp,
+                color = if (selected) Color.White else if (!byVlan && !byLoad && port.status == PortStatus.DOWN) LineStrong else Color.Transparent,
                 shape = RoundedCornerShape(5.dp),
             )
             .clickable(interactionSource = interaction, indication = null, role = Role.Button) { onClick(port) }
