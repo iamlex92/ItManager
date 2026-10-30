@@ -62,29 +62,34 @@ class MoreViewModel @Inject constructor(settings: SettingsRepository) : ViewMode
     val server: StateFlow<ServerSettings?> = settings.settings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 }
 
-/** Where every section of the app that is not a tab lives, by what it is for. */
+/** Where every section of the app that is not a tab lives, grouped by what the person wants to do. */
 enum class MoreItem(val title: String, val subtitle: String, val icon: ImageVector) {
     VLANS("VLAN и подсети", "Справочник VLAN, подсети и их цвета на карте", Icons.Outlined.Lan),
     IPAM("IP-адреса", "Заполнение подсетей, свободные адреса, конфликты", Icons.Outlined.Dns),
     TEMPLATES("Шаблоны устройств", "Типовые коммутаторы и патч-панели с портами", Icons.Outlined.Dashboard),
     PERIPHERALS("Периферия и склад", "Мониторы, клавиатуры, док-станции: где что стоит", Icons.Outlined.Inventory2),
-    PRINTERS("МФУ и расходники", "Тонер, барабаны, счётчики страниц", Icons.Outlined.Print),
     SCANNER("Сканер сети", "Найти устройства в подсетях и добавить в учёт", Icons.Outlined.TravelExplore),
     TOOLS("Сетевые утилиты", "Ping, трассировка, порты, SNMP, iperf3, Wake-on-LAN", Icons.Outlined.Construction),
     PCS("Компьютеры домена", "Сведения и ключи, диски, процессы, очистка, перезагрузка", Icons.Outlined.Computer),
     GPO("Групповые политики", "Какие действуют, где и на каких ПК; правка и применение", Icons.Outlined.Policy),
     RUNBOOKS("Сценарии", "Сброс пароля AD, права на папки, резервные копии", Icons.Outlined.Terminal),
     AUDIT("Журнал", "Кто, когда и что запускал и менял", Icons.AutoMirrored.Outlined.ManageSearch),
-    SETTINGS("Сервер и безопасность", "Адрес сервера, ключ, вход по биометрии", Icons.Outlined.Settings),
-    SERVER("Настройки сервера", "Коммутаторы, SNMP, компьютеры домена, Telegram — без правки файла", Icons.Outlined.Tune),
-    CREDENTIALS("Учётные данные", "Логины SSH, SNMPv3 и WinRM на сервере", Icons.Outlined.Key),
+    ACCESS("Сервер и доступ", "Подключение, безопасность, параметры сервера, учётные данные", Icons.Outlined.Settings),
 }
 
 private val GROUPS = listOf(
-    "Справочники" to listOf(MoreItem.VLANS, MoreItem.IPAM, MoreItem.TEMPLATES, MoreItem.PERIPHERALS, MoreItem.PRINTERS),
-    "Инструменты" to listOf(MoreItem.SCANNER, MoreItem.TOOLS, MoreItem.PCS, MoreItem.GPO, MoreItem.RUNBOOKS, MoreItem.AUDIT),
-    "Система" to listOf(MoreItem.SETTINGS, MoreItem.SERVER, MoreItem.CREDENTIALS),
+    "Учёт" to listOf(MoreItem.VLANS, MoreItem.IPAM, MoreItem.TEMPLATES, MoreItem.PERIPHERALS),
+    "Диагностика" to listOf(MoreItem.SCANNER, MoreItem.TOOLS),
+    "Windows" to listOf(MoreItem.PCS, MoreItem.GPO, MoreItem.RUNBOOKS),
+    "Система" to listOf(MoreItem.AUDIT, MoreItem.ACCESS),
 )
+
+/** The parts of «Сервер и доступ»; each opens the screen that already existed for it. */
+enum class AccessItem(val title: String, val subtitle: String, val icon: ImageVector) {
+    CONNECTION("Подключение и безопасность", "Адрес сервера, ключ, QR-код, вход по биометрии", Icons.Outlined.Settings),
+    SERVER("Параметры сервера", "Коммутаторы, SNMP, компьютеры домена, Telegram — без правки файла", Icons.Outlined.Tune),
+    CREDENTIALS("Учётные данные", "Логины SSH, SNMPv3 и WinRM на сервере", Icons.Outlined.Key),
+}
 
 @Composable
 fun MoreScreen(
@@ -110,7 +115,7 @@ fun MoreScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(16.dp))
-                            .clickable { onOpen(MoreItem.SETTINGS) }
+                            .clickable { onOpen(MoreItem.ACCESS) }
                             .padding(16.dp),
                     ) {
                         StatusDot(StatusColors.Warning)
@@ -130,7 +135,7 @@ fun MoreScreen(
                         Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(16.dp))) {
                             items.forEachIndexed { i, entry ->
                                 if (i > 0) HorizontalDivider(Modifier.padding(start = 56.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                                MoreRow(entry) { onOpen(entry) }
+                                MoreRow(entry.title, entry.subtitle, entry.icon) { onOpen(entry) }
                             }
                         }
                     }
@@ -141,17 +146,17 @@ fun MoreScreen(
 }
 
 @Composable
-private fun MoreRow(item: MoreItem, onClick: () -> Unit) {
+private fun MoreRow(title: String, subtitle: String, icon: ImageVector, onClick: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
-        Icon(item.icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
-            Text(item.title, style = MaterialTheme.typography.bodyLarge)
+            Text(title, style = MaterialTheme.typography.bodyLarge)
             Text(
-                item.subtitle,
+                subtitle,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -159,5 +164,22 @@ private fun MoreRow(item: MoreItem, onClick: () -> Unit) {
             )
         }
         Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** «Сервер и доступ»: one entry in «Ещё» for what used to be three, with the same screens behind it. */
+@Composable
+fun AccessHubScreen(onBack: () -> Unit, onOpen: (AccessItem) -> Unit) {
+    Column(Modifier.fillMaxSize()) {
+        TabTopBar(title = "Сервер и доступ", onBack = onBack)
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(16.dp)),
+        ) {
+            AccessItem.entries.forEachIndexed { i, entry ->
+                if (i > 0) HorizontalDivider(Modifier.padding(start = 56.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                MoreRow(entry.title, entry.subtitle, entry.icon) { onOpen(entry) }
+            }
+        }
     }
 }

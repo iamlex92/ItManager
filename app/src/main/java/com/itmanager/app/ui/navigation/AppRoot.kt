@@ -74,6 +74,8 @@ import com.itmanager.app.ui.devices.DevicesScreen
 import com.itmanager.app.ui.history.HistoryScreen
 import com.itmanager.app.ui.map.MapScreen
 import com.itmanager.app.ui.device.DeviceScreen
+import com.itmanager.app.ui.more.AccessHubScreen
+import com.itmanager.app.ui.more.AccessItem
 import com.itmanager.app.ui.more.MoreItem
 import com.itmanager.app.ui.more.MoreScreen
 import com.itmanager.app.ui.nfc.BindTagSheet
@@ -308,6 +310,7 @@ private fun AppNavHost(
                 onShowOnMap = openMapTab,
                 onOpenSettings = openSettings,
                 onOpenScanner = openScanner,
+                onOpenPrinters = { navController.navigate(PrintersRoute) { launchSingleTop = true } },
             )
         }
         composable<TopologyRoute> {
@@ -330,16 +333,13 @@ private fun AppNavHost(
                         MoreItem.IPAM -> IpamRoute
                         MoreItem.TEMPLATES -> TemplatesRoute
                         MoreItem.PERIPHERALS -> PeripheralsRoute
-                        MoreItem.PRINTERS -> PrintersRoute
                         MoreItem.SCANNER -> ScannerRoute
                         MoreItem.TOOLS -> ToolsRoute
                         MoreItem.PCS -> PcsRoute()
                         MoreItem.GPO -> GpoRoute
                         MoreItem.RUNBOOKS -> AutomationRoute
                         MoreItem.AUDIT -> AuditRoute
-                        MoreItem.SETTINGS -> SettingsRoute
-                        MoreItem.SERVER -> ServerConfigRoute
-                        MoreItem.CREDENTIALS -> CredentialsRoute
+                        MoreItem.ACCESS -> AccessRoute
                     }
                     navController.navigate(route) { launchSingleTop = true }
                 },
@@ -477,6 +477,24 @@ private fun AppNavHost(
             SettingsScreen(
                 onBack = back,
                 onOpenCredentials = { navController.navigate(CredentialsRoute) { launchSingleTop = true } },
+            )
+        }
+        composable<AccessRoute>(
+            enterTransition = { slideInHorizontally(push) { it } },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { slideOutHorizontally(push) { it } },
+        ) {
+            AccessHubScreen(
+                onBack = back,
+                onOpen = { item ->
+                    val route: Any = when (item) {
+                        AccessItem.CONNECTION -> SettingsRoute
+                        AccessItem.SERVER -> ServerConfigRoute
+                        AccessItem.CREDENTIALS -> CredentialsRoute
+                    }
+                    navController.navigate(route) { launchSingleTop = true }
+                },
             )
         }
         composable<IpamRoute>(

@@ -37,21 +37,28 @@
       <div class="more">
         <button type="button" id="more-toggle" aria-haspopup="true" aria-expanded="false">Ещё ▾</button>
         <div id="more-menu" class="pop more-menu" hidden>
-          <div class="pop-group">Справочники</div>
-          <button data-tab="vlans">VLAN и подсети</button>
-          <button data-tab="templates">Шаблоны устройств</button>
-          <button data-tab="peripherals">Периферия и склад</button>
-          <button data-tab="printers">МФУ и расходники</button>
-          <div class="pop-group">Инструменты</div>
-          <button data-tab="scan">Сканер сети</button>
-          <button data-tab="pcs">Компьютеры домена</button>
-          <button data-tab="gpo">Групповые политики</button>
-          <button data-tab="runbooks">Сценарии</button>
-          <button data-tab="scripts">Свои скрипты</button>
-          <button data-tab="audit">Журнал</button>
-          <div class="pop-group">Система</div>
-          <button data-tab="settings">Настройки сервера</button>
-          <button data-tab="creds">Учётные данные</button>
+          <div class="pop-col">
+            <div class="pop-group">Учёт</div>
+            <button data-tab="vlans">VLAN и подсети</button>
+            <button data-tab="templates">Шаблоны устройств</button>
+            <button data-tab="peripherals">Периферия и склад</button>
+          </div>
+          <div class="pop-col">
+            <div class="pop-group">Диагностика</div>
+            <button data-tab="scan">Сканер сети</button>
+          </div>
+          <div class="pop-col">
+            <div class="pop-group">Windows</div>
+            <button data-tab="pcs">Компьютеры домена</button>
+            <button data-tab="gpo">Групповые политики</button>
+            <button data-tab="runbooks">Сценарии</button>
+            <button data-tab="scripts">Свои скрипты</button>
+          </div>
+          <div class="pop-col">
+            <div class="pop-group">Система</div>
+            <button data-tab="audit">Журнал</button>
+            <button data-tab="settings">Сервер и доступ</button>
+          </div>
         </div>
       </div>
     </nav>
@@ -164,6 +171,7 @@
           <option value="type">по типу</option><option value="floor">по этажу</option><option value="room">по помещению</option>
         </select></label>
         <span id="device-count" class="muted small"></span>
+        <button id="printers-link" type="button" data-tab="printers" hidden>Расходники МФУ</button>
         <div class="spacer"></div>
         <button id="device-new" class="primary">+ Добавить устройство</button>
       </div>
@@ -252,11 +260,15 @@
       <div class="toolbar"><div class="spacer"></div><button id="printer-reload">Обновить</button></div>
       <p id="printer-emulated" class="error-box" hidden>Сервер не опрашивает МФУ: в его настройках <code>MONITOR_MODE=emulator</code>,
         и уровни тонера и счётчики страниц здесь ненастоящие. Включите «Опрос устройств: Настоящие» в
-        «Ещё → Настройки сервера» и перезапустите сервер там же.</p>
+        «Ещё → Сервер и доступ → Параметры сервера» и перезапустите сервер там же.</p>
       <div id="printer-cards" class="cards"></div>
     </section>
 
     <section id="tab-settings" class="tab" hidden>
+      <nav class="seg subnav" aria-label="Сервер и доступ">
+        <button type="button" data-tab="settings" class="active">Параметры сервера</button>
+        <button type="button" data-tab="creds">Учётные данные</button>
+      </nav>
       <div class="card">
         <div class="row wrap">
           <h2 class="grow">Настройки сервера</h2>
@@ -272,6 +284,10 @@
     </section>
 
     <section id="tab-creds" class="tab" hidden>
+      <nav class="seg subnav" aria-label="Сервер и доступ">
+        <button type="button" data-tab="settings">Параметры сервера</button>
+        <button type="button" data-tab="creds" class="active">Учётные данные</button>
+      </nav>
       <div class="columns">
         <div class="card grow">
           <h2>Учётные данные</h2>
@@ -470,7 +486,7 @@
       <div class="columns">
         <div class="card narrow">
           <div class="row"><h2>Свои скрипты</h2><div class="spacer"></div><button id="script-new" class="primary">+ Новый</button></div>
-          <p class="muted small">Скрипты появляются в приложении в разделе «Ещё» → «Сценарии». Запуск только в режиме эмуляции: сервер показывает текст с подставленными параметрами и ничего не выполняет.</p>
+          <p class="muted small">Скрипты появляются в приложении в разделе «Ещё» → Windows → «Сценарии». Запуск только в режиме эмуляции: сервер показывает текст с подставленными параметрами и ничего не выполняет.</p>
           <ul id="script-list" class="list"></ul>
         </div>
         <form id="script-form" class="card grow" hidden>
