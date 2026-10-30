@@ -51,6 +51,7 @@ class SettingsRepository @Inject constructor(
                 name = p[KEY_VPN_NAME].orEmpty(),
                 host = p[KEY_VPN_HOST].orEmpty(),
                 username = p[KEY_VPN_USER].orEmpty(),
+                disconnectOnExit = p[KEY_VPN_EXIT] ?: false,
             )
         }
         .distinctUntilChanged()
@@ -63,6 +64,7 @@ class SettingsRepository @Inject constructor(
             p[KEY_VPN_NAME] = vpn.name.trim()
             p[KEY_VPN_HOST] = vpn.host.trim()
             p[KEY_VPN_USER] = vpn.username.trim()
+            p[KEY_VPN_EXIT] = vpn.disconnectOnExit
         }
     }
 
@@ -84,5 +86,6 @@ class SettingsRepository @Inject constructor(
         val KEY_VPN_NAME = stringPreferencesKey("vpn_name")
         val KEY_VPN_HOST = stringPreferencesKey("vpn_host")
         val KEY_VPN_USER = stringPreferencesKey("vpn_user")
+        val KEY_VPN_EXIT = booleanPreferencesKey("vpn_disconnect_on_exit")
     }
 }

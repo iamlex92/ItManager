@@ -86,6 +86,19 @@ fun VpnSection(viewModel: VpnViewModel = hiltViewModel()) {
             Spacer(Modifier.width(12.dp))
             Switch(checked = v.enabled, onCheckedChange = { on -> viewModel.edit { it.copy(enabled = on) } })
         }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Отключать при выходе", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Выход кнопкой «Назад» с главного экрана отключает VPN завода, если его подключало приложение, " +
+                        "и телефон возвращается к вашему VPN.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Switch(checked = v.disconnectOnExit, onCheckedChange = { on -> viewModel.edit { it.copy(disconnectOnExit = on) } })
+        }
         OutlinedTextField(
             value = v.name,
             onValueChange = { s -> viewModel.edit { it.copy(name = s) } },

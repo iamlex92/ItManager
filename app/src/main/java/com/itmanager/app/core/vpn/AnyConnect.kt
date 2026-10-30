@@ -16,11 +16,19 @@ data class VpnSettings(
     val host: String = "",
     /** Filled into the login form; the password stays in AnyConnect. */
     val username: String = "",
+    /** Leaving the app with Back from its main screen disconnects the tunnel the app brought up. */
+    val disconnectOnExit: Boolean = false,
 ) {
     val isConfigured: Boolean get() = name.isNotBlank() || host.isNotBlank()
 }
 
-enum class VpnResult { CONNECTED, FAILED, DISCONNECTED }
+enum class VpnResult {
+    CONNECTED,
+    FAILED,
+    DISCONNECTED,
+    /** Disconnected because the app was being left: it goes on to the background. */
+    LEFT,
+}
 
 object AnyConnect {
     /** Cisco Secure Client on Google Play. */
@@ -38,7 +46,9 @@ object AnyConnect {
         "onerror" to "$CALLBACK/error",
     )
 
-    fun disconnectUri(): String = uri("disconnect", "onsuccess" to "$CALLBACK/disconnected")
+    /** [leaving]: the app is being closed, AnyConnect hands back to it only to let it go. */
+    fun disconnectUri(leaving: Boolean = false): String =
+        uri("disconnect", "onsuccess" to "$CALLBACK/${if (leaving) "left" else "disconnected"}")
 
     /** What AnyConnect's call back means; null for anything that is not one. */
     fun result(uri: String): VpnResult? {
@@ -48,6 +58,7 @@ object AnyConnect {
             "connected" -> VpnResult.CONNECTED
             "error" -> VpnResult.FAILED
             "disconnected" -> VpnResult.DISCONNECTED
+            "left" -> VpnResult.LEFT
             else -> null
         }
     }
