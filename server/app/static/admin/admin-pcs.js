@@ -16,11 +16,26 @@
 
   let host = null;
   let status = null;
+  let platform = "windows";
   const ASK = {
-    cleanup: "Удалить временные файлы (C:\\Windows\\Temp, Temp пользователей) и кэш загрузок обновлений Windows",
-    reboot: "Перезагрузить компьютер сейчас. Несохранённая работа пользователя пропадёт",
-    gpupdate: null,
+    windows: {
+      cleanup: "Удалить временные файлы (C:\\Windows\\Temp, Temp пользователей) и кэш загрузок обновлений Windows",
+      reboot: "Перезагрузить компьютер сейчас. Несохранённая работа пользователя пропадёт",
+    },
+    astra: {
+      cleanup: "Очистить кэш пакетов, журналы старше 14 дней и файлы /tmp старше недели",
+      reboot: "Перезагрузить компьютер через минуту (пользователь увидит предупреждение)",
+      update: "Установить обновления пакетов (astra-update) в фоне. Перезагрузка — отдельно",
+    },
   };
+  const CONFIRMED = new Set(["cleanup", "reboot", "update", "admin_add", "admin_remove"]);
+
+  function setPlatform(p) {
+    platform = p || "windows";
+    document.querySelectorAll("#pc-actions [data-only]").forEach((b) => { b.hidden = b.dataset.only !== platform; });
+    $("pc-console-title").textContent = platform === "astra" ? "Консоль bash (от root)" : "Консоль PowerShell";
+    $("pc-command").placeholder = platform === "astra" ? "ip -br addr" : "Get-NetIPConfiguration";
+  }
 
   async function loadStatus() {
     status = await api("GET", "pcs/status");
@@ -44,6 +59,7 @@
     $("pc-console-out").hidden = true;
     $("keys-result").hidden = true;
     $("pc-result").replaceChildren();
+    setPlatform("windows");
     await run("info");
   }
 
@@ -56,6 +72,7 @@
         arg: arg ?? null, confirm: confirmed, operator: window.NetAdmin.OPERATOR,
       });
       if (target !== host) return;
+      if (r.platform && r.platform !== platform) setPlatform(r.platform);
       if (!r.ok) {
         $("pc-result").replaceChildren(el("p", { className: "error-box", textContent: r.error || "Компьютер не ответил" }));
         return;
@@ -71,7 +88,15 @@
     const d = r.data;
     const sim = r.simulated ? el("p", { className: "muted small", textContent: "Эмуляция: данные ненастоящие. Включается в «Ещё → Настройки сервера» → «Компьютеры домена»." }) : "";
     const out = $("pc-result");
-    if (action === "info") {
+    if (action === "info" && r.platform === "astra") {
+      $("pc-user").textContent = d.user || "никто не вошёл";
+      out.replaceChildren(sim, astraInfo(d));
+    } else if (action === "assist") {
+      out.replaceChildren(sim, d.method === "msra" ? msraHelp(d) : vncHelp(d));
+    } else if (action === "admin_add" || action === "admin_remove") {
+      toast(d.output || "Готово");
+      run("info");
+    } else if (action === "info") {
       $("pc-user").textContent = d.user || "нет активного сеанса";
       const up = d.uptime_minutes != null ? `${Math.floor(d.uptime_minutes / 1440)} дн. ${Math.floor((d.uptime_minutes % 1440) / 60)} ч ${d.uptime_minutes % 60} мин` : null;
       out.replaceChildren(sim, el("div", { className: "info" },
@@ -89,7 +114,7 @@
         d.map((v) => [v.drive, v.label || "", String(v.free_gb), String(v.total_gb),
           v.total_gb ? `${Math.round((1 - v.free_gb / v.total_gb) * 100)} %` : ""])));
     } else if (action === "folders") {
-      out.replaceChildren(sim, d.length ? table(["Папка на C:\\", "Размер, ГБ"], d.map((f) => [f.name, String(f.size_gb)]))
+      out.replaceChildren(sim, d.length ? table([platform === "astra" ? "Папка" : "Папка на C:\\", "Размер, ГБ"], d.map((f) => [f.name, String(f.size_gb)]))
         : el("p", { className: "muted", textContent: "Папок больше 0,1 ГБ нет" }));
     } else if (action === "processes") {
       out.replaceChildren(sim, table(["PID", "Процесс", "Память, МБ", ""], d.map((p) => [String(p.id), p.name, String(p.ram_mb),
@@ -101,11 +126,61 @@
       out.replaceChildren(sim, el("p", { textContent: `Очистка завершена: освобождено ${d.freed_mb} МБ, свободно на C: ${d.free_gb} ГБ.` }));
     } else if (action === "command") {
       $("pc-console-out").hidden = false;
-      $("pc-console-out").textContent = `${r.simulated ? "[эмуляция]\n" : ""}PS ${host}> ${$("pc-command").dataset.last}\n${d.output || ""}`;
+      const prompt = platform === "astra" ? `root@${host}#` : `PS ${host}>`;
+      $("pc-console-out").textContent = `${r.simulated ? "[эмуляция]\n" : ""}${prompt} ${$("pc-command").dataset.last}\n${d.output || ""}`;
     } else {
       out.replaceChildren(sim, el("pre", { className: "output", textContent: d.output || JSON.stringify(d, null, 2) }));
       if (action === "reboot") { $("pc-user").textContent = ""; }
     }
+  }
+
+  function astraInfo(d) {
+    const up = d.uptime_minutes != null ? `${Math.floor(d.uptime_minutes / 1440)} дн. ${Math.floor((d.uptime_minutes % 1440) / 60)} ч ${d.uptime_minutes % 60} мин` : null;
+    const who = el("input", { placeholder: "ECOTEHS\\ivanova", autocomplete: "off" });
+    return el("div", { className: "info" },
+      section("Система", kv([["Компьютер", d.computer], ["ОС", d.os], ["Ядро", `${d.build || "—"} (${d.architecture || "?"})`],
+        ["Аптайм", up], ["Пользователь", d.user ? `${d.user} (${d.display})` : "никто не вошёл"], ["Процессор", d.cpu],
+        ["ОЗУ", d.ram_gb != null ? `${d.ram_gb} ГБ` : null]])),
+      section("Администраторы (sudo)",
+        d.admins.length ? table(["Пользователь", ""], d.admins.map((u) => [u,
+          el("button", { type: "button", className: "danger", textContent: "Снять", onclick: () => admins("admin_remove", u) })]))
+          : el("p", { className: "muted", textContent: "Через консоль никому не выдавалось; группа astra-admin пуста" }),
+        el("form", { className: "row", onsubmit: (ev) => { ev.preventDefault(); if (who.value.trim()) admins("admin_add", who.value.trim()); } },
+          who, el("button", { type: "submit", textContent: "Выдать sudo" })),
+        el("p", { className: "muted small", textContent: "Пишется в /etc/sudoers.d/netadmin-admins и проверяется visudo. Группа astra-admin не меняется. При включённом МКЦ администратору может понадобиться и уровень целостности (pdpl-user -i 63)." })),
+      section("Готовность", kv([["Удалённая помощь", d.x11vnc ? "x11vnc установлен" : "нет x11vnc: sudo apt install x11vnc"],
+        ["Групповые политики", d.samba_gpupdate ? "samba-gpupdate есть" : "нет samba-gpupdate (python3-samba)"]])));
+  }
+
+  function admins(action, user) {
+    const q = action === "admin_add" ? `Выдать sudo пользователю ${user} на ${host}?` : `Снять sudo с ${user} на ${host}?`;
+    if (!confirm(q)) return;
+    run(action, user, true);
+  }
+
+  function copyRow(text) {
+    return el("div", { className: "row" }, el("code", { className: "mono grow", textContent: text }),
+      el("button", { type: "button", textContent: "Копировать", onclick: () => navigator.clipboard.writeText(text).then(() => toast("Скопировано"), () => toast("Не удалось скопировать", true)) }));
+  }
+
+  function msraHelp(d) {
+    const cmd = new Blob([`@echo off\r\nstart "" msra.exe /offerra ${d.host}\r\n`], { type: "application/octet-stream" });
+    return section("Удалённая помощь Windows",
+      el("p", { textContent: "Запустите на своём компьютере (Windows, вы — в списке помощников политики):" }),
+      copyRow(d.command),
+      el("div", { className: "row" }, el("a", { className: "button", href: URL.createObjectURL(cmd), download: `Помощь ${d.host}.cmd`, textContent: "Скачать ярлык (.cmd)" })),
+      el("p", { className: "muted small", textContent: "Пользователь увидит запрос и разрешит подключение. Если msra отвечает, что предлагать помощь нельзя, нужны шаблоны групповой политики:" }),
+      el("ul", {}, ...d.needs.map((n) => el("li", { className: "small", textContent: n }))));
+  }
+
+  function vncHelp(d) {
+    return section("Удалённая помощь Astra Linux",
+      el("p", { textContent: `На ${d.host} запущен VNC для экрана ${d.user} (${d.display}). Подключитесь в течение ${d.expires_minutes} мин — пользователь увидит окно и должен нажать «Yes».` }),
+      kv([["Адрес", copyRow(d.address)], ["Пароль (одноразовый)", copyRow(d.password)], ["Режим", d.view_only ? "только просмотр" : "управление"]]),
+      el("div", { className: "row" },
+        el("a", { className: "button primary", href: d.url, textContent: "Открыть в VNC-клиенте" }),
+        d.view_only ? "" : el("button", { type: "button", textContent: "Заново, только просмотр", onclick: () => run("assist", "view") })),
+      el("p", { className: "muted small", textContent: "Любой VNC-клиент: TigerVNC, RealVNC, Remmina. Соединение одно; после отключения x11vnc закрывается. Трафик VNC не шифруется — только внутри сети. Пароль администратора в окне повышения прав вы вводите сами: на Astra оно открывается на том же экране." }));
   }
 
   function kill(name) {
@@ -117,8 +192,9 @@
     const b = ev.target.closest("button[data-pc]");
     if (!b || !host) return;
     const action = b.dataset.pc;
-    if (action in ASK && ASK[action] && !confirm(`${ASK[action]} на ${host}?`)) return;
-    run(action, null, action === "cleanup" || action === "reboot");
+    const ask = ASK[platform][action];
+    if (ask && !confirm(`${ask} на ${host}?`)) return;
+    run(action, null, CONFIRMED.has(action));
   });
   // What the computer really applied (gpresult), drawn by admin-gpo.js.
   $("pc-gpresult").addEventListener("click", () => { if (host) window.NetAdmin.showAppliedGpo(host, $("pc-result")); });
@@ -127,7 +203,7 @@
     ev.preventDefault();
     const cmd = $("pc-command").value.trim();
     if (!cmd || !host) return;
-    if (!confirm(`Выполнить на ${host} от имени администратора домена:\n\n${cmd}`)) return;
+    if (!confirm(`Выполнить на ${host} ${platform === "astra" ? "от root" : "от имени администратора домена"}:\n\n${cmd}`)) return;
     $("pc-command").dataset.last = cmd;
     run("command", cmd, true);
   });
@@ -203,6 +279,13 @@
     el("a", { href: url, download: `Keys_Inventory_${stamp}.csv` }).click();
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
+
+  // From the device card: the computer's page with remote help started.
+  window.NetAdmin.assistPc = (name) => {
+    window.NetAdmin.openTab("pcs");
+    $("pc-host").value = name;
+    openPc(name).then(() => run("assist")).catch(fail);
+  };
 
   // From the device card: the computer's page, opened at once.
   window.NetAdmin.openPc = (name) => {

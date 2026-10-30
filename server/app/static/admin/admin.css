@@ -254,3 +254,4 @@ dialog.card-dialog { width: min(980px, calc(100% - 32px)); height: min(760px, ca
 #gpo-template-form fieldset { border: 1px solid var(--line); border-radius: 8px; display: flex; flex-direction: column; gap: 10px; }
 #gpo-template-form fieldset:disabled { opacity: .55; }
 #gpo-template-form .states label.check { flex-wrap: nowrap; white-space: nowrap; }
+a.button { text-decoration: none; display: inline-flex; align-items: center; }

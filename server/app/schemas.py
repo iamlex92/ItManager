@@ -1195,6 +1195,8 @@ class PcActionOut(BaseModel):
     error: str = ""
     simulated: bool = False
     audit_id: uuid.UUID | None = None
+    # windows (WinRM) or astra (SSH): what answered.
+    platform: str = "windows"
 
 
 class PcKeysIn(BaseModel):

@@ -35,11 +35,37 @@ class Action(StrEnum):
     REBOOT = "reboot"
     KILL = "kill"
     COMMAND = "command"
+    # Remote help: msra for Windows, x11vnc with the user's consent for Astra Linux.
+    ASSIST = "assist"
+    # Astra Linux only.
+    UPDATE = "update"
+    ADMIN_ADD = "admin_add"
+    ADMIN_REMOVE = "admin_remove"
 
 
 READ_ACTIONS = {Action.INFO, Action.DISKS, Action.FOLDERS, Action.PROCESSES}
 # Asked again with a fingerprint on the phone (and «Да» in the web console) before they run.
-CONFIRM_ACTIONS = {Action.CLEANUP, Action.REBOOT, Action.KILL, Action.COMMAND}
+CONFIRM_ACTIONS = {
+    Action.CLEANUP,
+    Action.REBOOT,
+    Action.KILL,
+    Action.COMMAND,
+    Action.UPDATE,
+    Action.ADMIN_ADD,
+    Action.ADMIN_REMOVE,
+}
+WINDOWS_ACTIONS = {
+    Action.INFO,
+    Action.DISKS,
+    Action.FOLDERS,
+    Action.PROCESSES,
+    Action.CLEANUP,
+    Action.GPUPDATE,
+    Action.REBOOT,
+    Action.KILL,
+    Action.COMMAND,
+    Action.ASSIST,
+}
 
 
 class PcError(Exception):
@@ -62,6 +88,12 @@ def valid_host(host: str) -> str:
 
 
 def script_for(action: Action, arg: str | None) -> str:
+    if action not in WINDOWS_ACTIONS or action is Action.ASSIST:
+        raise PcError(
+            "Это действие есть только для Astra Linux"
+            if action not in WINDOWS_ACTIONS
+            else "Удалённая помощь Windows запускается с вашего компьютера (msra), не на сервере"
+        )
     if action is Action.KILL:
         name = (arg or "").strip()
         name = name[:-4] if name.lower().endswith(".exe") else name

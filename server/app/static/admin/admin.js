@@ -3648,6 +3648,7 @@
     $("card-plate").hidden = d.type === "RACK" || d.type === "SOCKET";
     // A Windows computer: the domain admin's tools (disks, processes, licences, reboot) are one click away.
     $("card-pc").hidden = !PC_KINDS.has(d.type);
+    $("card-assist").hidden = !PC_KINDS.has(d.type);
   }
 
   function kv(rows) {
@@ -3817,6 +3818,12 @@
     if (!d) return;
     $("card-dialog").close();
     window.NetAdmin.openPc(d.name || d.ip);
+  });
+  $("card-assist").addEventListener("click", () => {
+    const d = cardDevice();
+    if (!d) return;
+    $("card-dialog").close();
+    window.NetAdmin.assistPc(d.name || d.ip);
   });
   $("card-ping").addEventListener("click", async () => {
     const d = cardDevice();

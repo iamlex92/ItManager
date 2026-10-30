@@ -47,7 +47,16 @@ def offered(rb: Runbook, env: object) -> bool:
 
 
 async def runbook_login(session, settings: Settings) -> Login | None:
-    name = settings.runbook_credential.strip()
+    return await _login(session, settings.runbook_credential)
+
+
+async def linux_login(session, settings: Settings) -> Login | None:
+    """SSH and sudo on Astra Linux computers: its own credential, or the domain one."""
+    return await _login(session, settings.linux_credential or settings.runbook_credential)
+
+
+async def _login(session, name: str) -> Login | None:
+    name = name.strip()
     if not name:
         return None
     cred = await session.scalar(select(Credential).where(Credential.name == name))
