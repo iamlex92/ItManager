@@ -279,9 +279,7 @@ class Peripheral(Base):
     __tablename__ = "peripherals"
 
     id: Mapped[uuid.UUID] = _uuid_pk()
-    device_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("devices.id", ondelete="SET NULL"), index=True
-    )
+    device_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("devices.id", ondelete="SET NULL"), index=True)
     kind: Mapped[str] = mapped_column(String(30))
     vendor: Mapped[str | None] = mapped_column(String(50))
     model: Mapped[str | None] = mapped_column(String(100))

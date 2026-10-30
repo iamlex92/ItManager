@@ -356,8 +356,13 @@ async def remove_registry(gpo_id: str, body: GpoRegistryRemoveIn, request: Reque
         session,
         body,
         "registry_remove",
-        {"gpo": name, "gpo_id": gpo_id, "key": body.key, "name": body.name,
-         "before": await _previous(request, session, gpo_id, body.key, body.name)},  # fmt: skip
+        {
+            "gpo": name,
+            "gpo_id": gpo_id,
+            "key": body.key,
+            "name": body.name,
+            "before": await _previous(request, session, gpo_id, body.key, body.name),
+        },  # fmt: skip
         lambda login: backend.registry_remove(gpo_id, body.key, body.name, login),
     )
     return await _detail(request, session, gpo_id)

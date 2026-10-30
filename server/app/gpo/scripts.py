@@ -51,7 +51,10 @@ def _args(values: dict[str, Any]) -> str:
     return f"$a = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{raw}')) | ConvertFrom-Json\n"
 
 
-LIST = _PRELUDE + _LINKS + r"""
+LIST = (
+    _PRELUDE
+    + _LINKS
+    + r"""
 $links = @(Get-AllLinks)
 $gpos = foreach ($g in Get-GPO -All) {
   $id = $g.Id.Guid.ToLower()
@@ -69,14 +72,18 @@ $gpos = foreach ($g in Get-GPO -All) {
 }
 @{ gpos = @($gpos) } | ConvertTo-Json -Depth 6 -Compress
 """
+)
 
-OUS = _PRELUDE + r"""
+OUS = (
+    _PRELUDE
+    + r"""
 $d = Get-ADDomain
 $ous = @([pscustomobject]@{ dn = $d.DistinguishedName; name = $d.DNSRoot })
 $ous += Get-ADOrganizationalUnit -Filter * -Properties CanonicalName |
   Sort-Object CanonicalName | ForEach-Object { [pscustomobject]@{ dn = $_.DistinguishedName; name = $_.CanonicalName } }
 @{ ous = $ous } | ConvertTo-Json -Depth 4 -Compress
 """
+)
 
 # The registry part of a GPO (Administrative Templates and registry preferences under the policy keys):
 # Get-GPRegistryValue lists one key level at a time, so the policy roots are walked down.
@@ -108,7 +115,12 @@ _ROOTS = (
 
 
 def detail(gpo_id: str) -> str:
-    return _PRELUDE + _LINKS + _REGISTRY + _args({"id": gpo_id, "roots": list(_ROOTS)}) + r"""
+    return (
+        _PRELUDE
+        + _LINKS
+        + _REGISTRY
+        + _args({"id": gpo_id, "roots": list(_ROOTS)})
+        + r"""
 $g = Get-GPO -Guid $a.id
 $id = $g.Id.Guid.ToLower()
 $registry = foreach ($r in $a.roots) { Walk-Gpo $a.id $r 0 }
@@ -125,18 +137,27 @@ $filter = Get-GPPermission -Guid $a.id -All | Where-Object { $_.Permission -eq '
   security_filter = @($filter)
 } | ConvertTo-Json -Depth 6 -Compress
 """
+    )
 
 
 def report(gpo_id: str) -> str:
-    return _PRELUDE + _args({"id": gpo_id}) + r"""
+    return (
+        _PRELUDE
+        + _args({"id": gpo_id})
+        + r"""
 @{ html = (Get-GPOReport -Guid $a.id -ReportType Html) } | ConvertTo-Json -Compress
 """
+    )
 
 
 def scope(gpo_id: str) -> str:
     """Computers the GPO reaches: under its enabled links (blocked inheritance stops unenforced ones) and passing
     its security filter. The same rules Windows applies, short of WMI filters and loopback."""
-    return _PRELUDE + _LINKS + _args({"id": gpo_id}) + r"""
+    return (
+        _PRELUDE
+        + _LINKS
+        + _args({"id": gpo_id})
+        + r"""
 $id = $a.id.ToLower()
 $all = @(Get-AllLinks)
 $blockers = @($all | Where-Object { $_.blocks_inheritance } | Select-Object -ExpandProperty target -Unique)
@@ -173,6 +194,7 @@ $computers = foreach ($c in $found.Values) {
 }
 @{ computers = @($computers | Sort-Object name); filtered = (-not $everyone) } | ConvertTo-Json -Depth 4 -Compress
 """
+    )
 
 
 def _done(what: str) -> str:
@@ -187,15 +209,21 @@ def _backup(path: str) -> str:
 
 
 def set_status(gpo_id: str, status: str, backup: str) -> str:
-    return _PRELUDE + _args({"id": gpo_id, "status": status, "backup": backup, "what": "сменой состояния"}) + (
-        _backup(backup) + "(Get-GPO -Guid $a.id).GpoStatus = $a.status\n" + _done("status")
+    return (
+        _PRELUDE
+        + _args({"id": gpo_id, "status": status, "backup": backup, "what": "сменой состояния"})
+        + (_backup(backup) + "(Get-GPO -Guid $a.id).GpoStatus = $a.status\n" + _done("status"))
     )
 
 
 def link_add(gpo_id: str, target: str, enforced: bool) -> str:
-    return _PRELUDE + _args({"id": gpo_id, "target": target, "enforced": enforced}) + (
-        "New-GPLink -Guid $a.id -Target $a.target -LinkEnabled Yes "
-        "-Enforced $(if ($a.enforced) { 'Yes' } else { 'No' }) | Out-Null\n" + _done("link_add")
+    return (
+        _PRELUDE
+        + _args({"id": gpo_id, "target": target, "enforced": enforced})
+        + (
+            "New-GPLink -Guid $a.id -Target $a.target -LinkEnabled Yes "
+            "-Enforced $(if ($a.enforced) { 'Yes' } else { 'No' }) | Out-Null\n" + _done("link_add")
+        )
     )
 
 
@@ -205,44 +233,66 @@ def link_set(gpo_id: str, target: str, enabled: bool | None, enforced: bool | No
         parts += "Set-GPLink -Guid $a.id -Target $a.target -LinkEnabled $(if ($a.enabled) { 'Yes' } else { 'No' }) | Out-Null\n"
     if enforced is not None:
         parts += "Set-GPLink -Guid $a.id -Target $a.target -Enforced $(if ($a.enforced) { 'Yes' } else { 'No' }) | Out-Null\n"
-    return _PRELUDE + _args({"id": gpo_id, "target": target, "enabled": enabled, "enforced": enforced}) + parts + _done("link_set")
+    return (
+        _PRELUDE
+        + _args({"id": gpo_id, "target": target, "enabled": enabled, "enforced": enforced})
+        + parts
+        + _done("link_set")
+    )
 
 
 def link_remove(gpo_id: str, target: str) -> str:
-    return _PRELUDE + _args({"id": gpo_id, "target": target}) + (
-        "Remove-GPLink -Guid $a.id -Target $a.target | Out-Null\n" + _done("link_remove")
+    return (
+        _PRELUDE
+        + _args({"id": gpo_id, "target": target})
+        + ("Remove-GPLink -Guid $a.id -Target $a.target | Out-Null\n" + _done("link_remove"))
     )
 
 
 def registry_set(gpo_id: str, key: str, name: str, kind: str, value: Any, backup: str) -> str:
     args = {"id": gpo_id, "key": key, "name": name, "type": kind, "value": value, "backup": backup,
             "what": "изменением параметра"}  # fmt: skip
-    return _PRELUDE + _args(args) + _backup(backup) + r"""
+    return (
+        _PRELUDE
+        + _args(args)
+        + _backup(backup)
+        + r"""
 $v = $a.value
 if ($a.type -eq 'DWord') { $v = [uint32]$a.value }
 elseif ($a.type -eq 'QWord') { $v = [uint64]$a.value }
 elseif ($a.type -eq 'MultiString') { $v = [string[]]($a.value -split "`n") }
 Set-GPRegistryValue -Guid $a.id -Key $a.key -ValueName $a.name -Type $a.type -Value $v | Out-Null
-""" + _done("registry_set")
+"""
+        + _done("registry_set")
+    )
 
 
 def registry_remove(gpo_id: str, key: str, name: str, backup: str) -> str:
     args = {"id": gpo_id, "key": key, "name": name, "backup": backup, "what": "удалением параметра"}
-    return _PRELUDE + _args(args) + _backup(backup) + (
-        "Remove-GPRegistryValue -Guid $a.id -Key $a.key -ValueName $a.name | Out-Null\n" + _done("registry_remove")
+    return (
+        _PRELUDE
+        + _args(args)
+        + _backup(backup)
+        + ("Remove-GPRegistryValue -Guid $a.id -Key $a.key -ValueName $a.name | Out-Null\n" + _done("registry_remove"))
     )
 
 
 def create(name: str, comment: str) -> str:
-    return _PRELUDE + _args({"name": name, "comment": comment}) + r"""
+    return (
+        _PRELUDE
+        + _args({"name": name, "comment": comment})
+        + r"""
 $g = New-GPO -Name $a.name -Comment $a.comment
 @{ ok = $true; id = $g.Id.Guid.ToLower() } | ConvertTo-Json -Compress
 """
+    )
 
 
 def delete(gpo_id: str, backup: str) -> str:
-    return _PRELUDE + _args({"id": gpo_id, "backup": backup, "what": "удалением"}) + (
-        _backup(backup) + "Remove-GPO -Guid $a.id\n" + _done("delete")
+    return (
+        _PRELUDE
+        + _args({"id": gpo_id, "backup": backup, "what": "удалением"})
+        + (_backup(backup) + "Remove-GPO -Guid $a.id\n" + _done("delete"))
     )
 
 

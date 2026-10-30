@@ -35,9 +35,7 @@ def upgrade() -> None:
     op.create_index("ix_peripherals_device_id", "peripherals", ["device_id"])
     op.create_table(
         "device_faceplates",
-        sa.Column(
-            "device_id", UUID(as_uuid=True), sa.ForeignKey("devices.id", ondelete="CASCADE"), primary_key=True
-        ),
+        sa.Column("device_id", UUID(as_uuid=True), sa.ForeignKey("devices.id", ondelete="CASCADE"), primary_key=True),
         sa.Column("svg", sa.Text(), nullable=False),
         sa.Column("width", sa.Float(), nullable=False),
         sa.Column("height", sa.Float(), nullable=False),

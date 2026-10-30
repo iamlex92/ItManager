@@ -34,7 +34,16 @@ def _422(code: str, message: str) -> HTTPException:
 _UPLINK_FAMILIES = {"te", "twe", "fo", "hu"}
 # Colours for VLANs added from a config, so they differ on the map's VLAN layer.
 _PALETTE = [
-    "#3498db", "#e67e22", "#9b59b6", "#e74c3c", "#2ecc71", "#1abc9c", "#f1c40f", "#34495e", "#ff7eb6", "#95a5a6",
+    "#3498db",
+    "#e67e22",
+    "#9b59b6",
+    "#e74c3c",
+    "#2ecc71",
+    "#1abc9c",
+    "#f1c40f",
+    "#34495e",
+    "#ff7eb6",
+    "#95a5a6",
 ]
 _PLACEHOLDER = re.compile(r"^port(\d+)$")
 
@@ -98,8 +107,11 @@ async def import_config(device_id: uuid.UUID, body: ConfigImportIn, request: Req
     else:
         raise _422("unrecognised_text", "expected a Cisco/Eltex running-config or `show vlan brief` output")
 
-    new_vlans = {vid: name or ("default" if vid == 1 else f"VLAN {vid}") for vid, (name, _) in text_vlans.items()
-                 if vid not in known}
+    new_vlans = {
+        vid: name or ("default" if vid == 1 else f"VLAN {vid}")
+        for vid, (name, _) in text_vlans.items()
+        if vid not in known
+    }
 
     if body.apply and new_vlans:
         # VLANs first: ports point at them.

@@ -2,10 +2,7 @@
 
 from .conftest import find, ports_of
 
-SVG = (
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 482 44">'
-    '<rect width="482" height="44" fill="#333"/></svg>'
-)
+SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 482 44"><rect width="482" height="44" fill="#333"/></svg>'
 
 
 def test_peripheral_lifecycle(client):
@@ -24,9 +21,7 @@ def test_peripheral_lifecycle(client):
     assert [p["id"] for p in client.get("/api/v1/peripherals", params={"device_id": pc["id"]}).json()] == [
         monitor["id"]
     ]
-    assert [p["id"] for p in client.get("/api/v1/peripherals", params={"unassigned": True}).json()] == [
-        keyboard["id"]
-    ]
+    assert [p["id"] for p in client.get("/api/v1/peripherals", params={"unassigned": True}).json()] == [keyboard["id"]]
     assert len(client.get("/api/v1/peripherals", params={"q": "p2422"}).json()) == 1
 
     r = client.patch(f"/api/v1/peripherals/{keyboard['id']}", json={"device_id": pc["id"]})
@@ -83,9 +78,9 @@ def test_faceplate_upload_marks_and_copy(client):
     plate = r.json()
     assert (plate["width"], plate["height"], plate["ports"]) == (482, 44, [])
     svg = client.get(f"/api/v1/devices/{sw['id']}/faceplate/svg")
-    assert svg.headers["content-type"].startswith("image/svg+xml") and "sandbox" in svg.headers[
-        "content-security-policy"
-    ]
+    assert (
+        svg.headers["content-type"].startswith("image/svg+xml") and "sandbox" in svg.headers["content-security-policy"]
+    )
 
     ports = ports_of(client, sw["id"])
     marks = [
@@ -98,9 +93,10 @@ def test_faceplate_upload_marks_and_copy(client):
     other = ports_of(client, find(client, "SW-ACC-02")["id"])[0]
     bad = [{"port_id": other["id"], "x": 0, "y": 0, "w": 0.1, "h": 0.1}]
     assert client.put(f"/api/v1/devices/{sw['id']}/faceplate/ports", json={"ports": bad}).status_code == 422
-    assert client.put(
-        f"/api/v1/devices/{sw['id']}/faceplate/ports", json={"ports": [marks[0], marks[0]]}
-    ).status_code == 422
+    assert (
+        client.put(f"/api/v1/devices/{sw['id']}/faceplate/ports", json={"ports": [marks[0], marks[0]]}).status_code
+        == 422
+    )
     off = [{**marks[0], "x": 1.5}]
     assert client.put(f"/api/v1/devices/{sw['id']}/faceplate/ports", json={"ports": off}).status_code == 422
 
