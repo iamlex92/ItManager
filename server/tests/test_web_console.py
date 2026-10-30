@@ -62,7 +62,8 @@ def test_scripts_show_up_as_runbooks_and_only_emulate(client):
     r = client.post(f"/api/v1/runbooks/{rb['id']}/run", json={"params": {"server": "srv-print"}, "operator": "Pixel"})
     out = r.json()
     assert r.status_code == 200 and out["exit_code"] == 0 and out["simulated"] is True
-    assert "Эмуляция" in out["stdout"] and "-ComputerName srv-print" in out["stdout"]
+    # The value goes in as a PowerShell string, never as code.
+    assert "Эмуляция" in out["stdout"] and "-ComputerName 'srv-print'" in out["stdout"]
     audit = client.get("/api/v1/audit", params={"kind": "runbook"}).json()
     assert audit[0]["parameters"]["params"] == {"server": "srv-print"}
 

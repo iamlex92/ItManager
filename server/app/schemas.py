@@ -705,6 +705,8 @@ class RunbookRunIn(BaseModel):
     auth_method: str | None = Field(default=None, max_length=40)
     # Who or what started the run (the app sends the phone model); the client IP is added.
     operator: str | None = Field(default=None, max_length=60)
+    # A custom script: show it with the parameters filled in, run nothing (the web console's «Проверить»).
+    dry_run: bool = False
 
 
 class RunbookRunOut(BaseModel):
@@ -722,7 +724,9 @@ class RunbookRunOut(BaseModel):
 
 # --- custom scripts (web console) ---------------------------------------------
 
-ScriptShell = Literal["powershell", "bash", "cmd"]
+ScriptShell = Literal["powershell", "bash", "cmd", "python"]
+# emulator: only shown; pc: on a domain computer chosen at the run; server: on the NetAdmin server.
+ScriptTarget = Literal["emulator", "pc", "server"]
 
 
 def _unique_params(params: list["ScriptParam"]) -> list["ScriptParam"]:
@@ -746,6 +750,7 @@ class ScriptBase(BaseModel):
     body: str = Field(min_length=1, max_length=20_000)
     params: list[ScriptParam] = Field(default_factory=list, max_length=10)
     critical: bool = False
+    runs_on: ScriptTarget = "emulator"
 
     @field_validator("params")
     @classmethod
@@ -764,6 +769,7 @@ class ScriptUpdate(BaseModel):
     body: str | None = Field(default=None, min_length=1, max_length=20_000)
     params: list[ScriptParam] | None = Field(default=None, max_length=10)
     critical: bool | None = None
+    runs_on: ScriptTarget | None = None
 
     @field_validator("params")
     @classmethod

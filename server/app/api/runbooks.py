@@ -94,7 +94,7 @@ async def run_runbook(runbook_id: str, body: RunbookRunIn, request: Request, ses
             },
         )
 
-    # Scripts from the web console are never executed, whatever RUNBOOK_MODE says.
+    # Scripts from the web console run where they say (scripts.execute), whatever RUNBOOK_MODE says.
     real = isinstance(env, RealRunbooks) and custom is None
     client = request.client.host if request.client else "unknown"
     triggered_by = f"{body.operator} · {client}" if body.operator else f"api:{client}"
@@ -102,11 +102,14 @@ async def run_runbook(runbook_id: str, body: RunbookRunIn, request: Request, ses
     t0 = time.monotonic()
     try:
         if custom is not None:
-            result = scripts.emulate(custom, params)
+            result, simulated = await scripts.execute(custom, params, request, session, body.dry_run)
+            real = not simulated
         elif isinstance(env, RealRunbooks):
             result = await env.run(rb.id, params, await runbook_login(session, request.app.state.settings))
         else:
             result = await env.run(rb.id, params)
+    except HTTPException:
+        raise
     except Exception as e:
         log.exception("runbook %s failed", rb.id)
         result = RunResult(exit_code=1, stdout="", stderr=f"FAILED: {e!r}")

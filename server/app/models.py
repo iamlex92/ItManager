@@ -236,8 +236,9 @@ class Credential(Base):
 
 
 class CustomScript(Base):
-    """A script added by the IT team in the web console. The phone lists it with the runbooks;
-    runs are emulated (the text with parameters filled in is shown, nothing is executed)."""
+    """A script added by the IT team in the web console. The phone lists it with the runbooks. [runs_on]: emulator
+    (the text with parameters filled in is shown, nothing runs), pc (on a domain computer chosen at the run: Windows
+    over WinRM, Astra Linux over SSH) or server (on the NetAdmin server itself)."""
 
     __tablename__ = "custom_scripts"
 
@@ -249,6 +250,7 @@ class CustomScript(Base):
     # [{"name": "account", "label": "Учётная запись", "required": true, "placeholder": "i.ivanov"}]
     params: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default=text("'[]'::jsonb"))
     critical: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    runs_on: Mapped[str] = mapped_column(String(20), server_default=text("'emulator'"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
