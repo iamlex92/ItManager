@@ -13,6 +13,7 @@ import com.itmanager.app.data.model.PlanRect
 import com.itmanager.app.data.model.PortMode
 import com.itmanager.app.data.model.Printer
 import com.itmanager.app.data.model.ServerHealth
+import com.itmanager.app.data.model.StatusRefresh
 import com.itmanager.app.data.model.SwitchPort
 import com.itmanager.app.data.model.Vlan
 import com.itmanager.app.data.model.VlanDraft
@@ -96,6 +97,7 @@ data class DeviceDto(
     @SerialName("ssh_credential_id") val sshCredentialId: String? = null,
     @SerialName("has_snmp_community") val hasSnmpCommunity: Boolean = false,
     val metadata: Map<String, JsonElement> = emptyMap(),
+    @SerialName("extra_ips") val extraIps: List<String> = emptyList(),
 ) {
     fun toDomain() = Device(
         id = id,
@@ -122,8 +124,22 @@ data class DeviceDto(
         sshCredentialId = sshCredentialId,
         hasSnmpCommunity = hasSnmpCommunity,
         metadata = metadata,
+        extraIps = extraIps,
     )
 }
+
+@Serializable
+data class StatusRefreshDto(
+    val checked: Int = 0,
+    val online: Int = 0,
+    val changed: Int = 0,
+    val errors: List<String> = emptyList(),
+) {
+    fun toDomain() = StatusRefresh(checked, online, changed, errors)
+}
+
+@Serializable
+data class MergeBody(@SerialName("source_id") val sourceId: String, val confirm: Boolean = true)
 
 @Serializable
 data class PortDto(

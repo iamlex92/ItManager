@@ -75,6 +75,7 @@ import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.AnnotationKind
 import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.model.isMac
+import com.itmanager.app.data.model.splitIps
 import com.itmanager.app.data.model.FloorInfo
 import com.itmanager.app.ui.components.DEVICE_TYPES_IN_ORDER
 import com.itmanager.app.ui.components.icon
@@ -384,6 +385,9 @@ private fun SshLoginPicker(selected: String?, onPick: (String?) -> Unit) {
     )
 }
 
+/** Objects with no address of their own: no «Сеть» section in the form. */
+private val PASSIVE_FORM_TYPES = setOf(DeviceType.RACK, DeviceType.SOCKET, DeviceType.PATCH_PANEL)
+
 private val IPV4 = Regex("""^((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$""")
 
 /** Adds an object to the map or edits one. Only the inventory changes; the device itself is never contacted. */
@@ -407,6 +411,7 @@ fun DeviceFormDialog(
     var name by rememberSaveable(key) { mutableStateOf(device?.name.orEmpty()) }
     var type by rememberSaveable(key) { mutableStateOf(device?.type ?: form.presetType ?: DeviceType.SWITCH) }
     var ip by rememberSaveable(key) { mutableStateOf(device?.ip.orEmpty()) }
+    var extraIps by rememberSaveable(key) { mutableStateOf(device?.extraIps.orEmpty().joinToString(", ")) }
     var mac by rememberSaveable(key) { mutableStateOf(device?.mac.orEmpty()) }
     var vendor by rememberSaveable(key) { mutableStateOf(device?.vendor.orEmpty()) }
     var model by rememberSaveable(key) { mutableStateOf(device?.model.orEmpty()) }
@@ -416,6 +421,7 @@ fun DeviceFormDialog(
     var sshLogin by rememberSaveable(key) { mutableStateOf(device?.sshCredentialId) }
     var snmpCommunity by rememberSaveable(key) { mutableStateOf("") }
     val ipError = ip.isNotBlank() && !IPV4.matches(ip.trim())
+    val badExtraIp = splitIps(extraIps).firstOrNull { !IPV4.matches(it) }
     val macError = mac.isNotBlank() && !isMac(mac)
     var triedSave by rememberSaveable(key) { mutableStateOf(false) }
     val nameError = triedSave && name.isBlank()
@@ -425,7 +431,7 @@ fun DeviceFormDialog(
         onDismiss = onDismiss,
         onSave = {
             triedSave = true
-            if (name.isBlank() || ipError || macError) return@FormSheet
+            if (name.isBlank() || ipError || macError || badExtraIp != null) return@FormSheet
             onSave(
                 DeviceDraft(
                     name = name.trim(),
@@ -443,6 +449,7 @@ fun DeviceFormDialog(
                     rackH = device?.rackH.takeIf { type != DeviceType.RACK },
                     sshCredentialId = sshLogin.takeIf { type == DeviceType.SWITCH },
                     snmpCommunity = snmpCommunity.trim().takeIf { it.isNotEmpty() && type in SNMP_TYPES },
+                    extraIps = if (type in PASSIVE_FORM_TYPES) emptyList() else splitIps(extraIps),
                 ),
             )
         },
@@ -492,7 +499,7 @@ fun DeviceFormDialog(
                 )
             }
         }
-        if (type != DeviceType.RACK && type != DeviceType.SOCKET && type != DeviceType.PATCH_PANEL) {
+        if (type !in PASSIVE_FORM_TYPES) {
             FormSection("Сеть") {
                 OutlinedTextField(
                     value = ip,
@@ -502,6 +509,20 @@ fun DeviceFormDialog(
                     supportingText = if (ipError) ({ Text("Нужен адрес вида 10.0.0.1") }) else null,
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = extraIps,
+                    onValueChange = { extraIps = it.take(600) },
+                    label = { Text("Другие IP-адреса") },
+                    placeholder = { Text("10.0.1.1, 192.168.82.1") },
+                    isError = badExtraIp != null,
+                    supportingText = {
+                        Text(badExtraIp?.let { "«$it» — не IP-адрес" } ?: "Другие интерфейсы того же устройства: их тоже пингуем и находим поиском.")
+                    },
+                    singleLine = true,
+                    // Commas between addresses: the plain keyboard, not the number pad.
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(

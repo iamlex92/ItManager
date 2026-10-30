@@ -14,7 +14,7 @@ Clients should ignore unknown fields.
 | GET | `/api/v1/health` | `{status, version, hal_mode: "emulator"\|"real", device_writes_enabled, monitor_mode: "emulator"\|"real"}` (no auth) |
 | GET | `/api/v1/floors` | `[{id, building_name, floor_number, name, plan_image_url, scale_pixels_per_meter, width_px, height_px, created_at}]` |
 | GET | `/api/v1/floors/{id}/plan-image` | plan image uploaded for the floor (`plan_image_url` points here) |
-| GET | `/api/v1/devices?floor_id=&type=&q=` | `[{id, name, type, vendor, model, ip, mac, floor_id, x, y, is_online, last_seen_at, vlan_id, is_active, nfc_tag_uid, snmp_community, metadata}]` |
+| GET | `/api/v1/devices?floor_id=&type=&q=` | Search `q` also matches `extra_ips` (a device's other addresses: pinged too; online when any answers). `[{id, name, type, vendor, model, ip, extra_ips, mac, floor_id, x, y, is_online, last_seen_at, vlan_id, is_active, nfc_tag_uid, snmp_community, metadata}]` |
 | GET | `/api/v1/devices/{id}` | one device |
 | GET | `/api/v1/devices/by-nfc/{uid}` | device bound to an NFC tag |
 | GET | `/api/v1/search?q=` | devices matching name, IP, MAC or NFC UID |
@@ -75,6 +75,8 @@ Map editor (the app's "Редактор карты"), also inventory only:
 | PATCH | `/api/v1/connections/{id}` | `waypoints`: the cable's bends from end A to end B, `[{x, y, floor_id?}]`, up to 200. A bend without `floor_id` lies on end A's floor; a cable between floors lists its bends on each floor and the apps draw a riser where it leaves one. `[]` makes it straight again. |
 | POST | `/api/v1/devices/bulk` | `{ids: [...], set: {type?, floor_id?, vendor?, model?, is_active?, host_id?}}`: one change on up to 1000 devices; fields left out stay. `{changed, missing}`; 422 `nothing_to_change`, 404 for an unknown floor or host. |
 | POST | `/api/v1/devices/bulk-delete` | `{ids: [...]}`: removes devices with their ports and cables. `{changed, missing}` |
+| POST | `/api/v1/devices/{id}/merge` | `{source_id, confirm: true}`: the same device entered twice (each address found as its own host). The source's ports with their cables (a clashing port number goes after the last one, a clashing name gets the source's name), config backups, events, peripherals, faceplate, virtual machines and rack members move to `{id}`; its addresses join `extra_ips`; empty fields are filled from it; a cable between the two is removed; the source is deleted. Without `confirm` 400 `confirmation_required`; 422 `same_device`, `bad_merge` (a rack with a non-rack). Audited as `device:merge`. Returns the kept device. |
+| POST | `/api/v1/devices/refresh-status` | «Обновить» on the map: one round of monitoring now, the way the background tasks do it (switch ports over SSH, SNMP or the emulator, then ping when `MONITOR_MODE=real`). `{checked, online, changed, sources, errors}`. Read-only on the equipment. |
 | POST | `/api/v1/connections/link` | `{device_a_id, device_b_id, cable_type}`: a cable between two devices; the server picks a free port on each or adds one (`same_device`, `already_linked`, `no_free_port`). |
 
 ## Talking to switches

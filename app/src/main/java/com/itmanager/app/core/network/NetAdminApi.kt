@@ -95,6 +95,12 @@ class NetAdminApi @Inject constructor(
     suspend fun bulkDeleteDevices(s: ServerSettings, body: BulkDeleteBody): BulkResultDto =
         post(s, "devices/bulk-delete", body)
 
+    /** Folds [body]'s device into [id]: ports, cables, history and addresses move, the other one is removed. */
+    suspend fun mergeDevice(s: ServerSettings, id: String, body: MergeBody): DeviceDto = post(s, "devices/$id/merge", body)
+
+    /** Checks every device now (switch ports, then ping) instead of waiting for the next poll. Read-only. */
+    suspend fun refreshStatus(s: ServerSettings): StatusRefreshDto = post(s, "devices/refresh-status", JsonObject(emptyMap()))
+
     suspend fun deleteDevice(s: ServerSettings, id: String) {
         guarded { client.delete("${requireBase(s)}/api/v1/devices/$id") { auth(s) } }
     }

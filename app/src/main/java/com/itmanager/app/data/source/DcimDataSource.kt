@@ -32,6 +32,7 @@ import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.StatusRefresh
 import com.itmanager.app.data.model.DeviceBulkChange
 import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.DeviceHistoryEntry
@@ -178,6 +179,10 @@ interface DcimDataSource {
     /** Also puts a device that had no floor on [floorId]. */
     suspend fun moveDevice(id: String, floorId: String, x: Float, y: Float)
     suspend fun deleteDevice(id: String)
+    /** [sourceId] is the same device entered twice: it is folded into [id] and removed. */
+    suspend fun mergeDevice(id: String, sourceId: String): Device
+    /** One round of monitoring now: switch ports, then ping. */
+    suspend fun refreshStatus(): StatusRefresh
     /** One change on many devices; returns how many were changed. */
     suspend fun bulkUpdateDevices(ids: List<String>, change: DeviceBulkChange): Int
     suspend fun bulkDeleteDevices(ids: List<String>): Int

@@ -63,21 +63,26 @@ data class Device(
     val hasSnmpCommunity: Boolean = false,
     /** Free-form server-side attributes; a rack keeps its look here (see [RackStyle]). */
     val metadata: Map<String, JsonElement> = emptyMap(),
+    /** The device's other addresses (other interfaces, or a merged duplicate): pinged and searched like [ip]. */
+    val extraIps: List<String> = emptyList(),
 ) {
+    /** Every address, the main one first. */
+    val allIps: List<String> get() = listOfNotNull(ip) + extraIps
+
     /** The unit number the device's top edge reaches in its rack. */
     val rackTop: Int? get() = rackU?.let { it + (rackH ?: 1) - 1 }
 
     fun toDraft() = DeviceDraft(
         name = name, type = type, ip = ip, vendor = vendor, model = model, hostId = hostId,
         comment = comment, rackId = rackId, rackU = rackU, rackH = rackH, rackUnits = rackUnits, mac = mac,
-        sshCredentialId = sshCredentialId, metadata = metadata,
+        sshCredentialId = sshCredentialId, metadata = metadata, extraIps = extraIps,
     )
 
     fun matches(query: String): Boolean {
         val q = query.trim()
         if (q.isEmpty()) return true
         return name.contains(q, ignoreCase = true) ||
-            ip?.contains(q) == true ||
+            allIps.any { it.contains(q) } ||
             mac?.replace("-", ":")?.contains(q.replace("-", ":"), ignoreCase = true) == true ||
             model?.contains(q, ignoreCase = true) == true
     }
@@ -356,7 +361,15 @@ data class DeviceDraft(
     val snmpCommunity: String? = null,
     /** Sent whole: the server replaces the dictionary, so keep what the device already has. */
     val metadata: Map<String, JsonElement>? = null,
+    /** The device's other addresses, sent whole. */
+    val extraIps: List<String> = emptyList(),
 )
+
+/** What one «Обновить» round found: devices checked, answering, changed, and sources that failed. */
+data class StatusRefresh(val checked: Int, val online: Int, val changed: Int, val errors: List<String>)
+
+/** Addresses typed into one field, split on commas, semicolons and spaces. */
+fun splitIps(text: String): List<String> = text.split(',', ';', ' ', '\n').map { it.trim() }.filter { it.isNotEmpty() }.distinct()
 
 private val MAC = Regex("^[0-9a-fA-F]{2}([:-]?[0-9a-fA-F]{2}){5}$")
 

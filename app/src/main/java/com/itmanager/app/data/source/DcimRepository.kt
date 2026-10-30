@@ -32,6 +32,7 @@ import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.StatusRefresh
 import com.itmanager.app.data.model.DeviceTemplateDraft
 import com.itmanager.app.data.model.DeviceBulkChange
 import com.itmanager.app.data.model.DeviceDraft
@@ -165,6 +166,8 @@ class DcimRepository @Inject constructor(
     suspend fun moveDevice(id: String, floorId: String, x: Float, y: Float): Result<Unit> =
         edit { moveDevice(id, floorId, x, y) }
     suspend fun deleteDevice(id: String): Result<Unit> = edit { deleteDevice(id) }
+    suspend fun mergeDevice(id: String, sourceId: String): Result<Device> = edit { mergeDevice(id, sourceId) }
+    suspend fun refreshStatus(): Result<StatusRefresh> = edit { refreshStatus() }
     suspend fun bulkUpdateDevices(ids: List<String>, change: DeviceBulkChange): Result<Int> =
         edit { bulkUpdateDevices(ids, change) }
     suspend fun bulkDeleteDevices(ids: List<String>): Result<Int> = edit { bulkDeleteDevices(ids) }

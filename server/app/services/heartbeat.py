@@ -9,7 +9,7 @@ import sys
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..models import Device, DeviceAlert
@@ -47,13 +47,17 @@ def ping_available() -> bool:
     return shutil.which("ping") is not None
 
 
-async def heartbeat_once(sm: async_sessionmaker[AsyncSession], hub: Hub, pinger: Pinger, concurrency: int = 32) -> None:
+async def heartbeat_once(
+    sm: async_sessionmaker[AsyncSession], hub: Hub, pinger: Pinger, concurrency: int = 32
+) -> tuple[int, int]:
+    """One round: every active device with an address is pinged; one that answers on any of its addresses is
+    online. Returns how many devices were checked and how many changed state."""
     async with sm() as session:
         rows = (
             await session.execute(
-                select(Device.id, Device.ip_address).where(
+                select(Device.id, Device.ip_address, Device.extra_ips).where(
                     Device.is_active.is_(True),
-                    Device.ip_address.is_not(None),
+                    Device.ip_address.is_not(None) | (func.cardinality(Device.extra_ips) > 0),
                     Device.device_type.not_in(PASSIVE_TYPES),
                 )
             )
@@ -68,12 +72,22 @@ async def heartbeat_once(sm: async_sessionmaker[AsyncSession], hub: Hub, pinger:
                 log.exception("ping %s failed", ip)
                 return False
 
-    results = await asyncio.gather(*(probe(str(ip)) for _, ip in rows))
+    async def answers(ips: list[str]) -> bool:
+        # The main address first; the others only when it is silent.
+        for ip in ips:
+            if await probe(ip):
+                return True
+        return False
+
+    def addresses(main, extra) -> list[str]:
+        return list(dict.fromkeys(str(ip) for ip in [main, *(extra or [])] if ip is not None))
+
+    results = await asyncio.gather(*(answers(addresses(main, extra)) for _, main, extra in rows))
     now = datetime.now(UTC)
     async with sm() as session:
         flipped: list[Device] = []
         touched: list[DeviceAlert] = []
-        for (device_id, _), up in zip(rows, results, strict=True):
+        for (device_id, _, _), up in zip(rows, results, strict=True):
             d = await session.get(Device, device_id)
             if d is None:
                 continue
@@ -87,6 +101,7 @@ async def heartbeat_once(sm: async_sessionmaker[AsyncSession], hub: Hub, pinger:
         for d in flipped:
             alerts.publish_device_status(hub, d)
         await alerts.publish(session, hub, touched)
+    return len(rows), len(flipped)
 
 
 async def heartbeat(

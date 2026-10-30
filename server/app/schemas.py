@@ -213,6 +213,10 @@ class VlanOut(ORM, VlanBase):
 # --- devices --------------------------------------------------------------
 
 
+MAX_EXTRA_IPS = 32
+IpAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
+
+
 class DeviceBase(BaseModel):
     name: str = Field(max_length=100)
     type: DeviceType
@@ -222,6 +226,8 @@ class DeviceBase(BaseModel):
     x: float | None = None
     y: float | None = None
     ip: ipaddress.IPv4Address | ipaddress.IPv6Address | None = None
+    # The device's other addresses: pinged, searched and counted as used like the main one.
+    extra_ips: list[IpAddress] = Field(default_factory=list, max_length=MAX_EXTRA_IPS)
     mac: str | None = Field(default=None, pattern=_MAC_RE)
     nfc_tag_uid: str | None = Field(default=None, max_length=50)
     snmp_community: str | None = Field(default="public", max_length=50)
@@ -290,6 +296,7 @@ class DeviceUpdate(BaseModel):
     x: float | None = None
     y: float | None = None
     ip: ipaddress.IPv4Address | ipaddress.IPv6Address | None = None
+    extra_ips: list[IpAddress] | None = Field(default=None, max_length=MAX_EXTRA_IPS)
     mac: str | None = Field(default=None, pattern=_MAC_RE)
     nfc_tag_uid: str | None = Field(default=None, max_length=50)
     snmp_community: str | None = None
@@ -325,6 +332,7 @@ class DeviceOut(BaseModel):
     x: float | None
     y: float | None
     ip: str | None
+    extra_ips: list[str] = []
     mac: str | None
     is_online: bool
     last_seen_at: datetime | None
@@ -345,6 +353,24 @@ class DeviceOut(BaseModel):
     switch_id: uuid.UUID | None = None
     switch_port_id: uuid.UUID | None = None
     switch_port_name: str | None = None
+
+
+class DeviceMerge(BaseModel):
+    """Folds [source_id] into this device: its ports, cables, configs, events, accessories and addresses move
+    here, empty fields are filled from it, and it is removed. Inventory only; nothing is sent to equipment."""
+
+    source_id: uuid.UUID
+    confirm: bool = False
+
+
+class StatusRefreshOut(BaseModel):
+    """What one on-demand round of monitoring found: devices checked, how many answer, how many changed."""
+
+    checked: int
+    online: int
+    changed: int
+    sources: list[str]
+    errors: list[str] = []
 
 
 # --- ports ----------------------------------------------------------------
