@@ -19,6 +19,7 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.encodeURLPathPart
+import io.ktor.http.encodeURLQueryComponent
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.serialization.json.Json
@@ -527,6 +528,10 @@ class NetAdminApi @Inject constructor(
 
     suspend fun gpoApplied(s: ServerSettings, host: String): GpoAppliedDto =
         newerFeature("показывать групповые политики") { guarded { fetch(s, "gpo/computer/${host.encodeURLPathPart()}") } }
+
+    /** The ready-made settings with their state in GPO [id]. */
+    suspend fun gpoTemplates(s: ServerSettings, id: String): List<GpoTemplateDto> =
+        newerFeature("готовые шаблоны политик") { guarded { fetch(s, "gpo/templates?gpo=${id.encodeURLQueryComponent()}") } }
 
     suspend fun gpoApplyJob(s: ServerSettings, id: String): GpoApplyJobDto = guarded { fetch(s, "gpo/apply/${id.encodeURLPathPart()}") }
 

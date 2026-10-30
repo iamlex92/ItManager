@@ -43,6 +43,7 @@ import com.itmanager.app.data.model.ServerConfig
 import com.itmanager.app.data.model.GpoOverview
 import com.itmanager.app.data.model.GpoOu
 import com.itmanager.app.data.model.GpoDetail
+import com.itmanager.app.data.model.GpoTemplate
 import com.itmanager.app.data.model.GpoScope
 import com.itmanager.app.data.model.GpoAppliedOnPc
 import com.itmanager.app.data.model.GpoChange
@@ -481,6 +482,7 @@ class RemoteDataSource(
     private fun gpoBody(c: GpoChange, authMethod: AuthMethod, computers: List<String>? = null) = GpoChangeBody(
         authMethod = authMethod.wire, operator = Build.MODEL, status = c.status, target = c.target, enabled = c.enabled,
         enforced = c.enforced, key = c.key, name = c.name, type = c.type, value = c.value, comment = c.comment, computers = computers,
+        state = c.state, values = c.values,
     )
 
     override suspend fun gpoChange(method: String, path: String, change: GpoChange, authMethod: AuthMethod): GpoDetail =
@@ -492,6 +494,8 @@ class RemoteDataSource(
         api.gpoApply(settings, id, gpoBody(GpoChange(), authMethod, computers)).toDomain()
 
     override suspend fun gpoApplyJob(id: String): GpoApplyJob = api.gpoApplyJob(settings, id).toDomain()
+
+    override suspend fun gpoTemplates(id: String): List<GpoTemplate> = api.gpoTemplates(settings, id).map { it.toDomain() }
 
     override suspend fun serverConfig(): ServerConfig = api.serverConfig(settings).toDomain()
 

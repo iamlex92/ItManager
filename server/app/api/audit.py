@@ -51,6 +51,7 @@ GPO_ACTIONS = {
     "link_remove": "GPO: удаление связи",
     "registry_set": "GPO: параметр реестра",
     "registry_remove": "GPO: удаление параметра",
+    "template": "GPO: шаблон",
     "create": "GPO: создание политики",
     "delete": "GPO: удаление политики",
     "apply": "GPO: применение на компьютерах",

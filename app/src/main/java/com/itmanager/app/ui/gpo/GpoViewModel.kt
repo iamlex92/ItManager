@@ -10,6 +10,8 @@ import com.itmanager.app.data.model.GpoDetail
 import com.itmanager.app.data.model.GpoOu
 import com.itmanager.app.data.model.GpoOverview
 import com.itmanager.app.data.model.GpoScope
+import com.itmanager.app.data.model.GpoTemplate
+import com.itmanager.app.data.model.GpoTemplateState
 import com.itmanager.app.data.source.DcimRepository
 import com.itmanager.app.ui.components.UiState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -22,6 +24,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonElement
 import javax.inject.Inject
 
 /** The GPO being looked at, with what was loaded for it on demand. */
@@ -32,6 +35,9 @@ data class GpoPage(
     val scope: GpoScope? = null,
     val scopeLoading: Boolean = false,
     val job: GpoApplyJob? = null,
+    /** Ready-made settings with their state in this GPO; null while loading. */
+    val templates: List<GpoTemplate>? = null,
+    val templatesError: String? = null,
 )
 
 @HiltViewModel
@@ -73,7 +79,20 @@ class GpoViewModel @Inject constructor(private val repository: DcimRepository) :
                 .onSuccess { d -> update(id) { it.copy(detail = d, error = null) } }
                 .onFailure { e -> update(id) { it.copy(error = e.toUserMessage()) } }
         }
+        loadTemplates(id)
     }
+
+    private fun loadTemplates(id: String) {
+        viewModelScope.launch {
+            repository.gpoTemplates(id)
+                .onSuccess { t -> update(id) { it.copy(templates = t, templatesError = null) } }
+                .onFailure { e -> update(id) { it.copy(templatesError = e.toUserMessage()) } }
+        }
+    }
+
+    /** A template in one change: its state and the form's values. */
+    fun setTemplate(t: GpoTemplate, state: GpoTemplateState, values: Map<String, JsonElement>, authMethod: AuthMethod) =
+        change("POST", "templates/${t.id}", GpoChange(state = state.wire, values = values), authMethod)
 
     fun close() {
         poll?.cancel()
@@ -106,6 +125,7 @@ class GpoViewModel @Inject constructor(private val repository: DcimRepository) :
                     update(id) { it.copy(detail = d, scope = null) }
                     _messages.tryEmit("Изменено")
                     refreshList()
+                    loadTemplates(id)
                 }
                 .onFailure { _messages.tryEmit(it.toUserMessage()) }
         }

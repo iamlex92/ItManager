@@ -241,3 +241,16 @@ dialog.card-dialog { width: min(980px, calc(100% - 32px)); height: min(760px, ca
 .badge.ok { color: var(--ok, #30d158); border-color: var(--ok, #30d158); }
 @media (max-width: 760px) { .gpo-list { max-width: none; } .gpo-form { grid-template-columns: 1fr; } }
 .gpo-list .badge { white-space: nowrap; }
+.gpo-templates td:first-child { width: 100%; }
+.gpo-templates .badge { white-space: nowrap; }
+#gpo-template-dialog { width: min(600px, 96vw); }
+#gpo-template-form { width: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; }
+#gpo-template-form label.check { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+#gpo-template-form label.check > span.grow { flex: 1; min-width: 0; }
+#gpo-template-form label.check .muted { flex-basis: 100%; padding-left: 26px; }
+#gpo-template-form label.field { display: flex; flex-direction: column; gap: 4px; }
+#gpo-template-form textarea { min-height: 90px; font-family: inherit; }
+#gpo-template-form .states { display: flex; gap: 14px; flex-wrap: wrap; }
+#gpo-template-form fieldset { border: 1px solid var(--line); border-radius: 8px; display: flex; flex-direction: column; gap: 10px; }
+#gpo-template-form fieldset:disabled { opacity: .55; }
+#gpo-template-form .states label.check { flex-wrap: nowrap; white-space: nowrap; }
