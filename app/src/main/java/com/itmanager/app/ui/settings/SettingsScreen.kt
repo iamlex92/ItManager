@@ -187,7 +187,9 @@ fun SettingsScreen(
                     Spacer(Modifier.width(12.dp))
                     Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null)
                 }
-
+                Spacer(Modifier.height(24.dp))
+                SectionLabel("VPN завода (Cisco Secure Client)")
+                VpnSection()
             }
             Spacer(Modifier.height(24.dp))
             SectionLabel("Сервер NetAdmin")
