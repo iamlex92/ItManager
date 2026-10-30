@@ -366,6 +366,7 @@ private fun AppNavHost(
                 onOpenTool = { kind, host -> navController.navigate(ToolRoute(kind, host)) },
                 onOpenPc = { host -> navController.navigate(PcsRoute(host)) },
                 onOpenVlans = openVlans,
+                onAssistPc = { host -> navController.navigate(PcsRoute(host, assist = true)) },
             )
         }
         // --- screens from «Ещё» and from cards ---
@@ -541,7 +542,8 @@ private fun AppNavHost(
             popEnterTransition = { EnterTransition.None },
             popExitTransition = { slideOutHorizontally(push) { it } },
         ) { entry ->
-            PcsScreen(onBack = back, initialHost = entry.toRoute<PcsRoute>().host)
+            val route = entry.toRoute<PcsRoute>()
+            PcsScreen(onBack = back, initialHost = route.host, initialAssist = route.assist)
         }
         composable<GpoRoute>(
             enterTransition = { slideInHorizontally(push) { it } },

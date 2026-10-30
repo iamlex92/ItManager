@@ -11,6 +11,7 @@ import com.itmanager.app.data.model.GpoAppliedOnPc
 import com.itmanager.app.data.model.PcInfo
 import com.itmanager.app.data.model.PcKeyJob
 import com.itmanager.app.data.model.PcOutcome
+import com.itmanager.app.data.model.PcPlatform
 import com.itmanager.app.data.model.PcResult
 import com.itmanager.app.data.model.PcStatus
 import com.itmanager.app.data.model.PcSweepHit
@@ -40,6 +41,8 @@ data class PcSession(
     /** What the computer really applied (gpresult), once asked. */
     val applied: GpoAppliedOnPc? = null,
     val appliedLoading: Boolean = false,
+    /** Windows or Astra Linux: what answered (WinRM or SSH), learnt from the first reply. */
+    val platform: PcPlatform = PcPlatform.WINDOWS,
 )
 
 data class PcSweep(val prefix: String, val running: Boolean = false, val hits: List<PcSweepHit>? = null, val error: String? = null)
@@ -77,6 +80,9 @@ class PcsViewModel @Inject constructor(
     private var keysPoll: Job? = null
     private var opened = false
 
+    /** Remote help asked for together with opening the computer: started once its details are in. */
+    private var assistAfterInfo = false
+
     init {
         loadStatus()
     }
@@ -90,9 +96,10 @@ class PcsViewModel @Inject constructor(
     }
 
     /** Opened from a device card: once per screen, so coming back from the share sheet does not run it again. */
-    fun openOnce(host: String) {
+    fun openOnce(host: String, assist: Boolean = false) {
         if (opened || host.isBlank()) return
         opened = true
+        assistAfterInfo = assist
         open(host)
     }
 
@@ -123,19 +130,29 @@ class PcsViewModel @Inject constructor(
     }
 
     private fun applyResult(host: String, action: PcAction, arg: String?, r: PcResult) {
-        val current = _session.value?.takeIf { it.host == host } ?: return
+        val current = (_session.value?.takeIf { it.host == host } ?: return).copy(platform = r.platform)
         if (!r.ok) {
             _session.value = current.copy(running = null, error = r.error.ifBlank { "Компьютер не ответил" })
             return
         }
         when (val o = r.outcome) {
-            is PcOutcome.Info -> _session.value = current.copy(running = null, info = o.info, result = r)
+            is PcOutcome.Info -> {
+                _session.value = current.copy(running = null, info = o.info, result = r)
+                if (assistAfterInfo) {
+                    assistAfterInfo = false
+                    run(PcAction.ASSIST)
+                }
+            }
             is PcOutcome.Stopped -> {
                 _messages.tryEmit(if (o.count > 0) "Завершено процессов ${o.name}: ${o.count}" else "Процесс ${o.name} не найден")
                 _session.value = current.copy(running = null)
                 run(PcAction.PROCESSES)
             }
-            is PcOutcome.Text -> if (action == PcAction.COMMAND) {
+            is PcOutcome.Text -> if (action == PcAction.ADMIN_ADD || action == PcAction.ADMIN_REMOVE) {
+                _messages.tryEmit(o.text.ifBlank { "Готово" })
+                _session.value = current.copy(running = null)
+                run(PcAction.INFO)
+            } else if (action == PcAction.COMMAND) {
                 val out = (if (r.simulated) "[эмуляция]\n" else "") + o.text
                 _session.value = current.copy(running = null, console = (current.console + (arg.orEmpty() to out)).takeLast(CONSOLE_KEEP))
             } else {

@@ -1,20 +1,61 @@
 package com.itmanager.app.data.model
 
 /**
- * Domain computers: what the admin script Connect-DomainPC.ps1 did, run by the server over WinRM.
+ * Domain computers: what the admin script Connect-DomainPC.ps1 did, run by the server — Windows over WinRM,
+ * Astra Linux over SSH with sudo; the server tells which by the port that answers.
  * [changes]: it changes the computer (needs ALLOW_RUNBOOK_WRITES on the server);
- * [confirm]: asked once more with a fingerprint before it runs.
+ * [confirm]: asked once more with a fingerprint before it runs; [astraOnly]: shown for Astra Linux only.
  */
-enum class PcAction(val wire: String, val title: String, val changes: Boolean = false, val confirm: Boolean = false) {
-    INFO("info", "Сведения и лицензии"),
+enum class PcAction(
+    val wire: String,
+    val title: String,
+    val changes: Boolean = false,
+    val confirm: Boolean = false,
+    val astraOnly: Boolean = false,
+) {
+    INFO("info", "Сведения"),
     DISKS("disks", "Свободное место"),
-    FOLDERS("folders", "Крупные папки на C:"),
+    FOLDERS("folders", "Крупные папки"),
     PROCESSES("processes", "Процессы"),
     GPUPDATE("gpupdate", "Обновить групповые политики", changes = true),
-    CLEANUP("cleanup", "Очистить Temp и кэш обновлений", changes = true, confirm = true),
+    CLEANUP("cleanup", "Очистка", changes = true, confirm = true),
     REBOOT("reboot", "Перезагрузить", changes = true, confirm = true),
     KILL("kill", "Завершить процесс", changes = true, confirm = true),
-    COMMAND("command", "Команда PowerShell", changes = true, confirm = true),
+    COMMAND("command", "Команда", changes = true, confirm = true),
+    /** Windows: the msra command to run on the helper's computer; Astra: x11vnc on the user's screen. */
+    ASSIST("assist", "Удалённая помощь"),
+    UPDATE("update", "Обновить пакеты", changes = true, confirm = true, astraOnly = true),
+    ADMIN_ADD("admin_add", "Выдать sudo", changes = true, confirm = true, astraOnly = true),
+    ADMIN_REMOVE("admin_remove", "Снять sudo", changes = true, confirm = true, astraOnly = true),
+}
+
+enum class PcPlatform(val title: String) {
+    WINDOWS("Windows"),
+    ASTRA("Astra Linux");
+
+    companion object {
+        fun parse(raw: String?): PcPlatform = if (raw == "astra") ASTRA else WINDOWS
+    }
+}
+
+/**
+ * Remote help on a computer. «msra»: [command] is run on the helper's own Windows computer; «vnc»: x11vnc waits on
+ * [address] with a one-time [password] for [expiresMinutes], and the user at [display] accepts the helper.
+ */
+data class RemoteHelp(
+    val method: String,
+    val host: String,
+    val command: String? = null,
+    val needs: List<String> = emptyList(),
+    val address: String? = null,
+    val password: String? = null,
+    val url: String? = null,
+    val user: String? = null,
+    val display: String? = null,
+    val viewOnly: Boolean = false,
+    val expiresMinutes: Int? = null,
+) {
+    val isVnc: Boolean get() = method == "vnc"
 }
 
 /** «real»: WinRM with the server's domain login; «emulator»: made-up answers. */
@@ -44,6 +85,12 @@ data class PcInfo(
     /** Last five characters of each installed Office key. */
     val officeKeys: List<String>,
     val oneC: List<OneCLicence>,
+    val platform: PcPlatform = PcPlatform.WINDOWS,
+    /** Astra Linux: the X display of the logged-in user, who may sudo, what remote help and policies need. */
+    val display: String? = null,
+    val admins: List<String> = emptyList(),
+    val x11vnc: Boolean? = null,
+    val sambaGpupdate: Boolean? = null,
 ) {
     val uptimeText: String?
         get() = uptimeMinutes?.let { "${it / 1440} дн. ${it % 1440 / 60} ч ${it % 60} мин" }
@@ -73,6 +120,7 @@ sealed interface PcOutcome {
     data class Cleaned(val freedMb: Double, val freeGb: Double) : PcOutcome
     data class Stopped(val name: String, val count: Int) : PcOutcome
     data class Text(val text: String) : PcOutcome
+    data class Assist(val help: RemoteHelp) : PcOutcome
 }
 
 data class PcResult(
@@ -82,6 +130,7 @@ data class PcResult(
     val error: String,
     val simulated: Boolean,
     val outcome: PcOutcome?,
+    val platform: PcPlatform = PcPlatform.WINDOWS,
 )
 
 data class PcKeyRow(

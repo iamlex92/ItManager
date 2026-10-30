@@ -8,10 +8,12 @@ import com.itmanager.app.data.model.PcInfo
 import com.itmanager.app.data.model.PcKeyJob
 import com.itmanager.app.data.model.PcKeyRow
 import com.itmanager.app.data.model.PcOutcome
+import com.itmanager.app.data.model.PcPlatform
 import com.itmanager.app.data.model.PcProcess
 import com.itmanager.app.data.model.PcResult
 import com.itmanager.app.data.model.PcStatus
 import com.itmanager.app.data.model.PcSweepHit
+import com.itmanager.app.data.model.RemoteHelp
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -72,12 +74,35 @@ data class PcInfoDto(
     @SerialName("office_installed") val officeInstalled: Boolean = false,
     @SerialName("office_keys") val officeKeys: List<String> = emptyList(),
     @SerialName("one_c") val oneC: List<OneCDto> = emptyList(),
+    val platform: String? = null,
+    val display: String? = null,
+    val admins: List<String> = emptyList(),
+    val x11vnc: Boolean? = null,
+    @SerialName("samba_gpupdate") val sambaGpupdate: Boolean? = null,
 ) {
     fun toDomain() = PcInfo(
         computer, os, architecture, build, uptimeMinutes, cpu, ramGb, user?.takeIf { it.isNotBlank() },
         windowsBiosKey?.takeIf { it.isNotBlank() }, windowsRegistryKey?.takeIf { it.isNotBlank() },
         officeInstalled, officeKeys, oneC.map { OneCLicence(it.path ?: it.name.orEmpty(), it.date) },
+        PcPlatform.parse(platform), display, admins, x11vnc, sambaGpupdate,
     )
+}
+
+@Serializable
+data class RemoteHelpDto(
+    val method: String = "",
+    val host: String = "",
+    val command: String? = null,
+    val needs: List<String> = emptyList(),
+    val address: String? = null,
+    val password: String? = null,
+    val url: String? = null,
+    val user: String? = null,
+    val display: String? = null,
+    @SerialName("view_only") val viewOnly: Boolean = false,
+    @SerialName("expires_minutes") val expiresMinutes: Int? = null,
+) {
+    fun toDomain() = RemoteHelp(method, host, command, needs, address, password, url, user, display, viewOnly, expiresMinutes)
 }
 
 @Serializable
@@ -102,6 +127,8 @@ data class PcActionDto(
     val data: JsonElement? = null,
     val error: String = "",
     val simulated: Boolean = false,
+    /** windows or astra: what answered; missing from servers before Astra Linux support. */
+    val platform: String? = null,
 ) {
     fun toDomain(kind: PcAction): PcResult {
         val outcome = data?.takeIf { ok }?.let { d ->
@@ -124,10 +151,11 @@ data class PcActionDto(
                     val k = pcJson.decodeFromJsonElement<KillDto>(d)
                     PcOutcome.Stopped(k.name, k.stopped)
                 }
+                PcAction.ASSIST -> PcOutcome.Assist(pcJson.decodeFromJsonElement<RemoteHelpDto>(d).toDomain())
                 else -> PcOutcome.Text((d as? JsonObject)?.let { pcJson.decodeFromJsonElement<TextDto>(it).output }.orEmpty())
             }
         }
-        return PcResult(host, kind, ok, error, simulated, outcome)
+        return PcResult(host, kind, ok, error, simulated, outcome, PcPlatform.parse(platform))
     }
 }
 

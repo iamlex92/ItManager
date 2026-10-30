@@ -37,6 +37,7 @@ import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Lan
 import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.Computer
+import androidx.compose.material.icons.outlined.ScreenShare
 import androidx.compose.material.icons.outlined.NetworkPing
 import androidx.compose.material.icons.outlined.Nfc
 import androidx.compose.material.icons.outlined.Refresh
@@ -124,6 +125,8 @@ fun DeviceScreen(
     onOpenTool: (String, String) -> Unit,
     onOpenPc: (String) -> Unit,
     onOpenVlans: () -> Unit,
+    /** The computer's page with remote help started at once. */
+    onAssistPc: (String) -> Unit = {},
     viewModel: DeviceViewModel = hiltViewModel(),
     peripherals: PeripheralsViewModel = hiltViewModel(),
 ) {
@@ -182,6 +185,7 @@ fun DeviceScreen(
                             }.takeIf { d.device.floorId != null && d.device.type != DeviceType.VIRTUAL },
                             onPing = d.device.ip?.let { ip -> { onOpenTool("ping", ip) } },
                             onManagePc = { onOpenPc(d.device.name) }.takeIf { d.device.type in PC_TYPES },
+                            onAssistPc = { onAssistPc(d.device.name) }.takeIf { d.device.type in PC_TYPES },
                             onNfc = viewModel::bindNfc,
                         )
                         if (tabs.size > 1) {
@@ -292,6 +296,7 @@ private fun StatusHeader(
     onShowOnMap: (() -> Unit)?,
     onPing: (() -> Unit)?,
     onManagePc: (() -> Unit)?,
+    onAssistPc: (() -> Unit)?,
     onNfc: () -> Unit,
 ) {
     Column(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
@@ -327,6 +332,7 @@ private fun StatusHeader(
             if (onShowOnMap != null) ActionChip(Icons.Outlined.Map, "На карте", onShowOnMap)
             if (onPing != null) ActionChip(Icons.Outlined.NetworkPing, "Ping", onPing)
             if (onManagePc != null) ActionChip(Icons.Outlined.Computer, "Управление ПК", onManagePc)
+            if (onAssistPc != null) ActionChip(Icons.Outlined.ScreenShare, "Удалённая помощь", onAssistPc)
             ActionChip(Icons.Outlined.Nfc, "NFC-метка", onNfc)
         }
     }

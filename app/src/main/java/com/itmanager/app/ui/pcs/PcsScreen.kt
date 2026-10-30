@@ -1,6 +1,11 @@
 package com.itmanager.app.ui.pcs
 
+import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -28,6 +33,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CleaningServices
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.ScreenShare
+import androidx.compose.material.icons.outlined.SystemUpdateAlt
 import androidx.compose.material.icons.outlined.Computer
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Info
@@ -75,7 +83,9 @@ import com.itmanager.app.data.model.PcAction
 import com.itmanager.app.data.model.PcInfo
 import com.itmanager.app.data.model.PcKeyJob
 import com.itmanager.app.data.model.PcOutcome
+import com.itmanager.app.data.model.PcPlatform
 import com.itmanager.app.data.model.PcStatus
+import com.itmanager.app.data.model.RemoteHelp
 import com.itmanager.app.ui.components.SectionLabel
 import com.itmanager.app.ui.components.TabTopBar
 import com.itmanager.app.ui.theme.MonoStyle
@@ -93,6 +103,8 @@ private data class PendingAction(val action: PcAction, val arg: String?, val que
 fun PcsScreen(
     onBack: () -> Unit,
     initialHost: String = "",
+    /** Opened with «Удалённая помощь» from a device card: help starts right after the computer's details. */
+    initialAssist: Boolean = false,
     viewModel: PcsViewModel = hiltViewModel(),
 ) {
     val status by viewModel.status.collectAsStateWithLifecycle()
@@ -102,7 +114,7 @@ fun PcsScreen(
     val scope = rememberCoroutineScope()
     var pending by remember { mutableStateOf<PendingAction?>(null) }
 
-    LaunchedEffect(initialHost) { viewModel.openOnce(initialHost) }
+    LaunchedEffect(initialHost) { viewModel.openOnce(initialHost, initialAssist) }
     LaunchedEffect(viewModel) {
         viewModel.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
     }
@@ -130,11 +142,23 @@ fun PcsScreen(
             viewModel.run(action, arg)
             return
         }
+        val astra = session?.platform == PcPlatform.ASTRA
         val question = when (action) {
-            PcAction.CLEANUP -> "Удалить временные файлы (C:\\Windows\\Temp, Temp пользователей) и кэш загрузок обновлений Windows на $host?"
-            PcAction.REBOOT -> "Перезагрузить $host сейчас? Несохранённая работа пользователя пропадёт."
+            PcAction.CLEANUP -> if (astra) {
+                "Очистить на $host кэш пакетов, журналы старше 14 дней и файлы /tmp старше недели?"
+            } else {
+                "Удалить временные файлы (C:\\Windows\\Temp, Temp пользователей) и кэш загрузок обновлений Windows на $host?"
+            }
+            PcAction.REBOOT -> if (astra) {
+                "Перезагрузить $host через минуту? Пользователь увидит предупреждение."
+            } else {
+                "Перезагрузить $host сейчас? Несохранённая работа пользователя пропадёт."
+            }
             PcAction.KILL -> "Завершить все процессы $arg на $host? Несохранённые данные в них пропадут."
-            else -> "Выполнить на $host от имени администратора домена:\n\n$arg"
+            PcAction.UPDATE -> "Установить обновления пакетов на $host (astra-update, в фоне)? Перезагрузка — отдельно."
+            PcAction.ADMIN_ADD -> "Выдать sudo пользователю $arg на $host?"
+            PcAction.ADMIN_REMOVE -> "Снять sudo с $arg на $host?"
+            else -> "Выполнить на $host ${if (astra) "от root" else "от имени администратора домена"}:\n\n$arg"
         }
         pending = PendingAction(action, arg, question)
     }
@@ -155,7 +179,7 @@ fun PcsScreen(
     Column(Modifier.fillMaxSize()) {
         val s = session
         if (s == null) {
-            TabTopBar(title = "Компьютеры домена", subtitle = "Сведения, ключи, обслуживание по WinRM", onBack = onBack)
+            TabTopBar(title = "Компьютеры домена", subtitle = "Windows по WinRM, Astra Linux по SSH", onBack = onBack)
             PcsHome(viewModel, status, statusError)
         } else {
             TabTopBar(
@@ -163,7 +187,14 @@ fun PcsScreen(
                 subtitle = s.info?.let { it.user ?: "Нет активного сеанса" } ?: "Подключение…",
                 onBack = if (initialHost.isBlank()) viewModel::close else onBack,
             )
-            PcPage(s, status, onRun = ::ask, onClearConsole = viewModel::clearConsole, onApplied = viewModel::loadApplied)
+            PcPage(
+                s,
+                status,
+                onRun = ::ask,
+                onClearConsole = viewModel::clearConsole,
+                onApplied = viewModel::loadApplied,
+                onMessage = { Toast.makeText(context, it, Toast.LENGTH_LONG).show() },
+            )
         }
     }
 
@@ -378,13 +409,20 @@ private fun ModeNote(status: PcStatus?, error: String?) {
 
 private val ACTION_ICONS = mapOf(
     PcAction.INFO to Icons.Outlined.Info,
+    PcAction.ASSIST to Icons.Outlined.ScreenShare,
     PcAction.DISKS to Icons.Outlined.Storage,
     PcAction.FOLDERS to Icons.Outlined.FolderOpen,
     PcAction.PROCESSES to Icons.Outlined.Memory,
     PcAction.GPUPDATE to Icons.Outlined.Policy,
+    PcAction.UPDATE to Icons.Outlined.SystemUpdateAlt,
     PcAction.CLEANUP to Icons.Outlined.CleaningServices,
     PcAction.REBOOT to Icons.Outlined.RestartAlt,
 )
+
+private fun copy(context: Context, label: String, text: String, onMessage: (String) -> Unit) {
+    (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText(label, text))
+    onMessage("Скопировано: $label")
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -394,9 +432,11 @@ private fun PcPage(
     onRun: (PcAction, String?) -> Unit,
     onClearConsole: () -> Unit,
     onApplied: () -> Unit,
+    onMessage: (String) -> Unit,
 ) {
     var command by rememberSaveable(session.host) { mutableStateOf("") }
     val readOnly = status?.writesEnabled == false
+    val astra = session.platform == PcPlatform.ASTRA
     LazyColumn(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -404,10 +444,12 @@ private fun PcPage(
     ) {
         item(key = "actions") { Column {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ACTION_ICONS.forEach { (action, icon) ->
-                    ActionChip(icon, action.title, enabled = session.running == null && !(action.changes && readOnly)) { onRun(action, null) }
+                ACTION_ICONS.filter { (action, _) -> astra || !action.astraOnly }.forEach { (action, icon) ->
+                    // Help on an Astra computer starts x11vnc there, a change; on Windows it only shows the msra command.
+                    val changes = action.changes || (action == PcAction.ASSIST && astra)
+                    ActionChip(icon, action.title, enabled = session.running == null && !(changes && readOnly)) { onRun(action, null) }
                 }
-                ActionChip(Icons.Outlined.Policy, "Политики на ПК", enabled = !session.appliedLoading) { onApplied() }
+                if (!astra) ActionChip(Icons.Outlined.Policy, "Политики на ПК", enabled = !session.appliedLoading) { onApplied() }
             }
             if (session.running != null) {
                 Text("${session.running.title}: выполняется на ${session.host}…", style = MaterialTheme.typography.bodySmall)
@@ -456,7 +498,10 @@ private fun PcPage(
                 }
             }
             when (val o = r.outcome) {
-                is PcOutcome.Info -> item(key = "info") { InfoView(o.info) }
+                is PcOutcome.Info -> item(key = "info") {
+                    InfoView(o.info, enabled = session.running == null && !readOnly, onRun = onRun)
+                }
+                is PcOutcome.Assist -> item(key = "assist") { AssistView(o.help, onRun = onRun, onMessage = onMessage) }
                 is PcOutcome.Disks -> items(o.disks, key = { "disk-${it.drive}" }) { d ->
                     Card("${d.drive} ${d.label.orEmpty()}".trim()) {
                         Text("Свободно ${d.freeGb} ГБ из ${d.totalGb} ГБ · занято ${d.usedPercent} %")
@@ -464,7 +509,7 @@ private fun PcPage(
                     }
                 }
                 is PcOutcome.Folders -> item(key = "folders") {
-                    Card("Крупные папки на C:\\") {
+                    Card(if (astra) "Крупные папки" else "Крупные папки на C:\\") {
                         if (o.folders.isEmpty()) Text("Папок больше 0,1 ГБ нет")
                         o.folders.forEach { f -> Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                             Text(f.name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -488,7 +533,9 @@ private fun PcPage(
                     }
                 }
                 is PcOutcome.Cleaned -> item(key = "cleaned") {
-                    Card("Очистка завершена") { Text("Освобождено ${o.freedMb} МБ, свободно на C: ${o.freeGb} ГБ.") }
+                    Card("Очистка завершена") {
+                        Text("Освобождено ${o.freedMb} МБ, свободно на ${if (astra) "/" else "C:"} ${o.freeGb} ГБ.")
+                    }
                 }
                 is PcOutcome.Text -> item(key = "text") {
                     Card(r.action.title) { Text(o.text.ifBlank { "Готово" }, style = MonoStyle) }
@@ -497,15 +544,16 @@ private fun PcPage(
             }
         }
         item(key = "console") {
-            Card("Консоль PowerShell") {
+            Card(if (astra) "Консоль bash" else "Консоль PowerShell") {
                 Text(
-                    "Команда выполняется на ${session.host} от имени администратора домена. Каждая подтверждается и пишется в журнал.",
+                    "Команда выполняется на ${session.host} ${if (astra) "от root (sudo)" else "от имени администратора домена"}. " +
+                        "Каждая подтверждается и пишется в журнал.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 session.console.forEach { (cmd, out) ->
                     Text(
-                        "PS ${session.host}> $cmd\n$out",
+                        "${if (astra) "root@${session.host}#" else "PS ${session.host}>"} $cmd\n$out",
                         style = MonoStyle,
                         modifier = Modifier
                             .padding(top = 8.dp)
@@ -520,7 +568,7 @@ private fun PcPage(
                     value = command,
                     onValueChange = { command = it },
                     label = { Text("Команда") },
-                    placeholder = { Text("Get-Service spooler") },
+                    placeholder = { Text(if (astra) "ip -br addr" else "Get-Service spooler") },
                     textStyle = MonoStyle,
                     enabled = !readOnly,
                     modifier = Modifier.fillMaxWidth(),
@@ -541,7 +589,11 @@ private fun PcPage(
 }
 
 @Composable
-private fun InfoView(info: PcInfo) {
+private fun InfoView(info: PcInfo, enabled: Boolean, onRun: (PcAction, String?) -> Unit) {
+    if (info.platform == PcPlatform.ASTRA) {
+        AstraInfoView(info, enabled, onRun)
+        return
+    }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Card("Система") {
             Line("Компьютер", info.computer)
@@ -566,6 +618,124 @@ private fun InfoView(info: PcInfo) {
             }
             info.oneC.forEach { Line(it.path, it.date) }
         }
+    }
+}
+
+@Composable
+private fun AstraInfoView(info: PcInfo, enabled: Boolean, onRun: (PcAction, String?) -> Unit) {
+    var user by rememberSaveable { mutableStateOf("") }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Card("Система") {
+            Line("Компьютер", info.computer)
+            Line("ОС", info.os)
+            Line("Ядро", info.build?.let { b -> info.architecture?.let { "$b ($it)" } ?: b })
+            Line("Аптайм", info.uptimeText)
+            Line("Пользователь", info.user?.let { u -> info.display?.let { "$u ($it)" } ?: u } ?: "никто не вошёл")
+            Line("Процессор", info.cpu)
+            Line("ОЗУ", info.ramGb?.let { "$it ГБ" })
+        }
+        Card("Администраторы (sudo)") {
+            if (info.admins.isEmpty()) Text("Через консоль никому не выдавалось; группа astra-admin пуста", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            info.admins.forEach { a ->
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Text(a, Modifier.weight(1f), style = MonoStyle)
+                    TextButton(onClick = { onRun(PcAction.ADMIN_REMOVE, a) }, enabled = enabled) {
+                        Text("Снять", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+            OutlinedTextField(
+                value = user,
+                onValueChange = { user = it },
+                label = { Text("Пользователь") },
+                placeholder = { Text("ECOTEHS\\ivanova") },
+                singleLine = true,
+                textStyle = MonoStyle,
+                enabled = enabled,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            )
+            FilledTonalButton(
+                onClick = { onRun(PcAction.ADMIN_ADD, user.trim()) },
+                enabled = enabled && user.isNotBlank(),
+                modifier = Modifier.padding(top = 8.dp),
+            ) { Text("Выдать sudo") }
+            Text(
+                "Пишется в /etc/sudoers.d/netadmin-admins и проверяется visudo. При включённом МКЦ может понадобиться " +
+                    "и уровень целостности (pdpl-user -i 63).",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+        Card("Готовность") {
+            Line("Удалённая помощь", if (info.x11vnc == true) "x11vnc установлен" else "нет x11vnc: sudo apt install x11vnc")
+            Line("Групповые политики", if (info.sambaGpupdate == true) "samba-gpupdate есть" else "нет samba-gpupdate (python3-samba)")
+        }
+    }
+}
+
+/** Remote help: the msra command for a Windows computer, or the VNC address and one-time password for Astra. */
+@Composable
+private fun AssistView(help: RemoteHelp, onRun: (PcAction, String?) -> Unit, onMessage: (String) -> Unit) {
+    val context = LocalContext.current
+    if (!help.isVnc) {
+        val command = help.command.orEmpty()
+        Card("Удалённая помощь Windows") {
+            Text("Запустите на своём компьютере с Windows (вы — в списке помощников политики):")
+            Text(command, style = MonoStyle, modifier = Modifier.padding(vertical = 8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilledTonalButton(onClick = { copy(context, "команда msra", command, onMessage) }) {
+                    Icon(Icons.Outlined.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Копировать")
+                }
+                TextButton(onClick = {
+                    val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, command)
+                    context.startActivity(Intent.createChooser(send, "Отправить команду"))
+                }) { Text("Отправить на ПК") }
+            }
+            Text(
+                "Пользователь увидит запрос и разрешит подключение. Если msra отвечает, что предлагать помощь нельзя, " +
+                    "нужны шаблоны групповой политики:",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            help.needs.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
+        }
+        return
+    }
+    Card("Удалённая помощь Astra Linux") {
+        Text(
+            "На ${help.host} запущен VNC для экрана ${help.user.orEmpty()} (${help.display.orEmpty()}). Подключитесь " +
+                "в течение ${help.expiresMinutes ?: 2} мин — пользователь увидит окно и должен нажать «Yes».",
+        )
+        listOf("Адрес" to help.address.orEmpty(), "Пароль (одноразовый)" to help.password.orEmpty()).forEach { (label, value) ->
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
+                Column(Modifier.weight(1f)) {
+                    Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(value, style = MonoStyle)
+                }
+                TextButton(onClick = { copy(context, label, value, onMessage) }) { Text("Копировать") }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+            Button(onClick = {
+                try {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(help.url)))
+                } catch (_: ActivityNotFoundException) {
+                    onMessage("Нет VNC-клиента: установите, например, RealVNC Viewer или bVNC")
+                }
+            }) { Text("Открыть в VNC-клиенте") }
+            if (!help.viewOnly) TextButton(onClick = { onRun(PcAction.ASSIST, "view") }) { Text("Только просмотр") }
+        }
+        Text(
+            "Соединение одно; после отключения x11vnc закрывается. VNC не шифруется — только внутри сети. " +
+                "Пароль администратора в окне повышения прав вы вводите сами: на Astra оно на том же экране.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
     }
 }
 
