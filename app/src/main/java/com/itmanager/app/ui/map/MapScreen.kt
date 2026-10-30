@@ -56,6 +56,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.CenterFocusStrong
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.MeetingRoom
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.TravelExplore
@@ -144,6 +145,12 @@ fun MapScreen(
     val faceplateEditor by faceplates.editor.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val focusRequest by viewModel.focusRequest.collectAsStateWithLifecycle()
+    state.notice?.let { notice ->
+        LaunchedEffect(notice) {
+            Toast.makeText(context, notice, Toast.LENGTH_LONG).show()
+            viewModel.noticeShown()
+        }
+    }
     val camera = rememberMapCamera()
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
@@ -281,7 +288,8 @@ fun MapScreen(
             },
             editing = state.editing,
             onToggleEdit = if (content != null) ({ viewModel.setEditing(!state.editing) }) else null,
-            isRefreshing = (state.content as? UiState.Content)?.isRefreshing == true,
+            isRefreshing = state.checking || (state.content as? UiState.Content)?.isRefreshing == true,
+            onRefreshStatus = if (content != null && !state.checking) viewModel::refreshStatus else null,
             floors = content?.map?.floors.orEmpty(),
             currentFloorId = floorId,
             onFloor = {
@@ -667,6 +675,7 @@ private fun MapTopPanel(
     editing: Boolean,
     onToggleEdit: (() -> Unit)?,
     isRefreshing: Boolean,
+    onRefreshStatus: (() -> Unit)?,
     floors: List<FloorInfo>,
     currentFloorId: String?,
     onFloor: (String) -> Unit,
@@ -760,6 +769,10 @@ private fun MapTopPanel(
                     if (!editing) {
                         IconButton(onClick = { searching = true }, enabled = devices.isNotEmpty()) {
                             Icon(Icons.Outlined.Search, contentDescription = "Поиск на карте")
+                        }
+                        // The server checks every device now instead of waiting for the next poll.
+                        IconButton(onClick = { onRefreshStatus?.invoke() }, enabled = onRefreshStatus != null) {
+                            Icon(Icons.Outlined.Refresh, contentDescription = "Обновить состояние устройств")
                         }
                     }
                     // View or edit, always in sight: the mode is never a guess.

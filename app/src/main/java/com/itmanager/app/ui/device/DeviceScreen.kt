@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
@@ -36,12 +37,16 @@ import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Lan
 import androidx.compose.material.icons.outlined.Map
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Computer
 import androidx.compose.material.icons.outlined.ScreenShare
 import androidx.compose.material.icons.outlined.NetworkPing
 import androidx.compose.material.icons.outlined.Nfc
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -150,6 +155,8 @@ fun DeviceScreen(
     var editComment by remember { mutableStateOf(false) }
     var commentError by remember { mutableStateOf<String?>(null) }
     var pickVlan by remember { mutableStateOf(false) }
+    var merging by remember { mutableStateOf(false) }
+    var mergeSource by remember { mutableStateOf<Device?>(null) }
 
     val details = (state as? UiState.Content)?.data
     val device = details?.device
@@ -164,6 +171,21 @@ fun DeviceScreen(
             ) {
                 if (device != null) {
                     IconButton(onClick = viewModel::openEdit) { Icon(Icons.Outlined.Edit, contentDescription = "Изменить") }
+                    var menu by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, contentDescription = "Ещё") }
+                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            // The same device entered twice (each address found as its own host): fold the other one in.
+                            DropdownMenuItem(
+                                text = { Text("Объединить с…") },
+                                enabled = !busy,
+                                onClick = {
+                                    menu = false
+                                    merging = true
+                                },
+                            )
+                        }
+                    }
                 }
             }
         },
@@ -241,6 +263,38 @@ fun DeviceScreen(
             onDismiss = viewModel::closeEdit,
             hosts = details?.servers.orEmpty(),
             onOpenRack = { id -> viewModel.closeEdit(); onOpenDevice(id) },
+        )
+    }
+    if (merging && details != null) {
+        MergeDialog(
+            keep = details.device,
+            candidates = details.others.filter { (it.type == DeviceType.RACK) == (details.device.type == DeviceType.RACK) },
+            onPick = {
+                merging = false
+                mergeSource = it
+            },
+            onDismiss = { merging = false },
+        )
+    }
+    mergeSource?.let { src ->
+        AlertDialog(
+            onDismissRequest = { mergeSource = null },
+            title = { Text("Объединить с ${device?.name}?") },
+            text = {
+                Text(
+                    "«${src.name}» будет удалено из учёта. Его порты с кабелями, резервные копии конфигурации, события, " +
+                        "периферия и IP-адреса перейдут к «${device?.name}», пустые поля заполнятся из него. " +
+                        "Оборудование это не затрагивает.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    mergeSource = null
+                    viewModel.merge(src)
+                }) { Text("Объединить", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { mergeSource = null }) { Text("Отмена") } },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         )
     }
     if (editComment && device != null) {
@@ -323,7 +377,7 @@ private fun StatusHeader(
                         Text("Пассивное оборудование", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                val address = listOfNotNull(device.ip, device.mac).joinToString("  ·  ")
+                val address = (device.allIps + listOfNotNull(device.mac)).joinToString("  ·  ")
                 if (address.isNotEmpty()) Text(address, style = MonoStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -693,6 +747,54 @@ private fun VlanPickerDialog(
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Закрыть") } },
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+    )
+}
+
+/** Picks the other inventory entry of this same device; searched by name, address or MAC. */
+@Composable
+private fun MergeDialog(keep: Device, candidates: List<Device>, onPick: (Device) -> Unit, onDismiss: () -> Unit) {
+    var query by rememberSaveable { mutableStateOf("") }
+    val shown = candidates.filter { it.matches(query) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Объединить устройства") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Остаётся «${keep.name}». Выберите запись того же устройства, которую нужно влить в неё и удалить.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    label = { Text("Имя, IP или MAC") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                LazyColumn(Modifier.heightIn(max = 320.dp)) {
+                    items(shown, key = { it.id }) { d ->
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { onPick(d) }
+                                .padding(vertical = 10.dp),
+                        ) {
+                            Text(d.name, style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                (listOf(d.type.label) + d.allIps).joinToString(" · "),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+                if (shown.isEmpty()) {
+                    Text("Ничего не найдено.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
     )
 }

@@ -10,6 +10,7 @@ import com.itmanager.app.data.model.parseColorHex
 import com.itmanager.app.data.model.Zone
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -137,6 +138,7 @@ data class DeviceBody(
     @SerialName("ssh_credential_id") val sshCredentialId: String? = null,
     // Left out when null: the server then uses «public».
     @SerialName("snmp_community") val snmpCommunity: String? = null,
+    @SerialName("extra_ips") val extraIps: List<String> = emptyList(),
 )
 
 @Serializable
@@ -160,6 +162,7 @@ fun DeviceDraft.toPatch(): JsonObject = buildJsonObject {
     // Write-only on the server: sent only when the user typed a new one.
     snmpCommunity?.let { put("snmp_community", JsonPrimitive(it)) }
     metadata?.let { put("metadata", JsonObject(it)) }
+    put("extra_ips", JsonArray(extraIps.map { JsonPrimitive(it) }))
 }
 
 @Serializable

@@ -97,6 +97,10 @@ data class MapUiState(
     val editor: MapEditorState = MapEditorState(),
     /** The rack whose front view is open. */
     val rack: RackViewState? = null,
+    /** «Обновить»: the server is checking every device now. */
+    val checking: Boolean = false,
+    /** A one-time message for a toast, cleared once shown. */
+    val notice: String? = null,
 )
 
 /** The open rack view: every device of the inventory, so unmounted ones can be picked for a free unit. */
@@ -229,6 +233,30 @@ class MapViewModel @Inject constructor(
     fun retry() {
         viewModelScope.launch { load() }
     }
+
+    /** Asks the server to check every device now (switch ports, ping); the map reloads with what it found. */
+    fun refreshStatus() {
+        if (_state.value.checking) return
+        _state.update { it.copy(checking = true) }
+        viewModelScope.launch {
+            val notice = repository.refreshStatus().fold(
+                onSuccess = { r ->
+                    buildString {
+                        append("В сети ${r.online} из ${r.checked}")
+                        if (r.changed > 0) append(", изменилось: ${r.changed}")
+                        if (r.errors.isNotEmpty()) append(". ").append(r.errors.joinToString("; "))
+                    }
+                },
+                onFailure = { e ->
+                    load()
+                    e.toUserMessage()
+                },
+            )
+            _state.update { it.copy(checking = false, notice = notice) }
+        }
+    }
+
+    fun noticeShown() = _state.update { it.copy(notice = null) }
 
     private suspend fun load() {
         val previous = _state.value.content

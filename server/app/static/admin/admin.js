@@ -1626,7 +1626,7 @@
     const box = $("search-results");
     if (!q) { box.hidden = true; return; }
     const norm = (v) => (v || "").toLowerCase().replaceAll("-", ":");
-    const found = allDevicesOrMap().filter((d) => [d.name, d.ip, d.model].some((v) => (v || "").toLowerCase().includes(q))
+    const found = allDevicesOrMap().filter((d) => [d.name, d.ip, ...(d.extra_ips || []), d.model].some((v) => (v || "").toLowerCase().includes(q))
       || norm(d.mac).includes(q.replaceAll("-", ":"))).slice(0, 8);
     box.replaceChildren(...(found.length ? found.map((d) => {
       const b = document.createElement("button");
@@ -2082,7 +2082,25 @@
       await reloadFloors();
     } catch (e) { floorsError(e); }
   });
-  $("map-reload").addEventListener("click", () => loadMap().catch(fail));
+  // «Обновить»: the server checks every device now (switch ports, ping), then the map is drawn again.
+  $("map-reload").addEventListener("click", async () => {
+    const btn = $("map-reload");
+    btn.disabled = true;
+    btn.textContent = "Проверяю…";
+    try {
+      const r = await api("POST", "devices/refresh-status");
+      await loadMap();
+      const changed = r.changed ? `, изменилось: ${r.changed}` : "";
+      toast(`В сети ${r.online} из ${r.checked}${changed}` + (r.errors.length ? `. ${r.errors.join("; ")}` : ""),
+        r.errors.length > 0);
+    } catch (e) {
+      fail(e);
+      loadMap().catch(() => {});
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Обновить";
+    }
+  });
 
   // ---------------------------------------------------------------- device dialog
 
@@ -2147,10 +2165,12 @@
     $("device-name").value = device ? device.name : "";
     $("device-ip").value = (device && device.ip) || "";
     $("device-mac").value = (device && device.mac) || "";
-    for (const f of ["device-name", "device-ip", "device-mac"]) fieldError(f, null);
+    $("device-extra-ips").value = ((device && device.extra_ips) || []).join(", ");
+    for (const f of ["device-name", "device-ip", "device-mac", "device-extra-ips"]) fieldError(f, null);
     $("device-vendor").value = (device && device.vendor) || "";
     $("device-model").value = (device && device.model) || "";
     $("device-delete").hidden = !device;
+    $("device-merge").hidden = !device;
     const floorSel = $("device-floor");
     floorSel.replaceChildren(...[...S.floors].reverse().map((f) => {
       const o = document.createElement("option");
@@ -2188,9 +2208,12 @@
     ev.preventDefault();
     const ip = $("device-ip").value.trim(), mac = $("device-mac").value.trim();
     const passive = $("device-net").hidden;
+    const extraIps = $("device-extra-ips").value.split(/[\s,;]+/).filter(Boolean);
+    const badExtra = extraIps.find((x) => !IPV4.test(x) && !x.includes(":"));
     // Errors under their fields, the first one focused; nothing goes to the server until they are fixed.
     const problems = [
       ["device-mac", !passive && mac && !MAC.test(mac) ? "Нужен адрес вида aa:bb:cc:dd:ee:ff" : null],
+      ["device-extra-ips", !passive && badExtra ? `«${badExtra}» — не IP-адрес` : null],
       ["device-ip", !passive && ip && !IPV4.test(ip) && !ip.includes(":") ? "Нужен адрес вида 10.0.0.1" : null],
       ["device-name", $("device-name").value.trim() ? null : "Укажите имя"],
     ];
@@ -2201,6 +2224,7 @@
       type: dialogType,
       ip: passive ? null : ip || null,
       mac: passive ? null : mac.replaceAll("-", ":").toLowerCase() || null,
+      extra_ips: passive ? [] : extraIps,
       vendor: $("device-vendor").value.trim() || null,
       model: $("device-model").value.trim() || null,
       host_id: dialogType === "VIRTUAL" ? $("device-host").value || null : null,
@@ -2252,6 +2276,45 @@
       await refreshTab();
     }
     catch (e) { $("device-error").hidden = false; $("device-error").textContent = e.message; }
+  });
+
+  // Two inventory entries of one device (each address found as its own host): the other one is folded into this.
+  let mergeCandidates = [];
+  function fillMergeList() {
+    const q = $("merge-search").value.trim().toLowerCase();
+    const shown = mergeCandidates.filter((d) => !q
+      || [d.name, d.ip, d.mac, ...(d.extra_ips || [])].some((v) => (v || "").toLowerCase().includes(q)));
+    $("merge-source").replaceChildren(...shown.map((d) => new Option(
+      [d.name, typeOf(d).label, d.ip, ...(d.extra_ips || [])].filter(Boolean).join(" · "), d.id)));
+    if (shown.length) $("merge-source").selectedIndex = 0;
+  }
+  $("device-merge").addEventListener("click", async () => {
+    if (!dialogDevice) return;
+    $("merge-keep").textContent = dialogDevice.name;
+    $("merge-error").hidden = true;
+    $("merge-search").value = "";
+    try {
+      mergeCandidates = (await api("GET", "devices")).filter((d) => d.id !== dialogDevice.id && (d.type === "RACK") === (dialogDevice.type === "RACK"));
+    } catch (e) { $("device-error").hidden = false; $("device-error").textContent = e.message; return; }
+    fillMergeList();
+    $("merge-dialog").showModal();
+    $("merge-search").focus();
+  });
+  $("merge-search").addEventListener("input", fillMergeList);
+  $("merge-cancel").addEventListener("click", () => $("merge-dialog").close());
+  $("merge-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const src = mergeCandidates.find((d) => d.id === $("merge-source").value);
+    if (!src || !dialogDevice) { $("merge-error").hidden = false; $("merge-error").textContent = "Выберите устройство"; return; }
+    if (!confirm(`«${src.name}» будет удалено из учёта, его порты, кабели и адреса перейдут к «${dialogDevice.name}». Продолжить?`)) return;
+    try {
+      const kept = await api("POST", `devices/${dialogDevice.id}/merge`, { source_id: src.id, confirm: true });
+      if (cardId === src.id) { cardId = null; $("card-dialog").close(); }
+      $("merge-dialog").close();
+      $("device-dialog").close();
+      toast(`«${src.name}» объединено с «${kept.name}»`);
+      await refreshTab();
+    } catch (e) { $("merge-error").hidden = false; $("merge-error").textContent = e.message; }
   });
 
   // ---------------------------------------------------------------- VLANs (inventory only)
@@ -2563,7 +2626,7 @@
   }
 
   const isDown = (d) => !d.is_online && !PASSIVE.has(d.type) && d.type !== "RACK";
-  const matchesQuery = (d, q) => !q || [d.name, d.ip, d.mac, typeOf(d).label, d.vendor, d.model, (roomOf(d) || {}).name, d.comment]
+  const matchesQuery = (d, q) => !q || [d.name, d.ip, ...(d.extra_ips || []), d.mac, typeOf(d).label, d.vendor, d.model, (roomOf(d) || {}).name, d.comment]
     .join(" ").toLowerCase().includes(q);
   // Kinds of device the «Устройства» tab opens with: what people look for, not the 15 inventory types.
   const CATEGORIES = [
@@ -3785,7 +3848,7 @@
     const passive = PASSIVE.has(d.type) || d.type === "RACK";
     $("card-online").textContent = passive ? "пассивное оборудование" : d.is_online ? "● в сети" : "● не отвечает";
     $("card-online").className = passive ? "muted" : d.is_online ? "online" : "offline";
-    $("card-addr").textContent = [d.ip, d.mac].filter(Boolean).join("  ·  ");
+    $("card-addr").textContent = [d.ip, ...(d.extra_ips || []), d.mac].filter(Boolean).join("  ·  ");
     $("card-map").hidden = d.type === "VIRTUAL";
     // Ping runs on the switch the device is cabled to: the console itself is not in the plant network.
     $("card-ping").hidden = !(d.ip && d.switch_id);

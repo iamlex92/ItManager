@@ -38,7 +38,8 @@ async def import_found(session: AsyncSession, scan: Scan, ips: list[str], with_l
     height = int(floor.height_px or 1200) if floor else 1200
 
     existing = list((await session.scalars(select(Device))).all())
-    by_ip = {str(d.ip_address): d for d in existing if d.ip_address is not None}
+    by_ip = {str(ip): d for d in existing for ip in d.extra_ips or []}
+    by_ip.update({str(d.ip_address): d for d in existing if d.ip_address is not None})
     names = {d.name.lower() for d in existing}
     selected: dict[str, Device] = {}
     for ip in dict.fromkeys(ips):

@@ -15,11 +15,13 @@ async def _load(session) -> tuple[list[tuple[int, str, str | None]], list[Host]]
         (v.vlan_id, v.name, str(v.subnet_cidr) if v.subnet_cidr else None)
         for v in (await session.scalars(select(Vlan).order_by(Vlan.vlan_id))).all()
     ]
+    devices = (await session.scalars(select(Device).order_by(Device.name))).all()
+    # Every address of a device is in use, its extra ones too.
     hosts = [
-        Host(str(d.id), d.name, str(d.ip_address))
-        for d in (
-            await session.scalars(select(Device).where(Device.ip_address.is_not(None)).order_by(Device.name))
-        ).all()
+        Host(str(d.id), d.name, str(ip))
+        for d in devices
+        for ip in [d.ip_address, *(d.extra_ips or [])]
+        if ip is not None
     ]
     return vlans, hosts
 

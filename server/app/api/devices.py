@@ -5,10 +5,10 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
-from sqlalchemy import String, cast, delete, func, or_, select
+from sqlalchemy import String, cast, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 
-from ..models import Device, DeviceConfig, Floor
+from ..models import Connection, Device, DeviceAlert, DeviceConfig, DeviceFaceplate, Floor, Peripheral, Port
 from ..schemas import (
     BulkOut,
     CommandsOut,
@@ -19,16 +19,19 @@ from ..schemas import (
     DeviceConfigMeta,
     DeviceConfigOut,
     DeviceCreate,
+    DeviceMerge,
     DeviceOut,
     DeviceType,
     DeviceUpdate,
     DiagOut,
     PingRequest,
     PortOut,
+    StatusRefreshOut,
     TracerouteRequest,
     normalize_nfc_uid,
 )
 from ..services import linkstate, switches
+from ..services import status as device_status
 from ..services.serialize import device_out, port_out
 from ..services.topology import load_graph
 from .deps import DriverDep, HubDep, SessionDep, SettingsDep, conflict, not_found
@@ -50,7 +53,22 @@ def _apply(device: Device, data: dict[str, Any]) -> None:
     for k, v in data.items():
         if k == "ip" and v is not None:
             v = str(v)
+        if k == "extra_ips":
+            v = [str(ip) for ip in v or []]
         setattr(device, _FIELD_MAP.get(k, k), v)
+    _tidy_ips(device)
+
+
+def _tidy_ips(device: Device) -> None:
+    """The extra addresses without repeats and without the main one; with no main address the first extra takes
+    its place."""
+    extra = [str(ip) for ip in device.extra_ips or []]
+    main = str(device.ip_address) if device.ip_address is not None else None
+    if main is None and extra:
+        main = device.ip_address = extra[0]
+    tidy = [ip for ip in dict.fromkeys(extra) if ip != main]
+    if tidy != extra:
+        device.extra_ips = tidy
 
 
 async def _commit_device(session, device: Device) -> None:
@@ -152,6 +170,7 @@ def _search_clause(q: str):
     return or_(
         Device.name.ilike(like),
         cast(Device.ip_address, String).ilike(like),
+        func.array_to_string(Device.extra_ips, " ").ilike(like),
         cast(Device.mac_address, String).ilike(like.replace("-", ":")),
         Device.nfc_tag_uid.ilike(like),
     )
@@ -195,6 +214,13 @@ async def bulk_delete(body: DeviceBulkDelete, session: SessionDep):
     return BulkOut(changed=result.rowcount, missing=len(ids) - result.rowcount)
 
 
+@router.post("/refresh-status", response_model=StatusRefreshOut)
+async def refresh_status(request: Request):
+    """Checks every device now, the way the background monitoring does (switch ports, then ping when monitoring is
+    real), instead of waiting for the next round. Read-only on the equipment."""
+    return await device_status.refresh_now(request.app.state)
+
+
 @router.get("/by-nfc/{uid}", response_model=DeviceOut)
 async def get_device_by_nfc(uid: str, session: SessionDep):
     try:
@@ -229,6 +255,139 @@ async def delete_device(device_id: uuid.UUID, session: SessionDep):
     device = await _get(session, device_id)
     await session.delete(device)
     await session.commit()
+
+
+# Filled on the kept device from the merged one when empty there.
+_MERGE_FILL = (
+    "vendor",
+    "model",
+    "mac_address",
+    "ssh_credential_id",
+    "host_id",
+    "comment",
+    "snmp_community",
+)
+
+
+@router.post("/{device_id}/merge", response_model=DeviceOut)
+async def merge_device(device_id: uuid.UUID, body: DeviceMerge, request: Request, session: SessionDep):
+    """One device entered twice (each address found as its own host, say): [source_id] is folded into this one.
+    Its ports with their cables, config backups, events and accessories move here, its addresses become this
+    device's extra ones, empty fields here are filled from it, and it is removed. Inventory only."""
+    if body.source_id == device_id:
+        raise HTTPException(
+            422, detail={"code": "same_device", "message": "Нельзя объединить устройство с самим собой"}
+        )
+    keep = await _get(session, device_id)
+    src = await _get(session, body.source_id)
+    if body.confirm is not True:
+        raise HTTPException(
+            400,
+            detail={
+                "code": "confirmation_required",
+                "message": f"«{src.name}» будет удалено, его порты, кабели и адреса перейдут к «{keep.name}»; "
+                'повторите запрос с "confirm": true',
+            },
+        )
+    if "RACK" in (keep.device_type, src.device_type) and keep.device_type != src.device_type:
+        raise HTTPException(
+            422, detail={"code": "bad_merge", "message": "Стойку можно объединить только с другой стойкой"}
+        )
+    moved = {"ports": 0, "cables_dropped": 0}
+    async with audit(
+        session,
+        request,
+        request.app.state.settings,
+        "device:merge",
+        {"kept": keep.name, "kept_id": str(keep.id), "merged": src.name, "merged_id": str(src.id)},
+    ) as rec:
+        # Fields: what the kept device has stays, gaps are filled from the merged one.
+        for attr in _MERGE_FILL:
+            if getattr(keep, attr) in (None, "") and getattr(src, attr) not in (None, ""):
+                setattr(keep, attr, getattr(src, attr))
+        if keep.host_id == keep.id:
+            keep.host_id = None
+        if keep.comment and src.comment and src.comment not in keep.comment:
+            keep.comment = (keep.comment + "\n" + src.comment)[:4000]
+        if keep.floor_id is None and src.floor_id is not None:
+            keep.floor_id, keep.pos_x, keep.pos_y = src.floor_id, src.pos_x, src.pos_y
+        if keep.rack_id is None and src.rack_id is not None and src.rack_id != keep.id:
+            keep.rack_id, keep.rack_u, keep.rack_h = src.rack_id, src.rack_u, src.rack_h
+        keep.metadata_ = {**(src.metadata_ or {}), **(keep.metadata_ or {})}
+        keep.is_online = keep.is_online or src.is_online
+        if src.last_seen_at and (keep.last_seen_at is None or src.last_seen_at > keep.last_seen_at):
+            keep.last_seen_at = src.last_seen_at
+        keep.extra_ips = [
+            str(ip) for ip in [*(keep.extra_ips or []), src.ip_address, *(src.extra_ips or [])] if ip is not None
+        ]
+        _tidy_ips(keep)
+        # The NFC tag is unique: off the old device first.
+        tag, src.nfc_tag_uid = src.nfc_tag_uid, None
+        await session.flush()
+        if keep.nfc_tag_uid is None and tag:
+            keep.nfc_tag_uid = tag
+
+        # Ports: numbers that clash go after the kept device's last one, names that clash get the old device's name.
+        keep_ports = (await session.scalars(select(Port).where(Port.device_id == keep.id))).all()
+        src_ports = (
+            await session.scalars(select(Port).where(Port.device_id == src.id).order_by(Port.port_number))
+        ).all()
+        numbers = {p.port_number for p in keep_ports}
+        names = {p.port_name.lower() for p in keep_ports}
+        next_number = max(numbers, default=0) + 1
+        keep_ids = {p.id for p in keep_ports}
+        src_ids = {p.id for p in src_ports}
+        if keep_ids and src_ids:
+            # A cable between the two halves of one device would end on itself.
+            dropped = await session.execute(
+                delete(Connection).where(
+                    or_(
+                        Connection.port_a_id.in_(keep_ids) & Connection.port_b_id.in_(src_ids),
+                        Connection.port_a_id.in_(src_ids) & Connection.port_b_id.in_(keep_ids),
+                    )
+                )
+            )
+            moved["cables_dropped"] = dropped.rowcount
+        for p in src_ports:
+            number = p.port_number
+            if number in numbers:
+                number, next_number = next_number, next_number + 1
+            name = p.port_name
+            if name.lower() in names:
+                name = f"{name} ({src.name})"[:50]
+            numbers.add(number)
+            names.add(name.lower())
+            await session.execute(
+                update(Port).where(Port.id == p.id).values(device_id=keep.id, port_number=number, port_name=name)
+            )
+            moved["ports"] += 1
+        await session.execute(update(DeviceConfig).where(DeviceConfig.device_id == src.id).values(device_id=keep.id))
+        await session.execute(update(DeviceAlert).where(DeviceAlert.device_id == src.id).values(device_id=keep.id))
+        await session.execute(update(Peripheral).where(Peripheral.device_id == src.id).values(device_id=keep.id))
+        if await session.get(DeviceFaceplate, keep.id) is None:
+            await session.execute(
+                update(DeviceFaceplate).where(DeviceFaceplate.device_id == src.id).values(device_id=keep.id)
+            )
+        # Virtual machines on it and devices in it (when it is a rack) now belong to the kept one.
+        await session.execute(
+            update(Device).where(Device.host_id == src.id, Device.id != keep.id).values(host_id=keep.id)
+        )
+        await session.execute(
+            update(Device).where(Device.rack_id == src.id, Device.id != keep.id).values(rack_id=keep.id)
+        )
+        await session.execute(delete(Device).where(Device.id == src.id))
+        session.expunge(src)
+        try:
+            await session.commit()
+        except IntegrityError as e:
+            await session.rollback()
+            raise conflict("integrity_error", f"Не удалось объединить: {e.orig}") from e
+        rec.commands.append(
+            f"merged {src.name} into {keep.name}: {moved['ports']} ports moved, "
+            f"{moved['cables_dropped']} cables between them removed"
+        )
+    await session.refresh(keep)
+    return device_out(keep, await load_graph(session))
 
 
 @router.get("/{device_id}/ports", response_model=list[PortOut])

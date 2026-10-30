@@ -23,6 +23,8 @@ class KnownDevice:
     device_type: str
     online: bool
     snmp_community: str | None
+    # The device's other addresses: a scan finding one of them has found this device, not a new one.
+    extra_ips: tuple[str, ...] = ()
 
 
 @dataclass
@@ -35,7 +37,7 @@ class Inventory:
     free_uplinks: dict[str, list[str]] = field(default_factory=dict)
 
     def by_ip(self, ip: str | None) -> KnownDevice | None:
-        return next((d for d in self.devices if ip and d.ip == ip), None)
+        return next((d for d in self.devices if ip and (d.ip == ip or ip in d.extra_ips)), None)
 
     def by_name(self, name: str | None) -> KnownDevice | None:
         low = (name or "").lower()
@@ -66,6 +68,7 @@ async def load_inventory(session: AsyncSession) -> Inventory:
                 device_type=d.device_type,
                 online=d.is_online,
                 snmp_community=d.snmp_community,
+                extra_ips=tuple(str(ip) for ip in d.extra_ips or []),
             )
         )
     known = {d.id: d for d in inv.devices}
@@ -95,5 +98,5 @@ async def load_inventory(session: AsyncSession) -> Inventory:
 
 
 async def known_ips(session: AsyncSession) -> set[str]:
-    rows = await session.scalars(select(Device.ip_address).where(Device.ip_address.is_not(None)))
-    return {str(ip) for ip in rows}
+    rows = await session.execute(select(Device.ip_address, Device.extra_ips))
+    return {str(ip) for main, extra in rows.all() for ip in [main, *(extra or [])] if ip is not None}

@@ -15,6 +15,7 @@ def device_out(d: Device, graph: Graph | None = None) -> DeviceOut:
         x=float(d.pos_x) if d.pos_x is not None else None,
         y=float(d.pos_y) if d.pos_y is not None else None,
         ip=str(d.ip_address) if d.ip_address is not None else None,
+        extra_ips=[str(ip) for ip in d.extra_ips or []],
         mac=str(d.mac_address) if d.mac_address is not None else None,
         is_online=d.is_online,
         last_seen_at=d.last_seen_at,

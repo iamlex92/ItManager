@@ -89,7 +89,7 @@
         <div class="spacer"></div>
         <input id="map-search" type="search" placeholder="Найти: имя, IP, MAC">
         <button id="map-fit" title="Показать весь план">Весь план</button>
-        <button id="map-reload" title="Загрузить заново">Обновить</button>
+        <button id="map-reload" title="Проверить, какие устройства в сети, и загрузить карту заново">Обновить</button>
       </div>
       <div class="toolbar edit-bar" id="edit-bar" hidden>
         <div class="seg tools" id="tools">
@@ -560,6 +560,7 @@
         <label class="grow">IP-адрес, если есть<input id="device-ip" maxlength="45" placeholder="10.0.0.1"><small class="field-error" id="device-ip-error" hidden></small></label>
         <label class="grow">MAC-адрес, если есть<input id="device-mac" maxlength="17" placeholder="aa:bb:cc:dd:ee:ff"><small class="field-error" id="device-mac-error" hidden></small></label>
       </div>
+      <label>Другие IP-адреса <span class="muted small">(другие интерфейсы того же устройства, через запятую или пробел: их тоже пингуем и находим поиском)</span><input id="device-extra-ips" placeholder="10.0.1.1, 192.168.82.1"><small class="field-error" id="device-extra-ips-error" hidden></small></label>
       <label id="device-snmp-label">SNMP community <span class="muted small" id="device-snmp-state"></span><input id="device-snmp" maxlength="50" autocomplete="off" placeholder="public"></label>
       <label id="device-ssh-label" hidden>Логин SSH <span class="muted small">(для работы с коммутатором при HAL_MODE=real)</span><select id="device-ssh"></select></label>
     </fieldset>
@@ -582,8 +583,26 @@
       <button type="button" id="device-ports" title="Порты в учёте" hidden>Порты…</button>
       <button type="button" id="device-rack-open" title="Вид стойки спереди" hidden>Стойка…</button>
       <div class="spacer"></div>
+      <button type="button" id="device-merge" title="Это то же устройство, что и другое в учёте (например, найдено по второму IP): забрать его порты, кабели и адреса">Объединить с…</button>
       <button type="button" id="device-delete" class="danger">Удалить из учёта</button>
     </div>
+  </form>
+</dialog>
+
+<dialog id="merge-dialog">
+  <form id="merge-form" method="dialog" class="dialog" novalidate>
+    <div class="dialog-head">
+      <h2>Объединить устройства</h2>
+      <div class="spacer"></div>
+      <button type="button" id="merge-cancel">Отмена</button>
+      <button type="submit" class="danger">Объединить</button>
+    </div>
+    <p>Остаётся <b id="merge-keep"></b>. Выберите запись того же устройства, которую нужно влить в неё:</p>
+    <label>Найти<input id="merge-search" type="search" placeholder="Имя, IP, MAC"></label>
+    <label>Влить и удалить<select id="merge-source" size="8"></select></label>
+    <p class="muted small">К оставшемуся устройству перейдут порты с кабелями, резервные копии конфигурации, события, периферия и IP-адреса;
+      пустые поля заполнятся из второй записи. Вторая запись удаляется из учёта. Оборудование это не затрагивает.</p>
+    <p id="merge-error" class="error-box" hidden></p>
   </form>
 </dialog>
 

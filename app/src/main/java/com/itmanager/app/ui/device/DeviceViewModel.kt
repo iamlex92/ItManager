@@ -54,6 +54,8 @@ data class DeviceDetails(
     val guests: List<Device> = emptyList(),
     /** Servers a virtual machine can be moved to. */
     val servers: List<Device> = emptyList(),
+    /** Everything else in the inventory: what «Объединить с…» can fold into this device. */
+    val others: List<Device> = emptyList(),
     val alerts: List<Alert> = emptyList(),
     val printer: Printer? = null,
 ) {
@@ -136,6 +138,7 @@ class DeviceViewModel @Inject constructor(
             rackMembers = devices.filter { it.rackId == device.id }.sortedByDescending { it.rackU ?: 0 },
             guests = devices.filter { it.hostId == device.id }.sortedBy { it.name.lowercase() },
             servers = devices.filter { it.type == DeviceType.SERVER && it.id != device.id }.sortedBy { it.name.lowercase() },
+            others = devices.filter { it.id != device.id }.sortedBy { it.name.lowercase() },
             alerts = alerts.await().filter { it.deviceId == device.id && !it.isResolved },
             printer = printer.await(),
         )
@@ -199,6 +202,16 @@ class DeviceViewModel @Inject constructor(
                 _deleted.emit(Unit)
             }
             .onFailure { e -> _form.update { it?.copy(error = e.toUserMessage()) } }
+    }
+
+    /** [source] is this same device entered twice: its ports, cables, history and addresses move here, it is removed. */
+    fun merge(source: Device) = write {
+        repository.mergeDevice(deviceId, source.id)
+            .onSuccess {
+                _messages.emit("${source.name} объединено с ${it.name}")
+                load()
+            }
+            .onFailure { _messages.emit(it.toUserMessage()) }
     }
 
     /** The card's comment, saved on its own. [done] gets null on success or the error text. */

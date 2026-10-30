@@ -57,7 +57,8 @@ async def inventory_pcs(session: AsyncSession) -> list[Device]:
 def matches(device: Device, host: str) -> bool:
     h = host.lower()
     name = device.name.lower()
-    return name == h or name == h.split(".")[0] or (device.ip_address is not None and str(device.ip_address) == h)
+    ips = {str(ip) for ip in [device.ip_address, *(device.extra_ips or [])] if ip is not None}
+    return name == h or name == h.split(".")[0] or h in ips
 
 
 PLATFORM_TTL = 600.0

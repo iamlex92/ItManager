@@ -96,6 +96,9 @@ class Device(Base):
     pos_x: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     pos_y: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     ip_address: Mapped[Any | None] = mapped_column(INET)
+    # More addresses of the same device (a router's or server's other interfaces): pinged, searched and counted as
+    # used like the main one. Two devices merged into one keep the other's address here.
+    extra_ips: Mapped[list[Any]] = mapped_column(ARRAY(INET), server_default=text("'{}'"))
     mac_address: Mapped[str | None] = mapped_column(MACADDR)
     nfc_tag_uid: Mapped[str | None] = mapped_column(String(50), unique=True)
     ssh_credential_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("credentials.id", ondelete="SET NULL"))

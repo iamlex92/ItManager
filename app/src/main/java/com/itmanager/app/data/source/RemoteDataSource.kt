@@ -21,6 +21,7 @@ import com.itmanager.app.core.network.FaceplatePortsBody
 import com.itmanager.app.core.network.ImportBody
 import com.itmanager.app.core.network.attachBody
 import com.itmanager.app.core.network.LinkBody
+import com.itmanager.app.core.network.MergeBody
 import com.itmanager.app.core.network.PcSweepBody
 import com.itmanager.app.core.network.PcKeysBody
 import com.itmanager.app.core.network.PcActionBody
@@ -66,6 +67,7 @@ import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.StatusRefresh
 import com.itmanager.app.data.model.DeviceBulkChange
 import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.DeviceHistoryEntry
@@ -318,6 +320,7 @@ class RemoteDataSource(
                     draft.comment, draft.rackId, draft.rackU, draft.rackH, draft.rackUnits, draft.mac?.trim()?.ifEmpty { null },
                     sshCredentialId = draft.sshCredentialId,
                     snmpCommunity = draft.snmpCommunity,
+                    extraIps = draft.extraIps,
                 ),
             ).toDomain()
         }
@@ -330,6 +333,11 @@ class RemoteDataSource(
     }
 
     override suspend fun deleteDevice(id: String) = api.deleteDevice(settings, id)
+
+    override suspend fun mergeDevice(id: String, sourceId: String): Device =
+        api.mergeDevice(settings, id, MergeBody(sourceId)).toDomain()
+
+    override suspend fun refreshStatus(): StatusRefresh = api.refreshStatus(settings).toDomain()
 
     override suspend fun bulkUpdateDevices(ids: List<String>, change: DeviceBulkChange): Int = knowingTypes(change.type) {
         val set = BulkSetBody(change.type?.name, change.floorId, change.vendor, change.hostId)
