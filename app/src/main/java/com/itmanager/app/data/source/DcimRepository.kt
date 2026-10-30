@@ -22,6 +22,7 @@ import com.itmanager.app.data.model.GpoScope
 import com.itmanager.app.data.model.GpoAppliedOnPc
 import com.itmanager.app.data.model.GpoChange
 import com.itmanager.app.data.model.GpoApplyJob
+import com.itmanager.app.data.model.GpoTemplate
 import kotlinx.serialization.json.JsonElement
 import com.itmanager.app.data.model.MapPoint
 import com.itmanager.app.data.model.AuditEntry
@@ -208,6 +209,7 @@ class DcimRepository @Inject constructor(
     suspend fun gpoApply(id: String, computers: List<String>?, authMethod: AuthMethod): Result<GpoApplyJob> =
         load { gpoApply(id, computers, authMethod) }
     suspend fun gpoApplyJob(id: String): Result<GpoApplyJob> = load { gpoApplyJob(id) }
+    suspend fun gpoTemplates(id: String): Result<List<GpoTemplate>> = load { gpoTemplates(id) }
 
     suspend fun serverConfig(): Result<ServerConfig> = load { serverConfig() }
     suspend fun saveServerConfig(values: Map<String, JsonElement>, reset: List<String>): Result<ServerConfig> =

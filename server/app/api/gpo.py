@@ -4,6 +4,7 @@ GET  /gpo                          every GPO with its state and links
 GET  /gpo/ous                      the domain and its OUs, for linking
 GET  /gpo/computer/{host}          what a computer really applied (gpresult)
 GET  /gpo/apply/{job}              progress of «Применить»
+GET  /gpo/templates[?gpo={id}]     ready-made settings («Шаблоны»), with a GPO: their state in it
 GET  /gpo/{id}                     one GPO: links, registry settings, security filter
 GET  /gpo/{id}/report              the GPMC HTML report
 GET  /gpo/{id}/computers           the computers it reaches
@@ -13,6 +14,7 @@ POST /gpo/{id}/links               link to an OU                         │ rea
 PATCH /gpo/{id}/links              enable or enforce a link              │ audited as gpo:<action>
 POST /gpo/{id}/links/remove        unlink                                │
 PUT  /gpo/{id}/registry            set a registry setting                │
+POST /gpo/{id}/templates/{tid}     set a template, several values        │
 POST /gpo/{id}/registry/remove     remove a registry setting             │
 POST /gpo/{id}/delete              delete the GPO                        │
 POST /gpo/{id}/apply               gpupdate /force on its computers      ┘
@@ -29,6 +31,7 @@ from fastapi.responses import HTMLResponse
 from ..gpo import scripts
 from ..gpo.backend import EmulatedGpo, GpoError, RealGpo, check_id
 from ..gpo.service import ApplyJob, run_apply
+from ..gpo.templates import TEMPLATES, describe, plan, template
 from ..models import ScriptAuditLog
 from ..pcs.backend import PcError, RealPcs, as_list, valid_host
 from ..pcs.service import allowed_host, inventory_pcs
@@ -46,6 +49,8 @@ from ..schemas import (
     GpoRegistryRemoveIn,
     GpoScopeOut,
     GpoStatusIn,
+    GpoTemplateIn,
+    GpoTemplateOut,
     GpoWriteIn,
 )
 from .deps import SessionDep
@@ -193,6 +198,14 @@ async def apply_job(job_id: uuid.UUID, request: Request):
         started_at=job.started_at,
         rows=[r.__dict__ for r in job.rows],
     )
+
+
+@router.get("/templates", response_model=list[GpoTemplateOut])
+async def list_templates(request: Request, session: SessionDep, gpo: str | None = None):
+    rows = None
+    if gpo:
+        rows = [r.model_dump() for r in (await _detail(request, session, gpo)).registry]
+    return [describe(t, rows) for t in TEMPLATES.values()]
 
 
 @router.get("/{gpo_id}", response_model=GpoDetailOut)
@@ -348,6 +361,44 @@ async def remove_registry(gpo_id: str, body: GpoRegistryRemoveIn, request: Reque
         lambda login: backend.registry_remove(gpo_id, body.key, body.name, login),
     )
     return await _detail(request, session, gpo_id)
+
+
+@router.post("/{gpo_id}/templates/{template_id}", response_model=GpoDetailOut)
+async def set_template(gpo_id: str, template_id: str, body: GpoTemplateIn, request: Request, session: SessionDep):
+    """All the values of a template in one change; the log keeps what they were, to put back by hand."""
+    _gate(request, body)
+    backend = _backend(request)
+    detail = await _detail(request, session, gpo_id)
+    rows = [r.model_dump() for r in detail.registry]
+    try:
+        t = template(template_id)
+        ops = plan(t, body.state, body.values, rows)
+    except GpoError as e:
+        raise _bad("invalid_request", str(e)) from e
+    if not ops:
+        return detail
+    touched = {(op[1].lower(), op[2].lower()) for op in ops}
+    before = [
+        {"key": r["key"], "name": r["name"], "type": r["type"], "value": r["value"]}
+        for r in rows
+        if (r["key"].lower(), r["name"].lower()) in touched
+    ]
+    params = {"gpo": detail.gpo.name, "gpo_id": gpo_id, "template": t.title, "state": body.state,
+              "values": body.values, "changes": [list(op) for op in ops], "before": before}  # fmt: skip
+    await _write(request, session, body, "template", params, lambda login: _apply_ops(backend, gpo_id, ops, login))
+    return await _detail(request, session, gpo_id)
+
+
+async def _apply_ops(backend, gpo_id: str, ops: list[tuple], login) -> None:
+    """In one write where the backend can (straight over SYSVOL), else value by value."""
+    if hasattr(backend, "registry_batch"):
+        await backend.registry_batch(gpo_id, ops, login)
+        return
+    for op in ops:
+        if op[0] == "set":
+            await backend.registry_set(gpo_id, op[1], op[2], op[3], op[4], login)
+        else:
+            await backend.registry_remove(gpo_id, op[1], op[2], login)
 
 
 @router.post("/{gpo_id}/delete", status_code=204)

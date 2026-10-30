@@ -1195,6 +1195,8 @@ class PcActionOut(BaseModel):
     error: str = ""
     simulated: bool = False
     audit_id: uuid.UUID | None = None
+    # windows (WinRM) or astra (SSH): what answered.
+    platform: str = "windows"
 
 
 class PcKeysIn(BaseModel):
@@ -1394,6 +1396,42 @@ class GpoRegistryRemoveIn(GpoWriteIn):
 class GpoCreateIn(GpoWriteIn):
     name: str = Field(max_length=200)
     comment: str = Field(default="", max_length=1000)
+
+
+class GpoTemplateChoiceOut(BaseModel):
+    value: str
+    label: str
+
+
+class GpoTemplateFieldOut(BaseModel):
+    id: str
+    label: str
+    # bool, int, choice, list (one per line), text
+    kind: str
+    default: Any = None
+    help: str = ""
+    choices: list[GpoTemplateChoiceOut] = []
+    min: int | None = None
+    max: int | None = None
+
+
+class GpoTemplateOut(BaseModel):
+    id: str
+    title: str
+    path: str
+    help: str
+    # computer or user
+    scope: str
+    can_disable: bool
+    fields: list[GpoTemplateFieldOut]
+    # With ?gpo=: enabled, disabled or not_configured, and the values the GPO holds.
+    state: str | None = None
+    values: dict[str, Any] | None = None
+
+
+class GpoTemplateIn(GpoWriteIn):
+    state: str = Field(max_length=20)
+    values: dict[str, Any] = {}
 
 
 class GpoApplyIn(GpoWriteIn):

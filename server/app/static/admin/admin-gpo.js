@@ -102,7 +102,73 @@
         status.can_create ? el("button", { type: "button", className: "danger", textContent: "Удалить", disabled: !canWrite(), onclick: () => remove(g) }) : ""),
       d.simulated ? el("p", { className: "muted small", textContent: "Эмуляция: настоящий домен не затрагивается. Включается в «Настройки сервера» → «Компьютеры домена»." }) : "",
       el("label", { className: "row" }, "Состояние ", sel),
-      links(g), registry(g, d.registry), security(d.security_filter), computers(g));
+      links(g), templates(g), registry(g, d.registry), security(d.security_filter), computers(g));
+  }
+
+  // ---------------------------------------------------------------- ready-made settings
+
+  const STATE = { enabled: "Включено", disabled: "Отключено", not_configured: "Не задано" };
+
+  function templates(g) {
+    const body = el("tbody", {}, el("tr", {}, el("td", { colSpan: 3, className: "muted", textContent: "Загрузка…" })));
+    api("GET", `gpo/templates?gpo=${encodeURIComponent(g.id)}`).then((items) => {
+      body.replaceChildren(...items.map((t) => el("tr", {},
+        el("td", {}, el("strong", { textContent: t.title }), el("div", { className: "muted small", textContent: t.path })),
+        el("td", {}, el("span", { className: `badge ${t.state === "enabled" ? "ok" : ""}`, textContent: STATE[t.state] || "" })),
+        el("td", {}, el("button", { type: "button", textContent: "Настроить", disabled: !canWrite(), onclick: () => editTemplate(g, t) })))));
+    }).catch((e) => body.replaceChildren(el("tr", {}, el("td", { colSpan: 3, className: "error", textContent: e.message }))));
+    return el("div", { className: "gpo-section" },
+      el("h3", { textContent: "Готовые шаблоны" }),
+      el("p", { className: "muted small", textContent: "Частые политики без поиска ключей реестра: выберите «Включено» и заполните поля. В GPMC они видны как параметры реестра." }),
+      el("div", { className: "table-wrap" }, el("table", { className: "grid gpo-templates" }, body)));
+  }
+
+  function editTemplate(g, t) {
+    const form = $("gpo-template-form");
+    const values = t.values || {};
+    const inputs = {};
+    const fields = el("fieldset", {}, ...t.fields.map((f) => {
+      const v = values[f.id] ?? f.default;
+      let input;
+      if (f.kind === "bool") {
+        input = el("input", { type: "checkbox", checked: !!v });
+        inputs[f.id] = () => input.checked;
+        return el("label", { className: "check" }, input, el("span", { className: "grow", textContent: f.label }), f.help ? el("div", { className: "muted small", textContent: f.help }) : "");
+      }
+      if (f.kind === "choice") {
+        input = el("select", {}, ...f.choices.map((c) => new Option(c.label, c.value)));
+        input.value = String(v);
+      } else if (f.kind === "list") {
+        input = el("textarea", { value: (v || []).join("\n"), placeholder: "ECOTEHS\\kharca01" });
+      } else {
+        input = el("input", { type: f.kind === "int" ? "number" : "text", value: v ?? "" });
+        if (f.kind === "int") { input.min = f.min; input.max = f.max; }
+      }
+      inputs[f.id] = () => (f.kind === "int" ? Number(input.value) : input.value);
+      return el("label", { className: "field" }, f.label, input, f.help ? el("span", { className: "muted small", textContent: f.help }) : "");
+    }));
+    const states = ["not_configured", "enabled", ...(t.can_disable ? ["disabled"] : [])];
+    const radios = states.map((s) => el("input", { type: "radio", name: "tpl-state", value: s, checked: s === (t.state || "not_configured") }));
+    const sync = () => { fields.disabled = radios.find((r) => r.checked).value !== "enabled"; };
+    radios.forEach((r) => r.addEventListener("change", sync));
+    form.replaceChildren(
+      el("div", { className: "dialog-head" }, el("h2", { textContent: t.title })),
+      el("div", { className: "muted small", textContent: `${t.path} · ${t.scope === "user" ? "для пользователей" : "для компьютеров"}` }),
+      el("p", { textContent: t.help }),
+      el("div", { className: "states" }, ...radios.map((r, i) => el("label", { className: "check" }, r, " ", STATE[states[i]]))),
+      fields,
+      el("div", { className: "row" }, el("div", { className: "spacer" }),
+        el("button", { type: "button", textContent: "Отмена", onclick: () => $("gpo-template-dialog").close() }),
+        el("button", { type: "submit", className: "primary", textContent: "Записать" })));
+    sync();
+    form.onsubmit = (ev) => {
+      ev.preventDefault();
+      const state = radios.find((r) => r.checked).value;
+      const vals = Object.fromEntries(Object.entries(inputs).map(([k, get]) => [k, get()]));
+      $("gpo-template-dialog").close();
+      change(`«${t.title}» в «${g.name}»: ${STATE[state]}?`, "POST", `gpo/${g.id}/templates/${t.id}`, { state, values: vals });
+    };
+    $("gpo-template-dialog").showModal();
   }
 
   function links(g) {

@@ -377,6 +377,10 @@
       </div>
     </dialog>
 
+    <dialog id="gpo-template-dialog">
+      <form class="dialog" id="gpo-template-form" method="dialog"></form>
+    </dialog>
+
     <section id="tab-pcs" class="tab" hidden>
       <div class="toolbar">
         <form id="pc-open-form" class="row">
@@ -407,18 +411,20 @@
         <div class="card grow" id="pc-panel">
           <div class="row"><h2 id="pc-title">Компьютер не выбран</h2><div class="spacer"></div><span id="pc-user" class="muted"></span></div>
           <div id="pc-actions" class="row wrap" hidden>
-            <button data-pc="info" class="primary">Сведения и лицензии</button>
+            <button data-pc="info" class="primary">Сведения</button>
+            <button data-pc="assist" class="primary">Удалённая помощь</button>
             <button data-pc="disks">Свободное место</button>
-            <button data-pc="folders">Крупные папки на C:</button>
+            <button data-pc="folders">Крупные папки</button>
             <button data-pc="processes">Процессы</button>
             <button data-pc="gpupdate">Обновить групповые политики</button>
-            <button type="button" id="pc-gpresult">Политики на ПК</button>
-            <button data-pc="cleanup">Очистить Temp и кэш обновлений</button>
+            <button type="button" id="pc-gpresult" data-only="windows">Политики на ПК</button>
+            <button data-pc="update" data-only="astra">Обновить пакеты</button>
+            <button data-pc="cleanup">Очистка</button>
             <button data-pc="reboot" class="danger">Перезагрузить</button>
           </div>
           <div id="pc-result" class="stack"></div>
           <form id="pc-console" class="stack" hidden>
-            <label>Консоль PowerShell <span class="muted small">(каждая команда выполняется отдельно, переменные между командами не сохраняются)</span>
+            <label><span id="pc-console-title">Консоль PowerShell</span> <span class="muted small">(каждая команда выполняется отдельно, переменные между командами не сохраняются)</span>
               <div class="row"><input id="pc-command" class="mono" placeholder="Get-NetIPConfiguration" autocomplete="off"><button type="submit">Выполнить</button></div>
             </label>
             <pre id="pc-console-out" class="output" hidden></pre>
@@ -576,7 +582,8 @@
       <button type="button" id="card-map">На карте</button>
       <button type="button" id="card-ping" title="Проверить доступность с сервера">Ping</button>
       <button type="button" id="card-plate" title="Схема лицевой панели (SVG) и места портов">Схема панели</button>
-      <button type="button" id="card-pc" title="Диски, процессы, лицензии, очистка, перезагрузка по WinRM" hidden>Управление ПК</button>
+      <button type="button" id="card-pc" title="Диски, процессы, лицензии, очистка, перезагрузка: Windows по WinRM, Astra Linux по SSH" hidden>Управление ПК</button>
+      <button type="button" id="card-assist" title="Подключиться к экрану пользователя: msra для Windows, VNC с согласия пользователя для Astra Linux" hidden>Удалённая помощь</button>
     </div>
     <div class="seg" id="card-tabs">
       <button data-part="overview" class="active">Обзор</button>

@@ -121,6 +121,10 @@ GROUPS: tuple[Group, ...] = (
                  "C:\\GPOBackup — копия политики перед каждым изменением."),
             Spec("winrm_https", "WinRM по HTTPS", "Порт 5986, на ПК нужен сертификат.", "bool"),
             Spec("winrm_port", "Порт WinRM", "0 — 5985 или 5986 для HTTPS.", "int"),
+            Spec("linux_credential", "Учётная запись для Astra Linux",
+                 "SSH и sudo на ПК с Astra Linux. Пусто — «Учётная запись домена» (с winbind она входит по SSH, "
+                 "если ей разрешён sudo).", "credential", credential_kind="ssh"),
+            Spec("linux_ssh_port", "Порт SSH на ПК с Astra Linux", kind="int"),
         ),
     ),
     Group(

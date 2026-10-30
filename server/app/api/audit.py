@@ -39,6 +39,10 @@ PC_ACTIONS = {
     "reboot": "ПК: перезагрузка",
     "kill": "ПК: завершение процесса",
     "command": "ПК: команда в консоли",
+    "assist": "ПК: удалённая помощь",
+    "update": "ПК: обновление пакетов (Astra)",
+    "admin_add": "ПК: выдача sudo (Astra)",
+    "admin_remove": "ПК: снятие sudo (Astra)",
     "keys": "Инвентаризация ключей",
 }
 
@@ -51,6 +55,7 @@ GPO_ACTIONS = {
     "link_remove": "GPO: удаление связи",
     "registry_set": "GPO: параметр реестра",
     "registry_remove": "GPO: удаление параметра",
+    "template": "GPO: шаблон",
     "create": "GPO: создание политики",
     "delete": "GPO: удаление политики",
     "apply": "GPO: применение на компьютерах",

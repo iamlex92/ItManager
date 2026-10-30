@@ -136,6 +136,9 @@ class Settings(BaseSettings):
     winrm_https: bool = False
     # 0: 5985 (HTTP, NTLM-encrypted) or 5986 (HTTPS).
     winrm_port: int = 0
+    # Astra Linux computers (SSH, sudo): the stored credential; empty uses RUNBOOK_CREDENTIAL.
+    linux_credential: str = ""
+    linux_ssh_port: int = Field(default=22, ge=1, le=65535)
     # Pause per output step in the emulator, so a run in the app feels like a real one. 0 in tests.
     runbook_step_delay_seconds: float = 0.4
 

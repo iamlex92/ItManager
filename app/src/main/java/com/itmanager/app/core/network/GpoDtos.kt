@@ -13,6 +13,9 @@ import com.itmanager.app.data.model.GpoOverview
 import com.itmanager.app.data.model.GpoRegistryValue
 import com.itmanager.app.data.model.GpoScope
 import com.itmanager.app.data.model.GpoStatus
+import com.itmanager.app.data.model.GpoTemplate
+import com.itmanager.app.data.model.GpoTemplateField
+import com.itmanager.app.data.model.GpoTemplateState
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
@@ -147,4 +150,41 @@ data class GpoChangeBody(
     val value: String? = null,
     val comment: String? = null,
     val computers: List<String>? = null,
+    val state: String? = null,
+    val values: Map<String, JsonElement>? = null,
 )
+
+@Serializable
+data class GpoTemplateChoiceDto(val value: String, val label: String)
+
+@Serializable
+data class GpoTemplateFieldDto(
+    val id: String,
+    val label: String,
+    val kind: String,
+    val default: JsonElement? = null,
+    val help: String = "",
+    val choices: List<GpoTemplateChoiceDto> = emptyList(),
+    val min: Int? = null,
+    val max: Int? = null,
+)
+
+@Serializable
+data class GpoTemplateDto(
+    val id: String,
+    val title: String,
+    val path: String = "",
+    val help: String = "",
+    val scope: String = "computer",
+    @SerialName("can_disable") val canDisable: Boolean = true,
+    val fields: List<GpoTemplateFieldDto> = emptyList(),
+    val state: String? = null,
+    val values: Map<String, JsonElement>? = null,
+) {
+    fun toDomain() = GpoTemplate(
+        id, title, path, help, scope == "user", canDisable,
+        fields.map { f -> GpoTemplateField(f.id, f.label, f.kind, f.default, f.help, f.choices.map { it.value to it.label }, f.min, f.max) },
+        GpoTemplateState.parse(state) ?: GpoTemplateState.NOT_CONFIGURED,
+        values.orEmpty(),
+    )
+}

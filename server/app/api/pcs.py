@@ -2,7 +2,11 @@
 
 GET  /pcs/status                 mode, whether changes are allowed and the login is set
 POST /pcs/sweep                  ping a subnet and name what answers (menu item 1)
-POST /pcs/{host}/{action}        info, disks, folders, processes, cleanup, gpupdate, reboot, kill, command
+POST /pcs/{host}/{action}        info, disks, folders, processes, cleanup, gpupdate, reboot, kill, command,
+                                 assist (remote help); Astra Linux also update, admin_add, admin_remove
+
+Windows computers are reached over WinRM, Astra Linux ones over SSH with sudo (pcs/astra.py): whichever port
+answers decides, so the same page serves both.
 POST /pcs/keys                   key inventory over AD or a subnet (menu item 3); GET /pcs/keys/{id}, .../csv
 
 Every action on a computer goes to the audit log («pc:<action>»), with who asked and whether it was emulated.
@@ -17,12 +21,14 @@ from fastapi import APIRouter, HTTPException, Request, Response
 
 from ..config import DiscoveryMode
 from ..models import ScriptAuditLog
+from ..pcs.astra import ASTRA_ACTIONS, program
 from ..pcs.backend import (
     CONFIRM_ACTIONS,
     READ_ACTIONS,
     Action,
     EmulatedPcs,
     PcError,
+    PcResult,
     RealPcs,
     script_for,
     valid_host,
@@ -30,6 +36,7 @@ from ..pcs.backend import (
 from ..pcs.service import (
     KeyJob,
     allowed_host,
+    detect_platform,
     inventory_pcs,
     office_text,
     one_c_text,
@@ -50,7 +57,7 @@ from ..schemas import (
 )
 from ..services import heartbeat
 from .deps import SessionDep, not_found
-from .runbooks import runbook_login
+from .runbooks import linux_login, runbook_login
 
 router = APIRouter(prefix="/pcs", tags=["domain computers"])
 
@@ -198,22 +205,14 @@ async def keys_csv(job_id: uuid.UUID, request: Request):
 @router.post("/{host}/{action}", response_model=PcActionOut)
 async def act(host: str, action: Action, body: PcActionIn, request: Request, session: SessionDep):
     s = request.app.state.settings
-    backend = _backend(request)
-    real = isinstance(backend, RealPcs)
+    windows = _backend(request)
+    real = isinstance(windows, RealPcs)
     try:
         host = valid_host(host)
-        script_for(action, body.arg)  # a bad process name or an empty command is refused before anything runs
     except PcError as e:
         raise _bad("invalid_request", str(e)) from e
-    if action not in READ_ACTIONS and not backend.writes_enabled:
-        raise _bad(
-            "writes_disabled",
-            "Изменения на компьютерах выключены на сервере (ALLOW_RUNBOOK_WRITES=false): доступен только просмотр.",
-            403,
-        )
-    if action in CONFIRM_ACTIONS and not body.confirm:
-        raise _bad("confirmation_required", 'подтвердите действие и повторите с "confirm": true', 400)
     login = await runbook_login(session, s)
+    # Before anything is sent to it, the probe for WinRM and SSH included.
     if real and not await allowed_host(session, s, login, host):
         raise _bad(
             "unknown_host",
@@ -221,26 +220,62 @@ async def act(host: str, action: Action, body: PcActionIn, request: Request, ses
             "компьютерам. Добавьте компьютер в учёт или задайте AD_LDAP_URL.",
             403,
         )
+    try:
+        platform = await detect_platform(host, s, not real, request.app.state.pc_platforms, request.app.state.pc_probe)
+    except PcError as e:
+        raise _bad("pc_failed", str(e), 409) from e
+    backend = request.app.state.astra if platform == "astra" else windows
+    try:
+        # A bad process name, an empty command, a Linux-only action on Windows: refused before anything runs.
+        if platform == "astra":
+            if action not in ASTRA_ACTIONS:
+                raise PcError("Для Astra Linux этого действия нет")
+            program(action, body.arg)
+        elif action is not Action.ASSIST:
+            script_for(action, body.arg)
+    except PcError as e:
+        raise _bad("invalid_request", str(e)) from e
+    # Offering help from Windows changes nothing on the server's side: msra runs on the helper's computer.
+    read_only = action in READ_ACTIONS or (platform == "windows" and action is Action.ASSIST)
+    if not read_only and not backend.writes_enabled:
+        raise _bad(
+            "writes_disabled",
+            "Изменения на компьютерах выключены на сервере (ALLOW_RUNBOOK_WRITES=false): доступен только просмотр.",
+            403,
+        )
+    if action in CONFIRM_ACTIONS and not body.confirm:
+        raise _bad("confirmation_required", 'подтвердите действие и повторите с "confirm": true', 400)
 
     client = request.client.host if request.client else "unknown"
     started = datetime.now(UTC)
     t0 = time.monotonic()
     try:
-        result = await backend.run(host, action, body.arg, login)
+        if platform == "windows" and action is Action.ASSIST:
+            # msra runs on the helper's computer; the server only says how.
+            result = PcResult(True, data=msra_offer(host), simulated=not real)
+        elif platform == "astra":
+            result = await backend.run(host, action, body.arg, await linux_login(session, s) if real else login)
+        else:
+            result = await backend.run(host, action, body.arg, login)
     except PcError as e:
         raise _bad("pc_failed", str(e), 409) from e
     duration_ms = int((time.monotonic() - t0) * 1000)
 
     # Reads are logged without what they returned (the keys stay out of the log); changes keep their output.
     output = None
-    if action not in READ_ACTIONS and isinstance(result.data, dict):
+    if action is Action.ASSIST and isinstance(result.data, dict):
+        # Never the one-time VNC password.
+        d = result.data
+        output = f"{d.get('method')}: {d.get('command') or d.get('url')} · пользователь {d.get('user') or '—'}"
+    elif action not in READ_ACTIONS and isinstance(result.data, dict):
         output = str(result.data.get("output") or result.data)[:20000]
     entry = ScriptAuditLog(
         script_name=f"{AUDIT_PREFIX}{action.value}",
         triggered_by=(f"{body.operator} · {client}" if body.operator else f"api:{client}")[:100],
         parameters={
             "host": host,
-            "arg": body.arg if action in (Action.KILL, Action.COMMAND) else None,
+            "arg": body.arg if action in (Action.KILL, Action.COMMAND, Action.ADMIN_ADD, Action.ADMIN_REMOVE) else None,
+            "platform": platform,
             "confirmed": body.confirm,
             "auth_method": body.auth_method,
             "simulated": result.simulated,
@@ -255,6 +290,20 @@ async def act(host: str, action: Action, body: PcActionIn, request: Request, ses
     await session.commit()
     return PcActionOut(
         host=host, action=action.value, ok=result.ok, data=result.data, error=result.error,
-        simulated=result.simulated, audit_id=entry.id,
+        simulated=result.simulated, audit_id=entry.id, platform=platform,
     )  # fmt: skip
 
+
+def msra_offer(host: str) -> dict:
+    """What the helper runs on their own Windows computer to offer help to [host]."""
+    return {
+        "method": "msra",
+        "host": host,
+        "command": f"msra.exe /offerra {host}",
+        "needs": [
+            "Предлагать удалённую помощь (с вами в списке помощников)",
+            "Запрос удалённой помощи",
+            "Брандмауэр: входящие подключения → Удалённый помощник",
+            "Запросы UAC во время удалённой помощи — чтобы видеть окна UAC",
+        ],
+    }

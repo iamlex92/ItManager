@@ -15,6 +15,7 @@ import com.itmanager.app.data.model.GpoDetail
 import com.itmanager.app.data.model.GpoScope
 import com.itmanager.app.data.model.GpoAppliedOnPc
 import com.itmanager.app.data.model.GpoChange
+import com.itmanager.app.data.model.GpoTemplate
 import com.itmanager.app.data.model.GpoApplyJob
 import kotlinx.serialization.json.JsonElement
 import com.itmanager.app.data.model.MapPoint
@@ -257,4 +258,5 @@ interface DcimDataSource {
     suspend fun gpoDelete(id: String, authMethod: AuthMethod)
     suspend fun gpoApply(id: String, computers: List<String>?, authMethod: AuthMethod): GpoApplyJob
     suspend fun gpoApplyJob(id: String): GpoApplyJob
+    suspend fun gpoTemplates(id: String): List<GpoTemplate>
 }
