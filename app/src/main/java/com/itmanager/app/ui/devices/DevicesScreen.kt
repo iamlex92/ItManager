@@ -49,6 +49,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -139,6 +143,7 @@ fun DevicesScreen(
     val bulk by viewModel.bulk.collectAsStateWithLifecycle()
     var confirmDelete by remember { mutableStateOf(false) }
     BackHandler(enabled = selecting) { viewModel.clearSelection() }
+    BackHandler(enabled = !selecting && !state.home) { viewModel.backHome() }
 
     bulk?.let { b ->
         BulkEditDialog(
@@ -175,8 +180,17 @@ fun DevicesScreen(
             )
         } else {
             TabTopBar(
-                title = "Устройства",
-                subtitle = if (state.offlineCount > 0) "Не отвечают: ${state.offlineCount}" else "Долгое нажатие: выбрать несколько",
+                title = when {
+                    state.home -> "Устройства"
+                    state.query.isNotBlank() && state.filter == DeviceFilter.ALL -> "Поиск"
+                    else -> state.filter.label
+                },
+                onBack = if (state.home) null else viewModel::backHome,
+                subtitle = when {
+                    state.home && state.offlineCount > 0 -> "Не отвечают: ${state.offlineCount}"
+                    state.home -> "Выберите вид или найдите по имени, IP, MAC"
+                    else -> "Долгое нажатие: выбрать несколько"
+                },
                 actions = {
                     IconButton(
                         onClick = {
@@ -201,6 +215,14 @@ fun DevicesScreen(
             )
         }
         SearchField(state.query, viewModel::setQuery, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+        if (state.home) {
+            when (val devices = state.devices) {
+                UiState.Loading -> LoadingView()
+                is UiState.Error -> ErrorView(devices.message, viewModel::retry, onOpenSettings, contentPadding = contentPadding)
+                is UiState.Content -> KindGrid(state, onOpen = viewModel::openKind, onOpenScanner = onOpenScanner, contentPadding = contentPadding)
+            }
+            return@Column
+        }
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(horizontal = 16.dp),
@@ -271,6 +293,78 @@ fun DevicesScreen(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+/** The tab's first view: a tile per kind of device, with how many there are and how many do not answer. */
+@Composable
+private fun KindGrid(
+    state: DevicesUiState,
+    onOpen: (DeviceFilter) -> Unit,
+    onOpenScanner: () -> Unit,
+    contentPadding: PaddingValues,
+) {
+    val total = state.totals[DeviceFilter.ALL] ?: 0
+    if (total == 0) {
+        EmptyView("В учёте пока нет устройств. Найдите их сканером сети или добавьте на карте.", action = "Сканер сети", onAction = onOpenScanner)
+        return
+    }
+    val kinds = DeviceFilter.entries.filter { f ->
+        when (f) {
+            DeviceFilter.ALL -> false
+            DeviceFilter.OFFLINE -> (state.totals[f] ?: 0) > 0
+            else -> f.always || (state.totals[f] ?: 0) > 0
+        }
+    } + DeviceFilter.ALL
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(150.dp),
+        contentPadding = PaddingValues(
+            start = 16.dp, end = 16.dp, top = 4.dp,
+            bottom = contentPadding.calculateBottomPadding() + 16.dp,
+        ),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        gridItems(kinds, key = { it.name }) { f ->
+            val count = state.totals[f] ?: 0
+            val down = state.down[f] ?: 0
+            val note = when {
+                f == DeviceFilter.ALL -> "одним списком"
+                f == DeviceFilter.OFFLINE -> "не отвечают сейчас"
+                count == 0 -> "пока нет"
+                f == DeviceFilter.PASSIVE -> "не опрашиваются"
+                down > 0 -> "не в сети: $down"
+                else -> "все в сети"
+            }
+            val bad = f == DeviceFilter.OFFLINE || (f != DeviceFilter.ALL && down > 0)
+            val interaction = remember { MutableInteractionSource() }
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .pressScale(interaction)
+                    .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(16.dp))
+                    .combinedClickable(interactionSource = interaction, indication = null, onClick = { onOpen(f) })
+                    .padding(16.dp),
+            ) {
+                when (val type = f.type) {
+                    null -> if (f == DeviceFilter.OFFLINE) {
+                        StatusDot(StatusColors.Offline, size = 16.dp)
+                    } else {
+                        Icon(Icons.Outlined.Apps, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    else -> Icon(type.icon, contentDescription = null, tint = type.tint)
+                }
+                Text("$count", style = MaterialTheme.typography.headlineMedium)
+                Text(f.label, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(
+                    note,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (bad) StatusColors.Offline else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }

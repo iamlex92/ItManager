@@ -33,18 +33,27 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/** Filter chips: what an IT manager looks for, with passive cabling grouped together. */
-enum class DeviceFilter(val label: String, val types: Set<DeviceType>?) {
-    ALL("Все", null),
-    SWITCHES("Сеть", setOf(DeviceType.SWITCH, DeviceType.ROUTER, DeviceType.FIREWALL)),
-    HOSTS("Компьютеры", setOf(DeviceType.WORKSTATION, DeviceType.SERVER, DeviceType.VIRTUAL)),
-    PRINTERS("МФУ", setOf(DeviceType.PRINTER)),
-    CAMERAS("Камеры", setOf(DeviceType.CAMERA, DeviceType.ACCESS_POINT)),
-    PASSIVE("Кабельное", setOf(DeviceType.SOCKET, DeviceType.PATCH_PANEL)),
-    OTHER("Прочее", setOf(DeviceType.UPS, DeviceType.PHONE, DeviceType.RACK, DeviceType.UNKNOWN)),
+/**
+ * Kinds of device: the tiles the tab opens with and the chips over the list. What people look for, not the 15
+ * inventory types. [always]: a tile even when there are none yet, so «Телефоны» is where people expect it.
+ */
+enum class DeviceFilter(val label: String, val types: Set<DeviceType>?, val always: Boolean = false) {
+    ALL("Все устройства", null),
+    COMPUTERS("Компьютеры", setOf(DeviceType.WORKSTATION), always = true),
+    SERVERS("Серверы и ВМ", setOf(DeviceType.SERVER, DeviceType.VIRTUAL), always = true),
+    PHONES("Телефоны", setOf(DeviceType.PHONE), always = true),
+    NETWORK("Сетевое оборудование", setOf(DeviceType.SWITCH, DeviceType.ROUTER, DeviceType.FIREWALL, DeviceType.ACCESS_POINT), always = true),
+    PRINTERS("МФУ и принтеры", setOf(DeviceType.PRINTER), always = true),
+    CAMERAS("Камеры", setOf(DeviceType.CAMERA), always = true),
+    POWER("ИБП", setOf(DeviceType.UPS)),
+    PASSIVE("Кабельное и стойки", setOf(DeviceType.SOCKET, DeviceType.PATCH_PANEL, DeviceType.RACK)),
+    OTHER("Прочее", setOf(DeviceType.UNKNOWN)),
     /** Not a kind of device: everything active that does not answer right now. */
     OFFLINE("Не в сети", null),
     ;
+
+    /** The pictogram of a tile: its first kind's. */
+    val type: DeviceType? get() = types?.first()
 
     fun accepts(device: Device): Boolean = when (this) {
         OFFLINE -> device.isDown
@@ -64,6 +73,11 @@ data class DevicesUiState(
     val groups: List<DeviceGroup> = emptyList(),
     /** Devices picked for a group change; not empty means the list is in selection mode. */
     val selected: Set<String> = emptySet(),
+    /** The tiles instead of the list: until a kind is opened or something is searched. */
+    val home: Boolean = true,
+    /** Per kind, of all devices: how many there are and how many do not answer — for the tiles. */
+    val totals: Map<DeviceFilter, Int> = emptyMap(),
+    val down: Map<DeviceFilter, Int> = emptyMap(),
 )
 
 /** The group edit dialog: floors and servers to choose from, and how the last attempt went. */
@@ -104,6 +118,7 @@ class DevicesViewModel @Inject constructor(
     private val filter = MutableStateFlow(DeviceFilter.ALL)
     private val selected = MutableStateFlow<Set<String>>(emptySet())
     private val grouping = MutableStateFlow(DeviceGrouping.TYPE)
+    private val home = MutableStateFlow(true)
     /** Floors and their rooms, for grouping by floor or room. */
     private val places = MutableStateFlow(Places())
 
@@ -116,9 +131,15 @@ class DevicesViewModel @Inject constructor(
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val messages: SharedFlow<String> = _messages.asSharedFlow()
 
-    private val view = combine(query, filter, selected, grouping) { q, f, picked, g -> ViewOptions(q, f, picked, g) }
+    private val view = combine(query, filter, selected, grouping, home) { q, f, picked, g, h -> ViewOptions(q, f, picked, g, h) }
 
-    private data class ViewOptions(val query: String, val filter: DeviceFilter, val selected: Set<String>, val grouping: DeviceGrouping)
+    private data class ViewOptions(
+        val query: String,
+        val filter: DeviceFilter,
+        val selected: Set<String>,
+        val grouping: DeviceGrouping,
+        val home: Boolean,
+    )
 
     val state: StateFlow<DevicesUiState> = combine(all, view, places) { devices, v, p ->
         val found = (devices as? UiState.Content)?.data.orEmpty().filter { it.matches(v.query) }
@@ -136,6 +157,13 @@ class DevicesViewModel @Inject constructor(
             counts = DeviceFilter.entries.associateWith { f -> found.count { f.accepts(it) } },
             grouping = v.grouping,
             groups = groupDevices(shown, v.grouping, p.floors, p.zones),
+            home = v.home && v.query.isBlank(),
+            totals = (devices as? UiState.Content)?.data.orEmpty().let { list ->
+                DeviceFilter.entries.associateWith { f -> list.count { f.accepts(it) } }
+            },
+            down = (devices as? UiState.Content)?.data.orEmpty().let { list ->
+                DeviceFilter.entries.associateWith { f -> list.count { f.accepts(it) && it.isDown } }
+            },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DevicesUiState())
 
@@ -161,6 +189,20 @@ class DevicesViewModel @Inject constructor(
 
     fun setFilter(value: DeviceFilter) {
         filter.value = value
+    }
+
+    /** A tile: that kind's list. */
+    fun openKind(value: DeviceFilter) {
+        filter.value = value
+        home.value = false
+    }
+
+    /** Back from a list to the tiles, the search and the selection dropped. */
+    fun backHome() {
+        filter.value = DeviceFilter.ALL
+        query.value = ""
+        selected.value = emptySet()
+        home.value = true
     }
 
     fun setGrouping(value: DeviceGrouping) {

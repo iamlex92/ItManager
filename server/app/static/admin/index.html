@@ -32,13 +32,13 @@
     <nav class="tabs" id="tabs">
       <button data-tab="map" class="active">Карта</button>
       <button data-tab="devices">Устройства</button>
-      <button data-tab="topology">Сеть</button>
       <button data-tab="alerts">События <span id="alerts-count" class="count" hidden></span></button>
       <div class="more">
         <button type="button" id="more-toggle" aria-haspopup="true" aria-expanded="false">Ещё ▾</button>
         <div id="more-menu" class="pop more-menu" hidden>
           <div class="pop-col">
             <div class="pop-group">Учёт</div>
+            <button data-tab="topology">Схема сети</button>
             <button data-tab="vlans">VLAN и подсети</button>
             <button data-tab="templates">Шаблоны устройств</button>
             <button data-tab="peripherals">Периферия и склад</button>
@@ -166,9 +166,10 @@
 
     <section id="tab-devices" class="tab" hidden>
       <div class="toolbar">
-        <input id="device-filter" type="search" placeholder="Имя, IP, MAC, тип, модель">
+        <button id="device-back" type="button" hidden>← Все виды</button>
+        <input id="device-filter" type="search" placeholder="Найти среди всех: имя, IP, MAC, тип, модель">
         <select id="type-filter" title="Показать только одну категорию"></select>
-        <label class="inline">Группировать<select id="group-by">
+        <label class="inline" id="group-by-label">Группировать<select id="group-by">
           <option value="type">по типу</option><option value="floor">по этажу</option><option value="room">по помещению</option>
         </select></label>
         <span id="device-count" class="muted small"></span>
@@ -182,7 +183,8 @@
         <button id="bulk-delete" class="danger">Удалить</button>
         <button id="bulk-clear">Снять выбор</button>
       </div>
-      <div class="table-wrap">
+      <div id="device-home" class="device-home" hidden></div>
+      <div class="table-wrap" id="device-table">
         <table class="grid">
           <thead><tr><th class="pick"><input type="checkbox" id="pick-all" title="Выбрать все показанные"></th><th>Имя</th><th>Тип</th><th>IP</th><th>Производитель</th><th>Модель</th><th>Помещение</th><th>Стойка</th><th>Хост</th><th></th></tr></thead>
           <tbody id="device-rows"></tbody>

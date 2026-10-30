@@ -126,6 +126,7 @@ fun TopologyScreen(
     onOpenDevice: (String) -> Unit,
     onShowOnMap: () -> Unit,
     onOpenSettings: () -> Unit,
+    onBack: (() -> Unit)? = null,
     viewModel: TopologyViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -168,7 +169,8 @@ fun TopologyScreen(
 
     Column(Modifier.fillMaxSize()) {
         TabTopBar(
-            title = "Сеть",
+            title = "Схема сети",
+            onBack = onBack,
             subtitle = topology?.let { t ->
                 val down = t.nodes.count { !it.isOnline && it.type != DeviceType.VIRTUAL }
                 "${t.nodes.size} устр. · ${t.links.count { it.kind == TopologyLinkKind.CABLE }} связей" + if (down > 0) " · не в сети: $down" else ""

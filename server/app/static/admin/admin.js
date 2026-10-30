@@ -2565,7 +2565,27 @@
   const isDown = (d) => !d.is_online && !PASSIVE.has(d.type) && d.type !== "RACK";
   const matchesQuery = (d, q) => !q || [d.name, d.ip, d.mac, typeOf(d).label, d.vendor, d.model, (roomOf(d) || {}).name, d.comment]
     .join(" ").toLowerCase().includes(q);
-  const matchesType = (d, f) => !f || (f === "OFFLINE" ? isDown(d) : d.type === f);
+  // Kinds of device the «Устройства» tab opens with: what people look for, not the 15 inventory types.
+  const CATEGORIES = [
+    ["COMPUTERS", "Компьютеры", ["WORKSTATION"]],
+    ["SERVERS", "Серверы и ВМ", ["SERVER", "VIRTUAL"]],
+    ["PHONES", "Телефоны", ["PHONE"]],
+    ["NETWORK", "Сетевое оборудование", ["SWITCH", "ROUTER", "FIREWALL", "ACCESS_POINT"]],
+    ["PRINTERS", "МФУ и принтеры", ["PRINTER"]],
+    ["CAMERAS", "Камеры", ["CAMERA"]],
+    ["POWER", "ИБП", ["UPS"]],
+    ["PASSIVE", "Кабельное и стойки", ["PATCH_PANEL", "SOCKET", "RACK"]],
+    ["OTHER", "Прочее", ["UNKNOWN"]],
+  ];
+  const CATEGORY = Object.fromEntries(CATEGORIES.map(([id, label, types]) => [id, { label, types: new Set(types) }]));
+  const matchesType = (d, f) => !f || (f === "OFFLINE" ? isDown(d) : CATEGORY[f] ? CATEGORY[f].types.has(d.type) : d.type === f);
+  // The tiles, until a kind is opened or something is searched.
+  let deviceHome = true;
+  const el = (tag, props = {}, ...kids) => {
+    const e = Object.assign(document.createElement(tag), props);
+    e.append(...kids);
+    return e;
+  };
 
   function visibleDevices() {
     const q = $("device-filter").value.trim().toLowerCase();
@@ -2577,16 +2597,16 @@
     const q = $("device-filter").value.trim().toLowerCase();
     const found = allDevices.filter((d) => matchesQuery(d, q));
     const sel = $("type-filter");
-    const opts = [new Option(`Все категории · ${found.length}`, "")];
+    const opts = [new Option(`Все устройства · ${found.length}`, "")];
     const down = found.filter(isDown).length;
     if (down || typeFilter === "OFFLINE") opts.push(new Option(`● Не в сети · ${down}`, "OFFLINE"));
-    for (const [id, label] of TYPES) {
-      const n = found.filter((d) => d.type === id).length;
+    for (const [id, label] of CATEGORIES) {
+      const n = found.filter((d) => matchesType(d, id)).length;
       if (n || typeFilter === id) opts.push(new Option(`${label} · ${n}`, id));
     }
     sel.replaceChildren(...opts);
     sel.value = typeFilter;
-    $("printers-link").hidden = typeFilter !== "PRINTER";
+    $("printers-link").hidden = typeFilter !== "PRINTERS";
   }
 
   /** Sections of the list, as in the app: by kind, by floor (bottom to top) or by room on the floor's plan. */
@@ -2646,7 +2666,63 @@
     return td;
   }
 
+  /** The tab's first view: a tile per kind of device with how many there are and how many do not answer. */
+  function renderHome() {
+    const tile = (id, title, types, list, extra) => {
+      const down = list.filter(isDown).length;
+      const b = el("button", { type: "button", className: "device-tile", onclick: () => openCategory(id) });
+      b.append(types ? glyphCanvas(types[0], 28) : document.createTextNode(""),
+        el("span", { className: "tile-count", textContent: String(list.length) }),
+        el("span", { className: "tile-title", textContent: title }),
+        el("span", { className: `tile-sub${(extra == null ? down : id === "OFFLINE") ? " bad" : ""}`,
+          textContent: extra ?? (down ? `не в сети: ${down}` : "все в сети") }));
+      return b;
+    };
+    const tiles = [];
+    // The main kinds stay even when empty, so «Телефоны» is where people expect it; the rest only when present.
+    const always = new Set(["COMPUTERS", "SERVERS", "PHONES", "NETWORK", "PRINTERS", "CAMERAS"]);
+    for (const [id, label, types] of CATEGORIES) {
+      const list = allDevices.filter((d) => matchesType(d, id));
+      if (!list.length && !always.has(id)) continue;
+      tiles.push(tile(id, label, types, list, !list.length ? "пока нет" : id === "PASSIVE" ? "не опрашиваются" : undefined));
+    }
+    const down = allDevices.filter(isDown);
+    if (down.length) tiles.push(tile("OFFLINE", "Не в сети", null, down, "не отвечают сейчас"));
+    tiles.push(tile("", "Все устройства", null, allDevices, "одним списком"));
+    $("device-home").replaceChildren(...tiles);
+    if (!allDevices.length) {
+      $("device-home").replaceChildren(el("div", { className: "card" },
+        el("p", { textContent: "В учёте пока нет устройств. Найдите их сканером сети или добавьте вручную." }),
+        el("button", { type: "button", className: "primary", textContent: "Сканер сети", onclick: () => openTab("scan") })));
+    }
+  }
+
+  function openCategory(id) {
+    typeFilter = id;
+    deviceHome = false;
+    $("group-by").value = id === "" || id === "OFFLINE" ? "type" : $("group-by").value;
+    renderDevices();
+  }
+
+  $("device-back").addEventListener("click", () => {
+    deviceHome = true;
+    typeFilter = "";
+    $("device-filter").value = "";
+    picked.clear();
+    renderDevices();
+  });
+
   function renderDevices() {
+    const home = deviceHome && !$("device-filter").value.trim();
+    for (const id of ["type-filter", "group-by-label", "device-count", "device-table"]) $(id).hidden = home;
+    $("device-home").hidden = !home;
+    $("device-back").hidden = home;
+    if (home) {
+      $("printers-link").hidden = true;
+      $("bulk-bar").hidden = true;
+      renderHome();
+      return;
+    }
     renderTypeFilter();
     const rows = $("device-rows");
     rows.replaceChildren();

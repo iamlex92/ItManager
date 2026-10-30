@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.ManageSearch
+import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.Computer
 import androidx.compose.material.icons.outlined.Construction
 import androidx.compose.material.icons.outlined.Dns
@@ -64,6 +65,7 @@ class MoreViewModel @Inject constructor(settings: SettingsRepository) : ViewMode
 
 /** Where every section of the app that is not a tab lives, grouped by what the person wants to do. */
 enum class MoreItem(val title: String, val subtitle: String, val icon: ImageVector) {
+    TOPOLOGY("Схема сети", "Коммутаторы и связи: что к какому порту подключено", Icons.Outlined.AccountTree),
     VLANS("VLAN и подсети", "Справочник VLAN, подсети и их цвета на карте", Icons.Outlined.Lan),
     IPAM("IP-адреса", "Заполнение подсетей, свободные адреса, конфликты", Icons.Outlined.Dns),
     TEMPLATES("Шаблоны устройств", "Типовые коммутаторы и патч-панели с портами", Icons.Outlined.Dashboard),
@@ -78,7 +80,7 @@ enum class MoreItem(val title: String, val subtitle: String, val icon: ImageVect
 }
 
 private val GROUPS = listOf(
-    "Учёт" to listOf(MoreItem.VLANS, MoreItem.IPAM, MoreItem.TEMPLATES, MoreItem.PERIPHERALS),
+    "Учёт" to listOf(MoreItem.TOPOLOGY, MoreItem.VLANS, MoreItem.IPAM, MoreItem.TEMPLATES, MoreItem.PERIPHERALS),
     "Диагностика" to listOf(MoreItem.SCANNER, MoreItem.TOOLS),
     "Windows" to listOf(MoreItem.PCS, MoreItem.GPO, MoreItem.RUNBOOKS),
     "Система" to listOf(MoreItem.AUDIT, MoreItem.ACCESS),
