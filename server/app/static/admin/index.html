@@ -489,7 +489,7 @@
       <div class="columns">
         <div class="card narrow">
           <div class="row"><h2>Свои скрипты</h2><div class="spacer"></div><button id="script-new" class="primary">+ Новый</button></div>
-          <p class="muted small">Скрипты появляются в приложении в разделе «Ещё» → Windows → «Сценарии». Запуск только в режиме эмуляции: сервер показывает текст с подставленными параметрами и ничего не выполняет.</p>
+          <p class="muted small">Скрипты появляются в приложении в «Сценариях». Каждый выполняется там, где указано: только показ (ничего не запускается), на компьютере домена (Windows по WinRM, Astra Linux по SSH) или на сервере NetAdmin. Настоящий запуск — только при «Разрешить изменения», с подтверждением и записью в журнал.</p>
           <ul id="script-list" class="list"></ul>
         </div>
         <form id="script-form" class="card grow" hidden>
@@ -497,19 +497,26 @@
             <button type="button" id="script-delete" class="danger">Удалить</button></div>
           <div class="row wrap">
             <label class="grow">Название<input id="script-title" required maxlength="100"></label>
-            <label>Оболочка<select id="script-shell"><option value="powershell">PowerShell</option><option value="bash">bash</option><option value="cmd">cmd</option></select></label>
+            <label>Язык<select id="script-shell"><option value="powershell">PowerShell</option><option value="python">Python</option><option value="bash">bash</option><option value="cmd">cmd</option></select></label>
+            <label>Где выполнять<select id="script-runs-on">
+              <option value="emulator">Только показать (не запускать)</option>
+              <option value="pc">На компьютере домена</option>
+              <option value="server">На сервере NetAdmin</option>
+            </select></label>
           </div>
           <label>Описание<input id="script-description" maxlength="500"></label>
           <label class="check"><input id="script-critical" type="checkbox"> Важный: в приложении запуск только после подтверждения отпечатком</label>
           <div>
-            <div class="row"><strong>Параметры</strong><span class="muted small">в тексте пишите {{имя}}</span><div class="spacer"></div><button type="button" id="param-add">+ Параметр</button></div>
+            <div class="row"><strong>Параметры</strong><span class="muted small">в тексте пишите {{имя}} без кавычек: значение подставится строкой в кавычках, например Get-ADUser {{login}}</span><div class="spacer"></div><button type="button" id="param-add">+ Параметр</button></div>
             <div id="params"></div>
           </div>
           <label>Текст скрипта<textarea id="script-body" rows="8" class="mono" required></textarea></label>
+          <p id="script-where" class="muted small"></p>
           <p class="muted small">Не храните пароли в тексте: для входа на серверы есть раздел «Учётные данные» в приложении.</p>
           <div class="row">
             <button type="submit" class="primary">Сохранить</button>
             <button type="button" id="script-test">Проверить (эмуляция)</button>
+            <button type="button" id="script-run" class="danger" hidden>Запустить</button>
             <span id="script-msg" class="muted small"></span>
           </div>
           <pre id="script-output" class="output" hidden></pre>

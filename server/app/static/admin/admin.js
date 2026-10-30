@@ -3029,15 +3029,68 @@
     $("script-title").value = s ? s.title : "";
     $("script-description").value = s ? s.description : "";
     $("script-shell").value = s ? s.shell : "powershell";
+    $("script-runs-on").value = s ? s.runs_on || "emulator" : "emulator";
+    scriptWhere();
     $("script-critical").checked = s ? s.critical : false;
     $("script-body").value = s ? s.body : "";
     $("params").replaceChildren(...(s ? s.params : []).map(paramRow));
     $("script-delete").hidden = !s;
     $("script-test").hidden = !s;
+    $("script-run").hidden = !s || (s.runs_on || "emulator") === "emulator";
     $("script-output").hidden = true;
     $("script-msg").textContent = "";
     renderScriptList();
   }
+
+  // What the chosen language and place mean, under the form.
+  const WHERE = {
+    emulator: () => "Только показ: при запуске виден текст с подставленными параметрами, ничего не выполняется.",
+    pc: (sh) => ({
+      powershell: "PowerShell — на Windows по WinRM от учётной записи домена (до 8000 символов, до 30 с).",
+      cmd: "cmd — на Windows по WinRM (до 4000 символов, до 30 с). Значения параметров — без & | < > ^ % и кавычек.",
+      python: "Python — на Windows (нужен py или python в PATH) или на Astra Linux (python3 от root).",
+      bash: "bash — на Astra Linux по SSH от root (sudo).",
+    })[sh],
+    server: (sh) => (sh === "python" || sh === "bash"
+      ? "На сервере NetAdmin от пользователя службы, до 5 минут. Python — тот же, что у сервера."
+      : "На сервере NetAdmin запускаются только Python и bash."),
+  };
+  function scriptWhere() {
+    const runsOn = $("script-runs-on").value;
+    $("script-where").textContent = WHERE[runsOn]($("script-shell").value) + (runsOn === "pc" ? " Компьютер спрашивается при каждом запуске." : "");
+  }
+  $("script-runs-on").addEventListener("change", scriptWhere);
+  $("script-shell").addEventListener("change", scriptWhere);
+
+  function askParams(s) {
+    const params = {};
+    const list = (s.runs_on === "pc" ? [{ name: "host", label: "Компьютер", required: true, placeholder: "PC-BUH-01" }] : []).concat(s.params);
+    for (const p of list) {
+      const v = prompt(`${p.label}${p.required ? "" : " (необязательно)"}`, p.placeholder || "");
+      if (v === null) return null;
+      if (v.trim()) params[p.name] = v.trim();
+    }
+    return params;
+  }
+
+  function showRun(r) {
+    const out = $("script-output");
+    out.hidden = false;
+    out.textContent = `${r.simulated ? "" : `Код выхода: ${r.exit_code}\n`}${r.stdout}${r.stderr ? `\n\n${r.stderr}` : ""}`;
+  }
+
+  $("script-run").addEventListener("click", async () => {
+    if (!editing) return;
+    const params = askParams(editing);
+    if (!params) return;
+    const where = editing.runs_on === "pc" ? `на ${params.host}` : "на сервере NetAdmin";
+    if (!confirm(`Запустить «${editing.title}» ${where}? Скрипт выполнится по-настоящему.`)) return;
+    $("script-msg").textContent = "Выполняется…";
+    try {
+      showRun(await api("POST", `runbooks/${editing.runbook_id}/run`, { params, confirm: true, operator: OPERATOR }));
+      $("script-msg").textContent = "";
+    } catch (e) { $("script-msg").textContent = ""; fail(e); }
+  });
 
   $("script-new").addEventListener("click", () => editScript(null));
   $("param-add").addEventListener("click", () => $("params").appendChild(paramRow({})));
@@ -3048,6 +3101,7 @@
       title: $("script-title").value.trim(),
       description: $("script-description").value.trim(),
       shell: $("script-shell").value,
+      runs_on: $("script-runs-on").value,
       critical: $("script-critical").checked,
       body: $("script-body").value,
       params: [...$("params").children].map((r) => r.read()).filter((p) => p.name || p.label),
@@ -3068,18 +3122,10 @@
 
   $("script-test").addEventListener("click", async () => {
     if (!editing) return;
-    const params = {};
-    for (const p of editing.params) {
-      const v = prompt(`${p.label}${p.required ? "" : " (необязательно)"}`, p.placeholder || "");
-      if (v === null) return;
-      if (v.trim()) params[p.name] = v.trim();
-    }
-    if (editing.critical && !confirm("Важный скрипт. Запустить проверку? Это эмуляция: ничего не выполнится.")) return;
+    const params = askParams(editing);
+    if (!params) return;
     try {
-      const r = await api("POST", `runbooks/${editing.runbook_id}/run`, { params, confirm: true, operator: OPERATOR });
-      const out = $("script-output");
-      out.hidden = false;
-      out.textContent = r.stdout + (r.stderr ? `\n\n${r.stderr}` : "");
+      showRun(await api("POST", `runbooks/${editing.runbook_id}/run`, { params, confirm: true, dry_run: true, operator: OPERATOR }));
     } catch (e) { fail(e); }
   });
 
