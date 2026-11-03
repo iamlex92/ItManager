@@ -8,6 +8,7 @@ import com.itmanager.app.core.network.toUserMessage
 import com.itmanager.app.core.nfc.NfcController
 import com.itmanager.app.data.model.Alert
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.PortPath
 import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.model.FloorInfo
@@ -89,6 +90,10 @@ class DeviceViewModel @Inject constructor(
     private val _deleted = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val deleted: SharedFlow<Unit> = _deleted.asSharedFlow()
 
+    /** The line through one port, open in a sheet: what it is cabled to, both ways through patch panels. */
+    private val _path = MutableStateFlow<PortPathState?>(null)
+    val path: StateFlow<PortPathState?> = _path.asStateFlow()
+
     private val _pollingPrinter = MutableStateFlow(false)
     val pollingPrinter: StateFlow<Boolean> = _pollingPrinter.asStateFlow()
 
@@ -149,6 +154,19 @@ class DeviceViewModel @Inject constructor(
     // --- Actions ---
 
     fun showOnMap() = mapFocus.request(deviceId)
+
+    fun openPath(port: SwitchPort) {
+        _path.value = PortPathState(port)
+        viewModelScope.launch {
+            repository.portPath(port.id)
+                .onSuccess { p -> _path.update { it?.takeIf { s -> s.port.id == port.id }?.copy(path = p, loading = false) } }
+                .onFailure { e -> _path.update { it?.takeIf { s -> s.port.id == port.id }?.copy(error = e.toUserMessage(), loading = false) } }
+        }
+    }
+
+    fun closePath() {
+        _path.value = null
+    }
 
     fun bindNfc() {
         details?.device?.let(nfc::startBinding)
@@ -271,4 +289,13 @@ class DeviceViewModel @Inject constructor(
 
 /** Devices whose own ports are worth a tab in the card. */
 val DeviceType.hasPorts: Boolean
-    get() = this == DeviceType.SWITCH || this == DeviceType.ROUTER || this == DeviceType.FIREWALL || this == DeviceType.PATCH_PANEL
+    get() = this == DeviceType.SWITCH || this == DeviceType.ROUTER || this == DeviceType.FIREWALL ||
+        this == DeviceType.PATCH_PANEL || this == DeviceType.SOCKET
+
+/** One port's line, loading or loaded. */
+data class PortPathState(
+    val port: SwitchPort,
+    val path: PortPath? = null,
+    val loading: Boolean = true,
+    val error: String? = null,
+)

@@ -439,6 +439,23 @@ class TraceOut(BaseModel):
     hops: list[TraceHop]
 
 
+class PathHop(TraceHop):
+    ip: str | None = None
+    is_online: bool = False
+    # The cable from this hop to the next one; None on the last.
+    cable_type: str | None = None
+    cable_label: str | None = None
+    # The port asked about.
+    is_here: bool = False
+
+
+class PathOut(BaseModel):
+    """The whole line through a port, end to end, and the active devices at its ends (zero, one or two)."""
+
+    hops: list[PathHop]
+    ends: list[PathHop]
+
+
 # --- device writes --------------------------------------------------------
 
 

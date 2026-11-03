@@ -32,6 +32,7 @@ import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.PortPath
 import com.itmanager.app.data.model.StatusRefresh
 import com.itmanager.app.data.model.DeviceBulkChange
 import com.itmanager.app.data.model.DeviceDraft
@@ -75,6 +76,8 @@ interface DcimDataSource {
     suspend fun devices(): List<Device>
     suspend fun device(id: String): Device
     suspend fun ports(deviceId: String): List<SwitchPort>
+    /** What a port leads to, both ways: the computer on one side of a patch panel, the switch on the other. */
+    suspend fun portPath(portId: String): PortPath
     suspend fun printers(): List<Printer>
 
     suspend fun vlans(): List<Vlan>

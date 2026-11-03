@@ -32,6 +32,7 @@ import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.PortPath
 import com.itmanager.app.data.model.StatusRefresh
 import com.itmanager.app.data.model.DeviceTemplateDraft
 import com.itmanager.app.data.model.DeviceBulkChange
@@ -101,6 +102,7 @@ class DcimRepository @Inject constructor(
     suspend fun devices(): Result<List<Device>> = load { devices() }
     suspend fun device(id: String): Result<Device> = load { device(id) }
     suspend fun ports(deviceId: String): Result<List<SwitchPort>> = load { ports(deviceId) }
+    suspend fun portPath(portId: String): Result<PortPath> = load { portPath(portId) }
     suspend fun printers(): Result<List<Printer>> = load { printers() }
 
     suspend fun vlans(): Result<List<Vlan>> = load { vlans() }

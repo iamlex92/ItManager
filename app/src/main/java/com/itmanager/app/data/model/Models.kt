@@ -439,3 +439,23 @@ fun parseColorHex(hex: String?, fallback: Long = 0xFF3498DB): Long {
 
 /** Height of a rack that did not say how many units it has. */
 const val DEFAULT_RACK_UNITS = 42
+
+/** One port on a traced line: the device, its port, and the cable on to the next hop ([cableType] null on the last). */
+data class PathHop(
+    val deviceId: String,
+    val deviceName: String,
+    val deviceType: DeviceType,
+    val portId: String,
+    val portName: String,
+    val ip: String?,
+    val isOnline: Boolean,
+    val cableType: String?,
+    val cableLabel: String?,
+    /** The port the line was asked for. */
+    val isHere: Boolean,
+) {
+    val isPassive: Boolean get() = deviceType == DeviceType.SOCKET || deviceType == DeviceType.PATCH_PANEL
+}
+
+/** The whole line through a port, end to end, and the active devices at its ends (none, one or two). */
+data class PortPath(val hops: List<PathHop>, val ends: List<PathHop>)

@@ -20,6 +20,7 @@ Clients should ignore unknown fields.
 | GET | `/api/v1/search?q=` | devices matching name, IP, MAC or NFC UID |
 | GET | `/api/v1/devices/{id}/ports` | `[{id, device_id, number, name, is_uplink, mode, access_vlan, tagged_vlans, is_admin_up, is_oper_up, speed_mbps, poe_enabled, connected_mac, connected_device_name}]` |
 | GET | `/api/v1/ports/{id}/trace` | `{hops: [{device_id, device_name, device_type, port_id, port_name}]}`, e.g. PC → socket → patch panel → switch |
+| GET | `/api/v1/ports/{id}/path` | The whole line through a port, both ways: for a patch panel or socket port the computer on one side and the switch on the other. `{hops: [{device_id, device_name, device_type, port_id, port_name, ip, is_online, cable_type, cable_label, is_here}], ends: [...]}`; `hops` run from the far end to the switch, `cable_type` is the cable to the next hop, `ends` are the active devices at the ends. |
 | GET | `/api/v1/vlans` | `[{vlan_id, name, subnet_cidr, color_hex, description}]` |
 | GET | `/api/v1/connections?device_id=` | `[{id, port_a_id, port_b_id, device_a_id, device_b_id, cable_type, length_meters, label, notes, waypoints}]` |
 | GET | `/api/v1/printers` | `[{id, name, ip, model, is_online, total_pages, consumables: [{name, color_hex, kind, level_percent}], low_supply, polled_at}]` |

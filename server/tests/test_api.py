@@ -160,3 +160,22 @@ def test_alerts_filter_and_resolve(client):
     r = client.post(f"/api/v1/alerts/{open_alerts[0]['id']}/resolve")
     assert r.json()["is_resolved"] is True and r.json()["resolved_at"]
     assert len(client.get("/api/v1/alerts", params={"is_resolved": False}).json()) == 1
+
+
+def test_patch_panel_port_path_both_ways(client):
+    pc = find(client, "PC-BUH-02")
+    nic = ports_of(client, pc["id"])[0]
+    hops = client.get(f"/api/v1/ports/{nic['id']}/trace").json()["hops"]
+    panel_port = next(h for h in hops if h["device_type"] == "PATCH_PANEL")
+    # From the patch panel: the computer on one side, the switch on the other, the panel in between.
+    path = client.get(f"/api/v1/ports/{panel_port['port_id']}/path").json()
+    assert [h["device_type"] for h in path["hops"]] == ["WORKSTATION", "SOCKET", "PATCH_PANEL", "SWITCH"]
+    here = next(h for h in path["hops"] if h["is_here"])
+    assert here["port_id"] == panel_port["port_id"]
+    assert [e["device_name"] for e in path["ends"]] == ["PC-BUH-02", "SW-ACC-01"]
+    assert path["ends"][0]["ip"] == pc["ip"] and path["hops"][0]["cable_type"]
+    assert path["hops"][-1]["cable_type"] is None
+    # A switch port reads the same line from its own end.
+    sw_path = client.get(f"/api/v1/ports/{hops[-1]['port_id']}/path").json()
+    assert [h["device_name"] for h in sw_path["hops"]][-1] == "PC-BUH-02"
+    assert client.get("/api/v1/ports/00000000-0000-0000-0000-000000000000/path").status_code == 404

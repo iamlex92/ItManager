@@ -198,6 +198,9 @@ class NetAdminApi @Inject constructor(
 
     suspend fun ports(s: ServerSettings, deviceId: String): List<PortDto> = fetch(s, "devices/$deviceId/ports")
 
+    /** The whole line through a port, both ways through patch panels and sockets. Read-only. */
+    suspend fun portPath(s: ServerSettings, portId: String): PortPathDto = fetch(s, "ports/$portId/path")
+
     suspend fun vlans(s: ServerSettings): List<VlanDto> = fetch(s, "vlans")
 
     // The VLAN list is the server's own dictionary: names, subnets, colours. Nothing reaches a switch.

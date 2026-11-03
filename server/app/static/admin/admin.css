@@ -322,3 +322,10 @@ a.button { text-decoration: none; display: inline-flex; align-items: center; }
 .device-tile { min-width: 0; } .device-tile .tile-title { overflow-wrap: anywhere; }
 .device-tile > * { max-width: 100%; }
 .device-tile .tile-title { hyphens: auto; }
+
+/* Where a port's cable goes: the far ends, then the whole line. */
+.path-end { border-radius: 12px; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; text-align: left; margin: 6px 0; padding: 10px 12px; }
+.path-chain { list-style: none; padding: 0; margin: 0; }
+.path-chain li { padding: 4px 8px; border-radius: 8px; }
+.path-chain li.here { background: var(--accent-container); color: var(--on-accent-container); }
+.path-chain li.cable { padding-left: 24px; border-left: 2px solid var(--accent); margin-left: 14px; border-radius: 0; }
