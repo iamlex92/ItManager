@@ -41,7 +41,15 @@ def test_console_page_needs_no_token_but_locks_itself_down(seeded):
         for tab in tabs:
             assert f'data-tab="{tab}"' in r.text
         # As in the app: one device card from everywhere, view and edit modes, layers and marks on the map.
-        for part in ('id="card-dialog"', 'data-mode="edit"', 'data-layer="L2"', 'data-tool="marks"', 'id="more-menu"'):
+        for part in (
+            'id="card-dialog"',
+            'data-mode="edit"',
+            'data-layer="L2"',
+            'data-tool="marks"',
+            'class="side" id="tabs"',
+            'data-label="ip"',
+            'id="down-banner"',
+        ):
             assert part in r.text
         assert c.get("/", follow_redirects=False).headers["location"] == "/admin"
         # The page itself carries no data; everything behind it still needs the token.

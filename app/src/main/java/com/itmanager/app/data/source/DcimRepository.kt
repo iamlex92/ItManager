@@ -2,7 +2,7 @@ package com.itmanager.app.data.source
 
 import com.itmanager.app.core.network.LiveSocket
 import com.itmanager.app.core.network.NetAdminApi
-import com.itmanager.app.core.network.runCatchingCancellable
+import com.itmanager.app.core.network.ServerFailover
 import com.itmanager.app.core.settings.ServerSettings
 import com.itmanager.app.core.settings.SettingsRepository
 import com.itmanager.app.data.model.ALL_DEVICES
@@ -69,6 +69,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.flatMapLatest
@@ -85,7 +87,11 @@ class DcimRepository @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val api: NetAdminApi,
     private val liveSocket: LiveSocket,
+    private val failover: ServerFailover,
 ) {
+    /** The app works through the backup server: the main one cannot be reached. */
+    val usingBackup: StateFlow<Boolean> = failover.onBackup
+
     /** Bumped when the inventory changes from the app (devices added from a scan or on the map). */
     private val inventoryVersion = MutableStateFlow(0)
 
@@ -254,7 +260,9 @@ class DcimRepository @Inject constructor(
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun liveFor(deviceId: String): Flow<LiveEvent> =
-        settingsRepository.settings.flatMapLatest { source(it).live(deviceId) }
+        combine(settingsRepository.settings, failover.onBackup) { s, _ -> failover.active(s) }
+            .distinctUntilChanged()
+            .flatMapLatest { source(it).live(deviceId) }
 
     /**
      * The map, the printers and the alert journal all follow every device; they share one socket,
@@ -266,8 +274,7 @@ class DcimRepository @Inject constructor(
     private fun source(settings: ServerSettings): DcimDataSource =
         RemoteDataSource(api, liveSocket, settings)
 
-    private suspend fun <T> load(block: suspend DcimDataSource.() -> T): Result<T> {
-        val source = source(settingsRepository.current())
-        return runCatchingCancellable { source.block() }
-    }
+    /** On the main server, or on the backup while the main one cannot be reached. */
+    private suspend fun <T> load(block: suspend DcimDataSource.() -> T): Result<T> =
+        failover.run(settingsRepository.current()) { server -> source(server).block() }
 }

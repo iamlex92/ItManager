@@ -45,7 +45,8 @@
     else if (body !== undefined) { payload = JSON.stringify(body); headers["Content-Type"] = "application/json"; }
     let r;
     try { r = await fetch(`/api/v1/${path}`, { method, headers, body: payload }); }
-    catch { throw new ApiError(0, "network", "Нет связи с агентом"); }
+    catch { serverDown(true); throw new ApiError(0, "network", "Нет связи с агентом"); }
+    serverDown(false);
     if (r.status === 401) {
       logout("Ключ не подошёл или сменился. Войдите снова.");
       throw new ApiError(401, "unauthorized", "Нужен ключ доступа");
@@ -102,9 +103,27 @@
   });
   $("logout").addEventListener("click", () => logout(""));
 
+  // This server stopped answering: say so at the top and offer the backup server set in «Настройки сервера».
+  // Read on each use: the banner can be asked for before this part of the script has run.
+  function serverDown(down) {
+    if ($("down-banner").hidden === !down) return;
+    let backupServer = "";
+    try { backupServer = localStorage.getItem("netadmin.backupServer") || ""; } catch { /* private mode */ }
+    $("down-banner").hidden = !down;
+    if (!down) return;
+    $("down-text").textContent = backupServer
+      ? "Сервер не отвечает. Можно продолжить на резервном сервере (войдите его ключом доступа)."
+      : "Сервер не отвечает. Резервный сервер не задан: его адрес указывается в «Настройках сервера».";
+    $("down-link").hidden = !backupServer;
+    if (backupServer) $("down-link").href = `${backupServer}/admin`;
+  }
+  $("down-retry").addEventListener("click", () => { showMode(); refreshTab().catch(() => {}); });
+
   async function showMode() {
     try {
       const h = await (await fetch("/api/v1/health")).json();
+      try { localStorage.setItem("netadmin.backupServer", h.backup_server_url || ""); } catch { /* private mode */ }
+      serverDown(false);
       const hal = h.hal_mode === "emulator"
         ? (h.monitor_mode === "real" ? "коммутаторы: линки по SNMP, управление эмулируется" : "коммутаторы: эмулятор")
         : `коммутаторы: ${h.hal_mode} · запись ${h.device_writes_enabled ? "включена" : "выключена"}`;
@@ -113,7 +132,10 @@
       $("mode").textContent = `${hal} · ${monitor}`;
       $("mode").classList.toggle("warn", h.monitor_mode === "emulator");
       window.NetAdmin.monitorEmulated = h.monitor_mode === "emulator";
-    } catch { $("mode").textContent = ""; }
+    } catch (e) {
+      $("mode").textContent = "";
+      if (e instanceof TypeError) serverDown(true);
+    }
   }
 
   // ---------------------------------------------------------------- tabs
@@ -143,8 +165,8 @@
   });
   $("printers-link").addEventListener("click", () => openTab("printers"));
 
-  // Small pop-up menus («Ещё», «+ Добавить»): one open at a time, closed by a click elsewhere or Esc.
-  const MENUS = [["more-toggle", "more-menu"], ["add-toggle", "add-menu"]];
+  // Small pop-up menus («+ Добавить»): one open at a time, closed by a click elsewhere or Esc.
+  const MENUS = [["add-toggle", "add-menu"]];
   function closeMenus(except) {
     for (const [btn, menu] of MENUS) {
       if (menu === except) continue;
@@ -167,8 +189,6 @@
     currentTab = name;
     const home = TAB_HOME[name] || name;
     for (const b of $("tabs").querySelectorAll("button[data-tab]")) b.classList.toggle("active", b.dataset.tab === home);
-    // A section from «Ещё» lights «Ещё» itself, so the user sees where they are.
-    $("more-toggle").classList.toggle("active", !!$("more-menu").querySelector(`[data-tab="${home}"]`));
     for (const b of document.querySelectorAll(".subnav button[data-tab]")) b.classList.toggle("active", b.dataset.tab === name);
     for (const s of document.querySelectorAll("main > .tab")) s.hidden = s.id !== `tab-${name}`;
     if (name === "map") loadMap().catch(fail);

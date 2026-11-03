@@ -71,12 +71,23 @@ label input, label select, label textarea { color: var(--text); font-size: 14px;
 .app { height: 100%; display: flex; flex-direction: column; }
 .top { display: flex; align-items: center; gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--surface); flex-wrap: wrap; }
 .brand { font-weight: 600; font-size: 16px; }
-.tabs { display: flex; gap: 4px; }
-.tabs button { background: transparent; border-color: transparent; }
-.tabs button.active { background: var(--accent-container); color: var(--on-accent-container); border-color: transparent; }
 .top .right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .badge { font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; }
-main { flex: 1; min-height: 0; display: flex; }
+/* The sections: a list on the left, the open one beside it. */
+.body { flex: 1; min-height: 0; display: flex; }
+.side { flex: none; width: 210px; display: flex; flex-direction: column; gap: 2px; padding: 10px 8px; overflow-y: auto; border-right: 1px solid var(--line); background: var(--surface); }
+.side button { justify-content: flex-start; text-align: left; background: transparent; border-color: transparent; }
+.side button:hover { background: var(--raised); }
+.side button.active { background: var(--accent-container); color: var(--on-accent-container); border-color: transparent; }
+.side-group { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding: 12px 10px 2px; }
+main { flex: 1; min-width: 0; min-height: 0; display: flex; }
+/* A phone: the list becomes a strip that scrolls sideways above the section. */
+@media (max-width: 760px) {
+  .body { flex-direction: column; }
+  .side { width: auto; flex-direction: row; overflow-x: auto; overflow-y: hidden; padding: 6px 8px; border-right: none; border-bottom: 1px solid var(--line); }
+  .side button { flex: none; white-space: nowrap; }
+  .side-group { display: none; }
+}
 .tab { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 12px 16px; gap: 12px; }
 
 .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -191,14 +202,12 @@ details.row-details > summary { cursor: pointer; color: var(--muted); }
 .plate-cell { cursor: pointer; }
 
 /* --- navigation: four tabs and «Ещё» --- */
-.tabs { align-items: center; }
 .count { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--danger); color: var(--on-danger); font-size: 11px; line-height: 18px; text-align: center; margin-left: 4px; }
 .more, .menu-wrap { position: relative; }
 .pop { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; min-width: 230px; display: flex; flex-direction: column; gap: 2px; padding: 6px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 30px rgba(0, 0, 0, .4); }
 .pop > button { justify-content: flex-start; background: transparent; border-color: transparent; text-align: left; }
 .pop > button:hover, .pop > button.active { background: var(--raised); }
 .pop-group { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding: 8px 10px 2px; }
-#more-toggle.active { background: var(--raised); border-color: var(--line); }
 
 /* --- map: view / edit --- */
 .edit-bar { padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
@@ -275,12 +284,6 @@ dialog.card-dialog { width: min(980px, calc(100% - 32px)); height: min(760px, ca
 /* --- «Ещё»: four columns by task (Учёт · Диагностика · Windows · Система) --- */
 .top { position: relative; }
 .top .more { position: static; }
-.pop.more-menu { left: 16px; right: auto; flex-direction: row; gap: 8px; padding: 10px; width: max-content; max-width: calc(100vw - 32px); }
-.more-menu .pop-col { display: flex; flex-direction: column; gap: 2px; min-width: 190px; }
-.more-menu .pop-col > button { justify-content: flex-start; background: transparent; border-color: transparent; text-align: left; }
-.more-menu .pop-col > button:hover, .more-menu .pop-col > button.active { background: var(--raised); }
-.more-menu[hidden] { display: none; }
-@media (max-width: 900px) { .pop.more-menu { flex-direction: column; width: auto; right: 16px; } }
 .subnav { align-self: flex-start; }
 
 .gpo-templates td:first-child { width: 100%; }
@@ -329,3 +332,8 @@ a.button { text-decoration: none; display: inline-flex; align-items: center; }
 .path-chain li { padding: 4px 8px; border-radius: 8px; }
 .path-chain li.here { background: var(--accent-container); color: var(--on-accent-container); }
 .path-chain li.cable { padding-left: 24px; border-left: 2px solid var(--accent); margin-left: 14px; border-radius: 0; }
+
+/* This server stopped answering: the way to the backup one. */
+.down-banner { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 16px; background: var(--danger); color: var(--on-danger); }
+.down-banner[hidden] { display: none; }
+.down-banner a.button { text-decoration: none; }

@@ -29,47 +29,40 @@
 <div id="app" class="app" hidden>
   <header class="top">
     <div class="brand">NetAdmin <span class="muted small">веб-консоль · {{version}}</span></div>
-    <nav class="tabs" id="tabs">
-      <button data-tab="map" class="active">Карта</button>
-      <button data-tab="devices">Устройства</button>
-      <button data-tab="alerts">События <span id="alerts-count" class="count" hidden></span></button>
-      <div class="more">
-        <button type="button" id="more-toggle" aria-haspopup="true" aria-expanded="false">Ещё ▾</button>
-        <div id="more-menu" class="pop more-menu" hidden>
-          <div class="pop-col">
-            <div class="pop-group">Учёт</div>
-            <button data-tab="topology">Схема сети</button>
-            <button data-tab="vlans">VLAN и подсети</button>
-            <button data-tab="ipam">IP-адреса</button>
-            <button data-tab="templates">Шаблоны устройств</button>
-            <button data-tab="peripherals">Периферия и склад</button>
-          </div>
-          <div class="pop-col">
-            <div class="pop-group">Диагностика</div>
-            <button data-tab="scan">Сканер сети</button>
-          </div>
-          <div class="pop-col">
-            <div class="pop-group">Windows</div>
-            <button data-tab="pcs">Компьютеры домена</button>
-            <button data-tab="gpo">Групповые политики</button>
-            <button data-tab="runbooks">Сценарии</button>
-            <button data-tab="scripts">Свои скрипты</button>
-          </div>
-          <div class="pop-col">
-            <div class="pop-group">Система</div>
-            <button data-tab="audit">Журнал</button>
-            <button data-tab="settings">Сервер и доступ</button>
-          </div>
-        </div>
-      </div>
-    </nav>
     <div class="right">
       <span id="mode" class="badge"></span>
       <button id="theme-toggle" class="ghost" type="button" title="Сменить тему: светлая или тёмная" aria-label="Сменить тему">Тема</button>
       <button id="logout" class="ghost">Выйти</button>
     </div>
   </header>
+  <div id="down-banner" class="down-banner" role="alert" hidden>
+    <span id="down-text">Сервер не отвечает.</span>
+    <a id="down-link" class="button primary" hidden>Открыть резервный сервер</a>
+    <button type="button" id="down-retry">Повторить</button>
+  </div>
 
+  <div class="body">
+  <nav class="side" id="tabs" aria-label="Разделы">
+    <button data-tab="map" class="active">Карта</button>
+    <button data-tab="devices">Устройства</button>
+    <button data-tab="alerts">События <span id="alerts-count" class="count" hidden></span></button>
+    <div class="side-group">Учёт</div>
+    <button data-tab="topology">Схема сети</button>
+    <button data-tab="vlans">VLAN и подсети</button>
+    <button data-tab="ipam">IP-адреса</button>
+    <button data-tab="templates">Шаблоны устройств</button>
+    <button data-tab="peripherals">Периферия и склад</button>
+    <div class="side-group">Диагностика</div>
+    <button data-tab="scan">Сканер сети</button>
+    <div class="side-group">Windows</div>
+    <button data-tab="pcs">Компьютеры домена</button>
+    <button data-tab="gpo">Групповые политики</button>
+    <button data-tab="runbooks">Сценарии</button>
+    <button data-tab="scripts">Свои скрипты</button>
+    <div class="side-group">Система</div>
+    <button data-tab="audit">Журнал</button>
+    <button data-tab="settings">Сервер и доступ</button>
+  </nav>
   <main>
     <section id="tab-map" class="tab">
       <div class="toolbar">
@@ -542,6 +535,7 @@
       </div>
     </section>
   </main>
+  </div>
 </div>
 
 <dialog id="device-dialog" class="sheet">

@@ -11,7 +11,7 @@ Clients should ignore unknown fields.
 
 | Method | Path | Returns |
 |---|---|---|
-| GET | `/api/v1/health` | `{status, version, hal_mode: "emulator"\|"real", device_writes_enabled, monitor_mode: "emulator"\|"real"}` (no auth) |
+| GET | `/api/v1/health` | `{status, version, hal_mode: "emulator"\|"real", device_writes_enabled, monitor_mode: "emulator"\|"real", backup_server_url}` (no auth); `backup_server_url` is the backup server the web console offers while this one is down («Резервный сервер» in the server settings), "" when none |
 | GET | `/api/v1/floors` | `[{id, building_name, floor_number, name, plan_image_url, scale_pixels_per_meter, width_px, height_px, created_at}]` |
 | GET | `/api/v1/floors/{id}/plan-image` | plan image uploaded for the floor (`plan_image_url` points here) |
 | GET | `/api/v1/devices?floor_id=&type=&q=` | Search `q` also matches `extra_ips` (a device's other addresses: pinged too; online when any answers). `[{id, name, type, vendor, model, ip, extra_ips, mac, floor_id, x, y, is_online, last_seen_at, vlan_id, is_active, nfc_tag_uid, snmp_community, metadata}]` |

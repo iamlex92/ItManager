@@ -277,6 +277,67 @@ fun SettingsScreen(
             )
 
             Spacer(Modifier.height(24.dp))
+            Text("Резервный сервер", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Второй сервер NetAdmin. Когда основной не отвечает, приложение само переходит на резервный, " +
+                    "а через минуту снова пробует основной и возвращается, как только он ответит.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+            )
+            if (state.onBackup) {
+                Text(
+                    "Сейчас приложение работает через резервный сервер: основной недоступен.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+            }
+            OutlinedTextField(
+                value = state.backupUrl,
+                onValueChange = viewModel::setBackupUrl,
+                label = { Text("Адрес резервного сервера") },
+                placeholder = { Text("http://10.0.0.6:8000") },
+                singleLine = true,
+                isError = state.backupError != null,
+                supportingText = { Text(state.backupError ?: "Пусто — без резервного сервера.") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next, autoCorrectEnabled = false),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(8.dp))
+            var backupTokenVisible by rememberSaveable { mutableStateOf(false) }
+            OutlinedTextField(
+                value = state.backupToken,
+                onValueChange = viewModel::setBackupToken,
+                label = { Text("API-токен резервного сервера") },
+                singleLine = true,
+                visualTransformation = if (backupTokenVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    IconButton(onClick = { backupTokenVisible = !backupTokenVisible }) {
+                        Icon(
+                            if (backupTokenVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                            contentDescription = if (backupTokenVisible) "Скрыть токен" else "Показать токен",
+                        )
+                    }
+                },
+                supportingText = { Text("Пусто — тот же, что у основного.") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done, autoCorrectEnabled = false),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(12.dp))
+            OutlinedButton(
+                onClick = viewModel::checkBackup,
+                enabled = state.backupUrl.isNotBlank() && state.backupCheck != ConnectionCheck.Running,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Проверить резервный сервер") }
+            if (state.backupCheck != ConnectionCheck.Idle) {
+                Spacer(Modifier.height(12.dp))
+                ConnectionCheckResult(state.backupCheck)
+            }
+
+            Spacer(Modifier.height(24.dp))
             Button(
                 onClick = {
                     if (viewModel.save()) {

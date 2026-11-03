@@ -265,6 +265,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             runbook_mode=settings.runbook_mode.value,
             runbook_writes_enabled=settings.runbook_writes_enabled,
             secrets_encrypted=crypto.box().enabled,
+            backup_server_url=settings.backup_server_url.rstrip("/"),
         )
 
     api = APIRouter(prefix="/api/v1", dependencies=[Depends(require_token)])

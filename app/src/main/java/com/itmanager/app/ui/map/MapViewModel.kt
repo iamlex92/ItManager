@@ -233,6 +233,9 @@ class MapViewModel @Inject constructor(
         }
     }
 
+    /** The main server cannot be reached: the map comes from the backup one. */
+    val usingBackup: StateFlow<Boolean> = repository.usingBackup
+
     fun retry() {
         viewModelScope.launch { load() }
     }

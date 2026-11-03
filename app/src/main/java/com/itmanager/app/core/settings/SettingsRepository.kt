@@ -17,8 +17,16 @@ import javax.inject.Singleton
 data class ServerSettings(
     val baseUrl: String = "",
     val apiToken: String = "",
+    /** A second NetAdmin server the app turns to while this one cannot be reached; empty: none. */
+    val backupUrl: String = "",
+    /** The backup server's token; empty: the same as [apiToken]. */
+    val backupToken: String = "",
 ) {
     val isConfigured: Boolean get() = baseUrl.isNotBlank()
+
+    /** The backup server as a server of its own, or null when none is set. */
+    fun backup(): ServerSettings? =
+        backupUrl.takeIf { it.isNotBlank() }?.let { ServerSettings(baseUrl = it, apiToken = backupToken.ifBlank { apiToken }) }
 }
 
 @Singleton
@@ -30,6 +38,8 @@ class SettingsRepository @Inject constructor(
             ServerSettings(
                 baseUrl = prefs[KEY_BASE_URL].orEmpty(),
                 apiToken = prefs[KEY_API_TOKEN].orEmpty(),
+                backupUrl = prefs[KEY_BACKUP_URL].orEmpty(),
+                backupToken = prefs[KEY_BACKUP_TOKEN].orEmpty(),
             )
         }
         .distinctUntilChanged()
@@ -72,6 +82,8 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { prefs ->
             prefs[KEY_BASE_URL] = settings.baseUrl
             prefs[KEY_API_TOKEN] = settings.apiToken
+            prefs[KEY_BACKUP_URL] = settings.backupUrl
+            prefs[KEY_BACKUP_TOKEN] = settings.backupToken
             // A switch left by older versions of the app.
             prefs.remove(KEY_LEGACY_OFFLINE)
         }
@@ -80,6 +92,8 @@ class SettingsRepository @Inject constructor(
     private companion object {
         val KEY_BASE_URL = stringPreferencesKey("server_base_url")
         val KEY_API_TOKEN = stringPreferencesKey("server_api_token")
+        val KEY_BACKUP_URL = stringPreferencesKey("backup_base_url")
+        val KEY_BACKUP_TOKEN = stringPreferencesKey("backup_api_token")
         val KEY_LEGACY_OFFLINE = booleanPreferencesKey("demo_mode")
         val KEY_APP_LOCK = booleanPreferencesKey("app_lock")
         val KEY_VPN_ON = booleanPreferencesKey("vpn_auto")

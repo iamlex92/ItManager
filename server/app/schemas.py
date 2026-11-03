@@ -671,6 +671,8 @@ class HealthOut(BaseModel):
     runbook_writes_enabled: bool = True
     # SNMP communities and stored credentials are encrypted at rest (SECRET_KEY is set).
     secrets_encrypted: bool = False
+    # Where the web console sends the operator while this server is down; empty: nowhere.
+    backup_server_url: str = ""
 
 
 class ErrorCode(BaseModel):

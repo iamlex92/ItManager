@@ -144,6 +144,7 @@ fun MapScreen(
     faceplates: FaceplateViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val usingBackup by viewModel.usingBackup.collectAsStateWithLifecycle()
     val rackPlates by faceplates.rackPlates.collectAsStateWithLifecycle()
     val faceplateEditor by faceplates.editor.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -289,6 +290,7 @@ fun MapScreen(
                 "Правка карты · меняется только учёт"
             } else {
                 content?.let { "${it.map.devices.count { d -> d.type != DeviceType.SOCKET && d.type != DeviceType.PATCH_PANEL }} устройств" }
+                    ?.let { if (usingBackup) "$it · резервный сервер" else it }
             },
             editing = state.editing,
             onToggleEdit = if (content != null) ({ viewModel.setEditing(!state.editing) }) else null,

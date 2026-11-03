@@ -3,6 +3,7 @@ package com.itmanager.app.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itmanager.app.core.network.NetAdminApi
+import com.itmanager.app.core.network.ServerFailover
 import com.itmanager.app.core.network.runCatchingCancellable
 import com.itmanager.app.core.network.toUserMessage
 import com.itmanager.app.core.settings.ConnectQr
@@ -36,15 +37,26 @@ data class SettingsUiState(
     val check: ConnectionCheck = ConnectionCheck.Idle,
     val saved: ServerSettings? = null,
     val appLock: Boolean = true,
+    /** A second server the app turns to while the main one cannot be reached. */
+    val backupUrl: String = "",
+    val backupToken: String = "",
+    val backupError: String? = null,
+    val backupCheck: ConnectionCheck = ConnectionCheck.Idle,
+    /** Requests go to the backup server right now. */
+    val onBackup: Boolean = false,
 ) {
     val hasChanges: Boolean
-        get() = saved != null && (saved.baseUrl != baseUrl.trim() || saved.apiToken != apiToken.trim())
+        get() = saved != null && (
+            saved.baseUrl != baseUrl.trim() || saved.apiToken != apiToken.trim() ||
+                saved.backupUrl != backupUrl.trim() || saved.backupToken != backupToken.trim()
+            )
 }
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val settings: SettingsRepository,
     private val api: NetAdminApi,
+    private val failover: ServerFailover,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsUiState())
@@ -58,8 +70,11 @@ class SettingsViewModel @Inject constructor(
                 loaded = true,
                 baseUrl = current.baseUrl,
                 apiToken = current.apiToken,
+                backupUrl = current.backupUrl,
+                backupToken = current.backupToken,
                 saved = current,
             )
+            launch { failover.onBackup.collect { on -> _state.update { it.copy(onBackup = on) } } }
             // Applied at once, apart from the server form and its Save button.
             settings.appLock.collect { on -> _state.update { it.copy(appLock = on) } }
         }
@@ -76,6 +91,32 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setApiToken(value: String) = _state.update { it.copy(apiToken = value) }
+
+    fun setBackupUrl(value: String) = _state.update { it.copy(backupUrl = value, backupError = null, backupCheck = ConnectionCheck.Idle) }
+
+    fun setBackupToken(value: String) = _state.update { it.copy(backupToken = value) }
+
+    fun checkBackup() {
+        val url = when (val r = ServerUrl.check(_state.value.backupUrl)) {
+            is ServerUrlCheck.Invalid -> {
+                _state.update { it.copy(backupError = r.reason) }
+                return
+            }
+            is ServerUrlCheck.Valid -> r.normalized
+        }
+        viewModelScope.launch {
+            _state.update { it.copy(backupUrl = url, backupError = null, backupCheck = ConnectionCheck.Running) }
+            val result = runCatchingCancellable { api.health(url).toDomain() }
+            _state.update {
+                it.copy(
+                    backupCheck = result.fold(
+                        onSuccess = { health -> ConnectionCheck.Ok(health) },
+                        onFailure = { e -> ConnectionCheck.Failed(e.toUserMessage()) },
+                    ),
+                )
+            }
+        }
+    }
 
     fun checkConnection() {
         val url = when (val r = ServerUrl.check(_state.value.baseUrl)) {
@@ -160,8 +201,23 @@ class SettingsViewModel @Inject constructor(
             _state.update { it.copy(urlError = "Укажите адрес сервера NetAdmin") }
             return false
         }
-        val new = ServerSettings(baseUrl = url, apiToken = s.apiToken.trim())
-        _state.update { it.copy(baseUrl = url, saved = new) }
+        val backup = if (s.backupUrl.isBlank()) {
+            ""
+        } else {
+            when (val r = ServerUrl.check(s.backupUrl)) {
+                is ServerUrlCheck.Invalid -> {
+                    _state.update { it.copy(backupError = r.reason) }
+                    return false
+                }
+                is ServerUrlCheck.Valid -> r.normalized
+            }
+        }
+        if (backup.isNotEmpty() && backup == url) {
+            _state.update { it.copy(backupError = "Резервный сервер должен быть другим, не основным") }
+            return false
+        }
+        val new = ServerSettings(baseUrl = url, apiToken = s.apiToken.trim(), backupUrl = backup, backupToken = s.backupToken.trim())
+        _state.update { it.copy(baseUrl = url, backupUrl = backup, saved = new) }
         viewModelScope.launch { settings.save(new) }
         return true
     }
