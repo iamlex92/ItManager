@@ -13,6 +13,8 @@ import com.itmanager.app.data.model.PlanRect
 import com.itmanager.app.data.model.PortMode
 import com.itmanager.app.data.model.Printer
 import com.itmanager.app.data.model.ServerHealth
+import com.itmanager.app.data.model.PathHop
+import com.itmanager.app.data.model.PortPath
 import com.itmanager.app.data.model.StatusRefresh
 import com.itmanager.app.data.model.SwitchPort
 import com.itmanager.app.data.model.Vlan
@@ -136,6 +138,30 @@ data class StatusRefreshDto(
     val errors: List<String> = emptyList(),
 ) {
     fun toDomain() = StatusRefresh(checked, online, changed, errors)
+}
+
+@Serializable
+data class PathHopDto(
+    @SerialName("device_id") val deviceId: String,
+    @SerialName("device_name") val deviceName: String,
+    @SerialName("device_type") val deviceType: String,
+    @SerialName("port_id") val portId: String,
+    @SerialName("port_name") val portName: String,
+    val ip: String? = null,
+    @SerialName("is_online") val isOnline: Boolean = false,
+    @SerialName("cable_type") val cableType: String? = null,
+    @SerialName("cable_label") val cableLabel: String? = null,
+    @SerialName("is_here") val isHere: Boolean = false,
+) {
+    fun toDomain() = PathHop(
+        deviceId, deviceName, DeviceType.parse(deviceType), portId, portName, ip, isOnline, cableType,
+        cableLabel?.takeIf { it.isNotBlank() }, isHere,
+    )
+}
+
+@Serializable
+data class PortPathDto(val hops: List<PathHopDto> = emptyList(), val ends: List<PathHopDto> = emptyList()) {
+    fun toDomain() = PortPath(hops.map { it.toDomain() }, ends.map { it.toDomain() })
 }
 
 @Serializable

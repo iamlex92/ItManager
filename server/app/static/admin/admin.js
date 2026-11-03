@@ -45,7 +45,8 @@
     else if (body !== undefined) { payload = JSON.stringify(body); headers["Content-Type"] = "application/json"; }
     let r;
     try { r = await fetch(`/api/v1/${path}`, { method, headers, body: payload }); }
-    catch { throw new ApiError(0, "network", "Нет связи с агентом"); }
+    catch { serverDown(true); throw new ApiError(0, "network", "Нет связи с агентом"); }
+    serverDown(false);
     if (r.status === 401) {
       logout("Ключ не подошёл или сменился. Войдите снова.");
       throw new ApiError(401, "unauthorized", "Нужен ключ доступа");
@@ -102,9 +103,27 @@
   });
   $("logout").addEventListener("click", () => logout(""));
 
+  // This server stopped answering: say so at the top and offer the backup server set in «Настройки сервера».
+  // Read on each use: the banner can be asked for before this part of the script has run.
+  function serverDown(down) {
+    if ($("down-banner").hidden === !down) return;
+    let backupServer = "";
+    try { backupServer = localStorage.getItem("netadmin.backupServer") || ""; } catch { /* private mode */ }
+    $("down-banner").hidden = !down;
+    if (!down) return;
+    $("down-text").textContent = backupServer
+      ? "Сервер не отвечает. Можно продолжить на резервном сервере (войдите его ключом доступа)."
+      : "Сервер не отвечает. Резервный сервер не задан: его адрес указывается в «Настройках сервера».";
+    $("down-link").hidden = !backupServer;
+    if (backupServer) $("down-link").href = `${backupServer}/admin`;
+  }
+  $("down-retry").addEventListener("click", () => { showMode(); refreshTab().catch(() => {}); });
+
   async function showMode() {
     try {
       const h = await (await fetch("/api/v1/health")).json();
+      try { localStorage.setItem("netadmin.backupServer", h.backup_server_url || ""); } catch { /* private mode */ }
+      serverDown(false);
       const hal = h.hal_mode === "emulator"
         ? (h.monitor_mode === "real" ? "коммутаторы: линки по SNMP, управление эмулируется" : "коммутаторы: эмулятор")
         : `коммутаторы: ${h.hal_mode} · запись ${h.device_writes_enabled ? "включена" : "выключена"}`;
@@ -113,7 +132,10 @@
       $("mode").textContent = `${hal} · ${monitor}`;
       $("mode").classList.toggle("warn", h.monitor_mode === "emulator");
       window.NetAdmin.monitorEmulated = h.monitor_mode === "emulator";
-    } catch { $("mode").textContent = ""; }
+    } catch (e) {
+      $("mode").textContent = "";
+      if (e instanceof TypeError) serverDown(true);
+    }
   }
 
   // ---------------------------------------------------------------- tabs
@@ -143,8 +165,8 @@
   });
   $("printers-link").addEventListener("click", () => openTab("printers"));
 
-  // Small pop-up menus («Ещё», «+ Добавить»): one open at a time, closed by a click elsewhere or Esc.
-  const MENUS = [["more-toggle", "more-menu"], ["add-toggle", "add-menu"]];
+  // Small pop-up menus («+ Добавить»): one open at a time, closed by a click elsewhere or Esc.
+  const MENUS = [["add-toggle", "add-menu"]];
   function closeMenus(except) {
     for (const [btn, menu] of MENUS) {
       if (menu === except) continue;
@@ -167,8 +189,6 @@
     currentTab = name;
     const home = TAB_HOME[name] || name;
     for (const b of $("tabs").querySelectorAll("button[data-tab]")) b.classList.toggle("active", b.dataset.tab === home);
-    // A section from «Ещё» lights «Ещё» itself, so the user sees where they are.
-    $("more-toggle").classList.toggle("active", !!$("more-menu").querySelector(`[data-tab="${home}"]`));
     for (const b of document.querySelectorAll(".subnav button[data-tab]")) b.classList.toggle("active", b.dataset.tab === name);
     for (const s of document.querySelectorAll("main > .tab")) s.hidden = s.id !== `tab-${name}`;
     if (name === "map") loadMap().catch(fail);
@@ -213,6 +233,8 @@
     tool: "view", editTool: "move", pen: PENS[0], linkFrom: null, cable: "Cat6",
     // Layers as in the app: L1 cables, L2 VLAN colours, L3 subnets; a VLAN picked to stand out.
     layer: "L1", vlanFilter: null, vlans: new Map(),
+    // Under each marker: "name", "ip" or "vlan"; remembered in this browser.
+    label: (() => { try { return localStorage.getItem("netadmin.mapLabel") || "name"; } catch { return "name"; } })(),
     // Marks tool: the kind and colour of the next mark, the tail of an arrow being placed, a mark being dragged.
     markKind: "BADGE", markColor: "#FFD60A", arrowStart: null, markDrag: null,
     // A device found by search: ringed until the next click. Clusters drawn at the last frame.
@@ -1110,8 +1132,7 @@
       ctx.fillStyle = d.is_online ? "#30d158" : "#ff6b5e";
       ctx.fill();
     }
-    // On the subnet layer the address is what matters.
-    const label = S.layer === "L3" && d.ip ? `${d.name} · ${d.ip}` : d.name;
+    const label = markerLabel(d);
     ctx.font = "11px system-ui, sans-serif";
     ctx.fillStyle = "rgba(11,14,19,.75)";
     const tw = ctx.measureText(label).width;
@@ -1119,6 +1140,17 @@
     ctx.fillStyle = "#e6edf5";
     ctx.fillText(label, sx, sy + rad + 11);
     ctx.globalAlpha = 1;
+  }
+
+  /** What the marker says under it: the name, the address or the VLAN («Подписи» above the map). */
+  function markerLabel(d) {
+    if (S.label === "ip") return PASSIVE.has(d.type) || d.type === "RACK" ? d.name : d.ip || "нет IP";
+    if (S.label === "vlan") {
+      if (d.vlan_id == null) return PASSIVE.has(d.type) || d.type === "RACK" ? d.name : "нет VLAN";
+      const v = S.vlans.get(d.vlan_id);
+      return v ? `${v.vlan_id} · ${v.name}` : `VLAN ${d.vlan_id}`;
+    }
+    return d.name;
   }
 
   /** A gathered circle under the pointer: the click zooms in on it until it falls apart. */
@@ -1602,6 +1634,15 @@
     renderVlanFilter();
     draw();
   });
+  $("label-seg").addEventListener("click", (ev) => {
+    const b = ev.target.closest("button[data-label]");
+    if (!b) return;
+    S.label = b.dataset.label;
+    try { localStorage.setItem("netadmin.mapLabel", S.label); } catch { /* only this session then */ }
+    for (const x of $("label-seg").children) x.classList.toggle("active", x === b);
+    draw();
+  });
+  for (const x of $("label-seg").children) x.classList.toggle("active", x.dataset.label === S.label);
   /** On the VLAN and subnet layers: one list to pick a VLAN, and the way to the VLAN reference book. */
   function renderVlanFilter() {
     const sel = $("vlan-filter");
@@ -3801,7 +3842,7 @@
 
   // One card for a device, the same from the map, the list, the network and the events, as in the app.
   let cardId = null, cardPart = "overview";
-  const PORTED = new Set(["SWITCH", "ROUTER", "FIREWALL", "PATCH_PANEL"]);
+  const PORTED = new Set(["SWITCH", "ROUTER", "FIREWALL", "PATCH_PANEL", "SOCKET"]);
   const PC_KINDS = new Set(["WORKSTATION", "SERVER", "VIRTUAL"]);
   const node = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
   const linkTo = (text, onClick) => node("button", { type: "button", className: "link", textContent: text, onclick: onClick });
@@ -3950,19 +3991,51 @@
     table.append(node("thead", {}, node("tr", {}, ...["№", "Порт", "Статус", "Режим и VLAN", "Подключено"].map((t) => node("th", { textContent: t })))));
     const body = node("tbody");
     for (const p of ports) {
-      const status = !p.is_admin_up ? "выключен" : !p.is_oper_up ? "нет линка" : `${p.speed_mbps >= 1000 ? `${p.speed_mbps / 1000} Гбит/с` : `${p.speed_mbps} Мбит/с`}`;
+      // A patch panel or socket has no link of its own: whether a cable is in it.
+      const status = PASSIVE.has(d.type) ? (p.connected_device_name ? "кабель есть" : "свободен")
+        : !p.is_admin_up ? "выключен" : !p.is_oper_up ? "нет линка" : `${p.speed_mbps >= 1000 ? `${p.speed_mbps / 1000} Гбит/с` : `${p.speed_mbps} Мбит/с`}`;
       const vlan = p.mode === "TRUNK" ? `trunk ${p.tagged_vlans.join(",") || "все"}` : p.access_vlan != null ? `${p.access_vlan} ${(vlanById.get(p.access_vlan) || {}).name || ""}` : "—";
-      body.append(node("tr", {}, node("td", { textContent: String(p.number) }), node("td", { textContent: `${p.name}${p.is_uplink ? " · uplink" : ""}` }),
-        node("td", { textContent: status, className: p.is_oper_up && p.is_admin_up ? "online" : "muted" }), node("td", { textContent: vlan }),
+      body.append(node("tr", { className: "clickable", title: "Куда идёт кабель этого порта", onclick: () => openPortPath(d, p).catch(fail) },
+        node("td", { textContent: String(p.number) }), node("td", { textContent: `${p.name}${p.is_uplink ? " · uplink" : ""}` }),
+        node("td", { textContent: status, className: (PASSIVE.has(d.type) ? p.connected_device_name : p.is_oper_up && p.is_admin_up) ? "online" : "muted" }),
+        node("td", { textContent: PASSIVE.has(d.type) ? "" : vlan }),
         node("td", { textContent: p.connected_device_name || "" })));
     }
     if (!ports.length) body.append(emptyRow(5, "Портов в учёте пока нет.", "Добавить порты", () => openPorts(d).catch(fail)));
     table.append(body);
     $("card-ports").replaceChildren(
       node("div", { className: "row" }, node("button", { className: "primary", textContent: "Изменить порты…", onclick: () => openPorts(d).catch(fail) }),
-        node("span", { className: "muted small", textContent: "Записи учёта; на оборудование ничего не отправляется." })),
+        node("span", { className: "muted small", textContent: "Щелчок по порту: куда идёт его кабель. Записи учёта; на оборудование ничего не отправляется." })),
       node("div", { className: "table-wrap" }, table));
   }
+
+  // The whole line through one port, both ways through sockets and patch panels; every device opens its card.
+  async function openPortPath(d, p) {
+    const r = await api("GET", `ports/${p.id}/path`);
+    const passive = (h) => PASSIVE.has(h.device_type);
+    const status = (h) => passive(h) ? "" : h.is_online ? "● в сети" : "● не отвечает";
+    const go = (h) => () => { $("path-dialog").close(); if (h.device_id !== d.id) openCard(h.device_id).catch(fail); };
+    $("path-heading").textContent = `${d.name} · порт ${p.name}`;
+    const others = r.ends.filter((e) => e.device_id !== d.id);
+    const summary = r.hops.length < 2
+      ? node("p", { className: "muted", textContent: "Кабель к этому порту в учёте не подключён. Соедините его на карте (слой L1) или в разделе «Сеть»." })
+      : node("div", {}, node("p", { textContent: others.length ? "Подключено:" : "Линия обрывается на пассивном оборудовании: дальше кабель в учёте не проложен." }),
+        ...others.map((e) => node("button", { type: "button", className: "path-end", onclick: go(e) },
+          node("strong", { textContent: e.device_name }),
+          node("span", { className: "muted small", textContent: [typeOf({ type: e.device_type }).label, `порт ${e.port_name}`, e.ip].filter(Boolean).join(" · ") }),
+          node("span", { className: e.is_online ? "online small" : "offline small", textContent: status(e) }))));
+    const chain = node("ol", { className: "path-chain" });
+    r.hops.forEach((h, i) => {
+      chain.append(node("li", { className: h.is_here ? "here" : "" },
+        linkTo(h.device_name, go(h)),
+        node("span", { className: "muted small", textContent: ` ${typeOf({ type: h.device_type }).label} · порт ${h.port_name}${h.ip && !passive(h) ? ` · ${h.ip}` : ""}${h.is_here ? " · этот порт" : ""} ` }),
+        node("span", { className: h.is_online ? "online small" : "offline small", textContent: status(h) })));
+      if (i < r.hops.length - 1) chain.append(node("li", { className: "cable muted small", textContent: [h.cable_type, h.cable_label].filter(Boolean).join(" · ") || "кабель" }));
+    });
+    $("path-body").replaceChildren(summary, ...(r.hops.length > 1 ? [node("h3", { textContent: "Весь путь" }), chain] : []));
+    $("path-dialog").showModal();
+  }
+  $("path-close").addEventListener("click", () => $("path-dialog").close());
 
   function renderCardPeripherals(c) {
     const { d } = c;

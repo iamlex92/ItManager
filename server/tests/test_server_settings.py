@@ -182,3 +182,15 @@ def test_controller_certificate_is_read_for_the_operator_to_check(seeded, tmp_pa
         bad = c.post("/api/v1/server-settings/controller-certificate", json={"url": "ldap://x"})
         assert bad.status_code == 409 and bad.json()["detail"]["code"] == "certificate_failed"
     srv.close()
+
+
+def test_backup_server_reaches_the_console_through_health(seeded):
+    with TestClient(create_app(make_settings()), headers=AUTH) as c:
+        assert c.get("/api/v1/health").json()["backup_server_url"] == ""
+        bad = c.put("/api/v1/server-settings", json={"values": {"backup_server_url": "10.0.0.6"}})
+        assert bad.status_code == 422 and bad.json()["detail"]["key"] == "backup_server_url"
+        ok = c.put("/api/v1/server-settings", json={"values": {"backup_server_url": "http://10.0.0.6:8000/"}})
+        assert ok.status_code == 200
+    # Saved settings apply from the next start.
+    with TestClient(create_app(make_settings()), headers=AUTH) as c:
+        assert c.get("/api/v1/health").json()["backup_server_url"] == "http://10.0.0.6:8000"

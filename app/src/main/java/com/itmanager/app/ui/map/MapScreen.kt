@@ -58,6 +58,8 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.MeetingRoom
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.TextFields
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -112,6 +114,7 @@ import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.model.FloorMap
+import com.itmanager.app.data.model.MapLabel
 import com.itmanager.app.data.model.MapLayer
 import com.itmanager.app.data.model.Zone
 import com.itmanager.app.data.model.roomAt
@@ -141,6 +144,7 @@ fun MapScreen(
     faceplates: FaceplateViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val usingBackup by viewModel.usingBackup.collectAsStateWithLifecycle()
     val rackPlates by faceplates.rackPlates.collectAsStateWithLifecycle()
     val faceplateEditor by faceplates.editor.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -214,6 +218,7 @@ fun MapScreen(
                 FloorPlanView(
                     content = c.data.without(hiddenTypes),
                     layer = state.layer,
+                    label = state.label,
                     vlanFilter = state.vlanFilter,
                     selectedId = state.selectedId,
                     tracedLinks = state.tracedLinks,
@@ -285,6 +290,7 @@ fun MapScreen(
                 "Правка карты · меняется только учёт"
             } else {
                 content?.let { "${it.map.devices.count { d -> d.type != DeviceType.SOCKET && d.type != DeviceType.PATCH_PANEL }} устройств" }
+                    ?.let { if (usingBackup) "$it · резервный сервер" else it }
             },
             editing = state.editing,
             onToggleEdit = if (content != null) ({ viewModel.setEditing(!state.editing) }) else null,
@@ -297,6 +303,8 @@ fun MapScreen(
                 viewModel.selectFloor(it)
             },
             onManageFloors = { showFloors = true },
+            label = state.label,
+            onLabelChange = viewModel::setLabel,
             layer = state.layer,
             onLayerChange = {
                 haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
@@ -680,6 +688,8 @@ private fun MapTopPanel(
     currentFloorId: String?,
     onFloor: (String) -> Unit,
     onManageFloors: () -> Unit,
+    label: MapLabel,
+    onLabelChange: (MapLabel) -> Unit,
     layer: MapLayer,
     onLayerChange: (MapLayer) -> Unit,
     vlans: List<Pair<Int, Pair<String, Color>>>,
@@ -812,15 +822,47 @@ private fun MapTopPanel(
             }
         }
         Spacer(Modifier.height(8.dp))
-        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(end = 12.dp)) {
-            MapLayer.entries.forEachIndexed { index, item ->
-                SegmentedButton(
-                    selected = item == layer,
-                    onClick = { onLayerChange(item) },
-                    shape = SegmentedButtonDefaults.itemShape(index, MapLayer.entries.size),
-                    icon = {},
-                    label = { Text(item.title, maxLines = 1) },
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 12.dp)) {
+            SingleChoiceSegmentedButtonRow(Modifier.weight(1f)) {
+                MapLayer.entries.forEachIndexed { index, item ->
+                    SegmentedButton(
+                        selected = item == layer,
+                        onClick = { onLayerChange(item) },
+                        shape = SegmentedButtonDefaults.itemShape(index, MapLayer.entries.size),
+                        icon = {},
+                        label = { Text(item.title, maxLines = 1) },
+                    )
+                }
+            }
+            Spacer(Modifier.width(8.dp))
+            // What the markers say under them: name, address or VLAN.
+            var labelMenu by remember { mutableStateOf(false) }
+            Box {
+                FilterChip(
+                    selected = label != MapLabel.NAME,
+                    onClick = { labelMenu = true },
+                    label = { Text(label.title, maxLines = 1) },
+                    leadingIcon = { Icon(Icons.Outlined.TextFields, contentDescription = "Подписи", modifier = Modifier.size(16.dp)) },
+                    trailingIcon = { Icon(Icons.Outlined.ArrowDropDown, contentDescription = null, modifier = Modifier.size(18.dp)) },
                 )
+                DropdownMenu(expanded = labelMenu, onDismissRequest = { labelMenu = false }) {
+                    Text(
+                        "Подписи у значков",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    )
+                    MapLabel.entries.forEach { item ->
+                        DropdownMenuItem(
+                            text = { Text(item.title) },
+                            onClick = {
+                                labelMenu = false
+                                onLabelChange(item)
+                            },
+                            trailingIcon = if (item == label) ({ Icon(Icons.Outlined.Check, contentDescription = "выбрано") }) else null,
+                        )
+                    }
+                }
             }
         }
         AnimatedVisibility(

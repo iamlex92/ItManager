@@ -11,7 +11,7 @@ Clients should ignore unknown fields.
 
 | Method | Path | Returns |
 |---|---|---|
-| GET | `/api/v1/health` | `{status, version, hal_mode: "emulator"\|"real", device_writes_enabled, monitor_mode: "emulator"\|"real"}` (no auth) |
+| GET | `/api/v1/health` | `{status, version, hal_mode: "emulator"\|"real", device_writes_enabled, monitor_mode: "emulator"\|"real", backup_server_url}` (no auth); `backup_server_url` is the backup server the web console offers while this one is down («Резервный сервер» in the server settings), "" when none |
 | GET | `/api/v1/floors` | `[{id, building_name, floor_number, name, plan_image_url, scale_pixels_per_meter, width_px, height_px, created_at}]` |
 | GET | `/api/v1/floors/{id}/plan-image` | plan image uploaded for the floor (`plan_image_url` points here) |
 | GET | `/api/v1/devices?floor_id=&type=&q=` | Search `q` also matches `extra_ips` (a device's other addresses: pinged too; online when any answers). `[{id, name, type, vendor, model, ip, extra_ips, mac, floor_id, x, y, is_online, last_seen_at, vlan_id, is_active, nfc_tag_uid, snmp_community, metadata}]` |
@@ -20,6 +20,7 @@ Clients should ignore unknown fields.
 | GET | `/api/v1/search?q=` | devices matching name, IP, MAC or NFC UID |
 | GET | `/api/v1/devices/{id}/ports` | `[{id, device_id, number, name, is_uplink, mode, access_vlan, tagged_vlans, is_admin_up, is_oper_up, speed_mbps, poe_enabled, connected_mac, connected_device_name}]` |
 | GET | `/api/v1/ports/{id}/trace` | `{hops: [{device_id, device_name, device_type, port_id, port_name}]}`, e.g. PC → socket → patch panel → switch |
+| GET | `/api/v1/ports/{id}/path` | The whole line through a port, both ways: for a patch panel or socket port the computer on one side and the switch on the other. `{hops: [{device_id, device_name, device_type, port_id, port_name, ip, is_online, cable_type, cable_label, is_here}], ends: [...]}`; `hops` run from the far end to the switch, `cable_type` is the cable to the next hop, `ends` are the active devices at the ends. |
 | GET | `/api/v1/vlans` | `[{vlan_id, name, subnet_cidr, color_hex, description}]` |
 | GET | `/api/v1/connections?device_id=` | `[{id, port_a_id, port_b_id, device_a_id, device_b_id, cable_type, length_meters, label, notes, waypoints}]` |
 | GET | `/api/v1/printers` | `[{id, name, ip, model, is_online, total_pages, consumables: [{name, color_hex, kind, level_percent}], low_supply, polled_at}]` |

@@ -6,9 +6,11 @@ from sqlalchemy.exc import IntegrityError
 
 from ..hal.base import PortConfig
 from ..hal.commands import port_config_commands
-from ..models import Device, Port, Vlan
+from ..models import Connection, Device, Port, Vlan
 from ..schemas import (
     CommandsOut,
+    PathHop,
+    PathOut,
     PortConfigChange,
     PortConfigRequest,
     PortConfigResult,
@@ -21,7 +23,7 @@ from ..schemas import (
 )
 from ..services import switches
 from ..services.serialize import port_out
-from ..services.topology import load_graph
+from ..services.topology import PASSIVE_TYPES, load_graph
 from .deps import DriverDep, HubDep, SessionDep, SettingsDep, conflict, not_found
 from .guarded import audit, require_confirmation, require_managed_switch, require_uplink_ack
 
@@ -130,6 +132,39 @@ async def trace_port(port_id: uuid.UUID, session: SessionDep):
     await _get(session, port_id)
     graph = await load_graph(session)
     return TraceOut(hops=[TraceHop(**h.__dict__) for h in graph.trace(port_id)])
+
+
+@router.get("/{port_id}/path", response_model=PathOut)
+async def port_path(port_id: uuid.UUID, session: SessionDep):
+    """What a port leads to, both ways: for a patch panel or socket port the computer on one side and the switch
+    on the other, with every socket and panel between and the cables. Read from the inventory only."""
+    await _get(session, port_id)
+    graph = await load_graph(session)
+    ids = graph.path(port_id)
+    labels = {frozenset((c.port_a_id, c.port_b_id)): c.label for c in await session.scalars(select(Connection))}
+    hops = []
+    for i, pid in enumerate(ids):
+        port = graph.ports[pid]
+        d = graph.devices[port.device_id]
+        cable = frozenset((pid, ids[i + 1])) if i + 1 < len(ids) else None
+        hops.append(
+            PathHop(
+                device_id=d.id,
+                device_name=d.name,
+                device_type=d.device_type,
+                port_id=pid,
+                port_name=port.port_name,
+                ip=str(d.ip_address) if d.ip_address is not None else None,
+                is_online=d.is_online,
+                cable_type=graph.cables.get(cable) if cable else None,
+                cable_label=labels.get(cable) if cable else None,
+                is_here=pid == port_id,
+            )
+        )
+    ends = [h for h in (hops[0], hops[-1]) if h.device_type not in PASSIVE_TYPES] if hops else []
+    if len(hops) == 1 or (len(ends) == 2 and ends[0].port_id == ends[1].port_id):
+        ends = ends[:1]
+    return PathOut(hops=hops, ends=ends)
 
 
 async def _switch_port(session, port_id: uuid.UUID) -> tuple[Device, Port]:

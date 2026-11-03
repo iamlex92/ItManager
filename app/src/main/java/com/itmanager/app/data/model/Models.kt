@@ -386,6 +386,30 @@ data class DeviceBulkChange(
     val isEmpty get() = type == null && floorId == null && vendor == null && hostId == null
 }
 
+/** What the map writes under each device marker. */
+enum class MapLabel(val title: String) {
+    NAME("Имя"),
+    IP("IP"),
+    VLAN("VLAN"),
+}
+
+/**
+ * The text under a marker for [kind]. Sockets, patch panels and racks have no address or VLAN of their own: they keep
+ * their name. [vlanNames]: VLAN id to its name.
+ */
+fun Device.mapLabel(kind: MapLabel, vlanNames: Map<Int, String>): String {
+    val cablePlant = type == DeviceType.SOCKET || type == DeviceType.PATCH_PANEL || type == DeviceType.RACK
+    return when (kind) {
+        MapLabel.NAME -> name
+        MapLabel.IP -> if (cablePlant) name else ip ?: "нет IP"
+        MapLabel.VLAN -> when {
+            vlanId != null -> vlanNames[vlanId]?.let { "$vlanId · $it" } ?: "VLAN $vlanId"
+            cablePlant -> name
+            else -> "нет VLAN"
+        }
+    }
+}
+
 enum class MapLayer(val short: String, val title: String) {
     L1("L1", "Кабели"),
     L2("L2", "VLAN"),
@@ -439,3 +463,23 @@ fun parseColorHex(hex: String?, fallback: Long = 0xFF3498DB): Long {
 
 /** Height of a rack that did not say how many units it has. */
 const val DEFAULT_RACK_UNITS = 42
+
+/** One port on a traced line: the device, its port, and the cable on to the next hop ([cableType] null on the last). */
+data class PathHop(
+    val deviceId: String,
+    val deviceName: String,
+    val deviceType: DeviceType,
+    val portId: String,
+    val portName: String,
+    val ip: String?,
+    val isOnline: Boolean,
+    val cableType: String?,
+    val cableLabel: String?,
+    /** The port the line was asked for. */
+    val isHere: Boolean,
+) {
+    val isPassive: Boolean get() = deviceType == DeviceType.SOCKET || deviceType == DeviceType.PATCH_PANEL
+}
+
+/** The whole line through a port, end to end, and the active devices at its ends (none, one or two). */
+data class PortPath(val hops: List<PathHop>, val ends: List<PathHop>)

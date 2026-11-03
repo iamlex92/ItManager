@@ -50,6 +50,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -76,6 +79,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.PathHop
 import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.model.PortMode
 import com.itmanager.app.data.model.SwitchPort
@@ -86,6 +90,9 @@ import com.itmanager.app.ui.components.LoadingView
 import com.itmanager.app.ui.components.TabTopBar
 import com.itmanager.app.ui.components.UiState
 import com.itmanager.app.ui.components.icon
+import com.itmanager.app.ui.components.StatusDot
+import com.itmanager.app.ui.map.RackHost
+import com.itmanager.app.ui.map.RackViewModel
 import com.itmanager.app.ui.components.tint
 import com.itmanager.app.ui.map.CommentDialog
 import com.itmanager.app.ui.map.DeviceFormDialog
@@ -134,11 +141,13 @@ fun DeviceScreen(
     onAssistPc: (String) -> Unit = {},
     viewModel: DeviceViewModel = hiltViewModel(),
     peripherals: PeripheralsViewModel = hiltViewModel(),
+    rackViewModel: RackViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val form by viewModel.form.collectAsStateWithLifecycle()
     val busy by viewModel.busy.collectAsStateWithLifecycle()
     val polling by viewModel.pollingPrinter.collectAsStateWithLifecycle()
+    val portPath by viewModel.path.collectAsStateWithLifecycle()
     val peripheralState by peripherals.state.collectAsStateWithLifecycle()
     val peripheralEditor by peripherals.editor.collectAsStateWithLifecycle()
     val peripheralDevices by peripherals.devices.collectAsStateWithLifecycle()
@@ -233,8 +242,15 @@ fun DeviceScreen(
                                 },
                                 onPickVlan = { pickVlan = true },
                                 onRefresh = viewModel::refresh,
+                                onOpenRack = { rackViewModel.open(d.device.id) }.takeIf { d.device.type == DeviceType.RACK },
                             )
-                            DeviceTab.PORTS -> PortsTab(d.device, d.ports, d.vlans, onOpenPorts = { onOpenPorts(d.device.id) })
+                            DeviceTab.PORTS -> PortsTab(
+                                d.device,
+                                d.ports,
+                                d.vlans,
+                                onOpenPorts = { onOpenPorts(d.device.id) },
+                                onPort = viewModel::openPath,
+                            )
                             DeviceTab.PERIPHERALS -> {
                                 val all = (peripheralState as? UiState.Content)?.data.orEmpty()
                                 DevicePeripheralsContent(d.device, peripherals, all, Modifier.weight(1f))
@@ -262,7 +278,23 @@ fun DeviceScreen(
             onDelete = viewModel::delete,
             onDismiss = viewModel::closeEdit,
             hosts = details?.servers.orEmpty(),
-            onOpenRack = { id -> viewModel.closeEdit(); onOpenDevice(id) },
+            onOpenRack = { id ->
+                viewModel.closeEdit()
+                rackViewModel.open(id)
+            },
+        )
+    }
+    RackHost(onOpenDevice = onOpenDevice, rackViewModel = rackViewModel, fallback = { id -> device?.takeIf { it.id == id } })
+    portPath?.let { p ->
+        PortPathSheet(
+            state = p,
+            device = device,
+            onOpenDevice = { id ->
+                viewModel.closePath()
+                if (id != device?.id) onOpenDevice(id)
+            },
+            onOpenPorts = device?.takeIf { it.type == DeviceType.SWITCH }?.let { d -> { viewModel.closePath(); onOpenPorts(d.id) } },
+            onDismiss = viewModel::closePath,
         )
     }
     if (merging && details != null) {
@@ -412,6 +444,8 @@ private fun OverviewTab(
     onEditComment: () -> Unit,
     onPickVlan: () -> Unit,
     onRefresh: () -> Unit,
+    /** A rack: its front view with the mounted devices. */
+    onOpenRack: (() -> Unit)? = null,
 ) {
     val device = details.device
     Column(
@@ -488,6 +522,11 @@ private fun OverviewTab(
             )
         }
 
+        if (onOpenRack != null) {
+            FilledTonalButton(onClick = onOpenRack, modifier = Modifier.fillMaxWidth()) {
+                Text("Вид стойки: поставить или убрать устройства")
+            }
+        }
         if (details.rackMembers.isNotEmpty()) {
             Section("В стойке") {
                 details.rackMembers.forEach { member ->
@@ -591,7 +630,15 @@ private fun DeviceLink(device: Device, prefix: String? = null, onClick: () -> Un
 // --- Ports ---
 
 @Composable
-private fun PortsTab(device: Device, ports: List<SwitchPort>, vlans: List<Vlan>, onOpenPorts: () -> Unit) {
+private fun PortsTab(
+    device: Device,
+    ports: List<SwitchPort>,
+    vlans: List<Vlan>,
+    onOpenPorts: () -> Unit,
+    /** A tap on a port: where its cable goes, both ways. */
+    onPort: (SwitchPort) -> Unit,
+) {
+    val passive = device.type == DeviceType.PATCH_PANEL || device.type == DeviceType.SOCKET
     val vlanById = vlans.associateBy { it.id }
     LazyColumn(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 24.dp),
@@ -602,7 +649,22 @@ private fun PortsTab(device: Device, ports: List<SwitchPort>, vlans: List<Vlan>,
             FilledTonalButton(onClick = onOpenPorts, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Outlined.Lan, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text(if (device.type == DeviceType.SWITCH) "Панель портов, трафик и диагностика" else "Открыть панель портов")
+                Text(
+                    when (device.type) {
+                        DeviceType.SWITCH -> "Панель портов, трафик и диагностика"
+                        DeviceType.PATCH_PANEL, DeviceType.SOCKET -> "Добавить или изменить порты"
+                        else -> "Открыть панель портов"
+                    },
+                )
+            }
+        }
+        if (ports.isNotEmpty()) {
+            item {
+                Text(
+                    "Коснитесь порта, чтобы увидеть, куда идёт его кабель: что подключено с каждой стороны.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
         if (ports.isEmpty()) {
@@ -615,12 +677,12 @@ private fun PortsTab(device: Device, ports: List<SwitchPort>, vlans: List<Vlan>,
                 )
             }
         }
-        items(ports, key = { it.id }) { port -> PortRow(port, vlanById, onOpenPorts) }
+        items(ports, key = { it.id }) { port -> PortRow(port, vlanById, passive) { onPort(port) } }
     }
 }
 
 @Composable
-private fun PortRow(port: SwitchPort, vlans: Map<Int, Vlan>, onClick: () -> Unit) {
+private fun PortRow(port: SwitchPort, vlans: Map<Int, Vlan>, passive: Boolean, onClick: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -629,7 +691,13 @@ private fun PortRow(port: SwitchPort, vlans: Map<Int, Vlan>, onClick: () -> Unit
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
-        Box(Modifier.size(12.dp).background(port.status.color, RoundedCornerShape(3.dp)))
+        // A patch panel has no link of its own: the mark says whether a cable is in it.
+        val mark = if (passive) {
+            if (port.connectedDeviceName != null) StatusColors.Online else MaterialTheme.colorScheme.outlineVariant
+        } else {
+            port.status.color
+        }
+        Box(Modifier.size(12.dp).background(mark, RoundedCornerShape(3.dp)))
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(
@@ -637,23 +705,27 @@ private fun PortRow(port: SwitchPort, vlans: Map<Int, Vlan>, onClick: () -> Unit
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(
-                port.connectedDeviceName ?: port.status.label,
+                port.connectedDeviceName ?: if (passive) "свободен" else port.status.label,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        val vlanText = when (port.mode) {
-            PortMode.ACCESS -> port.accessVlan?.let { id -> vlans[id]?.let { "${it.id} ${it.name}" } ?: "VLAN $id" } ?: "—"
-            PortMode.TRUNK -> "trunk " + port.taggedVlans.sorted().joinToString(",").ifEmpty { "все" }
+        if (passive) {
+            Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
+            val vlanText = when (port.mode) {
+                PortMode.ACCESS -> port.accessVlan?.let { id -> vlans[id]?.let { "${it.id} ${it.name}" } ?: "VLAN $id" } ?: "—"
+                PortMode.TRUNK -> "trunk " + port.taggedVlans.sorted().joinToString(",").ifEmpty { "все" }
+            }
+            val color = port.accessVlan?.takeIf { port.mode == PortMode.ACCESS }?.let { vlans[it] }?.let { Color(it.colorArgb) }
+            if (color != null) {
+                Box(Modifier.size(8.dp).background(color, CircleShape))
+                Spacer(Modifier.width(6.dp))
+            }
+            Text(vlanText, style = MaterialTheme.typography.labelMedium, maxLines = 1, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        val color = port.accessVlan?.takeIf { port.mode == PortMode.ACCESS }?.let { vlans[it] }?.let { Color(it.colorArgb) }
-        if (color != null) {
-            Box(Modifier.size(8.dp).background(color, CircleShape))
-            Spacer(Modifier.width(6.dp))
-        }
-        Text(vlanText, style = MaterialTheme.typography.labelMedium, maxLines = 1, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -797,4 +869,116 @@ private fun MergeDialog(keep: Device, candidates: List<Device>, onPick: (Device)
         confirmButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
     )
+}
+
+/** Where one port's cable goes: the whole line through it, end to end, each device a tap away. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PortPathSheet(
+    state: PortPathState,
+    device: Device?,
+    onOpenDevice: (String) -> Unit,
+    onOpenPorts: (() -> Unit)?,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(start = 20.dp, end = 20.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("${device?.name.orEmpty()} · порт ${state.port.name}", style = MaterialTheme.typography.titleMedium)
+            val path = state.path
+            when {
+                state.loading -> LinearProgressIndicator(Modifier.fillMaxWidth())
+                state.error != null -> Text(state.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+                path == null || path.hops.size < 2 -> Text(
+                    "Кабель к этому порту в учёте не подключён. Соедините его на карте (слой L1) или в разделе «Сеть».",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                else -> {
+                    val others = path.ends.filter { it.deviceId != device?.id }
+                    Text(
+                        if (others.isEmpty()) "Линия обрывается на пассивном оборудовании: дальше кабель в учёте не проложен."
+                        else "Подключено: " + others.joinToString(" и ") { it.deviceName },
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    others.forEach { end -> PathEndCard(end) { onOpenDevice(end.deviceId) } }
+                    Text("Весь путь", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
+                    path.hops.forEachIndexed { i, hop ->
+                        PathHopRow(hop) { onOpenDevice(hop.deviceId) }
+                        if (i < path.hops.lastIndex) {
+                            Text(
+                                "   │ " + listOfNotNull(hop.cableType, hop.cableLabel).joinToString(" · ").ifEmpty { "кабель" },
+                                style = MonoStyle,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+            if (onOpenPorts != null) {
+                TextButton(onClick = onOpenPorts) { Text("Настроить порт на панели коммутатора…") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PathEndCard(hop: PathHop, onClick: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(12.dp),
+    ) {
+        Icon(hop.deviceType.icon, contentDescription = null, tint = hop.deviceType.tint, modifier = Modifier.size(28.dp))
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(hop.deviceName, style = MaterialTheme.typography.titleSmall)
+            Text(
+                listOfNotNull(hop.deviceType.label, "порт ${hop.portName}", hop.ip).joinToString(" · "),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                StatusDot(if (hop.isOnline) StatusColors.Online else StatusColors.Offline)
+                Spacer(Modifier.width(6.dp))
+                Text(if (hop.isOnline) "в сети" else "не отвечает", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = "Открыть", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun PathHopRow(hop: PathHop, onClick: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                if (hop.isHere) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+                RoundedCornerShape(10.dp),
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        Icon(hop.deviceType.icon, contentDescription = null, tint = hop.deviceType.tint, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(hop.deviceName, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                listOfNotNull("порт ${hop.portName}", hop.ip.takeIf { !hop.isPassive }).joinToString(" · ") + if (hop.isHere) " · этот порт" else "",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (!hop.isPassive) StatusDot(if (hop.isOnline) StatusColors.Online else StatusColors.Offline)
+    }
 }

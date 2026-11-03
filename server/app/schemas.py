@@ -439,6 +439,23 @@ class TraceOut(BaseModel):
     hops: list[TraceHop]
 
 
+class PathHop(TraceHop):
+    ip: str | None = None
+    is_online: bool = False
+    # The cable from this hop to the next one; None on the last.
+    cable_type: str | None = None
+    cable_label: str | None = None
+    # The port asked about.
+    is_here: bool = False
+
+
+class PathOut(BaseModel):
+    """The whole line through a port, end to end, and the active devices at its ends (zero, one or two)."""
+
+    hops: list[PathHop]
+    ends: list[PathHop]
+
+
 # --- device writes --------------------------------------------------------
 
 
@@ -654,6 +671,8 @@ class HealthOut(BaseModel):
     runbook_writes_enabled: bool = True
     # SNMP communities and stored credentials are encrypted at rest (SECRET_KEY is set).
     secrets_encrypted: bool = False
+    # Where the web console sends the operator while this server is down; empty: nowhere.
+    backup_server_url: str = ""
 
 
 class ErrorCode(BaseModel):

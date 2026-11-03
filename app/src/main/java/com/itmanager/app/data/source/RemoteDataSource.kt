@@ -67,6 +67,7 @@ import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.PortPath
 import com.itmanager.app.data.model.StatusRefresh
 import com.itmanager.app.data.model.DeviceBulkChange
 import com.itmanager.app.data.model.DeviceDraft
@@ -156,6 +157,8 @@ class RemoteDataSource(
     override suspend fun devices(): List<Device> = api.devices(settings).map { it.toDomain() }
 
     override suspend fun device(id: String): Device = api.device(settings, id).toDomain()
+
+    override suspend fun portPath(portId: String): PortPath = api.portPath(settings, portId).toDomain()
 
     override suspend fun ports(deviceId: String): List<SwitchPort> =
         api.ports(settings, deviceId).map { it.toDomain() }.sortedBy { it.number }

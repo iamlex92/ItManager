@@ -161,6 +161,10 @@ class Settings(BaseSettings):
     # Folder with pg_dump/pg_restore (and initdb/pg_ctl for the bundled database). Empty: search PATH.
     pg_bin_dir: str = ""
 
+    # A second NetAdmin server to turn to while this one is down, http(s)://host:port. The web console offers it
+    # when this server stops answering; the app keeps its own copy with that server's token.
+    backup_server_url: str = Field(default="", pattern=r"^(|https?://[^\s/]+(:\d+)?/?)$")
+
     @field_validator("api_token")
     @classmethod
     def _reject_placeholder(cls, v: str) -> str:

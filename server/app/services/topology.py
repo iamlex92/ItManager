@@ -66,6 +66,35 @@ class Graph:
             current = nxt
         return hops
 
+    def _walk(self, start: uuid.UUID, visited: set[uuid.UUID]) -> list[uuid.UUID]:
+        """From [start] on along the cables, through sockets and patch panels, to the first active device."""
+        out = [start]
+        visited.add(start)
+        current = start
+        while self.devices[self.ports[current].device_id].device_type in PASSIVE_TYPES:
+            nxt = next((n for n in self.adj.get(current, []) if n not in visited), None)
+            if nxt is None:
+                break
+            visited.add(nxt)
+            out.append(nxt)
+            current = nxt
+        return out
+
+    def path(self, port_id: uuid.UUID) -> list[uuid.UUID]:
+        """The whole line this port is on, end to end: for a socket or patch panel port both of its sides (the
+        switch on one, the computer on the other), for a port of an active device what its cable reaches."""
+        if port_id not in self.ports:
+            return []
+        if self.devices[self.ports[port_id].device_id].device_type not in PASSIVE_TYPES:
+            return [h.port_id for h in self.trace(port_id)]
+        visited = {port_id}
+        sides = [self._walk(n, visited) for n in self.adj.get(port_id, []) if n not in visited]
+        # The side that ends on a switch goes last, so the line reads from the computer to the switch.
+        sides.sort(key=lambda s: self.devices[self.ports[s[-1]].device_id].device_type == "SWITCH")
+        before = sides[0][::-1] if sides else []
+        after = [p for side in sides[1:] for p in side]
+        return [*before, port_id, *after]
+
     def far_end(self, port_id: uuid.UUID) -> Hop | None:
         hops = self.trace(port_id)
         if len(hops) < 2:
