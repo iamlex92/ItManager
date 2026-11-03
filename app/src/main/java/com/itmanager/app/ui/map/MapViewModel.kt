@@ -22,6 +22,7 @@ import com.itmanager.app.data.model.FloorDraft
 import com.itmanager.app.data.model.FloorMap
 import com.itmanager.app.data.model.FloorPlan
 import com.itmanager.app.data.model.LiveEvent
+import com.itmanager.app.data.model.MapLabel
 import com.itmanager.app.data.model.MapLayer
 import com.itmanager.app.data.model.PlanRect
 import com.itmanager.app.data.model.RackStyle
@@ -86,6 +87,8 @@ data class MapUiState(
     /** The floor picked in the switcher; null: the lowest one. */
     val floorId: String? = null,
     val layer: MapLayer = MapLayer.L1,
+    /** What the markers say under them: name, address or VLAN. */
+    val label: MapLabel = MapLabel.NAME,
     val vlanFilter: Int? = null,
     val selectedId: String? = null,
     val tracedLinks: Set<String> = emptySet(),
@@ -309,6 +312,8 @@ class MapViewModel @Inject constructor(
     }
 
     fun setVlanFilter(vlanId: Int?) = _state.update { it.copy(vlanFilter = vlanId) }
+
+    fun setLabel(label: MapLabel) = _state.update { it.copy(label = label) }
 
     fun select(deviceId: String?) {
         val content = (_state.value.content as? UiState.Content)?.data

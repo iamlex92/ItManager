@@ -77,7 +77,9 @@ import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.model.Drawing
+import com.itmanager.app.data.model.MapLabel
 import com.itmanager.app.data.model.MapLayer
+import com.itmanager.app.data.model.mapLabel
 import com.itmanager.app.data.model.PlanRect
 import com.itmanager.app.data.model.Vlan
 import com.itmanager.app.data.model.Waypoint
@@ -155,6 +157,8 @@ fun FloorPlanView(
     onSelect: (String?) -> Unit,
     modifier: Modifier = Modifier,
     editor: MapEditing? = null,
+    /** What each marker says under it. Name follows the zoom; an address or VLAN, asked for, is always shown. */
+    label: MapLabel = MapLabel.NAME,
 ) {
     // A marker being dragged, with its position in map pixels; a pen line in progress; a plan being moved.
     var drag by remember { mutableStateOf<Pair<String, Offset>?>(null) }
@@ -178,6 +182,7 @@ fun FloorPlanView(
     val currentContent by rememberUpdatedState(content)
     val currentRoutes by rememberUpdatedState(routes)
     val vlans = remember(content) { content.map.vlans.associateBy { it.id } }
+    val vlanNames = remember(vlans) { vlans.mapValues { it.value.name } }
     val textMeasurer = rememberTextMeasurer()
     val labelStyle = MaterialTheme.typography.labelSmall.copy(color = Ink400)
     val currentOnSelect by rememberUpdatedState(onSelect)
@@ -283,7 +288,8 @@ fun FloorPlanView(
                     vlanColor = if (layer == MapLayer.L1) null else device.vlanId?.let { vlans[it] }?.color,
                     selected = selected,
                     dimmed = dimmed,
-                    showLabel = showLabels || selected || editor != null,
+                    label = device.mapLabel(label, vlanNames),
+                    showLabel = showLabels || label != MapLabel.NAME || selected || editor != null,
                     camera = camera,
                     onClick = { if (editor != null) editor.onTapDevice(device.id) else onSelect(device.id) },
                     draggable = editor?.tool == EditTool.MOVE,
@@ -862,6 +868,7 @@ private fun DeviceMarker(
     showLabel: Boolean,
     camera: MapCamera,
     onClick: () -> Unit,
+    label: String = device.name,
     draggable: Boolean = false,
     onDrag: (Offset) -> Unit = {},
     onDragEnd: () -> Unit = {},
@@ -938,7 +945,7 @@ private fun DeviceMarker(
         }
         if (showLabel) {
             Text(
-                device.name,
+                label,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,

@@ -213,6 +213,8 @@
     tool: "view", editTool: "move", pen: PENS[0], linkFrom: null, cable: "Cat6",
     // Layers as in the app: L1 cables, L2 VLAN colours, L3 subnets; a VLAN picked to stand out.
     layer: "L1", vlanFilter: null, vlans: new Map(),
+    // Under each marker: "name", "ip" or "vlan"; remembered in this browser.
+    label: (() => { try { return localStorage.getItem("netadmin.mapLabel") || "name"; } catch { return "name"; } })(),
     // Marks tool: the kind and colour of the next mark, the tail of an arrow being placed, a mark being dragged.
     markKind: "BADGE", markColor: "#FFD60A", arrowStart: null, markDrag: null,
     // A device found by search: ringed until the next click. Clusters drawn at the last frame.
@@ -1110,8 +1112,7 @@
       ctx.fillStyle = d.is_online ? "#30d158" : "#ff6b5e";
       ctx.fill();
     }
-    // On the subnet layer the address is what matters.
-    const label = S.layer === "L3" && d.ip ? `${d.name} · ${d.ip}` : d.name;
+    const label = markerLabel(d);
     ctx.font = "11px system-ui, sans-serif";
     ctx.fillStyle = "rgba(11,14,19,.75)";
     const tw = ctx.measureText(label).width;
@@ -1119,6 +1120,17 @@
     ctx.fillStyle = "#e6edf5";
     ctx.fillText(label, sx, sy + rad + 11);
     ctx.globalAlpha = 1;
+  }
+
+  /** What the marker says under it: the name, the address or the VLAN («Подписи» above the map). */
+  function markerLabel(d) {
+    if (S.label === "ip") return PASSIVE.has(d.type) || d.type === "RACK" ? d.name : d.ip || "нет IP";
+    if (S.label === "vlan") {
+      if (d.vlan_id == null) return PASSIVE.has(d.type) || d.type === "RACK" ? d.name : "нет VLAN";
+      const v = S.vlans.get(d.vlan_id);
+      return v ? `${v.vlan_id} · ${v.name}` : `VLAN ${d.vlan_id}`;
+    }
+    return d.name;
   }
 
   /** A gathered circle under the pointer: the click zooms in on it until it falls apart. */
@@ -1602,6 +1614,15 @@
     renderVlanFilter();
     draw();
   });
+  $("label-seg").addEventListener("click", (ev) => {
+    const b = ev.target.closest("button[data-label]");
+    if (!b) return;
+    S.label = b.dataset.label;
+    try { localStorage.setItem("netadmin.mapLabel", S.label); } catch { /* only this session then */ }
+    for (const x of $("label-seg").children) x.classList.toggle("active", x === b);
+    draw();
+  });
+  for (const x of $("label-seg").children) x.classList.toggle("active", x.dataset.label === S.label);
   /** On the VLAN and subnet layers: one list to pick a VLAN, and the way to the VLAN reference book. */
   function renderVlanFilter() {
     const sel = $("vlan-filter");

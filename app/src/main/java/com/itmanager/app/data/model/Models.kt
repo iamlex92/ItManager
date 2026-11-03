@@ -386,6 +386,30 @@ data class DeviceBulkChange(
     val isEmpty get() = type == null && floorId == null && vendor == null && hostId == null
 }
 
+/** What the map writes under each device marker. */
+enum class MapLabel(val title: String) {
+    NAME("Имя"),
+    IP("IP"),
+    VLAN("VLAN"),
+}
+
+/**
+ * The text under a marker for [kind]. Sockets, patch panels and racks have no address or VLAN of their own: they keep
+ * their name. [vlanNames]: VLAN id to its name.
+ */
+fun Device.mapLabel(kind: MapLabel, vlanNames: Map<Int, String>): String {
+    val cablePlant = type == DeviceType.SOCKET || type == DeviceType.PATCH_PANEL || type == DeviceType.RACK
+    return when (kind) {
+        MapLabel.NAME -> name
+        MapLabel.IP -> if (cablePlant) name else ip ?: "нет IP"
+        MapLabel.VLAN -> when {
+            vlanId != null -> vlanNames[vlanId]?.let { "$vlanId · $it" } ?: "VLAN $vlanId"
+            cablePlant -> name
+            else -> "нет VLAN"
+        }
+    }
+}
+
 enum class MapLayer(val short: String, val title: String) {
     L1("L1", "Кабели"),
     L2("L2", "VLAN"),
