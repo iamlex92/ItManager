@@ -2793,12 +2793,27 @@
     const down = allDevices.filter(isDown);
     if (down.length) tiles.push(tile("OFFLINE", "Не в сети", null, down, "не отвечают сейчас"));
     tiles.push(tile("", "Все устройства", null, allDevices, "одним списком"));
-    $("device-home").replaceChildren(...tiles);
+    $("device-home").replaceChildren(attentionCard(down), ...tiles);
     if (!allDevices.length) {
       $("device-home").replaceChildren(el("div", { className: "card" },
         el("p", { textContent: "В учёте пока нет устройств. Найдите их сканером сети или добавьте вручную." }),
         el("button", { type: "button", className: "primary", textContent: "Сканер сети", onclick: () => openTab("scan") })));
     }
+  }
+
+  /** What needs a person right now: the devices that do not answer (first few, one click each), or a calm line. */
+  function attentionCard(down) {
+    if (!down.length) return el("div", { className: "attention ok", textContent: `Всё отвечает. Устройств в учёте: ${allDevices.length}` });
+    const byId = new Map(allDevices.map((x) => [x.id, x]));
+    const shown = [...down].sort((a, b) => a.name.localeCompare(b.name, "ru")).slice(0, 5);
+    const rows = shown.map((d) => {
+      const place = [(roomOf(d) || {}).name, d.rack_id ? (byId.get(d.rack_id) || {}).name : null].filter(Boolean).join(" · ");
+      return el("button", { type: "button", className: "attention-row", onclick: () => openCard(d.id).catch(fail) },
+        el("strong", { textContent: d.name }), el("code", { textContent: d.ip || "" }), el("span", { className: "muted small", textContent: place }));
+    });
+    const card = el("div", { className: "attention bad" }, el("div", { className: "attention-title", textContent: `Требуют внимания: ${down.length}` }), ...rows);
+    if (down.length > shown.length) card.append(el("button", { type: "button", textContent: `Показать все: ${down.length}`, onclick: () => openCategory("OFFLINE") }));
+    return card;
   }
 
   function openCategory(id) {

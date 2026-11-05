@@ -57,6 +57,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import com.itmanager.app.ui.theme.Dimens
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.material.icons.outlined.Apps
@@ -226,7 +228,7 @@ fun DevicesScreen(
             when (val devices = state.devices) {
                 UiState.Loading -> LoadingView()
                 is UiState.Error -> ErrorView(devices.message, viewModel::retry, onOpenSettings, contentPadding = contentPadding)
-                is UiState.Content -> KindGrid(state, onOpen = viewModel::openKind, onOpenScanner = onOpenScanner, contentPadding = contentPadding)
+                is UiState.Content -> KindGrid(state, onOpen = viewModel::openKind, onOpenDevice = onOpenDevice, onOpenScanner = onOpenScanner, contentPadding = contentPadding)
             }
             return@Column
         }
@@ -311,6 +313,7 @@ fun DevicesScreen(
 private fun KindGrid(
     state: DevicesUiState,
     onOpen: (DeviceFilter) -> Unit,
+    onOpenDevice: (String) -> Unit,
     onOpenScanner: () -> Unit,
     contentPadding: PaddingValues,
 ) {
@@ -336,6 +339,16 @@ private fun KindGrid(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
+        item(key = "attention", span = { GridItemSpan(maxLineSpan) }) {
+            val down = (state.devices as? UiState.Content)?.data.orEmpty().filter { it.isDown }
+            AttentionCard(
+                total = total,
+                down = down,
+                placeLines = state.placeLines,
+                onOpenDevice = onOpenDevice,
+                onShowAll = { onOpen(DeviceFilter.OFFLINE) },
+            )
+        }
         gridItems(kinds, key = { it.name }) { f ->
             val count = state.totals[f] ?: 0
             val down = state.down[f] ?: 0
@@ -374,6 +387,64 @@ private fun KindGrid(
                     color = if (bad) StatusColors.Offline else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+    }
+}
+
+/**
+ * The first thing on the tab: what needs a person right now. A red card with the devices that do not answer (the
+ * first few, each a tap away), or a calm green line when everything does.
+ */
+@Composable
+private fun AttentionCard(
+    total: Int,
+    down: List<Device>,
+    placeLines: Map<String, String>,
+    onOpenDevice: (String) -> Unit,
+    onShowAll: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(Dimens.CardCorner)
+    if (down.isEmpty()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().background(StatusColors.OkContainer, shape).padding(Dimens.CardPadding),
+        ) {
+            StatusDot(StatusColors.Online, size = 10.dp)
+            Spacer(Modifier.width(12.dp))
+            Text("Всё отвечает. Устройств в учёте: $total", style = MaterialTheme.typography.titleSmall)
+        }
+        return
+    }
+    val shown = down.sortedBy { it.name.lowercase() }.take(5)
+    Column(Modifier.fillMaxWidth().background(StatusColors.DangerContainer, shape).padding(vertical = 8.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = Dimens.CardPadding, end = Dimens.CardPadding, top = 8.dp, bottom = 4.dp),
+        ) {
+            StatusDot(StatusColors.Offline, size = 10.dp)
+            Spacer(Modifier.width(12.dp))
+            Text("Требуют внимания: ${down.size}", style = MaterialTheme.typography.titleSmall)
+        }
+        shown.forEach { d ->
+            Column(
+                Modifier.fillMaxWidth().clickable { onOpenDevice(d.id) }
+                    .padding(horizontal = Dimens.CardPadding, vertical = 8.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(d.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    d.ip?.let {
+                        Spacer(Modifier.width(8.dp))
+                        Text(it, style = MonoStyle, color = scheme.onSurfaceVariant)
+                    }
+                }
+                placeLines[d.id]?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+        if (down.size > shown.size) {
+            TextButton(onClick = onShowAll, modifier = Modifier.padding(start = 8.dp)) { Text("Показать все: ${down.size}") }
         }
     }
 }
