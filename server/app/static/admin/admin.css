@@ -346,3 +346,12 @@ a.button { text-decoration: none; display: inline-flex; align-items: center; }
 .dev-note { color: var(--warn); font-size: 12px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .copy-ip { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; cursor: copy; }
 .copy-ip:hover { text-decoration: underline dotted; }
+
+/* Device home: the attention card spans the whole row above the tiles. */
+.attention { grid-column: 1 / -1; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+.attention.ok { background: var(--ok-container); font-weight: 600; flex-direction: row; }
+.attention.bad { background: var(--danger-container); }
+.attention-title { font-weight: 600; margin-bottom: 4px; }
+.attention-row { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; text-align: left; background: transparent; border: 0; padding: 6px 4px; color: var(--text); cursor: pointer; border-radius: 8px; }
+.attention-row:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.attention > button:last-child:not(.attention-row) { align-self: flex-start; }
