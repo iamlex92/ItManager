@@ -5,6 +5,7 @@ import com.itmanager.app.data.model.DeviceGrouping
 import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.model.FloorInfo
 import com.itmanager.app.data.model.Zone
+import com.itmanager.app.data.model.devicePlace
 import com.itmanager.app.data.model.groupDevices
 import com.itmanager.app.data.model.isDown
 import org.junit.Assert.assertEquals
@@ -51,5 +52,22 @@ class DeviceGroupsTest {
         assertTrue(dev("pc", null, online = false).isDown)
         assertFalse(dev("sock", null, type = DeviceType.SOCKET, online = false).isDown)
         assertFalse(dev("rack", null, type = DeviceType.RACK, online = false).isDown)
+    }
+
+    @Test
+    fun `place line joins room, rack unit, switch port and host`() {
+        val room = Zone("z", "Серверная", isRoom = true, colorArgb = 0L, points = listOf(0f, 0f, 100f, 0f, 100f, 100f, 0f, 100f))
+        val rack = dev("r1", "f1", type = DeviceType.RACK).copy(name = "R1")
+        val sw = dev("sw1", "f1", type = DeviceType.SWITCH).copy(name = "SW-CORE-01")
+        val srv = dev("srv", "f1", 10f, 10f, type = DeviceType.SERVER)
+            .copy(rackId = "r1", rackU = 10, rackH = 2, switchId = "sw1", switchPortId = "p7", switchPortName = "Gi1/0/7")
+        val byId = listOf(rack, sw, srv).associateBy { it.id }
+        assertEquals("Серверная · R1 U10–11 · порт SW-CORE-01 Gi1/0/7", devicePlace(srv, byId, mapOf("f1" to listOf(room))))
+    }
+
+    @Test
+    fun `place line is null when nothing is known`() {
+        val pc = dev("pc", null)
+        assertEquals(null, devicePlace(pc, mapOf("pc" to pc)))
     }
 }

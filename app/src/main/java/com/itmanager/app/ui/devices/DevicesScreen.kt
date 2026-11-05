@@ -3,7 +3,14 @@ package com.itmanager.app.ui.devices
 import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -281,6 +288,7 @@ fun DevicesScreen(
                             device = device,
                             selecting = selecting,
                             checked = device.id in state.selected,
+                            placeLine = state.placeLines[device.id],
                             onClick = {
                                 when {
                                     selecting -> viewModel.toggle(device.id)
@@ -466,6 +474,7 @@ private fun DeviceRow(
     device: Device,
     selecting: Boolean,
     checked: Boolean,
+    placeLine: String?,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onShowOnMap: (() -> Unit)?,
@@ -474,15 +483,29 @@ private fun DeviceRow(
     val interaction = remember { MutableInteractionSource() }
     val passive = device.isPassive
     val haptics = LocalHapticFeedback.current
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+    val shape = RoundedCornerShape(16.dp)
+    val scheme = MaterialTheme.colorScheme
+    // The stripe on the left says the state without reading: green answers, red does not, grey is passive.
+    val stripe = when {
+        passive -> scheme.outline
+        device.isOnline -> StatusColors.Online
+        else -> StatusColors.Offline
+    }
+    val fill = when {
+        checked -> Modifier.background(scheme.primaryContainer)
+        device.isDown -> Modifier.background(Brush.horizontalGradient(listOf(StatusColors.DangerContainer, scheme.surfaceContainer), endX = 900f))
+        else -> Modifier.background(scheme.surfaceContainer)
+    }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
             .pressScale(interaction, pressedScale = 0.98f)
-            .background(
-                if (checked) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
-                RoundedCornerShape(16.dp),
-            )
+            .clip(shape)
+            .then(fill)
+            .drawBehind { drawRect(stripe, size = Size(4.dp.toPx(), size.height)) }
             .combinedClickable(
                 interactionSource = interaction,
                 indication = null,
@@ -492,19 +515,19 @@ private fun DeviceRow(
                 },
                 onClick = onClick,
             )
-            .padding(start = 14.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
+            .padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
     ) {
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .size(40.dp)
                 .background(
-                    if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    if (checked) scheme.primary else scheme.surfaceContainerHigh,
                     RoundedCornerShape(10.dp),
                 ),
         ) {
             if (checked) {
-                Icon(Icons.Outlined.Check, contentDescription = "Выбрано", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp))
+                Icon(Icons.Outlined.Check, contentDescription = "Выбрано", tint = scheme.onPrimary, modifier = Modifier.size(20.dp))
             } else {
                 Icon(device.type.icon, contentDescription = device.type.label, tint = device.type.tint, modifier = Modifier.size(20.dp))
             }
@@ -512,10 +535,6 @@ private fun DeviceRow(
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (!passive) {
-                    StatusDot(if (device.isOnline) StatusColors.Online else StatusColors.Offline)
-                    Spacer(Modifier.width(6.dp))
-                }
                 Text(
                     device.name,
                     style = MaterialTheme.typography.titleMedium,
@@ -525,18 +544,33 @@ private fun DeviceRow(
                 )
                 if (device.isDown) {
                     Spacer(Modifier.width(8.dp))
-                    StatusBadge("не в сети", StatusColors.Offline, StatusColors.DangerContainer)
+                    StatusBadge("не отвечает", StatusColors.Offline, StatusColors.DangerContainer)
                 }
+            }
+            device.ip?.let { ip ->
+                // A tap on the address copies it: what people do with it on site.
+                Text(
+                    ip,
+                    style = MonoStyle,
+                    color = scheme.onSurface,
+                    modifier = Modifier.clickable(enabled = !selecting) {
+                        clipboard.setText(AnnotatedString(ip))
+                        Toast.makeText(context, "Скопировано: $ip", Toast.LENGTH_SHORT).show()
+                    },
+                )
             }
             Text(
                 listOfNotNull(device.vendor, device.model).joinToString(" ").ifEmpty { device.type.label },
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = scheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            device.ip?.let {
-                Text(it, style = MonoStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            placeLine?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+            device.comment?.takeIf { it.isNotBlank() }?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = StatusColors.Warning, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         if (!selecting && onShowOnMap != null) {
@@ -548,7 +582,7 @@ private fun DeviceRow(
             Icon(
                 Icons.AutoMirrored.Outlined.KeyboardArrowRight,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = scheme.onSurfaceVariant,
                 modifier = Modifier.padding(end = 8.dp),
             )
         }

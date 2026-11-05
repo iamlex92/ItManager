@@ -2837,14 +2837,15 @@
       const head = document.createElement("tr");
       head.className = "group";
       const ht = cell(head, `${group.title} · ${group.items.length}`);
-      ht.colSpan = 10;
+      ht.colSpan = 11;
       rows.appendChild(head);
-      for (const d of group.items) rows.appendChild(deviceRow(d, byId));
+      // Devices that do not answer come first in their section; the order by name stays within each part.
+      for (const d of [...group.items].sort((a, b) => isDown(b) - isDown(a))) rows.appendChild(deviceRow(d, byId));
     }
     if (!shown.length) {
       rows.appendChild(allDevices.length
-        ? emptyRow(10, "Ничего не найдено.", "Сбросить поиск и фильтр", () => { $("device-filter").value = ""; typeFilter = ""; renderDevices(); })
-        : emptyRow(10, "В учёте пока нет устройств. Найдите их сканером сети или добавьте вручную.", "Сканер сети", () => openTab("scan")));
+        ? emptyRow(11, "Ничего не найдено.", "Сбросить поиск и фильтр", () => { $("device-filter").value = ""; typeFilter = ""; renderDevices(); })
+        : emptyRow(11, "В учёте пока нет устройств. Найдите их сканером сети или добавьте вручную.", "Сканер сети", () => openTab("scan")));
     }
     renderBulkBar();
   }
@@ -2854,7 +2855,8 @@
     const tr = document.createElement("tr");
     tr.className = "clickable";
     tr.classList.toggle("picked", picked.has(d.id));
-    tr.addEventListener("click", (ev) => { if (!ev.target.closest("input, button")) openCard(d.id).catch(fail); });
+    tr.classList.add(isDown(d) ? "st-down" : (PASSIVE.has(d.type) || d.type === "RACK") ? "st-passive" : "st-up");
+    tr.addEventListener("click", (ev) => { if (!ev.target.closest("input, button, .copy-ip")) openCard(d.id).catch(fail); });
     const pickCell = document.createElement("td");
     pickCell.className = "pick";
     const box = document.createElement("input");
@@ -2864,14 +2866,28 @@
     pickCell.appendChild(box);
     tr.appendChild(pickCell);
     const name = cell(tr, d.name);
-    if (isDown(d)) name.append(Object.assign(document.createElement("span"), { className: "down-mark", textContent: "не в сети" }));
+    name.classList.add("dev-name");
+    if (isDown(d)) name.append(Object.assign(document.createElement("span"), { className: "down-mark", textContent: "не отвечает" }));
+    if (d.comment && d.comment.trim()) name.append(Object.assign(document.createElement("div"), { className: "dev-note", textContent: d.comment, title: d.comment }));
     cell(tr, "").append(glyphCanvas(d.type), typeOf(d).label);
-    cell(tr, d.ip);
+    const ipCell = cell(tr, "");
+    if (d.ip) {
+      // A click on the address copies it: what people do with it.
+      const ip = Object.assign(document.createElement("code"), { className: "copy-ip", textContent: d.ip, title: "Нажмите, чтобы скопировать" });
+      ip.addEventListener("click", () => {
+        const done = () => { ip.textContent = "скопировано"; setTimeout(() => { ip.textContent = d.ip; }, 900); };
+        (navigator.clipboard ? navigator.clipboard.writeText(d.ip) : Promise.reject()).then(done, () => {
+          const r = document.createRange(); r.selectNodeContents(ip); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+        });
+      });
+      ipCell.append(ip);
+    } else ipCell.textContent = "—";
     cell(tr, d.vendor);
     cell(tr, d.model);
     cell(tr, (roomOf(d) || {}).name);
-    cell(tr, d.rack_id ? `${(byId.get(d.rack_id) || {}).name || "?"}${d.rack_u ? ` · U${d.rack_u}` : ""}` : null);
+    cell(tr, d.rack_id ? `${(byId.get(d.rack_id) || {}).name || "?"}${d.rack_u ? ` · U${d.rack_u}${(d.rack_h || 1) > 1 ? `–${d.rack_u + d.rack_h - 1}` : ""}` : ""}` : null);
     cell(tr, d.host_id ? (byId.get(d.host_id) || {}).name : null);
+    cell(tr, d.switch_port_id ? `${(byId.get(d.switch_id) || {}).name || "коммутатор"} ${d.switch_port_name || ""}`.trim() : null);
     const actions = cell(tr, "");
     actions.className = "actions";
     const edit = document.createElement("button");

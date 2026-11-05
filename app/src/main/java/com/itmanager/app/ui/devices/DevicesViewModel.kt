@@ -14,6 +14,7 @@ import com.itmanager.app.data.model.DeviceGrouping
 import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.model.FloorInfo
 import com.itmanager.app.data.model.Zone
+import com.itmanager.app.data.model.devicePlace
 import com.itmanager.app.data.model.groupDevices
 import com.itmanager.app.data.model.isDown
 import com.itmanager.app.data.source.DcimRepository
@@ -78,6 +79,8 @@ data class DevicesUiState(
     /** Per kind, of all devices: how many there are and how many do not answer — for the tiles. */
     val totals: Map<DeviceFilter, Int> = emptyMap(),
     val down: Map<DeviceFilter, Int> = emptyMap(),
+    /** Per device id: room, rack and unit, switch port, host — the second line of a list row. */
+    val placeLines: Map<String, String> = emptyMap(),
 )
 
 /** The group edit dialog: floors and servers to choose from, and how the last attempt went. */
@@ -156,7 +159,14 @@ class DevicesViewModel @Inject constructor(
             selected = v.selected,
             counts = DeviceFilter.entries.associateWith { f -> found.count { f.accepts(it) } },
             grouping = v.grouping,
-            groups = groupDevices(shown, v.grouping, p.floors, p.zones),
+            // Devices that do not answer come first in their section; the order by name stays within each part.
+            groups = groupDevices(shown, v.grouping, p.floors, p.zones).map { g ->
+                g.copy(devices = g.devices.sortedBy { !it.isDown })
+            },
+            placeLines = (devices as? UiState.Content)?.data.orEmpty().let { list ->
+                val byId = list.associateBy { it.id }
+                list.mapNotNull { d -> devicePlace(d, byId, p.zones)?.let { d.id to it } }.toMap()
+            },
             home = v.home && v.query.isBlank(),
             totals = (devices as? UiState.Content)?.data.orEmpty().let { list ->
                 DeviceFilter.entries.associateWith { f -> list.count { f.accepts(it) } }
@@ -177,9 +187,12 @@ class DevicesViewModel @Inject constructor(
 
     private suspend fun load() {
         all.update { if (it is UiState.Content) it.copy(isRefreshing = true) else UiState.Loading }
-        if (grouping.value != DeviceGrouping.TYPE) loadPlaces(withRooms = grouping.value == DeviceGrouping.ROOM)
         repository.devices()
-            .onSuccess { list -> all.value = UiState.Content(list) }
+            .onSuccess { list ->
+                all.value = UiState.Content(list)
+                // Rooms for the second line of each row; the rows show without them until they arrive.
+                viewModelScope.launch { loadPlaces(withRooms = true) }
+            }
             .onFailure { e -> all.value = UiState.Error(e.toUserMessage()) }
     }
 
