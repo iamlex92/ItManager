@@ -54,3 +54,22 @@ fun groupDevices(
         }
     return if (loose.isEmpty()) groups else groups + DeviceGroup("none", "Не на карте", loose.sortedWith(byName))
 }
+
+/**
+ * Where a device is and what it hangs off, for its list row: room, rack and unit, switch port, host.
+ * [byId] holds every device (racks, switches and hosts are looked up in it); [zones] are the rooms by floor id.
+ * Null when nothing is known.
+ */
+fun devicePlace(device: Device, byId: Map<String, Device>, zones: Map<String, List<Zone>> = emptyMap()): String? {
+    val room = device.floorId?.let { zones[it] }?.roomAt(device.x, device.y)?.name
+    val rack = device.rackId?.let { id ->
+        val unit = device.rackU?.let { u -> "U$u" + if ((device.rackH ?: 1) > 1) "–${device.rackTop}" else "" }
+        listOfNotNull(byId[id]?.name ?: "Стойка", unit).joinToString(" ")
+    }
+    val port = device.switchPortId?.let {
+        val switchName = device.switchId?.let { id -> byId[id]?.name } ?: "коммутатор"
+        "порт $switchName ${device.switchPortName.orEmpty()}".trim()
+    }
+    val host = device.hostId?.let { id -> byId[id]?.name?.let { "на хосте $it" } }
+    return listOfNotNull(room, rack, port, host).joinToString(" · ").ifEmpty { null }
+}

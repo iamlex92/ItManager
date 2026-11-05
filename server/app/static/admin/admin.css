@@ -337,3 +337,12 @@ a.button { text-decoration: none; display: inline-flex; align-items: center; }
 .down-banner { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 16px; background: var(--danger); color: var(--on-danger); }
 .down-banner[hidden] { display: none; }
 .down-banner a.button { text-decoration: none; }
+
+/* Device list: a stripe says the state, the address copies on click, the comment shows under the name. */
+.grid tr.st-up td:first-child { box-shadow: inset 4px 0 0 var(--ok); }
+.grid tr.st-down td:first-child { box-shadow: inset 4px 0 0 var(--danger); }
+.grid tr.st-passive td:first-child { box-shadow: inset 4px 0 0 var(--line); }
+.grid tr.st-down td { background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.dev-note { color: var(--warn); font-size: 12px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.copy-ip { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; cursor: copy; }
+.copy-ip:hover { text-decoration: underline dotted; }
