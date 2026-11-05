@@ -345,6 +345,7 @@ private fun KindGrid(
                 total = total,
                 down = down,
                 placeLines = state.placeLines,
+                incidents = state.incidents,
                 onOpenDevice = onOpenDevice,
                 onShowAll = { onOpen(DeviceFilter.OFFLINE) },
             )
@@ -400,12 +401,13 @@ private fun AttentionCard(
     total: Int,
     down: List<Device>,
     placeLines: Map<String, String>,
+    incidents: List<Incident>,
     onOpenDevice: (String) -> Unit,
     onShowAll: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(Dimens.CardCorner)
-    if (down.isEmpty()) {
+    if (down.isEmpty() && incidents.isEmpty()) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth().background(StatusColors.OkContainer, shape).padding(Dimens.CardPadding),
@@ -424,7 +426,7 @@ private fun AttentionCard(
         ) {
             StatusDot(StatusColors.Offline, size = 10.dp)
             Spacer(Modifier.width(12.dp))
-            Text("Требуют внимания: ${down.size}", style = MaterialTheme.typography.titleSmall)
+            Text("Требуют внимания: ${down.size + incidents.size}", style = MaterialTheme.typography.titleSmall)
         }
         shown.forEach { d ->
             Column(
@@ -441,6 +443,15 @@ private fun AttentionCard(
                 placeLines[d.id]?.let {
                     Text(it, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
+            }
+        }
+        incidents.take(3).forEach { i ->
+            Column(
+                Modifier.fillMaxWidth().clickable { onOpenDevice(i.deviceId) }
+                    .padding(horizontal = Dimens.CardPadding, vertical = 8.dp),
+            ) {
+                Text(i.deviceName, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(i.text, style = MaterialTheme.typography.bodySmall, color = StatusColors.Warning, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
         if (down.size > shown.size) {
