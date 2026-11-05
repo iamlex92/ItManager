@@ -7,6 +7,7 @@ import com.itmanager.app.core.nfc.TagPayload
 import com.itmanager.app.data.export.ExportFormat
 import com.itmanager.app.data.export.ExportedFile
 import com.itmanager.app.data.export.InventoryExporter
+import com.itmanager.app.data.model.Alert
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceBulkChange
 import com.itmanager.app.data.model.DeviceGroup
@@ -81,7 +82,12 @@ data class DevicesUiState(
     val down: Map<DeviceFilter, Int> = emptyMap(),
     /** Per device id: room, rack and unit, switch port, host — the second line of a list row. */
     val placeLines: Map<String, String> = emptyMap(),
+    /** Open incidents other than «host does not answer» (those are the devices themselves): low toner, link down. */
+    val incidents: List<Incident> = emptyList(),
 )
+
+/** One open alert for the «Требуют внимания» card: the device it is about and what is wrong. */
+data class Incident(val deviceId: String, val deviceName: String, val text: String)
 
 /** The group edit dialog: floors and servers to choose from, and how the last attempt went. */
 data class BulkEditState(
@@ -124,6 +130,7 @@ class DevicesViewModel @Inject constructor(
     private val home = MutableStateFlow(true)
     /** Floors and their rooms, for grouping by floor or room. */
     private val places = MutableStateFlow(Places())
+    private val alerts = MutableStateFlow<List<Alert>>(emptyList())
 
     private data class Places(val floors: List<FloorInfo> = emptyList(), val zones: Map<String, List<Zone>> = emptyMap())
 
@@ -144,7 +151,7 @@ class DevicesViewModel @Inject constructor(
         val home: Boolean,
     )
 
-    val state: StateFlow<DevicesUiState> = combine(all, view, places) { devices, v, p ->
+    val state: StateFlow<DevicesUiState> = combine(all, view, places, alerts) { devices, v, p, openAlerts ->
         val found = (devices as? UiState.Content)?.data.orEmpty().filter { it.matches(v.query) }
         val shown = found.filter { v.filter.accepts(it) }
         val visible = when (devices) {
@@ -162,6 +169,12 @@ class DevicesViewModel @Inject constructor(
             // Devices that do not answer come first in their section; the order by name stays within each part.
             groups = groupDevices(shown, v.grouping, p.floors, p.zones).map { g ->
                 g.copy(devices = g.devices.sortedBy { !it.isDown })
+            },
+            incidents = (devices as? UiState.Content)?.data.orEmpty().let { list ->
+                val byId = list.associateBy { it.id }
+                openAlerts.filter { !it.isResolved && it.type != "HOST_DOWN" }.mapNotNull { a ->
+                    byId[a.deviceId]?.let { Incident(it.id, it.name, a.message.ifBlank { a.typeLabel }) }
+                }
             },
             placeLines = (devices as? UiState.Content)?.data.orEmpty().let { list ->
                 val byId = list.associateBy { it.id }
@@ -192,6 +205,7 @@ class DevicesViewModel @Inject constructor(
                 all.value = UiState.Content(list)
                 // Rooms for the second line of each row; the rows show without them until they arrive.
                 viewModelScope.launch { loadPlaces(withRooms = true) }
+                viewModelScope.launch { alerts.value = repository.alerts().getOrNull().orEmpty() }
             }
             .onFailure { e -> all.value = UiState.Error(e.toUserMessage()) }
     }
