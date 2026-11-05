@@ -3,7 +3,22 @@ package com.itmanager.app.ui.devices
 import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material.icons.outlined.ArrowDropUp
+import androidx.compose.runtime.rememberCoroutineScope
+import com.itmanager.app.core.nettools.NetTools
+import com.itmanager.app.core.nettools.PingLine
+import com.itmanager.app.core.nettools.formatMs
+import com.itmanager.app.core.nettools.pingStats
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.net.InetAddress
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -151,6 +166,8 @@ fun DevicesScreen(
     val selecting = state.selected.isNotEmpty()
     val bulk by viewModel.bulk.collectAsStateWithLifecycle()
     var confirmDelete by remember { mutableStateOf(false) }
+    // One row open at a time: its details and quick actions.
+    var expandedId by remember { mutableStateOf<String?>(null) }
     BackHandler(enabled = selecting) { viewModel.clearSelection() }
     BackHandler(enabled = !selecting && !state.home) { viewModel.backHome() }
 
@@ -291,6 +308,8 @@ fun DevicesScreen(
                             selecting = selecting,
                             checked = device.id in state.selected,
                             placeLine = state.placeLines[device.id],
+                            expanded = expandedId == device.id && !selecting,
+                            onToggleExpand = { expandedId = if (expandedId == device.id) null else device.id },
                             onClick = {
                                 when {
                                     selecting -> viewModel.toggle(device.id)
@@ -557,6 +576,8 @@ private fun DeviceRow(
     selecting: Boolean,
     checked: Boolean,
     placeLine: String?,
+    expanded: Boolean,
+    onToggleExpand: () -> Unit,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onShowOnMap: (() -> Unit)?,
@@ -652,21 +673,72 @@ private fun DeviceRow(
                 Text(it, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             device.comment?.takeIf { it.isNotBlank() }?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = StatusColors.Warning, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(it, style = MaterialTheme.typography.bodySmall, color = StatusColors.Warning, maxLines = if (expanded) 4 else 1, overflow = TextOverflow.Ellipsis)
             }
-        }
-        if (!selecting && onShowOnMap != null) {
-            IconButton(onClick = onShowOnMap) {
-                Icon(Icons.Outlined.Place, contentDescription = "Показать на карте")
+            AnimatedVisibility(expanded) {
+                DeviceActions(device, onOpen = onClick, onShowOnMap = onShowOnMap)
             }
         }
         if (!selecting) {
-            Icon(
-                Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                contentDescription = null,
-                tint = scheme.onSurfaceVariant,
-                modifier = Modifier.padding(end = 8.dp),
-            )
+            // The arrow opens the details and quick actions in place; a tap on the row still opens the device.
+            IconButton(onClick = onToggleExpand) {
+                Icon(
+                    if (expanded) Icons.Outlined.ArrowDropUp else Icons.Outlined.ArrowDropDown,
+                    contentDescription = if (expanded) "Свернуть" else "Подробности и действия",
+                    tint = scheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/** The open row: MAC and quick actions. Ping goes from the phone (4 probes), so it also shows whether the phone reaches the device. */
+@Composable
+private fun DeviceActions(device: Device, onOpen: () -> Unit, onShowOnMap: (() -> Unit)?) {
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+    val scope = rememberCoroutineScope()
+    var pinging by remember { mutableStateOf(false) }
+    var result by remember { mutableStateOf<String?>(null) }
+    var reached by remember { mutableStateOf(true) }
+    fun copy(label: String, value: String) {
+        clipboard.setText(AnnotatedString(value))
+        Toast.makeText(context, "Скопировано: $label", Toast.LENGTH_SHORT).show()
+    }
+    Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        device.mac?.let { Text("MAC $it", style = MonoStyle, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = onOpen) { Text("Открыть") }
+            device.ip?.let { ip ->
+                FilledTonalButton(
+                    enabled = !pinging,
+                    onClick = {
+                        scope.launch {
+                            pinging = true
+                            result = null
+                            val addr = withContext(Dispatchers.IO) { runCatching { InetAddress.getByName(ip) }.getOrNull() }
+                            if (addr == null) {
+                                reached = false
+                                result = "Адрес не разобран"
+                            } else {
+                                val rtts = mutableListOf<Double?>()
+                                NetTools.ping(addr, 4).collect { (_, attempt) -> rtts += (attempt.line as? PingLine.Reply)?.rttMs }
+                                val stats = pingStats(rtts)
+                                reached = stats.received > 0
+                                result = stats.avgMs?.let { "с телефона: ${formatMs(it)} мс, потерь ${stats.lossPercent}%" }
+                                    ?: "с телефона: нет ответа"
+                            }
+                            pinging = false
+                        }
+                    },
+                ) { Text(if (pinging) "Ping…" else "Ping") }
+                FilledTonalButton(onClick = { copy(ip, ip) }) { Text("Копировать IP") }
+            }
+            device.mac?.let { mac -> FilledTonalButton(onClick = { copy(mac, mac) }) { Text("Копировать MAC") } }
+            onShowOnMap?.let { FilledTonalButton(onClick = it) { Text("На карте") } }
+        }
+        result?.let {
+            Text(it, style = MonoStyle, color = if (reached) StatusColors.Online else StatusColors.Offline)
         }
     }
 }
