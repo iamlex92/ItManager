@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itmanager.app.core.network.NetAdminApi
 import com.itmanager.app.core.network.ServerFailover
+import com.itmanager.app.core.nfc.DeepLink
+import com.itmanager.app.core.nfc.DeepLinkInbox
 import com.itmanager.app.core.network.runCatchingCancellable
 import com.itmanager.app.core.network.toUserMessage
 import com.itmanager.app.core.settings.ConnectQr
@@ -57,6 +59,7 @@ class SettingsViewModel @Inject constructor(
     private val settings: SettingsRepository,
     private val api: NetAdminApi,
     private val failover: ServerFailover,
+    private val links: DeepLinkInbox,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsUiState())
@@ -75,6 +78,8 @@ class SettingsViewModel @Inject constructor(
                 saved = current,
             )
             launch { failover.onBackup.collect { on -> _state.update { it.copy(onBackup = on) } } }
+            // A connection code scanned with the camera: the form fills in as from the app's own scanner.
+            links.take<DeepLink.Connect>()?.let { applyScanned(it.code) }
             // Applied at once, apart from the server form and its Save button.
             settings.appLock.collect { on -> _state.update { it.copy(appLock = on) } }
         }

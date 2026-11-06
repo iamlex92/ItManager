@@ -1,5 +1,9 @@
 package com.itmanager.app.ui.navigation
 
+import kotlinx.coroutines.flow.combine
+import com.itmanager.app.core.security.LockState
+import com.itmanager.app.core.nfc.DeepLinkInbox
+import com.itmanager.app.core.nfc.DeepLink
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itmanager.app.core.network.toUserMessage
@@ -26,8 +30,11 @@ import javax.inject.Inject
 
 /** Where something outside the current screen (a tag, an alert) wants to take the user. */
 sealed interface AppNavigation {
-    /** The device card: from an alert, an NFC tag or its banner. */
+    /** The device card: from an alert, an NFC tag, a scanned label or its banner. */
     data class OpenDevice(val deviceId: String) : AppNavigation
+
+    /** The connection settings, with a connection code scanned by the camera waiting in [DeepLinkInbox]. */
+    data object OpenSettings : AppNavigation
 }
 
 /** An alert that just arrived, with the device name resolved for the banner. */
@@ -40,6 +47,7 @@ class AppViewModel @Inject constructor(
     private val nfc: NfcController,
     private val alertCenter: AlertCenter,
     private val appLock: AppLock,
+    private val links: DeepLinkInbox,
 ) : ViewModel() {
 
     val lock = appLock.state
@@ -69,6 +77,23 @@ class AppViewModel @Inject constructor(
     init {
         alertCenter.start(viewModelScope)
         viewModelScope.launch { nfc.scans.collect(::openTag) }
+        viewModelScope.launch {
+            // Only once the app is unlocked: a label must not show a card past the lock.
+            combine(links.pending, appLock.state) { link, lock -> link.takeIf { lock == LockState.UNLOCKED } }
+                .collect { link ->
+                    when (link) {
+                        is DeepLink.Device -> {
+                            links.clear()
+                            repository.deviceForTag(link.id, "")
+                                .onSuccess(::open)
+                                .onFailure { _messages.emit(it.toUserMessage()) }
+                        }
+                        // The settings screen takes the code itself.
+                        is DeepLink.Connect -> _navigation.emit(AppNavigation.OpenSettings)
+                        null -> Unit
+                    }
+                }
+        }
     }
 
     /** Collected only while the app is on screen, so a pocketed phone does not keep the socket open. */

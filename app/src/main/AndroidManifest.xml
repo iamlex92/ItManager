@@ -43,6 +43,20 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="itmanager" android:host="vpn" />
             </intent-filter>
+            <!-- A device label scanned with the phone's own camera: itmanager://device/<id> opens the device's card. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="itmanager" android:host="device" />
+            </intent-filter>
+            <!-- The server's connection code scanned with the camera: the settings open with it filled in. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="netadmin" android:host="connect" />
+            </intent-filter>
         </activity>
 
         <!-- Hands exported reports to the share sheet; nothing else is exposed. -->

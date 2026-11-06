@@ -673,6 +673,10 @@ class HealthOut(BaseModel):
     secrets_encrypted: bool = False
     # Where the web console sends the operator while this server is down; empty: nowhere.
     backup_server_url: str = ""
+    # "main": sends its database to the backup server; "backup": takes it (changes made here are overwritten).
+    sync_role: str = ""
+    # On the backup server: when it last took the main server's database.
+    last_sync_at: str | None = None
 
 
 class ErrorCode(BaseModel):

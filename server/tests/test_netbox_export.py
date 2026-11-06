@@ -43,7 +43,7 @@ def test_netbox_export_needs_the_token(client):
     assert r.status_code == 401
 
 
-def test_labels_page_has_a_qr_per_device_with_the_tag_json(client):
+def test_labels_page_has_a_qr_per_device_with_its_app_link(client):
     devices = client.get("/api/v1/devices").json()
     r = client.get("/api/v1/export/labels.html")
     assert r.status_code == 200
@@ -55,6 +55,13 @@ def test_labels_page_has_a_qr_per_device_with_the_tag_json(client):
     r = client.get("/api/v1/export/labels.html", params={"ids": one["id"]})
     assert r.text.count('class="label"') == 1
     assert one["name"] in r.text
+
+    from app.netbox.labels import label_link
+
+    class D:
+        id = one["id"]
+
+    assert label_link(D()) == f"itmanager://device/{one['id']}"  # type: ignore[arg-type]
 
 
 def test_tag_payload_matches_the_nfc_tag_format():

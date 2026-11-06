@@ -1,6 +1,7 @@
 """Printable QR labels for devices: an A4 page of cut-out labels, printed from the browser (also to PDF).
 
-The QR carries the same JSON as the device's NFC tag, so one scanner reads both.
+The QR is a link the phone's own camera hands to the app: itmanager://device/<id>, which opens the device's card.
+Labels printed before carry the NFC tag's JSON instead; the app's scanner still reads those.
 """
 
 import html
@@ -29,6 +30,14 @@ def tag_payload(device: Device) -> str:
     )
 
 
+LINK_SCHEME = "itmanager"
+
+
+def label_link(device: Device) -> str:
+    """What the QR carries: the camera offers to open it in ItManager, which shows the device's card."""
+    return f"{LINK_SCHEME}://device/{device.id}"
+
+
 def qr_svg(data: str) -> str:
     out = io.BytesIO()
     segno.make(data, error="m", micro=False).save(out, kind="svg", scale=4, border=1, xmldecl=False, svgns=True)
@@ -41,7 +50,7 @@ def labels_page(devices: list[Device]) -> str:
         ip = html.escape(str(d.ip_address)) if d.ip_address else ""
         cells.append(
             '<div class="label">'
-            f"{qr_svg(tag_payload(d))}"
+            f"{qr_svg(label_link(d))}"
             f'<div class="text"><b>{html.escape(d.name)}</b><br>{html.escape(d.device_type.title())}'
             f"{'<br>' + ip if ip else ''}</div></div>"
         )

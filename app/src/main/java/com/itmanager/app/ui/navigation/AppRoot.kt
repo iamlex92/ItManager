@@ -123,6 +123,7 @@ fun AppRoot(appViewModel: AppViewModel = hiltViewModel()) {
         appViewModel.navigation.collect { target ->
             when (target) {
                 is AppNavigation.OpenDevice -> navController.navigate(DeviceRoute(target.deviceId)) { launchSingleTop = true }
+                AppNavigation.OpenSettings -> navController.navigate(SettingsRoute) { launchSingleTop = true }
             }
         }
     }

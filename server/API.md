@@ -406,3 +406,16 @@ Real mode runs the GroupPolicy cmdlets over WinRM on `GPO_HOST` (default: the ho
   `POST /gpo/{id}/delete`, `POST /gpo/{id}/apply {computers?}` → 202 job, `GET /gpo/apply/{job}`.
   `key`: `HKLM\...` or `HKCU\...`; `type`: String, ExpandString, DWord, QWord, MultiString; `target`: an OU or domain DN.
   Arguments reach PowerShell only as base64 JSON. With `GPO_BACKUP_PATH` set, `Backup-GPO` runs before each change.
+
+## Backup server sync
+
+The main server sends its database to the backup server; each keeps its own server settings.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/v1/sync` | `{role: "main"\|"backup"\|"", backup_server_url, interval_minutes, pushed_at, push_error, push_bytes, push_tables, push_rows, received_at, receive_error, received_rows, received_created_at}` |
+| POST | `/api/v1/sync/push` | Sends the database to `BACKUP_SERVER_URL` now with `BACKUP_SERVER_TOKEN`, as the scheduled sync does (`SYNC_TO_BACKUP`, every `SYNC_INTERVAL_MINUTES`). 422 `no_backup_server`, 502 `sync_failed` with the reason. Audited as `sync:push`. |
+| POST | `/api/v1/sync/receive` | On the backup server (`SYNC_ACCEPT=true`, else 403 `sync_not_accepted`): body `application/zip` from the main server, a manifest and every table but `server_settings` as COPY text. Replaces this server's tables in one transaction. 409 `sync_refused` for a different schema revision or `SECRET_KEY`, or a broken package; 413 over 2 GB. Audited as `sync:receive`. |
+
+`/health` also reports `sync_role` and, on the backup server, `last_sync_at`.
+
