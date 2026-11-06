@@ -17,6 +17,8 @@ def test_health_is_public(client):
         "runbook_writes_enabled": True,
         "secrets_encrypted": False,
         "backup_server_url": "",
+        "sync_role": "",
+        "last_sync_at": None,
     }
 
 

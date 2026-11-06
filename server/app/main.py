@@ -45,6 +45,9 @@ from .api import (
 from .api import (
     serversettings as serversettings_api,
 )
+from .api import (
+    sync as sync_api,
+)
 from .api.deps import require_token
 from .config import (
     REAL_SWITCH_MIN_POLL_SECONDS,
@@ -69,7 +72,7 @@ from .pcs.service import KeyInventory, port_open
 from .runbooks.emulator import RunbookEnvironment
 from .runbooks.real import RealRunbooks
 from .schemas import HealthOut
-from .services import backup, heartbeat, linkstate, traps
+from .services import backup, dbsync, heartbeat, linkstate, traps
 from .services import printers as printer_service
 from .services import traffic as traffic_service
 from .services.realtime import Hub
@@ -198,6 +201,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 )
             else:
                 log.error("ICMP heartbeat disabled: no ping binary found")
+        # The backup server's copy of this database.
+        app.state.sync_status = dbsync.SyncStatus()
+        app.state.sync_lock = asyncio.Lock()
+        if settings.sync_to_backup and settings.backup_server_url and not settings.sync_accept:
+            tasks.append(asyncio.create_task(dbsync.sync_loop(settings, app.state.sync_status, app.state.sync_lock)))
+            log.warning("database sync: to %s every %d min", settings.backup_server_url, settings.sync_interval_minutes)
+        if settings.sync_accept:
+            log.warning("database sync: this is the backup server, it takes the main server's database")
         if settings.backup_dir:
             tasks.append(asyncio.create_task(backup.backup_loop(settings)))
             log.warning("database backups: every %g h to %s", settings.backup_interval_hours, settings.backup_dir)
@@ -266,6 +277,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             runbook_writes_enabled=settings.runbook_writes_enabled,
             secrets_encrypted=crypto.box().enabled,
             backup_server_url=settings.backup_server_url.rstrip("/"),
+            sync_role="backup" if settings.sync_accept else "main" if settings.sync_to_backup else "",
+            last_sync_at=getattr(app.state, "sync_status", None) and app.state.sync_status.received_at,
         )
 
     api = APIRouter(prefix="/api/v1", dependencies=[Depends(require_token)])
@@ -293,7 +306,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         faceplates,
         topology,
     )
-    for module in (*routers, credentials, traffic, history, serversettings_api):
+    for module in (*routers, credentials, traffic, history, serversettings_api, sync_api):
         api.include_router(module.router)
 
     app.include_router(public)

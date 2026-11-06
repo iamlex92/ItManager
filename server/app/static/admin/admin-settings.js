@@ -36,7 +36,39 @@
     $("settings-groups").replaceChildren(...s.groups.map((g) => el("div", { className: "card" },
       el("h3", { textContent: g.title }),
       g.note ? el("p", { className: "muted small", textContent: g.note }) : "",
-      ...g.fields.map(row))));
+      ...g.fields.map(row),
+      g.title === "Резервный сервер" ? syncBox() : "")));
+  }
+
+  // What the last sync did, and a way to run one now; filled in after the page is drawn.
+  const when = (iso) => (iso ? new Date(iso).toLocaleString("ru-RU") : "ещё не было");
+  function syncBox() {
+    const box = el("div", { className: "sync-box" }, el("p", { className: "muted small", textContent: "Синхронизация: загрузка…" }));
+    const draw = (st) => {
+      const lines = [];
+      if (st.role === "backup") {
+        lines.push(`Этот сервер резервный: последняя база с основного — ${when(st.received_at)}` +
+          (st.received_created_at ? ` (снята ${when(st.received_created_at)})` : ""));
+        if (st.receive_error) lines.push(`Последняя попытка не удалась: ${st.receive_error}`);
+      } else {
+        lines.push(st.role === "main" ? `Отправка на резервный сервер каждые ${st.interval_minutes} мин.` : "Отправка по расписанию выключена.");
+        lines.push(`Последняя отправка: ${when(st.pushed_at)}` +
+          (st.pushed_at ? ` · ${st.push_rows} строк, ${Math.max(1, Math.round(st.push_bytes / 1024))} КБ` : ""));
+        if (st.push_error) lines.push(`Ошибка: ${st.push_error}`);
+      }
+      const now = el("button", { type: "button", textContent: "Синхронизировать сейчас" });
+      now.hidden = st.role === "backup" || !st.backup_server_url;
+      now.title = "Отправить базу на резервный сервер сейчас; его данные заменятся этими";
+      now.addEventListener("click", async () => {
+        now.disabled = true;
+        now.textContent = "Отправляю…";
+        try { draw(await api("POST", "sync/push")); toast("База отправлена на резервный сервер"); }
+        catch (e) { fail(e); api("GET", "sync").then(draw).catch(() => {}); }
+      });
+      box.replaceChildren(...lines.map((t) => el("p", { className: t.startsWith("Ошибка") || t.startsWith("Последняя попытка") ? "error small" : "small", textContent: t })), now);
+    };
+    api("GET", "sync").then(draw).catch((e) => box.replaceChildren(el("p", { className: "error small", textContent: e.message })));
+    return box;
   }
 
   function row(f) {

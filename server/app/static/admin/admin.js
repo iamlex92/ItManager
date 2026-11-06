@@ -123,6 +123,13 @@
     try {
       const h = await (await fetch("/api/v1/health")).json();
       try { localStorage.setItem("netadmin.backupServer", h.backup_server_url || ""); } catch { /* private mode */ }
+      // The backup server: what is changed here is overwritten by the next copy from the main one.
+      $("backup-role").hidden = h.sync_role !== "backup";
+      if (h.sync_role === "backup") {
+        $("backup-role").textContent = "Это резервный сервер: данные приходят с основного" +
+          (h.last_sync_at ? ` (последний раз ${new Date(h.last_sync_at).toLocaleString("ru-RU")})` : "") +
+          ". Изменения здесь заменятся при следующей синхронизации.";
+      }
       serverDown(false);
       const hal = h.hal_mode === "emulator"
         ? (h.monitor_mode === "real" ? "коммутаторы: линки по SNMP, управление эмулируется" : "коммутаторы: эмулятор")

@@ -16,6 +16,8 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import com.itmanager.app.core.nfc.DeepLink
+import com.itmanager.app.core.nfc.DeepLinkInbox
 import com.itmanager.app.core.nfc.NfcController
 import com.itmanager.app.core.security.AppLock
 import com.itmanager.app.core.security.LockState
@@ -34,6 +36,7 @@ class MainActivity : FragmentActivity() {
     @Inject lateinit var nfc: NfcController
     @Inject lateinit var appLock: AppLock
     @Inject lateinit var vpn: FactoryVpn
+    @Inject lateinit var links: DeepLinkInbox
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // The app is dark-only, so system bar icons stay light regardless of the system theme.
@@ -58,6 +61,7 @@ class MainActivity : FragmentActivity() {
         // A tag that launched the app; not again after rotation.
         if (savedInstanceState == null) {
             handleNfcIntent(intent)
+            handleLink(intent)
             if (vpn.onCallback(intent?.data) == VpnResult.LEFT) moveTaskToBack(true)
         }
 
@@ -74,7 +78,10 @@ class MainActivity : FragmentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         when (vpn.onCallback(intent.data)) {
-            null -> handleNfcIntent(intent)
+            null -> {
+                handleNfcIntent(intent)
+                handleLink(intent)
+            }
             VpnResult.LEFT -> moveTaskToBack(true)
             else -> Unit
         }
@@ -105,6 +112,12 @@ class MainActivity : FragmentActivity() {
     override fun onPause() {
         super.onPause()
         NfcAdapter.getDefaultAdapter(this)?.disableReaderMode(this)
+    }
+
+    /** A label or connection code opened from the camera; the app takes it once it is unlocked. */
+    private fun handleLink(intent: Intent?) {
+        if (intent?.action != Intent.ACTION_VIEW) return
+        DeepLink.parse(intent.dataString)?.let(links::offer)
     }
 
     private fun handleNfcIntent(intent: Intent?) {

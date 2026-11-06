@@ -164,6 +164,13 @@ class Settings(BaseSettings):
     # A second NetAdmin server to turn to while this one is down, http(s)://host:port. The web console offers it
     # when this server stops answering; the app keeps its own copy with that server's token.
     backup_server_url: str = Field(default="", pattern=r"^(|https?://[^\s/]+(:\d+)?/?)$")
+    # The backup server's API token, for sending it this database.
+    backup_server_token: str = ""
+    # This server sends its database to the backup one every sync_interval_minutes.
+    sync_to_backup: bool = False
+    sync_interval_minutes: int = Field(default=15, ge=1, le=1440)
+    # This server is the backup: it takes the main server's database over its own (its settings stay).
+    sync_accept: bool = False
 
     @field_validator("api_token")
     @classmethod
