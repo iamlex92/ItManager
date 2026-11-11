@@ -191,6 +191,33 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    /** The same code for the backup server: fills its address and token and checks that it answers. */
+    fun applyScannedBackup(text: String) {
+        val qr = ConnectQr.parse(text)
+        if (qr == null) {
+            _state.update { it.copy(backupCheck = ConnectionCheck.Failed("Это не код подключения NetAdmin. Его показывает netadmin-agent info на резервном сервере.")) }
+            return
+        }
+        viewModelScope.launch {
+            _state.update {
+                it.copy(backupUrl = qr.urls.first(), backupToken = qr.token, backupError = null, backupCheck = ConnectionCheck.Running)
+            }
+            var lastError: Throwable? = null
+            for (url in qr.urls) {
+                val result = runCatchingCancellable { api.health(url).toDomain() }
+                val health = result.getOrNull()
+                if (health != null) {
+                    _state.update { it.copy(backupUrl = url, backupCheck = ConnectionCheck.Ok(health)) }
+                    return@launch
+                }
+                lastError = result.exceptionOrNull()
+            }
+            _state.update {
+                it.copy(backupCheck = ConnectionCheck.Failed("Код прочитан, но сервер не отвечает: ${lastError?.toUserMessage().orEmpty().trimEnd('.')}."))
+            }
+        }
+    }
+
     /** The scanner could not start (no Google Play services, the module not downloaded yet). Cancel is not a failure. */
     fun scanFailed() = _state.update {
         it.copy(check = ConnectionCheck.Failed("Сканер QR-кодов недоступен: нужны сервисы Google Play и интернет при первом запуске. Введите адрес и токен вручную."))

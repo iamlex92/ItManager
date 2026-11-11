@@ -41,7 +41,15 @@ sealed interface AppNavigation {
 }
 
 /** The app works through the backup server; [readOnly]: it refuses changes. */
-data class BackupState(val readOnly: Boolean)
+data class BackupState(val readOnly: Boolean, val syncedAt: String? = null)
+
+/** "14:05" for the ISO time the server reports, or null when it is missing or unreadable. */
+internal fun syncClock(iso: String?): String? = iso?.let {
+    runCatching {
+        java.time.OffsetDateTime.parse(it).atZoneSameInstant(java.time.ZoneId.systemDefault())
+            .format(java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm"))
+    }.getOrNull()
+}
 
 /** An alert that just arrived, with the device name resolved for the banner. */
 data class AlertNotice(val alert: Alert, val deviceName: String?)
@@ -62,7 +70,7 @@ class AppViewModel @Inject constructor(
      * because what is changed there is replaced by the next copy from the main server.
      */
     val backup: StateFlow<BackupState?> = combine(repository.usingBackup, repository.backupHealth) { on, health ->
-        if (on) BackupState(readOnly = health?.readOnly == true) else null
+        if (on) BackupState(readOnly = health?.readOnly == true, syncedAt = syncClock(health?.lastSyncAt)) else null
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /** A question waiting for the user: send a change to a backup server that takes them? */

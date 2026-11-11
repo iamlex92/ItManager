@@ -348,12 +348,39 @@ fun SettingsScreen(
                 enabled = state.backupUrl.isNotBlank() && state.backupCheck != ConnectionCheck.Running,
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Проверить резервный сервер") }
+            OutlinedButton(
+                onClick = {
+                    val options = GmsBarcodeScannerOptions.Builder()
+                        .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+                        .enableAutoZoom()
+                        .build()
+                    GmsBarcodeScanning.getClient(context, options).startScan()
+                        .addOnSuccessListener { code ->
+                            haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+                            viewModel.applyScannedBackup(code.rawValue.orEmpty())
+                        }
+                        .addOnFailureListener { viewModel.scanFailed() }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Outlined.QrCodeScanner, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Сканировать QR резервного сервера")
+            }
             if (state.backupCheck != ConnectionCheck.Idle) {
                 Spacer(Modifier.height(12.dp))
                 ConnectionCheckResult(state.backupCheck)
             }
 
             Spacer(Modifier.height(24.dp))
+            if (state.hasChanges && (state.check is ConnectionCheck.Ok || state.backupCheck is ConnectionCheck.Ok)) {
+                Text(
+                    "Соединение проверено, но настройки ещё не сохранены: нажмите «Сохранить».",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+            }
             Button(
                 onClick = {
                     if (viewModel.save()) {

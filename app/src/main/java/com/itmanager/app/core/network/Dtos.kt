@@ -48,10 +48,11 @@ data class HealthDto(
     @SerialName("monitor_mode") val monitorMode: String? = null,
     @SerialName("read_only") val readOnly: Boolean = false,
     @SerialName("sync_role") val syncRole: String = "",
+    @SerialName("last_sync_at") val lastSyncAt: String? = null,
 ) {
     fun toDomain() = ServerHealth(
         status, version, halMode, deviceWritesEnabled, secretsEncrypted, runbookMode, runbookWritesEnabled,
-        monitorMode, readOnly, syncRole,
+        monitorMode, readOnly, syncRole, lastSyncAt,
     )
 }
 
