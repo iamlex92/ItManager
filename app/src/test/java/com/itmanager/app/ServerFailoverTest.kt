@@ -63,13 +63,15 @@ class ServerFailoverTest {
     fun tryMainNowSkipsTheMinuteOnTheBackup() = runBlocking {
         now = 1_700_000_000_000L
         val asked = mutableListOf<String>()
+        var mainUp = false
         val call: suspend (ServerSettings) -> String = { s ->
             asked += s.baseUrl
-            if (s.baseUrl == "http://main:8000" && asked.size == 1) throw ConnectException("refused")
+            if (s.baseUrl == "http://main:8000" && !mainUp) throw ConnectException("refused")
             s.apiToken
         }
         failover.run(settings, call)
         assertTrue(failover.onBackup.value)
+        mainUp = true
         asked.clear()
         failover.tryMainNow()
         failover.run(settings, call)
