@@ -192,7 +192,8 @@ fun AppRoot(appViewModel: AppViewModel = hiltViewModel()) {
                         .padding(bottom = padding.calculateBottomPadding() + 8.dp),
                 ) {
                     Text(
-                        if (state.readOnly) "Резервный сервер · только чтение" else "Резервный сервер · правки пропадут",
+                        (if (state.readOnly) "Резервный сервер · только чтение" else "Резервный сервер · правки пропадут") +
+                            (state.syncedAt?.let { " · база от $it" } ?: ""),
                         style = MaterialTheme.typography.labelMedium,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                     )

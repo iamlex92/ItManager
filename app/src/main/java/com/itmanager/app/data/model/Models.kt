@@ -522,6 +522,8 @@ data class ServerHealth(
     val readOnly: Boolean = false,
     /** "main", "backup" or "". */
     val syncRole: String = "",
+    /** When the backup server last took the main server's database (ISO time), or null. */
+    val lastSyncAt: String? = null,
 )
 
 fun parseColorHex(hex: String?, fallback: Long = 0xFF3498DB): Long {
