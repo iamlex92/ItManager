@@ -86,7 +86,7 @@ def test_refresh_status_in_the_emulator(client):
 
 
 def _refresh(client) -> dict:
-    """«Обновить» as the clients do it: start, and read the job until it is done (a slow SNMP read outlasts the wait)."""
+    """«Обновить» as the clients do it: start, and read the job until done (a slow SNMP read outlasts the wait)."""
     import time
 
     r = client.post(f"{API}/devices/refresh-status").json()

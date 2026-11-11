@@ -100,6 +100,15 @@ ConvertTo-Json -InputObject $rows -Compress -Depth 3
 """
 )
 
+# What the sessions of the computer are, as its own qwinsta prints them; parsed on the server (pcs/shadow.py).
+QWINSTA = (
+    _PRELUDE
+    + r"""
+$out = (& qwinsta.exe 2>&1 | Out-String)
+@{ raw = $out } | ConvertTo-Json -Compress
+"""
+)
+
 PROCESSES = (
     _PRELUDE
     + r"""

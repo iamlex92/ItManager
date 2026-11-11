@@ -12,6 +12,7 @@ enum class PcAction(
     val changes: Boolean = false,
     val confirm: Boolean = false,
     val astraOnly: Boolean = false,
+    val windowsOnly: Boolean = false,
 ) {
     INFO("info", "Сведения"),
     DISKS("disks", "Свободное место"),
@@ -24,6 +25,8 @@ enum class PcAction(
     COMMAND("command", "Команда", changes = true, confirm = true),
     /** Windows: the msra command to run on the helper's computer; Astra: x11vnc on the user's screen. */
     ASSIST("assist", "Удалённая помощь"),
+    /** Windows: the sessions of the computer and the ready «mstsc /shadow» command (RDP shadowing). */
+    SHADOW("shadow", "Подключиться напрямую", windowsOnly = true),
     UPDATE("update", "Обновить пакеты", changes = true, confirm = true, astraOnly = true),
     ADMIN_ADD("admin_add", "Выдать sudo", changes = true, confirm = true, astraOnly = true),
     ADMIN_REMOVE("admin_remove", "Снять sudo", changes = true, confirm = true, astraOnly = true),
@@ -111,6 +114,36 @@ data class PcFolder(val name: String, val sizeGb: Double)
 
 data class PcProcess(val id: Int, val name: String, val ramMb: Double)
 
+/** One user session of a Windows computer, as its qwinsta lists it. */
+data class ShadowSession(
+    val id: Int,
+    val name: String,
+    val user: String,
+    val state: String,
+    val active: Boolean,
+    /** A user is logged on and the session is not disconnected: one that can be shadowed. */
+    val shadowable: Boolean,
+)
+
+/**
+ * RDP shadowing: [command] is run on the helper's own Windows computer; [commands] has one for every session that can
+ * be shadowed (by id). Null [command]: nobody is logged on, [message] says so.
+ */
+data class ShadowInfo(
+    val host: String,
+    val sessions: List<ShadowSession>,
+    val sessionId: Int?,
+    val user: String?,
+    val command: String?,
+    val commandView: String?,
+    val commands: Map<String, String>,
+    val needs: List<String>,
+    val message: String?,
+) {
+    /** The command for [id] without taking the mouse, from the one with control. */
+    fun viewOf(command: String) = command.replace(" /control", "")
+}
+
 /** What an action brought back, by kind. */
 sealed interface PcOutcome {
     data class Info(val info: PcInfo) : PcOutcome
@@ -121,6 +154,7 @@ sealed interface PcOutcome {
     data class Stopped(val name: String, val count: Int) : PcOutcome
     data class Text(val text: String) : PcOutcome
     data class Assist(val help: RemoteHelp) : PcOutcome
+    data class Shadow(val shadow: ShadowInfo) : PcOutcome
 }
 
 data class PcResult(

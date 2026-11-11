@@ -2,6 +2,8 @@ package com.itmanager.app.core.network
 
 import com.itmanager.app.data.model.OneCLicence
 import com.itmanager.app.data.model.PcAction
+import com.itmanager.app.data.model.ShadowSession
+import com.itmanager.app.data.model.ShadowInfo
 import com.itmanager.app.data.model.PcDisk
 import com.itmanager.app.data.model.PcFolder
 import com.itmanager.app.data.model.PcInfo
@@ -106,6 +108,35 @@ data class RemoteHelpDto(
 }
 
 @Serializable
+data class ShadowSessionDto(
+    val id: Int = 0,
+    val name: String = "",
+    val user: String = "",
+    val state: String = "",
+    val active: Boolean = false,
+    val shadowable: Boolean = false,
+)
+
+@Serializable
+data class ShadowDto(
+    val host: String = "",
+    val sessions: List<ShadowSessionDto> = emptyList(),
+    @SerialName("session_id") val sessionId: Int? = null,
+    val user: String? = null,
+    val command: String? = null,
+    @SerialName("command_view") val commandView: String? = null,
+    val commands: Map<String, String> = emptyMap(),
+    val needs: List<String> = emptyList(),
+    val message: String? = null,
+) {
+    fun toDomain() = ShadowInfo(
+        host,
+        sessions.map { ShadowSession(it.id, it.name, it.user, it.state, it.active, it.shadowable) },
+        sessionId, user, command, commandView, commands, needs, message,
+    )
+}
+
+@Serializable
 data class PcDiskDto(
     val drive: String = "",
     val label: String? = null,
@@ -152,6 +183,7 @@ data class PcActionDto(
                     PcOutcome.Stopped(k.name, k.stopped)
                 }
                 PcAction.ASSIST -> PcOutcome.Assist(pcJson.decodeFromJsonElement<RemoteHelpDto>(d).toDomain())
+                PcAction.SHADOW -> PcOutcome.Shadow(pcJson.decodeFromJsonElement<ShadowDto>(d).toDomain())
                 else -> PcOutcome.Text((d as? JsonObject)?.let { pcJson.decodeFromJsonElement<TextDto>(it).output }.orEmpty())
             }
         }

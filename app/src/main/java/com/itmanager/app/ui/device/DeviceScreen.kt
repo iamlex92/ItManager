@@ -39,6 +39,7 @@ import androidx.compose.material.icons.outlined.Lan
 import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Computer
+import androidx.compose.material.icons.outlined.DesktopWindows
 import androidx.compose.material.icons.outlined.ScreenShare
 import androidx.compose.material.icons.outlined.NetworkPing
 import androidx.compose.material.icons.outlined.Nfc
@@ -139,6 +140,8 @@ fun DeviceScreen(
     onOpenVlans: () -> Unit,
     /** The computer's page with remote help started at once. */
     onAssistPc: (String) -> Unit = {},
+    /** The computer's page with RDP shadowing started: the sessions looked up, the mstsc command ready. */
+    onShadowPc: (String) -> Unit = {},
     viewModel: DeviceViewModel = hiltViewModel(),
     peripherals: PeripheralsViewModel = hiltViewModel(),
     rackViewModel: RackViewModel = hiltViewModel(),
@@ -217,6 +220,7 @@ fun DeviceScreen(
                             onPing = d.device.ip?.let { ip -> { onOpenTool("ping", ip) } },
                             onManagePc = { onOpenPc(d.device.name) }.takeIf { d.device.type in PC_TYPES },
                             onAssistPc = { onAssistPc(d.device.name) }.takeIf { d.device.type in PC_TYPES },
+                            onShadowPc = { onShadowPc(d.device.name) }.takeIf { d.device.type in PC_TYPES },
                             onNfc = viewModel::bindNfc,
                         )
                         if (tabs.size > 1) {
@@ -382,6 +386,7 @@ private fun StatusHeader(
     onPing: (() -> Unit)?,
     onManagePc: (() -> Unit)?,
     onAssistPc: (() -> Unit)?,
+    onShadowPc: (() -> Unit)? = null,
     onNfc: () -> Unit,
 ) {
     Column(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
@@ -418,6 +423,7 @@ private fun StatusHeader(
             if (onPing != null) ActionChip(Icons.Outlined.NetworkPing, "Ping", onPing)
             if (onManagePc != null) ActionChip(Icons.Outlined.Computer, "Управление ПК", onManagePc)
             if (onAssistPc != null) ActionChip(Icons.Outlined.ScreenShare, "Удалённая помощь", onAssistPc)
+            if (onShadowPc != null) ActionChip(Icons.Outlined.DesktopWindows, "Подключиться напрямую", onShadowPc)
             ActionChip(Icons.Outlined.Nfc, "NFC-метка", onNfc)
         }
     }

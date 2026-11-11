@@ -3965,6 +3965,8 @@
     // A Windows computer: the domain admin's tools (disks, processes, licences, reboot) are one click away.
     $("card-pc").hidden = !PC_KINDS.has(d.type);
     $("card-assist").hidden = !PC_KINDS.has(d.type);
+    // RDP shadowing is for Windows computers; the server says so if the one chosen is an Astra Linux one.
+    $("card-shadow").hidden = !PC_KINDS.has(d.type);
   }
 
   function kv(rows) {
@@ -4172,6 +4174,12 @@
     if (!d) return;
     $("card-dialog").close();
     window.NetAdmin.assistPc(d.name || d.ip);
+  });
+  $("card-shadow").addEventListener("click", () => {
+    const d = cardDevice();
+    if (!d) return;
+    $("card-dialog").close();
+    window.NetAdmin.shadowPc(d.name || d.ip);
   });
   $("card-ping").addEventListener("click", async () => {
     const d = cardDevice();
