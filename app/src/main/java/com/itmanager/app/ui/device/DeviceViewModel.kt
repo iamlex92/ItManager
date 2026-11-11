@@ -8,6 +8,7 @@ import com.itmanager.app.core.network.toUserMessage
 import com.itmanager.app.core.nfc.NfcController
 import com.itmanager.app.data.model.Alert
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.MergePreview
 import com.itmanager.app.data.model.PortPath
 import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.DeviceType
@@ -222,6 +223,29 @@ class DeviceViewModel @Inject constructor(
             .onFailure { e -> _form.update { it?.copy(error = e.toUserMessage()) } }
     }
 
+    /** The merge being asked about: what it would do, then the user's yes or no. */
+    private val _mergeAsk = MutableStateFlow<MergeAsk?>(null)
+    val mergeAsk: StateFlow<MergeAsk?> = _mergeAsk.asStateFlow()
+
+    fun askMerge(source: Device) {
+        _mergeAsk.value = MergeAsk(source)
+        viewModelScope.launch {
+            repository.previewMerge(deviceId, source.id)
+                .onSuccess { p -> _mergeAsk.update { it?.takeIf { a -> a.source.id == source.id }?.copy(preview = p, loading = false) } }
+                .onFailure { e -> _mergeAsk.update { it?.takeIf { a -> a.source.id == source.id }?.copy(error = e.toUserMessage(), loading = false) } }
+        }
+    }
+
+    fun cancelMerge() {
+        _mergeAsk.value = null
+    }
+
+    fun confirmMerge() {
+        val ask = _mergeAsk.value ?: return
+        _mergeAsk.value = null
+        merge(ask.source)
+    }
+
     /** [source] is this same device entered twice: its ports, cables, history and addresses move here, it is removed. */
     fun merge(source: Device) = write {
         repository.mergeDevice(deviceId, source.id)
@@ -291,6 +315,14 @@ class DeviceViewModel @Inject constructor(
 val DeviceType.hasPorts: Boolean
     get() = this == DeviceType.SWITCH || this == DeviceType.ROUTER || this == DeviceType.FIREWALL ||
         this == DeviceType.PATCH_PANEL || this == DeviceType.SOCKET
+
+/** A merge waiting for the user's answer: [preview] says what it would do. */
+data class MergeAsk(
+    val source: Device,
+    val preview: MergePreview? = null,
+    val loading: Boolean = true,
+    val error: String? = null,
+)
 
 /** One port's line, loading or loaded. */
 data class PortPathState(

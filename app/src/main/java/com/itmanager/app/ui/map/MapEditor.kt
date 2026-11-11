@@ -424,6 +424,9 @@ fun DeviceFormDialog(
     val badExtraIp = splitIps(extraIps).firstOrNull { !IPV4.matches(it) }
     val macError = mac.isNotBlank() && !isMac(mac)
     var triedSave by rememberSaveable(key) { mutableStateOf(false) }
+    // The server said the address is taken (ip_in_use): pressing Save again saves it anyway.
+    var allowDuplicateIp by rememberSaveable(key) { mutableStateOf(false) }
+    LaunchedEffect(form.error) { if (form.error?.startsWith("Адрес ") == true && form.error.contains("уже занят")) allowDuplicateIp = true }
     val nameError = triedSave && name.isBlank()
 
     FormSheet(
@@ -450,6 +453,7 @@ fun DeviceFormDialog(
                     sshCredentialId = sshLogin.takeIf { type == DeviceType.SWITCH },
                     snmpCommunity = snmpCommunity.trim().takeIf { it.isNotEmpty() && type in SNMP_TYPES },
                     extraIps = if (type in PASSIVE_FORM_TYPES) emptyList() else splitIps(extraIps),
+                    allowDuplicateIp = allowDuplicateIp,
                 ),
             )
         },

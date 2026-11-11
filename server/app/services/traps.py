@@ -11,7 +11,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from pyasn1.codec.ber import decoder
-from sqlalchemy import select
+from sqlalchemy import cast, or_, select
+from sqlalchemy.dialects.postgresql import ARRAY, INET
+from sqlalchemy.dialects.postgresql import array as pg_array
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
@@ -114,7 +116,11 @@ async def handle_trap(
         ips = {source_ip} | ({trap.agent_address} if trap.agent_address else set())
         device = await session.scalar(
             select(Device)
-            .where(Device.device_type == "SWITCH", Device.ip_address.in_(list(ips)))
+            .where(
+                Device.device_type == "SWITCH",
+                # A trap may come from any of the switch's addresses, a management or loopback one included.
+                or_(Device.ip_address.in_(list(ips)), Device.extra_ips.overlap(cast(pg_array(list(ips)), ARRAY(INET)))),
+            )
             .options(selectinload(Device.ports))
             .limit(1)
         )

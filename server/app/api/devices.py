@@ -1,11 +1,14 @@
+import contextlib
 import difflib
 import hashlib
 import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from sqlalchemy import String, cast, delete, func, or_, select, update
+from sqlalchemy.dialects.postgresql import ARRAY, INET
+from sqlalchemy.dialects.postgresql import array as pg_array
 from sqlalchemy.exc import IntegrityError
 
 from ..models import Connection, Device, DeviceAlert, DeviceConfig, DeviceFaceplate, Floor, Peripheral, Port
@@ -24,6 +27,7 @@ from ..schemas import (
     DeviceType,
     DeviceUpdate,
     DiagOut,
+    MergePreviewOut,
     PingRequest,
     PortOut,
     StatusRefreshOut,
@@ -35,7 +39,7 @@ from ..services import status as device_status
 from ..services.serialize import device_out, port_out
 from ..services.topology import load_graph
 from .deps import DriverDep, HubDep, SessionDep, SettingsDep, conflict, not_found
-from .guarded import audit, require_confirmation, require_managed_switch
+from .guarded import AuditRecord, audit, require_confirmation, require_managed_switch
 
 router = APIRouter(prefix="/devices", tags=["devices"])
 
@@ -59,6 +63,10 @@ def _apply(device: Device, data: dict[str, Any]) -> None:
     _tidy_ips(device)
 
 
+def _addresses_of(device: Device) -> set[str]:
+    return {str(ip) for ip in [device.ip_address, *(device.extra_ips or [])] if ip is not None}
+
+
 def _tidy_ips(device: Device) -> None:
     """The extra addresses without repeats and without the main one; with no main address the first extra takes
     its place."""
@@ -77,6 +85,33 @@ async def _commit_device(session, device: Device) -> None:
     except IntegrityError as e:
         await session.rollback()
         raise conflict("integrity_error", "NFC tag already bound to another device or bad floor_id") from e
+
+
+async def _check_ip_free(session, wanted: set[str], own: uuid.UUID | None) -> None:
+    """An address another device already has (as its main or an extra one): 409 ip_in_use naming them, so the form
+    can ask «save anyway?» instead of the conflict showing up later in «IP-адреса»."""
+    if not wanted:
+        return
+    stmt = select(Device).where(
+        or_(Device.ip_address.in_(list(wanted)), Device.extra_ips.overlap(cast(pg_array(list(wanted)), ARRAY(INET))))
+    )
+    if own is not None:
+        stmt = stmt.where(Device.id != own)
+    others = (await session.scalars(stmt.limit(10))).all()
+    if not others:
+        return
+    held = sorted(
+        {str(ip) for d in others for ip in [d.ip_address, *(d.extra_ips or [])] if ip is not None and str(ip) in wanted}
+    )
+    names = ", ".join(f"{d.name}" for d in others)
+    raise HTTPException(
+        409,
+        detail={
+            "code": "ip_in_use",
+            "message": f"Адрес {', '.join(held)} уже занят: {names}. Нажмите «Сохранить» ещё раз, если так и задумано",
+            "devices": [{"id": str(d.id), "name": d.name} for d in others],
+        },
+    )
 
 
 async def _check_host(session, host_id: uuid.UUID | None, own: set[uuid.UUID]) -> None:
@@ -149,9 +184,12 @@ async def _get(session, device_id: uuid.UUID) -> Device:
 @router.get("", response_model=list[DeviceOut])
 async def list_devices(
     session: SessionDep,
+    response: Response,
     floor_id: uuid.UUID | None = None,
     type: DeviceType | None = None,
     q: str | None = Query(default=None, description="Substring of name, IP or MAC"),
+    limit: int | None = Query(default=None, ge=1, le=5000, description="Page size; without it every device"),
+    offset: int = Query(default=0, ge=0),
 ):
     stmt = select(Device).order_by(Device.device_type, Device.name)
     if floor_id:
@@ -160,8 +198,12 @@ async def list_devices(
         stmt = stmt.where(Device.device_type == type)
     if q:
         stmt = stmt.where(_search_clause(q))
+    total = await session.scalar(select(func.count()).select_from(stmt.order_by(None).subquery()))
+    if limit is not None:
+        stmt = stmt.limit(limit).offset(offset)
     devices = (await session.scalars(stmt)).all()
-    graph = await load_graph(session)
+    graph = await load_graph(session, cached=True)
+    response.headers["X-Total-Count"] = str(total or 0)
     return [device_out(d, graph) for d in devices]
 
 
@@ -180,7 +222,9 @@ def _search_clause(q: str):
 async def create_device(body: DeviceCreate, session: SessionDep):
     await _check_host(session, body.host_id, set())
     device = Device()
-    _apply(device, body.model_dump())
+    _apply(device, body.model_dump(exclude={"allow_duplicate_ip"}))
+    if not body.allow_duplicate_ip:
+        await _check_ip_free(session, _addresses_of(device), None)
     await _check_rack(session, device)
     session.add(device)
     await _commit_device(session, device)
@@ -221,6 +265,15 @@ async def refresh_status(request: Request):
     return await device_status.refresh_now(request.app.state)
 
 
+@router.get("/refresh-status/{job_id}", response_model=StatusRefreshOut)
+async def refresh_status_job(job_id: str, request: Request):
+    """The round started by `POST /devices/refresh-status`: «running» with its progress, then «done» with the result."""
+    job = device_status.get(request.app.state, job_id)
+    if job is None:
+        raise not_found("refresh job")
+    return job
+
+
 @router.get("/by-nfc/{uid}", response_model=DeviceOut)
 async def get_device_by_nfc(uid: str, session: SessionDep):
     try:
@@ -236,14 +289,18 @@ async def get_device_by_nfc(uid: str, session: SessionDep):
 @router.get("/{device_id}", response_model=DeviceOut)
 async def get_device(device_id: uuid.UUID, session: SessionDep):
     device = await _get(session, device_id)
-    return device_out(device, await load_graph(session))
+    return device_out(device, await load_graph(session, cached=True))
 
 
 @router.patch("/{device_id}", response_model=DeviceOut)
 async def update_device(device_id: uuid.UUID, body: DeviceUpdate, session: SessionDep):
     device = await _get(session, device_id)
     await _check_host(session, body.host_id, {device_id})
-    _apply(device, body.model_dump(exclude_unset=True))
+    had = _addresses_of(device)
+    _apply(device, body.model_dump(exclude_unset=True, exclude={"allow_duplicate_ip"}))
+    if not body.allow_duplicate_ip:
+        # Only addresses this edit adds: an old duplicate must not block an unrelated change.
+        await _check_ip_free(session, _addresses_of(device) - had, device_id)
     await _check_rack(session, device)
     await _commit_device(session, device)
     await session.refresh(device)
@@ -269,8 +326,26 @@ _MERGE_FILL = (
 )
 
 
-@router.post("/{device_id}/merge", response_model=DeviceOut)
-async def merge_device(device_id: uuid.UUID, body: DeviceMerge, request: Request, session: SessionDep):
+async def _check_rack_members(session, keep_rack: uuid.UUID, src_rack: uuid.UUID) -> None:
+    """Two cabinets become one: their devices must not take the same units."""
+    rows = (await session.scalars(select(Device).where(Device.rack_id.in_([keep_rack, src_rack])))).all()
+    spans = [(d.rack_u or 1, (d.rack_u or 1) + (d.rack_h or 1) - 1, d) for d in rows]
+    for i, (a0, a1, a) in enumerate(spans):
+        for b0, b1, b in spans[i + 1 :]:
+            if a.rack_id != b.rack_id and a0 <= b1 and b0 <= a1:
+                raise conflict(
+                    "rack_unit_busy", f"Юниты {max(a0, b0)}–{min(a1, b1)} заняты и там, и там: {a.name}, {b.name}"
+                )
+
+
+@router.post("/{device_id}/merge", response_model=DeviceOut | MergePreviewOut)
+async def merge_device(
+    device_id: uuid.UUID,
+    body: DeviceMerge,
+    request: Request,
+    session: SessionDep,
+    dry_run: bool = Query(default=False, description="Only say what would happen; change nothing"),
+):
     """One device entered twice (each address found as its own host, say): [source_id] is folded into this one.
     Its ports with their cables, config backups, events and accessories move here, its addresses become this
     device's extra ones, empty fields here are filled from it, and it is removed. Inventory only."""
@@ -280,7 +355,7 @@ async def merge_device(device_id: uuid.UUID, body: DeviceMerge, request: Request
         )
     keep = await _get(session, device_id)
     src = await _get(session, body.source_id)
-    if body.confirm is not True:
+    if body.confirm is not True and not dry_run:
         raise HTTPException(
             400,
             detail={
@@ -293,26 +368,71 @@ async def merge_device(device_id: uuid.UUID, body: DeviceMerge, request: Request
         raise HTTPException(
             422, detail={"code": "bad_merge", "message": "Стойку можно объединить только с другой стойкой"}
         )
-    moved = {"ports": 0, "cables_dropped": 0}
-    async with audit(
-        session,
-        request,
-        request.app.state.settings,
-        "device:merge",
-        {"kept": keep.name, "kept_id": str(keep.id), "merged": src.name, "merged_id": str(src.id)},
-    ) as rec:
+    moved = {
+        "ports": 0,
+        "cables_moved": 0,
+        "cables_dropped": 0,
+        "configs": 0,
+        "alerts": 0,
+        "peripherals": 0,
+        "faceplate_moved": False,
+        "guests": 0,
+        "rack_members": 0,
+    }
+    filled: list[str] = []
+    keep_name, src_name = keep.name, src.name
+    before_ips = {str(ip) for ip in [keep.ip_address, *(keep.extra_ips or [])] if ip is not None}
+    graph = await load_graph(session)
+    # The merged record as it was, in the journal: the only way back is putting it in again by hand.
+    snapshot = {
+        "device": device_out(src, graph).model_dump(mode="json"),
+        "ports": [
+            {
+                "number": p.port_number,
+                "name": p.port_name,
+                "mode": p.mode,
+                "access_vlan": p.access_vlan,
+                "tagged_vlans": list(p.tagged_vlans or []),
+                "is_uplink": p.is_uplink,
+                "connected_to": graph.connected_device_name(p.id),
+            }
+            for p in graph.ports.values()
+            if p.device_id == src.id
+        ],
+    }
+    guard = (
+        contextlib.nullcontext(AuditRecord())
+        if dry_run
+        else audit(
+            session,
+            request,
+            request.app.state.settings,
+            "device:merge",
+            {
+                "kept": keep.name,
+                "kept_id": str(keep.id),
+                "merged": src.name,
+                "merged_id": str(src.id),
+                "merged_snapshot": snapshot,
+            },
+        )
+    )
+    async with guard as rec:
         # Fields: what the kept device has stays, gaps are filled from the merged one.
         for attr in _MERGE_FILL:
             if getattr(keep, attr) in (None, "") and getattr(src, attr) not in (None, ""):
                 setattr(keep, attr, getattr(src, attr))
+                filled.append(attr)
         if keep.host_id == keep.id:
             keep.host_id = None
         if keep.comment and src.comment and src.comment not in keep.comment:
             keep.comment = (keep.comment + "\n" + src.comment)[:4000]
         if keep.floor_id is None and src.floor_id is not None:
             keep.floor_id, keep.pos_x, keep.pos_y = src.floor_id, src.pos_x, src.pos_y
+            filled.append("floor")
         if keep.rack_id is None and src.rack_id is not None and src.rack_id != keep.id:
             keep.rack_id, keep.rack_u, keep.rack_h = src.rack_id, src.rack_u, src.rack_h
+            filled.append("rack")
         keep.metadata_ = {**(src.metadata_ or {}), **(keep.metadata_ or {})}
         keep.is_online = keep.is_online or src.is_online
         if src.last_seen_at and (keep.last_seen_at is None or src.last_seen_at > keep.last_seen_at):
@@ -348,6 +468,15 @@ async def merge_device(device_id: uuid.UUID, body: DeviceMerge, request: Request
                 )
             )
             moved["cables_dropped"] = dropped.rowcount
+        if src_ids:
+            moved["cables_moved"] = (
+                await session.scalar(
+                    select(func.count())
+                    .select_from(Connection)
+                    .where(or_(Connection.port_a_id.in_(src_ids), Connection.port_b_id.in_(src_ids)))
+                )
+                or 0
+            )
         for p in src_ports:
             number = p.port_number
             if number in numbers:
@@ -361,22 +490,61 @@ async def merge_device(device_id: uuid.UUID, body: DeviceMerge, request: Request
                 update(Port).where(Port.id == p.id).values(device_id=keep.id, port_number=number, port_name=name)
             )
             moved["ports"] += 1
-        await session.execute(update(DeviceConfig).where(DeviceConfig.device_id == src.id).values(device_id=keep.id))
-        await session.execute(update(DeviceAlert).where(DeviceAlert.device_id == src.id).values(device_id=keep.id))
-        await session.execute(update(Peripheral).where(Peripheral.device_id == src.id).values(device_id=keep.id))
-        if await session.get(DeviceFaceplate, keep.id) is None:
+        moved["configs"] = (
             await session.execute(
-                update(DeviceFaceplate).where(DeviceFaceplate.device_id == src.id).values(device_id=keep.id)
+                update(DeviceConfig).where(DeviceConfig.device_id == src.id).values(device_id=keep.id)
             )
+        ).rowcount
+        moved["alerts"] = (
+            await session.execute(update(DeviceAlert).where(DeviceAlert.device_id == src.id).values(device_id=keep.id))
+        ).rowcount
+        moved["peripherals"] = (
+            await session.execute(update(Peripheral).where(Peripheral.device_id == src.id).values(device_id=keep.id))
+        ).rowcount
+        if await session.get(DeviceFaceplate, keep.id) is None:
+            moved["faceplate_moved"] = (
+                await session.execute(
+                    update(DeviceFaceplate).where(DeviceFaceplate.device_id == src.id).values(device_id=keep.id)
+                )
+            ).rowcount > 0
+        # Two racks: their devices must not take the same units.
+        if keep.device_type == "RACK":
+            await _check_rack_members(session, keep.id, src.id)
         # Virtual machines on it and devices in it (when it is a rack) now belong to the kept one.
-        await session.execute(
-            update(Device).where(Device.host_id == src.id, Device.id != keep.id).values(host_id=keep.id)
-        )
-        await session.execute(
-            update(Device).where(Device.rack_id == src.id, Device.id != keep.id).values(rack_id=keep.id)
-        )
+        moved["guests"] = (
+            await session.execute(
+                update(Device).where(Device.host_id == src.id, Device.id != keep.id).values(host_id=keep.id)
+            )
+        ).rowcount
+        moved["rack_members"] = (
+            await session.execute(
+                update(Device).where(Device.rack_id == src.id, Device.id != keep.id).values(rack_id=keep.id)
+            )
+        ).rowcount
         await session.execute(delete(Device).where(Device.id == src.id))
         session.expunge(src)
+        await session.flush()
+        if keep.device_type != "RACK":
+            # The place the kept device took from the merged one must be free.
+            await _check_rack(session, keep)
+        if dry_run:
+            added = [ip for ip in [str(i) for i in (keep.extra_ips or [])] if ip not in before_ips]
+            await session.rollback()
+            return MergePreviewOut(
+                keep_name=keep_name,
+                source_name=src_name,
+                ports=moved["ports"],
+                cables_moved=moved["cables_moved"],
+                cables_dropped=moved["cables_dropped"],
+                configs=moved["configs"],
+                alerts=moved["alerts"],
+                peripherals=moved["peripherals"],
+                faceplate_moved=moved["faceplate_moved"],
+                guests=moved["guests"],
+                rack_members=moved["rack_members"],
+                extra_ips_added=added,
+                filled_fields=filled,
+            )
         try:
             await session.commit()
         except IntegrityError as e:

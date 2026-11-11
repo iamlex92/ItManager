@@ -98,6 +98,13 @@ class NetAdminApi @Inject constructor(
     /** Folds [body]'s device into [id]: ports, cables, history and addresses move, the other one is removed. */
     suspend fun mergeDevice(s: ServerSettings, id: String, body: MergeBody): DeviceDto = post(s, "devices/$id/merge", body)
 
+    /** The round started by [refreshStatus], while it is «running» and when it is done. */
+    suspend fun refreshJob(s: ServerSettings, id: String): StatusRefreshDto = fetch(s, "devices/refresh-status/$id")
+
+    /** What [mergeDevice] would do: counts of what moves; nothing is changed. */
+    suspend fun previewMerge(s: ServerSettings, id: String, body: MergeBody): MergePreviewDto =
+        post(s, "devices/$id/merge?dry_run=true", body)
+
     /** Checks every device now (switch ports, then ping) instead of waiting for the next poll. Read-only. */
     suspend fun refreshStatus(s: ServerSettings): StatusRefreshDto = post(s, "devices/refresh-status", JsonObject(emptyMap()))
 
@@ -474,7 +481,7 @@ class NetAdminApi @Inject constructor(
             "wrong_port", "port_busy", "invalid_request", "invalid_subnet", "unknown_host", "no_login", "no_ad",
             "ad_failed", "pc_failed", "writes_disabled",
             "no_switch_login", "switch_unreachable", "switch_login_failed", "switch_timeout", "switch_closed",
-            "switch_rejected", "snmp_failed", "bad_setting", "cannot_restart", "gpo_failed", "not_found",
+            "switch_rejected", "snmp_failed", "bad_setting", "cannot_restart", "gpo_failed", "not_found", "backup_read_only", "ip_in_use", "rack_unit_busy",
         )
     }
 

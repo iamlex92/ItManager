@@ -56,6 +56,24 @@
           (st.pushed_at ? ` · ${st.push_rows} строк, ${Math.max(1, Math.round(st.push_bytes / 1024))} КБ` : ""));
         if (st.push_error) lines.push(`Ошибка: ${st.push_error}`);
       }
+      const extra = [];
+      if (st.role === "backup") {
+        const promote = el("button", { type: "button", className: "danger", textContent: "Сделать этот сервер основным",
+          title: "Основной сервер потерян: этот перестаёт принимать базу и разрешает изменения" });
+        promote.addEventListener("click", async () => {
+          if (!confirm("Этот сервер перестанет принимать базу с основного и разрешит изменения. Продолжить?")) return;
+          try { await api("POST", "sync/promote"); toast("Сервер стал основным. Перезапустите его, чтобы заработали опрос и ping"); load(); }
+          catch (e) { fail(e); }
+        });
+        const reset = el("button", { type: "button", textContent: "Принимать от другого сервера",
+          title: "Если основной сервер заменён: этот забудет прежний источник и примет пакет от нового" });
+        reset.addEventListener("click", async () => {
+          if (!confirm("Забыть прежний основной сервер? Следующий пакет от любого сервера будет принят.")) return;
+          try { draw(await api("POST", "sync/reset-source")); toast("Источник забыт"); } catch (e) { fail(e); }
+        });
+        extra.push(promote, reset);
+        if (st.source_id) lines.push(`Источник: ${st.source_id.slice(0, 8)}…`);
+      }
       const now = el("button", { type: "button", textContent: "Синхронизировать сейчас" });
       now.hidden = st.role === "backup" || !st.backup_server_url;
       now.title = "Отправить базу на резервный сервер сейчас; его данные заменятся этими";
@@ -65,7 +83,7 @@
         try { draw(await api("POST", "sync/push")); toast("База отправлена на резервный сервер"); }
         catch (e) { fail(e); api("GET", "sync").then(draw).catch(() => {}); }
       });
-      box.replaceChildren(...lines.map((t) => el("p", { className: t.startsWith("Ошибка") || t.startsWith("Последняя попытка") ? "error small" : "small", textContent: t })), now);
+      box.replaceChildren(...lines.map((t) => el("p", { className: t.startsWith("Ошибка") || t.startsWith("Последняя попытка") ? "error small" : "small", textContent: t })), now, ...extra);
     };
     api("GET", "sync").then(draw).catch((e) => box.replaceChildren(el("p", { className: "error small", textContent: e.message })));
     return box;

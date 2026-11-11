@@ -158,6 +158,9 @@ class Settings(BaseSettings):
     backup_dir: str = ""
     backup_interval_hours: float = Field(default=24, gt=0)
     backup_keep_days: int = Field(default=14, ge=1)
+    # How long the journal («Журнал») and closed events are kept; older ones are deleted once a day.
+    audit_keep_days: int = Field(default=365, ge=7, le=3650)
+    alerts_keep_days: int = Field(default=180, ge=7, le=3650)
     # Folder with pg_dump/pg_restore (and initdb/pg_ctl for the bundled database). Empty: search PATH.
     pg_bin_dir: str = ""
 
@@ -171,6 +174,8 @@ class Settings(BaseSettings):
     sync_interval_minutes: int = Field(default=15, ge=1, le=1440)
     # This server is the backup: it takes the main server's database over its own (its settings stay).
     sync_accept: bool = False
+    # The backup server refuses changes (409 backup_read_only): they would be overwritten by the next copy.
+    sync_read_only: bool = True
 
     @field_validator("api_token")
     @classmethod

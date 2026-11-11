@@ -1,5 +1,6 @@
 """Cable graph: tracing PC -> socket -> patch panel -> switch port chains."""
 
+import time
 import uuid
 from dataclasses import dataclass
 
@@ -127,11 +128,31 @@ class Graph:
         return sp.access_vlan
 
 
-async def load_graph(session: AsyncSession) -> Graph:
+# Reads (the device list, a card, the map's search, the topology) share one graph for a few seconds instead of loading
+# every device, port and cable again on each request. Writes drop it at once (see invalidate_graph); the time limit
+# covers changes made behind the API's back (polling, ping, a copy from the main server).
+GRAPH_TTL_SECONDS = 5.0
+_cached: tuple[float, Graph] | None = None
+
+
+def invalidate_graph() -> None:
+    global _cached
+    _cached = None
+
+
+async def load_graph(session: AsyncSession, cached: bool = False) -> Graph:
+    """The cable graph. [cached]: only for code that reads it; a caller that changes the devices or ports it finds
+    in the graph must load a fresh one (they belong to this session)."""
+    global _cached
+    if cached and _cached is not None and time.monotonic() - _cached[0] < GRAPH_TTL_SECONDS:
+        return _cached[1]
     devices = list((await session.scalars(select(Device))).all())
     ports = list((await session.scalars(select(Port))).all())
     conns = list((await session.scalars(select(Connection))).all())
-    return Graph(devices, ports, conns)
+    graph = Graph(devices, ports, conns)
+    if cached:
+        _cached = (time.monotonic(), graph)
+    return graph
 
 
 # Not part of the network picture: cable plant and cabinets.

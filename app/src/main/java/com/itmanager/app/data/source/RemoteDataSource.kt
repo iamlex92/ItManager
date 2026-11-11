@@ -3,6 +3,7 @@ package com.itmanager.app.data.source
 import android.os.Build
 import com.itmanager.app.core.network.LiveSocket
 import com.itmanager.app.core.network.NetAdminApi
+import kotlinx.coroutines.delay
 import com.itmanager.app.core.network.BulkDeleteBody
 import com.itmanager.app.core.network.BulkSetBody
 import com.itmanager.app.core.network.BulkUpdateBody
@@ -67,6 +68,7 @@ import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.MergePreview
 import com.itmanager.app.data.model.PortPath
 import com.itmanager.app.data.model.StatusRefresh
 import com.itmanager.app.data.model.DeviceBulkChange
@@ -324,6 +326,7 @@ class RemoteDataSource(
                     sshCredentialId = draft.sshCredentialId,
                     snmpCommunity = draft.snmpCommunity,
                     extraIps = draft.extraIps,
+                    allowDuplicateIp = draft.allowDuplicateIp,
                 ),
             ).toDomain()
         }
@@ -340,7 +343,19 @@ class RemoteDataSource(
     override suspend fun mergeDevice(id: String, sourceId: String): Device =
         api.mergeDevice(settings, id, MergeBody(sourceId)).toDomain()
 
-    override suspend fun refreshStatus(): StatusRefresh = api.refreshStatus(settings).toDomain()
+    override suspend fun previewMerge(id: String, sourceId: String): MergePreview =
+        api.previewMerge(settings, id, MergeBody(sourceId)).toDomain()
+
+    override suspend fun refreshStatus(): StatusRefresh {
+        var round = api.refreshStatus(settings)
+        // A slow round is a job on the server: read it until it is done instead of holding one request.
+        var polls = 0
+        while (round.state == "running" && polls++ < REFRESH_POLLS) {
+            delay(1_000)
+            round = api.refreshJob(settings, round.id)
+        }
+        return round.toDomain()
+    }
 
     override suspend fun bulkUpdateDevices(ids: List<String>, change: DeviceBulkChange): Int = knowingTypes(change.type) {
         val set = BulkSetBody(change.type?.name, change.floorId, change.vendor, change.hostId)
@@ -521,6 +536,8 @@ class RemoteDataSource(
 
     private companion object {
         const val PLAN_MARGIN = 200f
+        /** A round of «Обновить» is read for at most this many seconds. */
+        const val REFRESH_POLLS = 120
         const val MIN_WIDTH = 1600f
         const val MIN_HEIGHT = 1000f
         const val NO_FLOOR = "default"

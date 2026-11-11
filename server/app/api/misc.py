@@ -14,5 +14,5 @@ router = APIRouter(tags=["search"])
 @router.get("/search", response_model=list[DeviceOut])
 async def search(session: SessionDep, q: str = Query(min_length=2, description="Name, IP, MAC or NFC tag UID")):
     devices = (await session.scalars(select(Device).where(_search_clause(q)).order_by(Device.name).limit(50))).all()
-    graph = await load_graph(session)
+    graph = await load_graph(session, cached=True)
     return [device_out(d, graph) for d in devices]

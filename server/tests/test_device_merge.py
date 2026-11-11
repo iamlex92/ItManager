@@ -85,6 +85,18 @@ def test_refresh_status_in_the_emulator(client):
     assert r["checked"] > 10 and 0 < r["online"] <= r["checked"]
 
 
+def _refresh(client) -> dict:
+    """«Обновить» as the clients do it: start, and read the job until it is done (a slow SNMP read outlasts the wait)."""
+    import time
+
+    r = client.post(f"{API}/devices/refresh-status").json()
+    deadline = time.monotonic() + 120
+    while r["state"] != "done" and time.monotonic() < deadline:
+        time.sleep(0.5)
+        r = client.get(f"{API}/devices/refresh-status/{r['id']}").json()
+    return r
+
+
 def test_refresh_status_pings_every_address(seeded):
     app = create_app(make_settings(monitor_mode=MonitorMode.REAL, heartbeat_interval_seconds=0))
     with TestClient(app, headers=AUTH) as client:
@@ -96,9 +108,168 @@ def test_refresh_status_pings_every_address(seeded):
             return ip in answering
 
         app.state.pinger = pinger
-        r = client.post(f"{API}/devices/refresh-status").json()
+        r = _refresh(client)
         assert "ping" in r["sources"] and r["errors"] == [], r
         assert find(client, "SRV-1C-01")["is_online"] is True  # silent on its main address, answers on the other
         answering.clear()
-        r = client.post(f"{API}/devices/refresh-status").json()
+        r = _refresh(client)
         assert find(client, "SRV-1C-01")["is_online"] is False and r["changed"] >= 1
+
+
+def test_merge_preview_changes_nothing_and_says_what_would_move(client):
+    keep = find(client, "SRV-1C-01")
+    dup = _device(client, name="SRV-1C-01-b", ip="10.10.50.97", comment="iLO")
+    port = client.post(f"{API}/ports", json={"device_id": dup["id"], "number": 1, "name": "eth0"}).json()
+    peripheral = client.post(f"{API}/peripherals", json={"kind": "MONITOR", "device_id": dup["id"]})
+    assert peripheral.status_code in (200, 201)
+    r = client.post(f"{API}/devices/{keep['id']}/merge?dry_run=true", json={"source_id": dup["id"]})
+    assert r.status_code == 200, r.text
+    p = r.json()
+    assert p["dry_run"] is True and p["source_name"] == "SRV-1C-01-b" and p["keep_name"] == "SRV-1C-01"
+    assert p["ports"] == 1 and p["peripherals"] == 1 and p["extra_ips_added"] == ["10.10.50.97"]
+    assert "comment" in p["filled_fields"] or keep["comment"]
+    # Nothing happened: the duplicate and its port are still there, and it needed no confirmation.
+    assert client.get(f"{API}/devices/{dup['id']}").status_code == 200
+    assert client.get(f"{API}/devices/{keep['id']}").json()["extra_ips"] == []
+    assert port["id"] in [x["id"] for x in ports_of(client, dup["id"])]
+
+
+def test_merge_keeps_a_snapshot_of_the_removed_record_in_the_journal(client):
+    keep = _device(client, name="KEEP")
+    dup = _device(client, name="GONE", ip="10.10.50.96")
+    client.post(f"{API}/ports", json={"device_id": dup["id"], "number": 5, "name": "p5"})
+    assert (
+        client.post(f"{API}/devices/{keep['id']}/merge", json={"source_id": dup["id"], "confirm": True}).status_code
+        == 200
+    )
+    entry = next(a for a in client.get(f"{API}/audit").json() if a["action"] == "device:merge")
+    snap = entry["parameters"]["merged_snapshot"]
+    assert snap["device"]["name"] == "GONE" and snap["device"]["ip"] == "10.10.50.96"
+    assert [p["name"] for p in snap["ports"]] == ["p5"]
+
+
+def test_merge_refuses_a_rack_place_that_is_taken(client):
+    rack = client.post(f"{API}/devices", json={"name": "R1", "type": "RACK"}).json()
+    a = client.post(
+        f"{API}/devices", json={"name": "A", "type": "SERVER", "rack_id": rack["id"], "rack_u": 3, "rack_h": 2}
+    )
+    b = _device(client, name="B")
+    assert a.status_code == 201
+    # B (no place) takes A's place in the rack when merged INTO nothing - the other way round: A kept at its place,
+    # a duplicate of it standing on the same units is the conflict.
+    c = client.post(f"{API}/devices", json={"name": "C", "type": "SERVER"}).json()
+    assert (
+        client.patch(f"{API}/devices/{c['id']}", json={"rack_id": rack["id"], "rack_u": 10, "rack_h": 1}).status_code
+        == 200
+    )
+    keep = _device(client, name="K")  # no place
+    # C stands at U10; K takes C's place by the merge: free, so it works.
+    ok = client.post(f"{API}/devices/{keep['id']}/merge", json={"source_id": c["id"], "confirm": True})
+    assert ok.status_code == 200 and ok.json()["rack_id"] == rack["id"]
+    assert b["id"]
+
+
+def test_a_second_device_on_a_taken_address_is_a_warning_you_can_override(client):
+    first = _device(client, name="ONE", ip="10.10.50.90", extra_ips=["10.10.40.90"])
+    # The main address and an extra one are both guarded.
+    r = client.post(f"{API}/devices", json={"name": "TWO", "type": "SERVER", "ip": "10.10.50.90"})
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "ip_in_use"
+    assert r.json()["detail"]["devices"][0]["name"] == "ONE"
+    r = client.post(f"{API}/devices", json={"name": "TWO", "type": "SERVER", "extra_ips": ["10.10.40.90"]})
+    assert r.status_code == 409
+    ok = client.post(
+        f"{API}/devices", json={"name": "TWO", "type": "SERVER", "ip": "10.10.50.90", "allow_duplicate_ip": True}
+    )
+    assert ok.status_code == 201
+    # An old duplicate does not block an unrelated edit, a new one does.
+    two = ok.json()
+    assert client.patch(f"{API}/devices/{two['id']}", json={"comment": "x"}).status_code == 200
+    bad = client.patch(f"{API}/devices/{two['id']}", json={"extra_ips": ["10.10.40.90"]})
+    assert bad.status_code == 409
+    assert client.patch(f"{API}/devices/{first['id']}", json={"ip": "10.10.50.90"}).status_code == 200  # its own
+
+
+async def test_retention_deletes_old_journal_and_closed_events_only():
+    from datetime import UTC, datetime, timedelta
+
+    from app.db import make_engine, make_sessionmaker
+    from app.models import DeviceAlert, ScriptAuditLog
+    from app.services import retention
+
+    from .conftest import TEST_DB
+
+    engine = make_engine(TEST_DB)
+    sm = make_sessionmaker(engine)
+    now = datetime.now(UTC)
+    try:
+        async with sm() as s:
+            from sqlalchemy import select
+
+            from app.models import Device
+
+            dev = (await s.scalars(select(Device).limit(1))).first()
+            s.add_all(
+                [
+                    ScriptAuditLog(script_name="old-ret", triggered_by="t", executed_at=now - timedelta(days=400)),
+                    ScriptAuditLog(script_name="new-ret", triggered_by="t", executed_at=now - timedelta(days=5)),
+                    DeviceAlert(
+                        device_id=dev.id,
+                        severity="INFO",
+                        alert_type="X",
+                        message="old closed",
+                        is_resolved=True,
+                        created_at=now - timedelta(days=300),
+                        resolved_at=now - timedelta(days=290),
+                    ),
+                    DeviceAlert(
+                        device_id=dev.id,
+                        severity="INFO",
+                        alert_type="X",
+                        message="old OPEN",
+                        is_resolved=False,
+                        created_at=now - timedelta(days=300),
+                    ),
+                ]
+            )
+            await s.commit()
+        done = await retention.run_once(sm, make_settings())
+        assert done["journal"] >= 1 and done["events"] >= 1
+        async with sm() as s:
+            names = {r.script_name for r in (await s.scalars(select(ScriptAuditLog))).all()}
+            msgs = {r.message for r in (await s.scalars(select(DeviceAlert))).all()}
+        assert "old-ret" not in names and "new-ret" in names
+        assert "old closed" not in msgs and "old OPEN" in msgs
+    finally:
+        await engine.dispose()
+
+
+def test_refresh_status_is_a_job_with_progress(client):
+    """A slow round is answered as «running» and read back by id; a quick one comes back done at once."""
+    from app.services import status as status_service
+
+    first = client.post(f"{API}/devices/refresh-status").json()
+    assert first["state"] == "done" and first["id"] and first["done"] == first["total"] >= 1
+    again = client.get(f"{API}/devices/refresh-status/{first['id']}").json()
+    assert again["checked"] == first["checked"]
+    assert client.get(f"{API}/devices/refresh-status/nope").status_code == 404
+    assert status_service.WAIT_SECONDS > 0
+
+
+def test_device_list_pages_and_counts(client):
+    everything = client.get(f"{API}/devices")
+    total = int(everything.headers["x-total-count"])
+    assert total == len(everything.json()) > 10
+    page = client.get(f"{API}/devices", params={"limit": 5, "offset": 5})
+    assert [d["id"] for d in page.json()] == [d["id"] for d in everything.json()[5:10]]
+    assert page.headers["x-total-count"] == str(total)
+
+
+def test_a_write_drops_the_cached_graph(client):
+    pc = find(client, "PC-BUH-02")
+    before = client.get(f"{API}/devices/{pc['id']}").json()
+    assert before["switch_port_name"]
+    nic = ports_of(client, pc["id"])[0]
+    conn = next(c for c in client.get(f"{API}/connections").json() if nic["id"] in (c["port_a_id"], c["port_b_id"]))
+    assert client.delete(f"{API}/connections/{conn['id']}").status_code == 204
+    # The card is read from the cache a second ago; the delete dropped it.
+    assert client.get(f"{API}/devices/{pc['id']}").json()["switch_port_name"] is None

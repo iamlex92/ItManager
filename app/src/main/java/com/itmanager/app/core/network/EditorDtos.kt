@@ -139,6 +139,7 @@ data class DeviceBody(
     // Left out when null: the server then uses «public».
     @SerialName("snmp_community") val snmpCommunity: String? = null,
     @SerialName("extra_ips") val extraIps: List<String> = emptyList(),
+    @SerialName("allow_duplicate_ip") val allowDuplicateIp: Boolean = false,
 )
 
 @Serializable
@@ -163,6 +164,7 @@ fun DeviceDraft.toPatch(): JsonObject = buildJsonObject {
     snmpCommunity?.let { put("snmp_community", JsonPrimitive(it)) }
     metadata?.let { put("metadata", JsonObject(it)) }
     put("extra_ips", JsonArray(extraIps.map { JsonPrimitive(it) }))
+    if (allowDuplicateIp) put("allow_duplicate_ip", JsonPrimitive(true))
 }
 
 @Serializable

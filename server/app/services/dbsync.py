@@ -14,6 +14,7 @@ import hashlib
 import json
 import logging
 import tempfile
+import uuid
 import zipfile
 from collections.abc import AsyncIterator
 from dataclasses import asdict, dataclass
@@ -24,12 +25,13 @@ import asyncpg
 import httpx
 from sqlalchemy.engine import make_url
 
+from .. import crypto
 from ..config import Settings
 from ..models import Base
 
 log = logging.getLogger(__name__)
 
-FORMAT = 1
+FORMAT = 2
 MANIFEST = "manifest.json"
 # Never copied: each server has its own settings.
 LOCAL_TABLES = {"server_settings"}
@@ -56,9 +58,60 @@ class SyncStatus:
     receive_error: str | None = None
     received_rows: int = 0
     received_created_at: str | None = None
+    # The server this one takes the database from (set by the first package, kept until reset).
+    source_id: str | None = None
+    # This server's own id, put in every package it sends.
+    server_id: str | None = None
 
     def as_dict(self) -> dict:
         return asdict(self)
+
+
+# The server's own id and the source it accepts packages from: rows of server_settings, which is never copied.
+KEY_SERVER_ID = "_sync_server_id"
+KEY_SOURCE_ID = "_sync_source_id"
+KEY_LAST_CREATED = "_sync_last_created"
+KEEP_PRESYNC = 3
+
+
+async def kv_get(conn: asyncpg.Connection, key: str) -> str | None:
+    value = await conn.fetchval("SELECT value FROM server_settings WHERE id = $1", key)
+    return crypto.box().decrypt(value) if value is not None else None
+
+
+async def kv_set(conn: asyncpg.Connection, key: str, value: str | None) -> None:
+    if value is None:
+        await conn.execute("DELETE FROM server_settings WHERE id = $1", key)
+        return
+    await conn.execute(
+        "INSERT INTO server_settings (id, value) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET value = EXCLUDED.value",
+        key,
+        crypto.box().encrypt(value),
+    )
+
+
+async def server_id(settings: Settings) -> str:
+    """This server's id: made on first use and kept, so a backup can tell who sends the packages."""
+    conn = await asyncpg.connect(dsn(settings.database_url))
+    try:
+        found = await kv_get(conn, KEY_SERVER_ID)
+        if found:
+            return found
+        found = str(uuid.uuid4())
+        await kv_set(conn, KEY_SERVER_ID, found)
+        return found
+    finally:
+        await conn.close()
+
+
+async def reset_source(settings: Settings) -> None:
+    """Forget the server packages were taken from, so another one may be accepted."""
+    conn = await asyncpg.connect(dsn(settings.database_url))
+    try:
+        await kv_set(conn, KEY_SOURCE_ID, None)
+        await kv_set(conn, KEY_LAST_CREATED, None)
+    finally:
+        await conn.close()
 
 
 def tables() -> list:
@@ -86,10 +139,12 @@ def _q(name: str) -> str:
 async def pack(settings: Settings, target: Path) -> dict:
     """Writes the package to [target]; returns its manifest. Read in one REPEATABLE READ snapshot, so the tables
     agree with each other."""
+    own_id = await server_id(settings)
     conn = await asyncpg.connect(dsn(settings.database_url))
     try:
         manifest = {
             "format": FORMAT,
+            "source_id": own_id,
             "revision": await _revision(conn),
             "key": key_fingerprint(settings.secret_key),
             "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
@@ -122,8 +177,9 @@ async def _chunks(f) -> AsyncIterator[bytes]:
         yield data
 
 
-async def unpack(settings: Settings, package: Path) -> dict:
-    """Replaces this server's inventory with [package]. All or nothing."""
+async def unpack(settings: Settings, package: Path, force: bool = False) -> dict:
+    """Replaces this server's inventory with [package]. All or nothing. [force]: for putting back a kept copy of the
+    data that was replaced, so the source and age checks do not apply."""
     try:
         zf = zipfile.ZipFile(package)
     except zipfile.BadZipFile as e:
@@ -144,6 +200,15 @@ async def unpack(settings: Settings, package: Path) -> dict:
         missing = [t.name for t in mine if f"tables/{t.name}.tsv" not in zf.namelist()]
         if missing:
             raise SyncError(f"в пакете нет таблиц: {', '.join(missing)}")
+        source = str(manifest.get("source_id") or "")
+        created = str(manifest.get("created_at") or "")
+        if not source or not created:
+            raise SyncError("в пакете нет сведений об источнике: обновите основной сервер")
+        own_id = await server_id(settings)
+        if source == own_id and not force:
+            raise SyncError(
+                "пакет пришёл с этого же сервера: проверьте адрес резервного сервера в настройках основного"
+            )
         conn = await asyncpg.connect(dsn(settings.database_url))
         try:
             revision = await _revision(conn)
@@ -152,6 +217,17 @@ async def unpack(settings: Settings, package: Path) -> dict:
                     f"версии базы разные (основной {manifest.get('revision')}, резервный {revision}): "
                     "обновите оба сервера до одной версии"
                 )
+            known = await kv_get(conn, KEY_SOURCE_ID)
+            if known and known != source and not force:
+                raise SyncError(
+                    f"этот сервер уже принимает базу от другого сервера ({known[:8]}…, а пакет от {source[:8]}…): "
+                    "если основной сервер заменён, нажмите «Принимать от другого сервера» в настройках"
+                )
+            last = await kv_get(conn, KEY_LAST_CREATED)
+            if last and created < last and not force:
+                raise SyncError(f"пакет старше уже принятого (снят {created}, принят {last}): он не применён")
+            if not force:
+                await _keep_presync_copy(settings)
             async with conn.transaction():
                 # Do not hang behind a long request: try again next time instead.
                 await conn.execute("SET LOCAL lock_timeout = '30s'")
@@ -159,9 +235,26 @@ async def unpack(settings: Settings, package: Path) -> dict:
                 for t in mine:
                     with zf.open(f"tables/{t.name}.tsv") as src:
                         await conn.copy_to_table(t.name, columns=[c.name for c in t.columns], source=_chunks(src))
+                if not force:
+                    await kv_set(conn, KEY_SOURCE_ID, source)
+                    await kv_set(conn, KEY_LAST_CREATED, created)
         finally:
             await conn.close()
     return manifest
+
+
+async def _keep_presync_copy(settings: Settings) -> None:
+    """The data about to be replaced, kept as a package in the backup folder (the last few), so a wrong or bad copy
+    from the main server can be undone with `netadmin-agent restore-sync FILE`. Without BACKUP_DIR there is none."""
+    if not settings.backup_dir:
+        log.warning("database sync: BACKUP_DIR is not set, the data replaced by the main server's is not kept")
+        return
+    folder = Path(settings.backup_dir) / "presync"
+    folder.mkdir(mode=0o700, parents=True, exist_ok=True)
+    target = folder / f"netadmin-presync-{datetime.now().strftime('%Y%m%d-%H%M%S')}.zip"
+    await pack(settings, target)
+    for old in sorted(folder.glob("netadmin-presync-*.zip"))[:-KEEP_PRESYNC]:
+        old.unlink(missing_ok=True)
 
 
 def _receive_url(settings: Settings) -> str:

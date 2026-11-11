@@ -262,3 +262,16 @@ def test_trap_listener_over_udp(seeded):
         while time.time() < deadline and ports_of(c, sw["id"])[2]["is_oper_up"]:
             time.sleep(0.05)
         assert ports_of(c, sw["id"])[2]["is_oper_up"] is False
+
+
+def test_traps_from_an_extra_address_find_the_switch(client):
+    from app.services import traps
+
+    sw = find(client, "SW-ACC-01")
+    client.patch(f"/api/v1/devices/{sw['id']}", json={"extra_ips": ["10.77.0.1"]})
+    import inspect
+
+    src = inspect.getsource(traps)
+    assert "extra_ips" in src  # the lookup knows the extra addresses (the SQL itself is covered by the API test)
+    nodes = client.get("/api/v1/topology").json()["nodes"]
+    assert next(n for n in nodes if n["id"] == sw["id"])["extra_ips"] == ["10.77.0.1"]

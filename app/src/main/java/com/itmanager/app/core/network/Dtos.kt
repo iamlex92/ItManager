@@ -9,6 +9,7 @@ import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.model.FloorInfo
 import com.itmanager.app.data.model.FloorPlan
+import com.itmanager.app.data.model.MergePreview
 import com.itmanager.app.data.model.PlanRect
 import com.itmanager.app.data.model.PortMode
 import com.itmanager.app.data.model.Printer
@@ -45,10 +46,12 @@ data class HealthDto(
     @SerialName("runbook_mode") val runbookMode: String? = null,
     @SerialName("runbook_writes_enabled") val runbookWritesEnabled: Boolean? = null,
     @SerialName("monitor_mode") val monitorMode: String? = null,
+    @SerialName("read_only") val readOnly: Boolean = false,
+    @SerialName("sync_role") val syncRole: String = "",
 ) {
     fun toDomain() = ServerHealth(
         status, version, halMode, deviceWritesEnabled, secretsEncrypted, runbookMode, runbookWritesEnabled,
-        monitorMode,
+        monitorMode, readOnly, syncRole,
     )
 }
 
@@ -136,6 +139,11 @@ data class StatusRefreshDto(
     val online: Int = 0,
     val changed: Int = 0,
     val errors: List<String> = emptyList(),
+    val id: String = "",
+    /** "running" while the server is still checking (a slow switch); then "done". */
+    val state: String = "done",
+    val done: Int = 0,
+    val total: Int = 0,
 ) {
     fun toDomain() = StatusRefresh(checked, online, changed, errors)
 }
@@ -162,6 +170,28 @@ data class PathHopDto(
 @Serializable
 data class PortPathDto(val hops: List<PathHopDto> = emptyList(), val ends: List<PathHopDto> = emptyList()) {
     fun toDomain() = PortPath(hops.map { it.toDomain() }, ends.map { it.toDomain() })
+}
+
+@Serializable
+data class MergePreviewDto(
+    @SerialName("keep_name") val keepName: String,
+    @SerialName("source_name") val sourceName: String,
+    val ports: Int = 0,
+    @SerialName("cables_moved") val cablesMoved: Int = 0,
+    @SerialName("cables_dropped") val cablesDropped: Int = 0,
+    val configs: Int = 0,
+    val alerts: Int = 0,
+    val peripherals: Int = 0,
+    @SerialName("faceplate_moved") val faceplateMoved: Boolean = false,
+    val guests: Int = 0,
+    @SerialName("rack_members") val rackMembers: Int = 0,
+    @SerialName("extra_ips_added") val extraIpsAdded: List<String> = emptyList(),
+    @SerialName("filled_fields") val filledFields: List<String> = emptyList(),
+) {
+    fun toDomain() = MergePreview(
+        keepName, sourceName, ports, cablesMoved, cablesDropped, configs, alerts, peripherals, faceplateMoved, guests,
+        rackMembers, extraIpsAdded, filledFields,
+    )
 }
 
 @Serializable

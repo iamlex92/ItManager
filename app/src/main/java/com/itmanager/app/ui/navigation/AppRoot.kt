@@ -29,6 +29,10 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -112,6 +116,8 @@ fun AppRoot(appViewModel: AppViewModel = hiltViewModel()) {
     val openAlertCount by appViewModel.openAlertCount.collectAsStateWithLifecycle()
     val notice by appViewModel.notice.collectAsStateWithLifecycle()
     val binding by appViewModel.binding.collectAsStateWithLifecycle()
+    val backup by appViewModel.backup.collectAsStateWithLifecycle()
+    val writeQuestion by appViewModel.writeQuestion.collectAsStateWithLifecycle()
     val haptics = LocalHapticFeedback.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -175,6 +181,24 @@ fun AppRoot(appViewModel: AppViewModel = hiltViewModel()) {
                 onOpenDevice = appViewModel::openDevice,
             )
 
+            // On the backup server on every screen: what is changed there is replaced by the next copy.
+            backup?.let { state ->
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = padding.calculateBottomPadding() + 8.dp),
+                ) {
+                    Text(
+                        if (state.readOnly) "Резервный сервер · только чтение" else "Резервный сервер · правки пропадут",
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    )
+                }
+            }
+
             // The last notice stays composed while it slides away.
             var lastNotice by remember { mutableStateOf<AlertNotice?>(null) }
             if (notice != null) lastNotice = notice
@@ -192,6 +216,21 @@ fun AppRoot(appViewModel: AppViewModel = hiltViewModel()) {
                 }
             }
         }
+    }
+
+    writeQuestion?.let { answer ->
+        AlertDialog(
+            onDismissRequest = { answer.complete(false) },
+            title = { Text("Вы на резервном сервере") },
+            text = {
+                Text(
+                    "Основной сервер недоступен. Изменение, сделанное на резервном, пропадёт при следующей " +
+                        "синхронизации с основным. Всё равно сохранить?",
+                )
+            },
+            confirmButton = { TextButton(onClick = { answer.complete(true) }) { Text("Сохранить") } },
+            dismissButton = { TextButton(onClick = { answer.complete(false) }) { Text("Отмена") } },
+        )
     }
 
     val lock by appViewModel.lock.collectAsStateWithLifecycle()

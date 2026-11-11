@@ -2,7 +2,10 @@ package com.itmanager.app.data.source
 
 import com.itmanager.app.core.network.LiveSocket
 import com.itmanager.app.core.network.NetAdminApi
+import com.itmanager.app.core.network.BackupWriteGate
 import com.itmanager.app.core.network.ServerFailover
+import com.itmanager.app.core.network.UserFacingException
+import com.itmanager.app.core.network.runCatchingCancellable
 import com.itmanager.app.core.settings.ServerSettings
 import com.itmanager.app.core.settings.SettingsRepository
 import com.itmanager.app.data.model.ALL_DEVICES
@@ -32,7 +35,9 @@ import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.MergePreview
 import com.itmanager.app.data.model.PortPath
+import com.itmanager.app.data.model.ServerHealth
 import com.itmanager.app.data.model.StatusRefresh
 import com.itmanager.app.data.model.DeviceTemplateDraft
 import com.itmanager.app.data.model.DeviceBulkChange
@@ -70,6 +75,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.SharingStarted
@@ -88,9 +95,31 @@ class DcimRepository @Inject constructor(
     private val api: NetAdminApi,
     private val liveSocket: LiveSocket,
     private val failover: ServerFailover,
+    private val gate: BackupWriteGate,
 ) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     /** The app works through the backup server: the main one cannot be reached. */
     val usingBackup: StateFlow<Boolean> = failover.onBackup
+
+    /** What the backup server says about itself while the app works through it: null while on the main one. */
+    private val _backupHealth = MutableStateFlow<ServerHealth?>(null)
+    val backupHealth: StateFlow<ServerHealth?> = _backupHealth.asStateFlow()
+
+    init {
+        scope.launch {
+            failover.onBackup.collect { on ->
+                if (!on) {
+                    gate.forget()
+                    _backupHealth.value = null
+                    return@collect
+                }
+                val backup = settingsRepository.current().backup() ?: return@collect
+                _backupHealth.value = runCatchingCancellable { api.health(backup.baseUrl).toDomain() }.getOrNull()
+                    ?: ServerHealth(status = "ok", version = null, halMode = null, deviceWritesEnabled = null)
+            }
+        }
+    }
 
     /** Bumped when the inventory changes from the app (devices added from a scan or on the map). */
     private val inventoryVersion = MutableStateFlow(0)
@@ -175,7 +204,9 @@ class DcimRepository @Inject constructor(
         edit { moveDevice(id, floorId, x, y) }
     suspend fun deleteDevice(id: String): Result<Unit> = edit { deleteDevice(id) }
     suspend fun mergeDevice(id: String, sourceId: String): Result<Device> = edit { mergeDevice(id, sourceId) }
-    suspend fun refreshStatus(): Result<StatusRefresh> = edit { refreshStatus() }
+    suspend fun previewMerge(id: String, sourceId: String): Result<MergePreview> = load { previewMerge(id, sourceId) }
+    // A check, not an edit of the inventory: no «backup server» question for it.
+    suspend fun refreshStatus(): Result<StatusRefresh> = load { refreshStatus() }.onSuccess { inventoryVersion.value++ }
     suspend fun bulkUpdateDevices(ids: List<String>, change: DeviceBulkChange): Result<Int> =
         edit { bulkUpdateDevices(ids, change) }
     suspend fun bulkDeleteDevices(ids: List<String>): Result<Int> = edit { bulkDeleteDevices(ids) }
@@ -250,8 +281,13 @@ class DcimRepository @Inject constructor(
         inventoryVersion.value++
     }
 
-    private suspend fun <T> edit(block: suspend DcimDataSource.() -> T): Result<T> =
-        load(block).onSuccess { inventoryVersion.value++ }
+    private suspend fun <T> edit(block: suspend DcimDataSource.() -> T): Result<T> {
+        // A backup server that takes changes: they are replaced by the next copy, so ask first.
+        if (failover.onBackup.value && _backupHealth.value?.readOnly != true && !gate.confirm()) {
+            return Result.failure(UserFacingException("Изменение отменено: оно пропало бы при синхронизации"))
+        }
+        return load(block).onSuccess { inventoryVersion.value++ }
+    }
 
     /** Restarts the stream whenever settings change, so a new server address takes effect at once. */
     @OptIn(ExperimentalCoroutinesApi::class)
