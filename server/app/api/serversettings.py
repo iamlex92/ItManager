@@ -17,7 +17,7 @@ from .. import serversettings as ss
 from ..config import Settings
 from ..models import ScriptAuditLog
 from ..schemas import ServerSettingsIn, ServerSettingsOut
-from .deps import SessionDep
+from .deps import SessionDep, who
 
 log = logging.getLogger(__name__)
 
@@ -86,12 +86,11 @@ async def put_server_settings(body: ServerSettingsIn, request: Request, session:
     except ss.SettingError as e:
         raise HTTPException(422, detail={"code": "bad_setting", "message": str(e), "key": e.key}) from e
     if changed:
-        client = request.client.host if request.client else "unknown"
         shown = {k: ("***" if ss.SPECS[k].kind == "secret" else ss.plain(values.get(k))) for k in changed}
         session.add(
             ScriptAuditLog(
                 script_name="server_settings",
-                triggered_by=f"api:{client}",
+                triggered_by=who(request),
                 parameters={"changed": shown, "operator": body.operator},
                 executed_at=datetime.now(UTC),
                 exit_code=0,
@@ -133,7 +132,7 @@ async def restart_server(request: Request, session: SessionDep):
     session.add(
         ScriptAuditLog(
             script_name="server_restart",
-            triggered_by=f"api:{client}",
+            triggered_by=who(request),
             parameters={},
             executed_at=datetime.now(UTC),
             exit_code=0,

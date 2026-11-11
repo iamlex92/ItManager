@@ -8,6 +8,7 @@ import io.ktor.client.call.body
 import io.ktor.client.plugins.ResponseException
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.bearerAuth
+import io.ktor.client.request.header
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
@@ -494,6 +495,8 @@ class NetAdminApi @Inject constructor(
 
     private fun HttpRequestBuilder.auth(s: ServerSettings) {
         if (s.apiToken.isNotBlank()) bearerAuth(s.apiToken)
+        // The name in the settings goes to the server's journal; percent-encoded, a header is ASCII only.
+        if (s.operatorName.isNotBlank()) header("X-Operator", operatorHeader(s.operatorName))
     }
 
     /** Subnet usage and address conflicts from the inventory. Reads only. */
@@ -595,3 +598,6 @@ class NetAdminApi @Inject constructor(
         return client.get("${requireBase(s)}/api/v1/$path") { auth(s) }.body()
     }
 }
+
+/** The operator's name as an HTTP header value: UTF-8, percent-encoded (a space as %20). */
+fun operatorHeader(name: String): String = java.net.URLEncoder.encode(name.trim().take(60), "UTF-8").replace("+", "%20")

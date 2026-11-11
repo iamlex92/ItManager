@@ -3,7 +3,7 @@
 // (VLAN view, history, traffic, config import). Builds on admin.js through window.NetAdmin.
 // Inventory and read-only views: nothing here writes to equipment.
 (() => {
-  const { $, api, toast, fail, OPERATOR, tabs } = window.NetAdmin;
+  const { $, api, toast, fail, OPERATOR, tabs, ask, askText } = window.NetAdmin;
 
   const el = (tag, props = {}, ...kids) => {
     const e = Object.assign(document.createElement(tag), props);
@@ -174,7 +174,7 @@
     ev.preventDefault();
     const params = {};
     for (const input of $("runbook-params").querySelectorAll("[name]")) if (input.value.trim()) params[input.name] = input.value.trim();
-    if (runbook.critical && !confirm(`«${runbook.title}» меняет данные. Запустить? Запуск попадёт в журнал.`)) return;
+    if (runbook.critical && !await ask(`«${runbook.title}» меняет данные. Запустить? Запуск попадёт в журнал.`)) return;
     $("runbook-run").disabled = true;
     try {
       const r = await api("POST", `runbooks/${runbook.id}/run`, {
@@ -219,7 +219,7 @@
       td(tr, el("button", {
         className: "danger", textContent: "Удалить",
         onclick: async () => {
-          if (!confirm(`Удалить «${c.name}»?`)) return;
+          if (!await ask(`Удалить «${c.name}»?`)) return;
           try { await api("DELETE", `credentials/${c.id}`); await loadCreds(); } catch (e) { fail(e); }
         },
       }));
@@ -484,12 +484,29 @@
   {
     const bar = document.querySelector("#tab-devices .toolbar");
     const spacer = bar.querySelector(".spacer");
-    spacer.after(
-      el("button", { textContent: "Этикетки QR", title: "Страница этикеток для печати (выбранные или все)", onclick: () => {
-        const ids = [...window.NetAdmin.picked].map((id) => `ids=${id}`).join("&");
-        download(`export/labels.html${ids ? `?${ids}` : ""}`).catch(fail);
-      } }),
-      el("button", { textContent: "NetBox CSV", title: "Выгрузка учёта для NetBox", onclick: () => download("export/netbox.zip", "itmanager-netbox.zip").catch(fail) }),
-    );
+    // What a button takes: the ticked devices, else the ones the list shows now (search, category), else all.
+    const scope = () => {
+      if (window.NetAdmin.picked.size) return { ids: [...window.NetAdmin.picked], what: "выбранные" };
+      const listed = window.NetAdmin.listedIds();
+      return listed.length && !document.querySelector("#device-home:not([hidden])") ? { ids: listed, what: "показанные в списке" } : { ids: [], what: "все" };
+    };
+    const layout = el("select", { title: "Размер этикеток: лист A4 или одна этикетка 50×30 мм для термопринтера" },
+      new Option("Лист A4, 3 в ряд", "normal"), new Option("Лист A4, мелкие (4 в ряд)", "small"), new Option("Термопринтер 50×30 мм", "single"));
+    const labels = el("button", { textContent: "Этикетки QR", onclick: () => {
+      const s = scope();
+      const q = [...s.ids.map((id) => `ids=${id}`), `layout=${layout.value}`].join("&");
+      download(`export/labels.html?${q}`).catch(fail);
+    } });
+    const netbox = el("button", { textContent: "NetBox CSV", title: "Выгрузка всего учёта для NetBox", onclick: () => download("export/netbox.zip", "itmanager-netbox.zip").catch(fail) });
+    // The label says how many it prints, so a search left on does not surprise.
+    const refreshLabel = () => {
+      const s = scope();
+      labels.textContent = s.ids.length ? `Этикетки QR (${s.ids.length})` : "Этикетки QR (все)";
+      labels.title = `Страница этикеток для печати: ${s.what}`;
+    };
+    document.addEventListener("click", () => setTimeout(refreshLabel, 0));
+    document.addEventListener("input", () => setTimeout(refreshLabel, 0));
+    refreshLabel();
+    spacer.after(layout, labels, netbox);
   }
 })();

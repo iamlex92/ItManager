@@ -12,6 +12,7 @@ from ..config import Settings
 from ..hal.base import DeviceWritesDisabled
 from ..models import Device, ScriptAuditLog
 from ..services.switches import is_managed_switch
+from .deps import who
 
 
 def require_confirmation(confirm: bool) -> None:
@@ -59,10 +60,9 @@ async def audit(
     """Write an audit log row for a device write, whether it succeeded,
     was blocked by the write guard, or failed."""
     rec = AuditRecord()
-    client = request.client.host if request.client else "unknown"
     entry = ScriptAuditLog(
         script_name=action,
-        triggered_by=f"api:{client}",
+        triggered_by=who(request),
         parameters={**params, "hal_mode": settings.hal_mode.value},
     )
     try:

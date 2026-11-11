@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 
 from ..models import ScriptAuditLog, Vlan
 from ..schemas import VlanCreate, VlanOut, VlanUpdate
-from .deps import SessionDep, conflict, not_found
+from .deps import SessionDep, conflict, not_found, who
 
 router = APIRouter(prefix="/vlans", tags=["vlans"])
 
@@ -20,13 +20,12 @@ ACTIONS = {
 
 
 def _audit(request: Request, action: str, vlan: Vlan, changed: dict | None = None) -> ScriptAuditLog:
-    client = request.client.host if request.client else "unknown"
     params = {"vlan_id": vlan.vlan_id, "name": vlan.name, "subnet": str(vlan.subnet_cidr) if vlan.subnet_cidr else None}
     if changed:
         params["changed"] = changed
     return ScriptAuditLog(
         script_name=action,
-        triggered_by=f"api:{client}",
+        triggered_by=who(request),
         parameters=params,
         executed_at=datetime.now(UTC),
         exit_code=0,

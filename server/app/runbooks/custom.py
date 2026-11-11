@@ -123,6 +123,11 @@ async def run_on_server(shell: str, source: str) -> RunResult:
             proc.kill()
             await proc.wait()
             return RunResult(exit_code=124, stdout="", stderr=f"Скрипт не закончился за {SERVER_TIMEOUT // 60} минут")
+        except asyncio.CancelledError:
+            # The request was dropped (the tab was closed): the script must not go on running unseen.
+            proc.kill()
+            await proc.wait()
+            raise
         return RunResult(
             exit_code=proc.returncode or 0,
             stdout=out.decode("utf-8", "replace")[:MAX_OUTPUT],

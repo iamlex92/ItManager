@@ -68,3 +68,22 @@ def test_websocket_bad_message(client):
     with client.websocket_connect("/api/v1/ws", headers={"Authorization": f"Bearer {TOKEN}"}) as ws:
         ws.send_json({"action": "subscribe", "device_id": "nope"})
         assert ws.receive_json()["type"] == "error"
+
+
+def test_websocket_token_may_come_as_the_first_message(client):
+    import pytest
+    from starlette.websockets import WebSocketDisconnect
+
+    from .conftest import TOKEN
+
+    with client.websocket_connect("/api/v1/ws", headers={"Authorization": ""}) as ws:
+        ws.send_json({"action": "auth", "token": TOKEN})
+        ws.send_json({"action": "subscribe", "device_id": "*"})
+        ws.send_json({"action": "subscribe", "device_id": "not-a-uuid"})
+        assert ws.receive_json()["type"] == "error"  # the connection is open and working
+    with (
+        pytest.raises(WebSocketDisconnect),
+        client.websocket_connect("/api/v1/ws", headers={"Authorization": ""}) as ws,
+    ):
+        ws.send_json({"action": "auth", "token": "wrong-token-0000000000"})
+        ws.receive_json()

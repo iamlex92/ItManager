@@ -74,6 +74,7 @@ import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceDraft
 import com.itmanager.app.data.model.AnnotationKind
 import com.itmanager.app.data.model.DeviceType
+import com.itmanager.app.data.model.isIpAddress
 import com.itmanager.app.data.model.isMac
 import com.itmanager.app.data.model.splitIps
 import com.itmanager.app.data.model.FloorInfo
@@ -388,7 +389,6 @@ private fun SshLoginPicker(selected: String?, onPick: (String?) -> Unit) {
 /** Objects with no address of their own: no «Сеть» section in the form. */
 private val PASSIVE_FORM_TYPES = setOf(DeviceType.RACK, DeviceType.SOCKET, DeviceType.PATCH_PANEL)
 
-private val IPV4 = Regex("""^((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$""")
 
 /** Adds an object to the map or edits one. Only the inventory changes; the device itself is never contacted. */
 @OptIn(ExperimentalLayoutApi::class)
@@ -420,8 +420,8 @@ fun DeviceFormDialog(
     var rackUnits by rememberSaveable(key) { mutableStateOf((device?.rackUnits ?: DEFAULT_RACK_UNITS).toString()) }
     var sshLogin by rememberSaveable(key) { mutableStateOf(device?.sshCredentialId) }
     var snmpCommunity by rememberSaveable(key) { mutableStateOf("") }
-    val ipError = ip.isNotBlank() && !IPV4.matches(ip.trim())
-    val badExtraIp = splitIps(extraIps).firstOrNull { !IPV4.matches(it) }
+    val ipError = ip.isNotBlank() && !isIpAddress(ip)
+    val badExtraIp = splitIps(extraIps).firstOrNull { !isIpAddress(it) }
     val macError = mac.isNotBlank() && !isMac(mac)
     var triedSave by rememberSaveable(key) { mutableStateOf(false) }
     // The server said the address is taken (ip_in_use): pressing Save again saves it anyway.
@@ -507,12 +507,12 @@ fun DeviceFormDialog(
             FormSection("Сеть") {
                 OutlinedTextField(
                     value = ip,
-                    onValueChange = { ip = it.take(15) },
+                    onValueChange = { ip = it.take(45) },
                     label = { Text("IP-адрес, если есть") },
                     isError = ipError,
-                    supportingText = if (ipError) ({ Text("Нужен адрес вида 10.0.0.1") }) else null,
+                    supportingText = if (ipError) ({ Text("Нужен адрес вида 10.0.0.1 или fd00::1") }) else null,
                     singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(

@@ -19,7 +19,7 @@ from ..cliimport.parse import (
 from ..models import Port, ScriptAuditLog, Vlan
 from ..schemas import ConfigImportIn, ConfigImportOut, ConfigImportPort
 from ..services import switches
-from .deps import SessionDep, not_found
+from .deps import SessionDep, not_found, who
 
 router = APIRouter(prefix="/devices", tags=["config import"])
 
@@ -169,11 +169,10 @@ async def import_config(device_id: uuid.UUID, body: ConfigImportIn, request: Req
                     setattr(port, fld, value)
 
     if body.apply and (changed_ports or new_vlans):
-        client = request.client.host if request.client else "unknown"
         session.add(
             ScriptAuditLog(
                 script_name="config_import",
-                triggered_by=f"api:{client}",
+                triggered_by=who(request),
                 parameters={
                     "device": device.name,
                     "kind": kind,

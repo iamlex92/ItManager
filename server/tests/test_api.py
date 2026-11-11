@@ -183,3 +183,53 @@ def test_patch_panel_port_path_both_ways(client):
     sw_path = client.get(f"/api/v1/ports/{hops[-1]['port_id']}/path").json()
     assert [h["device_name"] for h in sw_path["hops"]][-1] == "PC-BUH-02"
     assert client.get("/api/v1/ports/00000000-0000-0000-0000-000000000000/path").status_code == 404
+
+
+def test_a_second_cable_in_a_patch_panel_port_is_warned_about(client):
+    import asyncio
+
+    from sqlalchemy import text
+
+    from app.db import make_engine
+
+    from .conftest import TEST_DB
+
+    pc = find(client, "PC-BUH-02")
+    nic = ports_of(client, pc["id"])[0]
+    hops = client.get(f"/api/v1/ports/{nic['id']}/trace").json()["hops"]
+    panel = next(h for h in hops if h["device_type"] == "PATCH_PANEL")
+    assert client.get(f"/api/v1/ports/{panel['port_id']}/path").json()["warnings"] == []
+    # A record the API would refuse (the port is busy), put in the way a bad import could.
+    other = find(client, "PC-BUH-03")
+    spare = ports_of(client, other["id"])[0]
+
+    async def cable():
+        engine = make_engine(TEST_DB)
+        async with engine.begin() as c:
+            await c.execute(
+                text("INSERT INTO connections (id, port_a_id, port_b_id) VALUES (gen_random_uuid(), :a, :b)"),
+                {"a": panel["port_id"], "b": spare["id"]},
+            )
+        await engine.dispose()
+
+    asyncio.run(cable())
+    warned = client.get(f"/api/v1/ports/{panel['port_id']}/path").json()["warnings"]
+    assert any("PP-ACC-01" in w and "несколько кабелей" in w for w in warned)
+
+
+def test_ten_wrong_keys_block_the_address_for_a_while(client):
+    from app.api import deps
+
+    wrong = {"Authorization": "Bearer wrong-key-0000000000000000"}
+    for _ in range(deps.MAX_FAILURES - 1):
+        assert client.get("/api/v1/devices", headers=wrong).status_code == 401
+    # The 10th wrong key is still answered 401 and blocks the address.
+    assert client.get("/api/v1/devices", headers=wrong).status_code == 401
+    blocked = client.get("/api/v1/devices")  # the right key, from the blocked address
+    assert blocked.status_code == 429 and blocked.json()["detail"]["code"] == "too_many_attempts"
+    assert blocked.headers["retry-after"] == "60"
+    # The server's own unblocking: the clock.
+    client.app.state.auth_guard._blocked.clear()
+    assert client.get("/api/v1/devices").status_code == 200
+    entry = next(a for a in client.get("/api/v1/audit").json() if a["action"] == "auth:blocked")
+    assert "заблокирован" in (entry["stdout"] or "")

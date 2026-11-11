@@ -156,6 +156,9 @@ class DeviceViewModel @Inject constructor(
 
     fun showOnMap() = mapFocus.request(deviceId)
 
+    /** A device on a traced line: the map opens on it, which lights its cable to the switch. */
+    fun showOnMap(id: String) = mapFocus.request(id)
+
     fun openPath(port: SwitchPort) {
         _path.value = PortPathState(port)
         viewModelScope.launch {

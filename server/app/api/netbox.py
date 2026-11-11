@@ -29,9 +29,14 @@ async def netbox_export(session: SessionDep):
 
 
 @router.get("/labels.html", response_class=HTMLResponse)
-async def device_labels(session: SessionDep, ids: Annotated[list[uuid.UUID] | None, Query()] = None):
-    """A printable page of QR labels (print to PDF from the browser). Without ids: every device."""
+async def device_labels(
+    session: SessionDep,
+    ids: Annotated[list[uuid.UUID] | None, Query()] = None,
+    layout: Annotated[str, Query(pattern="^(normal|small|single)$")] = "normal",
+):
+    """A printable page of QR labels (print to PDF from the browser). Without ids: every device. [layout]: «normal»
+    3 columns on A4, «small» 4 columns, «single» one 50×30 mm label per page for a thermal printer."""
     query = select(Device).order_by(Device.name)
     if ids:
         query = query.where(Device.id.in_(ids))
-    return HTMLResponse(labels_page(list((await session.scalars(query)).all())))
+    return HTMLResponse(labels_page(list((await session.scalars(query)).all()), layout))

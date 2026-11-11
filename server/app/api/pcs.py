@@ -57,7 +57,7 @@ from ..schemas import (
     PcSweepIn,
 )
 from ..services import heartbeat
-from .deps import SessionDep, not_found
+from .deps import SessionDep, not_found, who
 from .runbooks import linux_login, runbook_login
 
 router = APIRouter(prefix="/pcs", tags=["domain computers"])
@@ -247,7 +247,6 @@ async def act(host: str, action: Action, body: PcActionIn, request: Request, ses
     if action in CONFIRM_ACTIONS and not body.confirm:
         raise _bad("confirmation_required", 'подтвердите действие и повторите с "confirm": true', 400)
 
-    client = request.client.host if request.client else "unknown"
     started = datetime.now(UTC)
     t0 = time.monotonic()
     try:
@@ -275,7 +274,7 @@ async def act(host: str, action: Action, body: PcActionIn, request: Request, ses
         output = str(result.data.get("output") or result.data)[:20000]
     entry = ScriptAuditLog(
         script_name=f"{AUDIT_PREFIX}{action.value}",
-        triggered_by=(f"{body.operator} · {client}" if body.operator else f"api:{client}")[:100],
+        triggered_by=who(request, body.operator),
         parameters={
             "host": host,
             "arg": body.arg if action in (Action.KILL, Action.COMMAND, Action.ADMIN_ADD, Action.ADMIN_REMOVE) else None,

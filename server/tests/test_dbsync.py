@@ -197,3 +197,35 @@ def test_backup_takes_packages_only_from_one_source_and_never_older(seeded, tmp_
 
         newest = sorted((tmp_path / "bk" / "presync").glob("netadmin-presync-*.zip"))[-1]
         b.portal.call(lambda: dbsync.unpack(app.state.settings, Path(newest), force=True))
+
+
+def test_check_tells_what_would_stop_a_push(seeded):
+    main = create_app(make_settings(backup_server_url="http://backup:8000", backup_server_token=BACKUP_TOKEN))
+    backup = _backup_app()
+    plain = create_app(make_settings(api_token=BACKUP_TOKEN))
+    with (
+        TestClient(main, headers=AUTH) as m,
+        TestClient(backup, headers={"Authorization": f"Bearer {BACKUP_TOKEN}"}) as b,
+        TestClient(plain, headers={"Authorization": f"Bearer {BACKUP_TOKEN}"}) as p,
+    ):
+
+        def via(target):
+            async def forward(request: httpx.Request) -> httpx.Response:
+                r = await asyncio.to_thread(
+                    target.request, request.method, request.url.path, headers=dict(request.headers)
+                )
+                return httpx.Response(r.status_code, content=r.content, headers={"content-type": "application/json"})
+
+            return httpx.MockTransport(forward)
+
+        main.state.sync_transport = via(b)
+        ok = m.post(f"{API}/sync/check").json()
+        assert ok["ok"], ok
+        # A server that does not take packages.
+        main.state.sync_transport = via(p)
+        bad = m.post(f"{API}/sync/check").json()
+        assert not bad["ok"] and any(c["name"] == "Приём базы" and not c["ok"] for c in bad["checks"])
+        # Nobody there.
+        main.state.sync_transport = httpx.MockTransport(lambda r: (_ for _ in ()).throw(httpx.ConnectError("down")))
+        down = m.post(f"{API}/sync/check").json()
+        assert not down["ok"] and down["checks"][0]["name"] == "Связь"

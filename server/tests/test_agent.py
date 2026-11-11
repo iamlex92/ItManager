@@ -121,3 +121,20 @@ def test_info_shows_qr_with_token_only(tmp_path: Path, capsys, monkeypatch):
     cli.main(["info", "--config", str(path), "--no-token"])
     out = capsys.readouterr().out
     assert values["API_TOKEN"] not in out and "▀" not in out
+
+
+def test_rotate_token_writes_a_new_key_and_shows_it(tmp_path: Path, capsys, monkeypatch):
+    path = tmp_path / "netadmin.env"
+    cli.main(["init-config", str(path), "--database-url", "postgresql+asyncpg://x@/y"])
+    old = configfile.read(path)
+    for key, value in old.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setattr(cli, "_addresses", lambda: ["10.0.0.5"])
+    capsys.readouterr()
+    cli.main(["rotate-token", "--config", str(path)])
+    out = capsys.readouterr().out
+    new = configfile.read(path)
+    assert new["API_TOKEN"] != old["API_TOKEN"] and len(new["API_TOKEN"]) >= 32
+    assert new["API_TOKEN"] in out and old["API_TOKEN"] not in out and "Перезапустите службу" in out
+    # Everything else in the file stays.
+    assert new["SECRET_KEY"] == old["SECRET_KEY"] and new["DATABASE_URL"] == old["DATABASE_URL"]

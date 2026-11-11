@@ -2,7 +2,7 @@
 // «Настройки сервера»: everything that used to be edited in netadmin.env, as a form. The server describes the
 // settings itself (GET server-settings), so this page only draws them. Saved values act after a restart.
 (() => {
-  const { $, api, toast, fail, tabs } = window.NetAdmin;
+  const { $, api, toast, fail, tabs, ask, askText } = window.NetAdmin;
   const el = (tag, props = {}, ...kids) => {
     const e = Object.assign(document.createElement(tag), props);
     e.append(...kids);
@@ -15,7 +15,12 @@
   let credentials = [];
 
   const showError = (e) => { $("settings-error").hidden = !e; $("settings-error").textContent = e ? e.message : ""; };
-  const dirty = () => { $("settings-save").disabled = !Object.keys(edits).length && !resets.size; };
+  const dirty = () => {
+    const n = Object.keys(edits).length + resets.size;
+    $("settings-save").disabled = !n;
+    $("settings-dirty").hidden = !n;
+    $("settings-dirty").textContent = n ? `Не сохранено: ${n}` : "";
+  };
 
   async function load() {
     showError(null);
@@ -38,7 +43,33 @@
       g.note ? el("p", { className: "muted small", textContent: g.note }) : "",
       ...g.fields.map(row),
       g.title === "Резервный сервер" ? syncBox() : "")));
+    $("settings-toc").replaceChildren(...[...$("settings-groups").children].map((card) => {
+      const a = el("button", { type: "button", className: "toc-item", textContent: card.querySelector("h3").textContent });
+      a.addEventListener("click", () => card.scrollIntoView({ behavior: "smooth", block: "start" }));
+      return a;
+    }));
+    applySearch();
   }
+
+  // The search hides the groups and rows that do not match; a group whose title matches stays whole.
+  function applySearch() {
+    const q = $("settings-search").value.trim().toLowerCase();
+    for (const card of $("settings-groups").children) {
+      const title = card.querySelector("h3").textContent.toLowerCase();
+      let any = !q || title.includes(q);
+      for (const r of card.querySelectorAll(".setting")) {
+        const hit = !q || title.includes(q) || r.textContent.toLowerCase().includes(q);
+        r.hidden = !hit;
+        any ||= hit;
+      }
+      card.hidden = !any;
+    }
+  }
+  $("settings-search").addEventListener("input", applySearch);
+  // Leaving with unsaved values asks first.
+  window.addEventListener("beforeunload", (ev) => {
+    if (Object.keys(edits).length || resets.size) { ev.preventDefault(); ev.returnValue = ""; }
+  });
 
   // What the last sync did, and a way to run one now; filled in after the page is drawn.
   const when = (iso) => (iso ? new Date(iso).toLocaleString("ru-RU") : "ещё не было");
@@ -61,14 +92,14 @@
         const promote = el("button", { type: "button", className: "danger", textContent: "Сделать этот сервер основным",
           title: "Основной сервер потерян: этот перестаёт принимать базу и разрешает изменения" });
         promote.addEventListener("click", async () => {
-          if (!confirm("Этот сервер перестанет принимать базу с основного и разрешит изменения. Продолжить?")) return;
+          if (!await ask("Этот сервер перестанет принимать базу с основного и разрешит изменения. Продолжить?")) return;
           try { await api("POST", "sync/promote"); toast("Сервер стал основным. Перезапустите его, чтобы заработали опрос и ping"); load(); }
           catch (e) { fail(e); }
         });
         const reset = el("button", { type: "button", textContent: "Принимать от другого сервера",
           title: "Если основной сервер заменён: этот забудет прежний источник и примет пакет от нового" });
         reset.addEventListener("click", async () => {
-          if (!confirm("Забыть прежний основной сервер? Следующий пакет от любого сервера будет принят.")) return;
+          if (!await ask("Забыть прежний основной сервер? Следующий пакет от любого сервера будет принят.")) return;
           try { draw(await api("POST", "sync/reset-source")); toast("Источник забыт"); } catch (e) { fail(e); }
         });
         extra.push(promote, reset);
@@ -83,7 +114,20 @@
         try { draw(await api("POST", "sync/push")); toast("База отправлена на резервный сервер"); }
         catch (e) { fail(e); api("GET", "sync").then(draw).catch(() => {}); }
       });
-      box.replaceChildren(...lines.map((t) => el("p", { className: t.startsWith("Ошибка") || t.startsWith("Последняя попытка") ? "error small" : "small", textContent: t })), now, ...extra);
+      const check = el("button", { type: "button", textContent: "Проверить связь",
+        title: "Дойдёт ли база до резервного сервера: связь, токен, приём, ключ шифрования. Ничего не отправляет" });
+      check.hidden = st.role === "backup" || !st.backup_server_url;
+      const verdict = el("div", { className: "sync-check" });
+      check.addEventListener("click", async () => {
+        check.disabled = true;
+        try {
+          const r = await api("POST", "sync/check");
+          verdict.replaceChildren(...r.checks.map((c) => el("p", { className: c.ok ? "small" : "error small", textContent: `${c.ok ? "✓" : "✗"} ${c.name}: ${c.text}` })));
+        } catch (e) { fail(e); }
+        check.disabled = false;
+      });
+      extra.unshift(check);
+      box.replaceChildren(...lines.map((t) => el("p", { className: t.startsWith("Ошибка") || t.startsWith("Последняя попытка") ? "error small" : "small", textContent: t })), now, ...extra, verdict);
     };
     api("GET", "sync").then(draw).catch((e) => box.replaceChildren(el("p", { className: "error small", textContent: e.message })));
     return box;
@@ -136,7 +180,7 @@
         try {
           const url = typeof edits.ad_ldap_url === "string" ? edits.ad_ldap_url : "";
           const c = await api("POST", "server-settings/controller-certificate", { url });
-          const ok = confirm(`Сертификат контроллера:\n\nКому: ${c.subject}\nКем выдан: ${c.issuer}${c.self_signed ? " (самоподписанный)" : ""}\n`
+          const ok = await ask(`Сертификат контроллера:\n\nКому: ${c.subject}\nКем выдан: ${c.issuer}${c.self_signed ? " (самоподписанный)" : ""}\n`
             + `Действует до: ${new Date(c.not_after).toLocaleDateString("ru-RU")}\n\nОтпечаток SHA-256:\n${c.sha256}\n\n`
             + "Сверьте отпечаток на контроллере:\nopenssl x509 -in /var/lib/samba/private/tls/cert.pem -noout -fingerprint -sha256\n\nДоверять этому сертификату?");
           if (!ok) return;
@@ -165,7 +209,7 @@
   });
 
   $("settings-restart").addEventListener("click", async () => {
-    if (!confirm("Перезапустить сервер? Он будет недоступен 10–30 секунд, приложение и консоль переподключатся сами.")) return;
+    if (!await ask("Перезапустить сервер? Он будет недоступен 10–30 секунд, приложение и консоль переподключатся сами.")) return;
     try {
       await api("POST", "server-settings/restart");
       toast("Сервер перезапускается…");

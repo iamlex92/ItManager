@@ -140,3 +140,37 @@ def test_windows_wrappers_carry_the_script_as_data():
     assert base64.b64decode(b64).decode() == "print('привет')" and "Get-Command py" in py and "??" not in py
     assert "cmd.exe /c $f" in custom.windows_script("cmd", "dir")
     assert custom.linux_command("bash", "echo 'x'").startswith("sudo -S -p '' -- bash -c")
+
+
+def test_the_same_script_twice_at_once_is_refused(seeded):
+    with TestClient(create_app(make_settings(allow_runbook_writes=True)), headers=AUTH) as c:
+        s = _script(c, runs_on="server")
+        c.app.state.scripts_running = {(s["runbook_id"], "")}  # one is running
+        r = c.post(f"/api/v1/runbooks/{s['runbook_id']}/run", json={"params": {"who": "a"}, "confirm": True})
+        assert r.status_code == 409 and r.json()["detail"]["code"] == "already_running"
+        # A preview is only text: it may run beside it.
+        dry = c.post(
+            f"/api/v1/runbooks/{s['runbook_id']}/run", json={"params": {"who": "a"}, "dry_run": True, "confirm": True}
+        )
+        assert dry.status_code == 200
+        c.app.state.scripts_running.clear()
+        ok = c.post(f"/api/v1/runbooks/{s['runbook_id']}/run", json={"params": {"who": "a"}, "confirm": True})
+        assert ok.status_code == 200 and "ok a" in ok.json()["stdout"]
+        assert c.app.state.scripts_running == set()  # the slot is given back
+
+
+async def test_a_dropped_request_kills_the_server_script():
+    import asyncio
+    import os
+
+    task = asyncio.create_task(custom.run_on_server("python", "import time\ntime.sleep(60)"))
+    await asyncio.sleep(0.8)
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+    await asyncio.sleep(0.3)
+    # The temporary script file names the process; the bracket keeps pgrep from matching its own shell.
+    alive = os.popen('pgrep -f "[n]etadmin-script-" || true').read().split()
+    assert alive == []

@@ -7,6 +7,8 @@ import com.itmanager.app.core.nfc.DeepLink
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itmanager.app.core.network.BackupWriteGate
+import com.itmanager.app.core.network.UnknownTagException
+import io.ktor.client.plugins.ClientRequestException
 import com.itmanager.app.core.network.toUserMessage
 import com.itmanager.app.core.nfc.NfcController
 import com.itmanager.app.core.nfc.TagScan
@@ -101,9 +103,18 @@ class AppViewModel @Inject constructor(
                     when (link) {
                         is DeepLink.Device -> {
                             links.clear()
-                            repository.deviceForTag(link.id, "")
+                            repository.device(link.id)
                                 .onSuccess(::open)
-                                .onFailure { _messages.emit(it.toUserMessage()) }
+                                .onFailure {
+                                    // The label is of another server (or the device was removed): say so, not just «not found».
+                                    _messages.emit(
+                                        if (it is UnknownTagException || (it is ClientRequestException && it.response.status.value == 404)) {
+                                            "Устройства с этой этикетки нет на этом сервере: этикетка с другого сервера или устройство удалено"
+                                        } else {
+                                            it.toUserMessage()
+                                        },
+                                    )
+                                }
                         }
                         // The settings screen takes the code itself.
                         is DeepLink.Connect -> _navigation.emit(AppNavigation.OpenSettings)
