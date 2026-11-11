@@ -39,6 +39,11 @@ class ServerFailover(private val clock: () -> Long) {
     fun active(settings: ServerSettings): ServerSettings =
         settings.backup()?.takeIf { _onBackup.value } ?: settings
 
+    /** «Вернуться на основной сейчас»: the next request tries the main server first, whatever the minute says. */
+    fun tryMainNow() {
+        backupSince = Long.MIN_VALUE / 2
+    }
+
     /** [used] answered: it is the server from now on. */
     fun answered(settings: ServerSettings, used: ServerSettings) {
         val backup = settings.backup() != null && used.baseUrl != settings.baseUrl

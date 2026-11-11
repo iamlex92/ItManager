@@ -58,4 +58,24 @@ class ServerFailoverTest {
         assertTrue(r.isFailure && ServerFailover.unreachable(r.exceptionOrNull()))
         assertEquals(listOf("http://main:8000"), asked)
     }
+
+    @Test
+    fun tryMainNowSkipsTheMinuteOnTheBackup() = runBlocking {
+        now = 1_700_000_000_000L
+        val asked = mutableListOf<String>()
+        var mainUp = false
+        val call: suspend (ServerSettings) -> String = { s ->
+            asked += s.baseUrl
+            if (s.baseUrl == "http://main:8000" && !mainUp) throw ConnectException("refused")
+            s.apiToken
+        }
+        failover.run(settings, call)
+        assertTrue(failover.onBackup.value)
+        mainUp = true
+        asked.clear()
+        failover.tryMainNow()
+        failover.run(settings, call)
+        assertEquals(listOf("http://main:8000"), asked)
+        assertFalse(failover.onBackup.value)
+    }
 }
