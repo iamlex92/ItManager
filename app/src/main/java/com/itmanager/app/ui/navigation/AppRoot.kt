@@ -64,6 +64,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import com.itmanager.app.R
+import androidx.compose.ui.res.stringResource
 import com.itmanager.app.data.model.AlertSeverity
 import com.itmanager.app.ui.alerts.AlertNoticeBanner
 import com.itmanager.app.ui.alerts.AlertsScreen
@@ -193,7 +195,7 @@ fun AppRoot(appViewModel: AppViewModel = hiltViewModel()) {
                         .padding(bottom = padding.calculateBottomPadding() + 8.dp),
                 ) {
                     Text(
-                        "Нет связи · данные на " + (syncClock(java.time.Instant.ofEpochMilli(since).toString()) ?: "") + " · изменения отключены",
+                        stringResource(R.string.offline_pill, syncClock(java.time.Instant.ofEpochMilli(since).toString()).orEmpty()),
                         style = MaterialTheme.typography.labelMedium,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                     )

@@ -71,6 +71,8 @@ import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import com.itmanager.app.data.model.isOlderVersion
+import com.itmanager.app.R
+import androidx.compose.ui.res.stringResource
 import com.itmanager.app.core.security.BiometricGate
 import com.itmanager.app.core.security.GateResult
 import com.itmanager.app.core.security.findFragmentActivity
@@ -127,9 +129,13 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
-                SectionLabel("Оформление")
+                SectionLabel(stringResource(R.string.settings_appearance))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    listOf("dark" to "Тёмная", "light" to "Светлая", "system" to "Как в системе").forEach { (mode, title) ->
+                    listOf(
+                        "dark" to stringResource(R.string.theme_dark),
+                        "light" to stringResource(R.string.theme_light),
+                        "system" to stringResource(R.string.theme_system),
+                    ).forEach { (mode, title) ->
                         androidx.compose.material3.FilterChip(
                             selected = state.themeMode == mode,
                             onClick = { viewModel.setThemeMode(mode) },
@@ -138,7 +144,7 @@ fun SettingsScreen(
                     }
                 }
                 Text(
-                    "Тёмная читается лучше в серверной; на ярком свету выберите светлую. Карта и панели портов рисуются в цветах для тёмной темы.",
+                    stringResource(R.string.settings_theme_note),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 6.dp, bottom = 16.dp),
@@ -323,7 +329,7 @@ fun SettingsScreen(
                     modifier = Modifier.padding(bottom = 4.dp),
                 )
                 TextButton(onClick = viewModel::tryMainNow, modifier = Modifier.padding(bottom = 8.dp)) {
-                    Text("Вернуться на основной сейчас")
+                    Text(stringResource(R.string.backup_return_now))
                 }
             }
             OutlinedTextField(
@@ -382,7 +388,7 @@ fun SettingsScreen(
             ) {
                 Icon(Icons.Outlined.QrCodeScanner, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("Сканировать QR резервного сервера")
+                Text(stringResource(R.string.backup_scan_qr))
             }
             if (state.backupCheck != ConnectionCheck.Idle) {
                 Spacer(Modifier.height(12.dp))
@@ -392,7 +398,7 @@ fun SettingsScreen(
             Spacer(Modifier.height(24.dp))
             if (state.hasChanges && (state.check is ConnectionCheck.Ok || state.backupCheck is ConnectionCheck.Ok)) {
                 Text(
-                    "Соединение проверено, но настройки ещё не сохранены: нажмите «Сохранить».",
+                    stringResource(R.string.settings_unsaved_hint),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(bottom = 8.dp),
@@ -452,7 +458,7 @@ private fun ConnectionCheckResult(check: ConnectionCheck) {
                 }
                 if (isOlderVersion(appVersion, h.minAppVersion)) {
                     Text(
-                        "Приложение $appVersion старее, чем нужно серверу (${h.minAppVersion}): обновите приложение.",
+                        stringResource(R.string.app_too_old, appVersion.orEmpty(), h.minAppVersion),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.error,
                     )
