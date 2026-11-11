@@ -126,6 +126,22 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
+                SectionLabel("Оформление")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    listOf("dark" to "Тёмная", "light" to "Светлая", "system" to "Как в системе").forEach { (mode, title) ->
+                        androidx.compose.material3.FilterChip(
+                            selected = state.themeMode == mode,
+                            onClick = { viewModel.setThemeMode(mode) },
+                            label = { Text(title) },
+                        )
+                    }
+                }
+                Text(
+                    "Тёмная читается лучше в серверной; на ярком свету выберите светлую. Карта и панели портов рисуются в цветах для тёмной темы.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp, bottom = 16.dp),
+                )
                 SectionLabel("Безопасность")
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -428,6 +444,17 @@ private fun ConnectionCheckResult(check: ConnectionCheck) {
                     true -> "секреты зашифрованы"
                     false -> "секреты не зашифрованы: на сервере не задан SECRET_KEY"
                     null -> null
+                }
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val appVersion = remember {
+                    runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
+                }
+                if (isOlderVersion(appVersion, h.minAppVersion)) {
+                    Text(
+                        "Приложение $appVersion старее, чем нужно серверу (${h.minAppVersion}): обновите приложение.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
                 }
                 Text(
                     listOfNotNull(

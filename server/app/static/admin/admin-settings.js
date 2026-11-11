@@ -62,7 +62,34 @@
       return a;
     }));
     applySearch();
+    shown = s;
+    linkFields();
   }
+
+  // Fields that only matter together: the interval and token of the sync are dead while sending is off, and a server
+  // that takes the database has nothing to send.
+  let shown = null;
+  function linkFields() {
+    if (!shown) return;
+    const value = (key) => {
+      if (key in edits) return edits[key];
+      for (const g of shown.groups) for (const f of g.fields) if (f.key === key) return f.value;
+      return undefined;
+    };
+    const accept = !!value("sync_accept");
+    const sending = !!value("sync_to_backup") && !accept;
+    const lock = (key, off, why) => {
+      const input = document.getElementById(`set-${key}`);
+      if (!input) return;
+      input.disabled = off;
+      input.title = off ? why : "";
+    };
+    lock("sync_to_backup", accept, "Этот сервер сам принимает базу: отправлять ему нечего");
+    lock("sync_interval_minutes", !sending, "Включите отправку базы на резервный сервер");
+    lock("backup_server_token", !sending, "Включите отправку базы на резервный сервер");
+  }
+  $("settings-groups").addEventListener("input", linkFields);
+  $("settings-groups").addEventListener("change", linkFields);
 
   // The search hides the groups and rows that do not match; a group whose title matches stays whole.
   function applySearch() {

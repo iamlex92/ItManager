@@ -9,6 +9,10 @@ import android.os.SystemClock
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.core.content.IntentCompat
@@ -37,9 +41,10 @@ class MainActivity : FragmentActivity() {
     @Inject lateinit var appLock: AppLock
     @Inject lateinit var vpn: FactoryVpn
     @Inject lateinit var links: DeepLinkInbox
+    @Inject lateinit var appSettings: com.itmanager.app.core.settings.SettingsRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // The app is dark-only, so system bar icons stay light regardless of the system theme.
+        // Before the saved theme is known: dark; the content switches it as soon as it is read.
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
@@ -54,7 +59,21 @@ class MainActivity : FragmentActivity() {
         onBackPressedDispatcher.addCallback(leave)
         lifecycleScope.launch { vpn.disconnectOnExit.collect { leave.isEnabled = it } }
         setContent {
-            ItManagerTheme {
+            val mode by appSettings.themeMode.collectAsState(initial = "dark")
+            val dark = when (mode) {
+                "light" -> false
+                "system" -> isSystemInDarkTheme()
+                else -> true
+            }
+            // System bar icons follow the theme.
+            DisposableEffect(dark) {
+                enableEdgeToEdge(
+                    statusBarStyle = if (dark) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
+                    navigationBarStyle = if (dark) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
+                )
+                onDispose {}
+            }
+            ItManagerTheme(darkTheme = dark) {
                 AppRoot()
             }
         }

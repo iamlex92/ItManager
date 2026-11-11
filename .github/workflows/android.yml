@@ -37,6 +37,19 @@ jobs:
       - name: Unit tests
         run: ./gradlew --no-daemon testDebugUnitTest
 
+      # Android Lint: reported, not blocking yet (first stage); the report is attached to the run.
+      - name: Android Lint
+        continue-on-error: true
+        run: ./gradlew --no-daemon lintDebug
+
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: app/build/reports/lint-results-debug.html
+          if-no-files-found: ignore
+
       - name: Assemble debug APK
         run: ./gradlew --no-daemon assembleDebug
 

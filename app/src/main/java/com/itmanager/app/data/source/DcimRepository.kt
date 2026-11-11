@@ -18,6 +18,7 @@ import com.itmanager.app.data.model.PcKeyJob
 import com.itmanager.app.data.model.PcAction
 import com.itmanager.app.data.model.ServerConfig
 import com.itmanager.app.core.network.ControllerCertificateDto
+import com.itmanager.app.core.network.OfflineCache
 import com.itmanager.app.data.model.GpoOverview
 import com.itmanager.app.data.model.GpoOu
 import com.itmanager.app.data.model.GpoDetail
@@ -96,6 +97,7 @@ class DcimRepository @Inject constructor(
     private val liveSocket: LiveSocket,
     private val failover: ServerFailover,
     private val gate: BackupWriteGate,
+    private val offlineCache: OfflineCache,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -286,7 +288,7 @@ class DcimRepository @Inject constructor(
         if (failover.onBackup.value && _backupHealth.value?.readOnly != true && !gate.confirm()) {
             return Result.failure(UserFacingException("Изменение отменено: оно пропало бы при синхронизации"))
         }
-        return load(block).onSuccess { inventoryVersion.value++ }
+        return loadLive(block).onSuccess { inventoryVersion.value++ }
     }
 
     /** Restarts the stream whenever settings change, so a new server address takes effect at once. */
@@ -310,7 +312,35 @@ class DcimRepository @Inject constructor(
     private fun source(settings: ServerSettings): DcimDataSource =
         RemoteDataSource(api, liveSocket, settings)
 
+    /**
+     * When the app shows the last saved state because no server can be reached: the time that state is from (ms),
+     * else null. Changes are off meanwhile: they need a server.
+     */
+    private val _offlineSince = MutableStateFlow<Long?>(null)
+    val offlineSince: StateFlow<Long?> = _offlineSince.asStateFlow()
+
     /** On the main server, or on the backup while the main one cannot be reached. */
-    private suspend fun <T> load(block: suspend DcimDataSource.() -> T): Result<T> =
+    private suspend fun <T> loadLive(block: suspend DcimDataSource.() -> T): Result<T> =
         failover.run(settingsRepository.current()) { server -> source(server).block() }
+
+    /** [loadLive], and when no server can be reached at all, the same read from the saved copy. */
+    private suspend fun <T> load(block: suspend DcimDataSource.() -> T): Result<T> {
+        val live = loadLive(block)
+        if (live.isSuccess) {
+            _offlineSince.value = null
+            return live
+        }
+        if (!ServerFailover.unreachable(live.exceptionOrNull())) return live
+        offlineCache.serve(true)
+        try {
+            val saved = runCatchingCancellable { source(settingsRepository.current()).block() }
+            if (saved.isSuccess) {
+                offlineCache.servedFrom().takeIf { it > 0 }?.let { _offlineSince.value = it }
+                return saved
+            }
+        } finally {
+            offlineCache.serve(false)
+        }
+        return live
+    }
 }

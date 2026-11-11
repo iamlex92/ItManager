@@ -3,6 +3,7 @@ package com.itmanager.app.ui.theme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
@@ -38,6 +39,35 @@ private val DarkColors = darkColorScheme(
     scrim = Color.Black,
 )
 
+private val LightColors = lightColorScheme(
+    primary = Color(0xFF1F5FD0),
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFFD9E5FF),
+    onPrimaryContainer = Color(0xFF0B2A66),
+    secondary = Color(0xFF4A5565),
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFFE3E8F0),
+    onSecondaryContainer = Color(0xFF0F1620),
+    tertiary = Color(0xFF1B7F3A),
+    background = Color(0xFFF6F8FB),
+    onBackground = Color(0xFF0F1620),
+    surface = Color(0xFFFFFFFF),
+    onSurface = Color(0xFF0F1620),
+    surfaceVariant = Color(0xFFE9EDF3),
+    onSurfaceVariant = Color(0xFF4A5565),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFF1F4F9),
+    surfaceContainer = Color(0xFFEBEFF5),
+    surfaceContainerHigh = Color(0xFFE3E8F0),
+    surfaceContainerHighest = Color(0xFFDAE0E9),
+    outline = Color(0xFF6B7686),
+    outlineVariant = Color(0xFFC5CDD8),
+    error = Color(0xFFB3261E),
+    onError = Color.White,
+    errorContainer = Color(0xFFF9DEDC),
+    onErrorContainer = Color(0xFF410E0B),
+)
+
 private val AppShapes = Shapes(
     extraSmall = RoundedCornerShape(6.dp),
     small = RoundedCornerShape(10.dp),
@@ -46,11 +76,14 @@ private val AppShapes = Shapes(
     extraLarge = RoundedCornerShape(28.dp),
 )
 
-/** The app is dark-only by design: it is used in server rooms and on the shop floor. */
+/**
+ * Dark by default: the app is used in server rooms and on the shop floor. Light is a choice in the settings; the
+ * map and the port panels draw with their own colours and are made for the dark theme.
+ */
 @Composable
-fun ItManagerTheme(content: @Composable () -> Unit) {
+fun ItManagerTheme(darkTheme: Boolean = true, content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = DarkColors,
+        colorScheme = if (darkTheme) DarkColors else LightColors,
         typography = AppTypography,
         shapes = AppShapes,
         content = content,

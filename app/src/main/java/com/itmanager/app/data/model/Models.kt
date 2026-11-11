@@ -524,7 +524,23 @@ data class ServerHealth(
     val syncRole: String = "",
     /** When the backup server last took the main server's database (ISO time), or null. */
     val lastSyncAt: String? = null,
+    /** The oldest app version this server works with; empty on a server from before the check. */
+    val minAppVersion: String = "",
 )
+
+/** True when [app] ("1.0.3", "1.1.0-debug") is older than [required]; unreadable versions never count as older. */
+fun isOlderVersion(app: String?, required: String?): Boolean {
+    fun parts(v: String?) = v?.substringBefore('-')?.split('.')?.map { it.toIntOrNull() }
+    val a = parts(app) ?: return false
+    val r = parts(required) ?: return false
+    if (a.any { it == null } || r.any { it == null }) return false
+    for (i in 0 until maxOf(a.size, r.size)) {
+        val x = a.getOrElse(i) { 0 } ?: 0
+        val y = r.getOrElse(i) { 0 } ?: 0
+        if (x != y) return x < y
+    }
+    return false
+}
 
 fun parseColorHex(hex: String?, fallback: Long = 0xFF3498DB): Long {
     val digits = hex?.trim()?.removePrefix("#") ?: return fallback

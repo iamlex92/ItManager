@@ -39,6 +39,7 @@ data class SettingsUiState(
     val check: ConnectionCheck = ConnectionCheck.Idle,
     val saved: ServerSettings? = null,
     val appLock: Boolean = true,
+    val themeMode: String = "dark",
     /** A second server the app turns to while the main one cannot be reached. */
     val backupUrl: String = "",
     val backupToken: String = "",
@@ -84,14 +85,21 @@ class SettingsViewModel @Inject constructor(
             launch { failover.onBackup.collect { on -> _state.update { it.copy(onBackup = on) } } }
             // A connection code scanned with the camera: the form fills in as from the app's own scanner.
             links.take<DeepLink.Connect>()?.let { applyScanned(it.code) }
+            launch { settings.themeMode.collect { m -> _state.update { it.copy(themeMode = m) } } }
             // Applied at once, apart from the server form and its Save button.
             settings.appLock.collect { on -> _state.update { it.copy(appLock = on) } }
         }
     }
 
-    /** Turning the lock off is confirmed with biometrics by the screen first. */
+    /** «Вернуться на основной сейчас»: the next request tries the main server first. */
     fun tryMainNow() = failover.tryMainNow()
 
+    fun setThemeMode(mode: String) {
+        _state.update { it.copy(themeMode = mode) }
+        viewModelScope.launch { settings.setThemeMode(mode) }
+    }
+
+    /** Turning the lock off is confirmed with biometrics by the screen first. */
     fun setAppLock(enabled: Boolean) {
         viewModelScope.launch { settings.setAppLock(enabled) }
     }

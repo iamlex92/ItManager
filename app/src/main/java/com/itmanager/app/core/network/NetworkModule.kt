@@ -1,6 +1,9 @@
 package com.itmanager.app.core.network
 
+import android.content.Context
 import dagger.Module
+import dagger.hilt.android.qualifiers.ApplicationContext
+import java.io.File
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
@@ -26,7 +29,13 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideHttpClient(json: Json): HttpClient = HttpClient(OkHttp) {
+    fun provideOfflineCache(@ApplicationContext context: Context): OfflineCache =
+        OfflineCache(File(context.cacheDir, "offline"))
+
+    @Provides
+    @Singleton
+    fun provideHttpClient(json: Json, cache: OfflineCache): HttpClient = HttpClient(OkHttp) {
+        engine { addInterceptor(cache.interceptor) }
         expectSuccess = true
         install(ContentNegotiation) { json(json) }
         install(WebSockets) { pingIntervalMillis = 20_000 }
