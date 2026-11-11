@@ -38,8 +38,13 @@
     return `Ошибка сервера (${status})`;
   }
 
+  let operatorName = "";
+  try { operatorName = localStorage.getItem("netadmin.operator") || ""; } catch { /* private mode */ }
+
   async function api(method, path, body, raw) {
     const headers = { Authorization: `Bearer ${token}` };
+    // Who is at the keyboard, for the journal: percent-encoded because a header can only be ASCII.
+    if (operatorName) headers["X-Operator"] = encodeURIComponent(operatorName);
     let payload;
     if (raw) { payload = raw.body; headers["Content-Type"] = raw.type; }
     else if (body !== undefined) { payload = JSON.stringify(body); headers["Content-Type"] = "application/json"; }
@@ -82,6 +87,7 @@
 
   function logout(message) {
     token = "";
+    liveStop();
     try { sessionStorage.removeItem(KEY); localStorage.removeItem(KEY); } catch { /* ignore */ }
     $("app").hidden = true;
     $("login").hidden = false;
@@ -93,8 +99,10 @@
   $("login-form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     token = $("login-token").value.trim();
+    operatorName = $("login-name").value.trim().slice(0, 60);
     try {
       await api("GET", "floors");
+      try { localStorage.setItem("netadmin.operator", operatorName); } catch { /* private mode */ }
       store($("login-remember").checked);
       start();
     } catch (e) {
@@ -102,6 +110,7 @@
     }
   });
   $("logout").addEventListener("click", () => logout(""));
+  $("login-name").value = operatorName;
 
   // This server stopped answering: say so at the top and offer the backup server set in «Настройки сервера».
   // Read on each use: the banner can be asked for before this part of the script has run.
@@ -219,6 +228,68 @@
     } catch { /* the badge simply stays as it was */ }
   }
 
+  // ---------------------------------------------------------------- live updates
+
+  // The server pushes what changes (a device answering or not, an alert, an inventory edit); the page follows without
+  // being asked. Dropped connections come back by themselves, 1 s, 2 s, 4 s ... at most 30 s apart.
+  let liveSocket = null, liveTimer = 0, liveDelay = 1000, liveBusy = 0, livePending = new Map(), liveReload = 0;
+
+  function liveStop() {
+    clearTimeout(liveTimer);
+    if (liveSocket) { liveSocket.onclose = null; liveSocket.close(); liveSocket = null; }
+    $("live").hidden = true;
+  }
+
+  function liveStart() {
+    liveStop();
+    if (!token) return;
+    const url = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/v1/ws`;
+    let ws;
+    try { ws = new WebSocket(url); } catch { liveRetry(); return; }
+    liveSocket = ws;
+    // The token goes in the first message, not in the address: addresses end up in logs.
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ action: "auth", token }));
+      ws.send(JSON.stringify({ action: "subscribe", device_id: "*" }));
+      liveDelay = 1000;
+      $("live").hidden = true;
+    };
+    ws.onmessage = (ev) => { try { liveEvent(JSON.parse(ev.data)); } catch { /* not for us */ } };
+    ws.onclose = () => { liveSocket = null; if (token) { $("live").hidden = false; liveRetry(); } };
+  }
+
+  function liveRetry() {
+    clearTimeout(liveTimer);
+    liveTimer = setTimeout(liveStart, liveDelay);
+    liveDelay = Math.min(liveDelay * 2, 30_000);
+  }
+
+  function liveEvent(m) {
+    if (m.type === "device_status") {
+      // Online or not: the dot on the map and in the list changes at once, without reloading anything.
+      for (const list of [S.allHere, S.devices, allDevices]) {
+        const d = list && list.find((x) => x.id === m.device_id);
+        if (d) d.is_online = m.is_online;
+      }
+      clearTimeout(liveBusy);
+      liveBusy = setTimeout(() => {
+        if (currentTab === "map") draw();
+        else if (currentTab === "devices") renderDevices();
+        if (cardId === m.device_id && $("card-dialog").open) openCard(cardId, true).catch(() => {});
+      }, 250);
+    } else if (m.type === "alert") {
+      refreshAlertCount();
+      if (currentTab === "alerts" && !document.querySelector("dialog[open]")) window.NetAdmin.tabs.alerts?.();
+    } else if (m.type === "inventory_changed") {
+      // Somebody else edited the inventory: reload the open section, unless this page is in the middle of an edit.
+      clearTimeout(liveReload);
+      liveReload = setTimeout(() => {
+        if (document.querySelector("dialog[open]") || (currentTab === "map" && S.tool !== "view")) return;
+        refreshTab().catch(() => {});
+      }, 1000);
+    }
+  }
+
   let alertTimer = 0;
   function start() {
     $("login").hidden = true;
@@ -228,6 +299,7 @@
     refreshAlertCount();
     clearInterval(alertTimer);
     alertTimer = setInterval(refreshAlertCount, 60_000);
+    liveStart();
   }
 
   // ---------------------------------------------------------------- map state
@@ -4102,7 +4174,12 @@
         node("span", { className: h.is_online ? "online small" : "offline small", textContent: status(h) })));
       if (i < r.hops.length - 1) chain.append(node("li", { className: "cable muted small", textContent: [h.cable_type, h.cable_label].filter(Boolean).join(" · ") || "кабель" }));
     });
-    $("path-body").replaceChildren(summary, ...(r.hops.length > 1 ? [node("h3", { textContent: "Весь путь" }), chain] : []));
+    const warn = (r.warnings || []).map((w) => node("p", { className: "error-box", textContent: w }));
+    // The line on the map: the far device is selected there, which lights its cable to the switch.
+    const onMap = others.find((e) => !PASSIVE.has(e.device_type) && e.device_type !== "SWITCH") || others[0];
+    const mapBtn = onMap ? node("button", { type: "button", textContent: "Показать на карте",
+      onclick: () => { $("path-dialog").close(); $("card-dialog").close(); showOnMap(onMap.device_id).catch(fail); } }) : "";
+    $("path-body").replaceChildren(...warn, summary, ...(r.hops.length > 1 ? [node("h3", { textContent: "Весь путь" }), chain] : []), mapBtn);
     $("path-dialog").showModal();
   }
   $("path-close").addEventListener("click", () => $("path-dialog").close());
@@ -4260,7 +4337,7 @@
   // What admin-more.js (the other tabs) builds on.
   window.NetAdmin = {
     $, api, toast, fail, typeOf, glyphCanvas, OPERATOR, tabs: {},
-    picked, renderPorts: () => renderPorts(), portsDevice: () => portsDevice,
+    picked, listedIds: () => visibleDevices().map((d) => d.id), renderPorts: () => renderPorts(), portsDevice: () => portsDevice,
     openCard: (id) => openCard(id).catch(fail),
     openTab: (name) => openTab(name),
     showMode: () => showMode(),

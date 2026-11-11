@@ -409,6 +409,33 @@ data class MergePreview(
 /** What one «Обновить» round found: devices checked, answering, changed, and sources that failed. */
 data class StatusRefresh(val checked: Int, val online: Int, val changed: Int, val errors: List<String>)
 
+private val IPV4_ADDRESS = Regex("""^((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$""")
+private val IPV6_GROUP = Regex("^[0-9A-Fa-f]{1,4}$")
+
+/** An IPv4 or IPv6 address as the server accepts it (no name lookup, no zone or prefix). */
+fun isIpAddress(text: String): Boolean {
+    val t = text.trim()
+    if (IPV4_ADDRESS.matches(t)) return true
+    if (':' !in t || t.length > 45) return false
+    val doubled = t.split("::")
+    if (doubled.size > 2) return false
+    val groups = mutableListOf<String>()
+    for (part in doubled) if (part.isNotEmpty()) groups += part.split(':')
+    // An IPv4 tail (::ffff:10.0.0.1) counts for two groups.
+    var count = 0
+    for ((i, g) in groups.withIndex()) {
+        if (i == groups.lastIndex && '.' in g) {
+            if (!IPV4_ADDRESS.matches(g)) return false
+            count += 2
+        } else if (IPV6_GROUP.matches(g)) {
+            count += 1
+        } else {
+            return false
+        }
+    }
+    return if (doubled.size == 2) count <= 7 else count == 8
+}
+
 /** Addresses typed into one field, split on commas, semicolons and spaces. */
 fun splitIps(text: String): List<String> = text.split(',', ';', ' ', '\n').map { it.trim() }.filter { it.isNotEmpty() }.distinct()
 
@@ -527,4 +554,8 @@ data class PathHop(
 }
 
 /** The whole line through a port, end to end, and the active devices at its ends (none, one or two). */
-data class PortPath(val hops: List<PathHop>, val ends: List<PathHop>)
+data class PortPath(val hops: List<PathHop>, val ends: List<PathHop>, val warnings: List<String> = emptyList()) {
+    /** The device to show on the map for this line: the far computer or device, not the switch it ends on. */
+    fun mapTarget(hereDeviceId: String): PathHop? =
+        ends.filter { it.deviceId != hereDeviceId }.let { far -> far.firstOrNull { it.deviceType != DeviceType.SWITCH } ?: far.firstOrNull() }
+}

@@ -168,8 +168,12 @@ data class PathHopDto(
 }
 
 @Serializable
-data class PortPathDto(val hops: List<PathHopDto> = emptyList(), val ends: List<PathHopDto> = emptyList()) {
-    fun toDomain() = PortPath(hops.map { it.toDomain() }, ends.map { it.toDomain() })
+data class PortPathDto(
+    val hops: List<PathHopDto> = emptyList(),
+    val ends: List<PathHopDto> = emptyList(),
+    val warnings: List<String> = emptyList(),
+) {
+    fun toDomain() = PortPath(hops.map { it.toDomain() }, ends.map { it.toDomain() }, warnings)
 }
 
 @Serializable

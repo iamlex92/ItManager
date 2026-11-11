@@ -20,6 +20,9 @@
       <input id="login-token" type="password" autocomplete="current-password" required>
     </label>
     <p class="muted small">Токен показывает команда <code>sudo netadmin-agent info</code> (в Windows: «NetAdmin — подключение телефона»).</p>
+    <label>Ваше имя <span class="muted small">(необязательно: попадёт в журнал рядом с вашими изменениями)</span>
+      <input id="login-name" autocomplete="name" maxlength="60" placeholder="Например, Иван Петров">
+    </label>
     <label class="check"><input id="login-remember" type="checkbox"> Запомнить на этом компьютере</label>
     <button type="submit" class="primary">Войти</button>
     <p id="login-error" class="error" hidden></p>
@@ -30,6 +33,7 @@
   <header class="top">
     <div class="brand">NetAdmin <span class="muted small">веб-консоль · {{version}}</span></div>
     <div class="right">
+      <span id="live" class="badge warn" hidden title="Нет живого обновления: данные обновляются при открытии разделов и кнопкой «Обновить»">без автообновления</span>
       <span id="mode" class="badge"></span>
       <button id="theme-toggle" class="ghost" type="button" title="Сменить тему: светлая или тёмная" aria-label="Сменить тему">Тема</button>
       <button id="logout" class="ghost">Выйти</button>

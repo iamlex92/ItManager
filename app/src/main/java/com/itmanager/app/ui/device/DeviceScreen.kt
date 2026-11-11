@@ -298,6 +298,11 @@ fun DeviceScreen(
                 if (id != device?.id) onOpenDevice(id)
             },
             onOpenPorts = device?.takeIf { it.type == DeviceType.SWITCH }?.let { d -> { viewModel.closePath(); onOpenPorts(d.id) } },
+            onShowOnMap = { id ->
+                viewModel.closePath()
+                viewModel.showOnMap(id)
+                onShowOnMap()
+            },
             onDismiss = viewModel::closePath,
         )
     }
@@ -884,6 +889,7 @@ private fun PortPathSheet(
     device: Device?,
     onOpenDevice: (String) -> Unit,
     onOpenPorts: (() -> Unit)?,
+    onShowOnMap: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
@@ -896,6 +902,14 @@ private fun PortPathSheet(
         ) {
             Text("${device?.name.orEmpty()} · порт ${state.port.name}", style = MaterialTheme.typography.titleMedium)
             val path = state.path
+            path?.warnings?.forEach { w ->
+                Text(
+                    w,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.errorContainer, RoundedCornerShape(10.dp)).padding(10.dp),
+                )
+            }
             when {
                 state.loading -> LinearProgressIndicator(Modifier.fillMaxWidth())
                 state.error != null -> Text(state.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
@@ -924,6 +938,9 @@ private fun PortPathSheet(
                         }
                     }
                 }
+            }
+            path?.mapTarget(device?.id.orEmpty())?.let { target ->
+                TextButton(onClick = { onShowOnMap(target.deviceId) }) { Text("Показать линию на карте") }
             }
             if (onOpenPorts != null) {
                 TextButton(onClick = onOpenPorts) { Text("Настроить порт на панели коммутатора…") }

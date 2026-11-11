@@ -53,7 +53,7 @@ from ..schemas import (
     GpoTemplateOut,
     GpoWriteIn,
 )
-from .deps import SessionDep
+from .deps import SessionDep, who
 from .runbooks import runbook_login
 
 router = APIRouter(prefix="/gpo", tags=["group policy"])
@@ -97,7 +97,6 @@ async def _write(request: Request, session, body: GpoWriteIn, action: str, param
     backend = _backend(request)
     _gate(request, body)
     login = await runbook_login(session, request.app.state.settings)
-    client = request.client.host if request.client else "unknown"
     started, t0 = datetime.now(UTC), time.monotonic()
     error, result = None, None
     try:
@@ -107,7 +106,7 @@ async def _write(request: Request, session, body: GpoWriteIn, action: str, param
     session.add(
         ScriptAuditLog(
             script_name=f"{AUDIT_PREFIX}{action}",
-            triggered_by=(f"{body.operator} · {client}" if body.operator else f"api:{client}")[:100],
+            triggered_by=who(request, body.operator),
             parameters={**params, "auth_method": body.auth_method, "simulated": backend.simulated},
             executed_at=started,
             exit_code=1 if error else 0,

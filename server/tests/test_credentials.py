@@ -120,3 +120,26 @@ def test_credentials_without_key_still_work_plaintext(client):
     r = client.post("/api/v1/credentials", json={"name": "winrm", "kind": "winrm", "secret": "x"})
     assert r.status_code == 201 and r.json()["has_secret"]
     assert client.get("/api/v1/health").json()["secrets_encrypted"] is False
+
+
+def test_the_operators_name_goes_to_the_journal(client):
+    from urllib.parse import quote
+
+    r = client.post(
+        "/api/v1/vlans",
+        json={"vlan_id": 777, "name": "Проверка"},
+        headers={"X-Operator": quote("Иван Петров")},
+    )
+    assert r.status_code == 201, r.text
+    entry = next(
+        a
+        for a in client.get("/api/v1/audit").json()
+        if a["action"].startswith("vlan") and a["parameters"].get("vlan_id") == 777
+    )
+    assert entry["triggered_by"].startswith("Иван Петров · ")
+    # Without the header: the address alone, as before.
+    client.post("/api/v1/vlans", json={"vlan_id": 778, "name": "Без имени"})
+    other = next(
+        a for a in client.get("/api/v1/audit").json() if a["parameters"] and a["parameters"].get("vlan_id") == 778
+    )
+    assert other["triggered_by"].startswith("api:")

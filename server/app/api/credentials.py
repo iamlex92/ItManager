@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from ..crypto import box
 from ..models import Credential, Device, ScriptAuditLog
 from ..schemas import CredentialIn, CredentialOut, CredentialUpdate
-from .deps import SessionDep, conflict, not_found
+from .deps import SessionDep, conflict, not_found, who
 
 router = APIRouter(prefix="/credentials", tags=["credentials"])
 
@@ -36,13 +36,12 @@ async def _out(session, c: Credential) -> CredentialOut:
 
 
 def _audit(request: Request, action: str, c: Credential, operator: str | None, changed: list[str] | None = None):
-    client = request.client.host if request.client else "unknown"
     params = {"name": c.name, "kind": c.kind, "username": c.username, "encrypted": box().enabled}
     if changed is not None:
         params["changed"] = changed
     return ScriptAuditLog(
         script_name=action,
-        triggered_by=(f"{operator} · {client}" if operator else f"api:{client}")[:100],
+        triggered_by=who(request, operator),
         parameters=params,
         executed_at=datetime.now(UTC),
         exit_code=0,

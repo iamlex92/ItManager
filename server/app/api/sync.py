@@ -17,7 +17,7 @@ from .. import serversettings as ss
 from ..models import ScriptAuditLog
 from ..services import dbsync
 from ..services.realtime import Hub
-from .deps import SessionDep
+from .deps import SessionDep, who
 
 log = logging.getLogger(__name__)
 
@@ -44,11 +44,10 @@ def _out(request: Request) -> dict:
 
 
 async def _audit(request: Request, action: str, exit_code: int, text: str, params: dict) -> None:
-    client = request.client.host if request.client else "unknown"
     async with request.app.state.sessionmaker() as s:
         s.add(
             ScriptAuditLog(
-                script_name=action, triggered_by=f"api:{client}", parameters=params, exit_code=exit_code,
+                script_name=action, triggered_by=who(request), parameters=params, exit_code=exit_code,
                 output_log=text,
             )
         )  # fmt: skip

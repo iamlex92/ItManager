@@ -20,7 +20,7 @@ from ..schemas import (
     ScanIn,
     ScanOut,
 )
-from .deps import SessionDep, conflict, not_found
+from .deps import SessionDep, conflict, not_found, who
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/discovery", tags=["discovery"])
@@ -31,8 +31,7 @@ def _manager(request: Request) -> ScanManager:
 
 
 def _who(request: Request, operator: str | None) -> str:
-    client = request.client.host if request.client else "unknown"
-    return f"{operator} · {client}" if operator else f"api:{client}"
+    return who(request, operator)
 
 
 def _end(end: End, inv: Inventory) -> LinkEndOut:

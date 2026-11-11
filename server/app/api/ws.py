@@ -8,9 +8,11 @@ from ..services.realtime import ALL
 from ..services.serialize import port_out
 from ..services.switches import load_switch
 from ..services.topology import load_graph
-from .deps import token_ok
+from .deps import record_block, token_ok
 
 router = APIRouter()
+
+AUTH_WAIT_SECONDS = 5.0
 
 
 def _ws_token(ws: WebSocket) -> str | None:
@@ -27,6 +29,8 @@ def _ws_token(ws: WebSocket) -> str | None:
 async def live(ws: WebSocket):
     """Live port status and alerts.
 
+    Auth: the token in the query or an Authorization header (older clients), or as the first message
+              {"action": "auth", "token": "..."} within 5 seconds, so it stays out of URLs and proxy logs.
     Client -> {"action": "subscribe", "device_id": "<uuid>" | "*"}
               {"action": "unsubscribe", "device_id": ...}
     Server -> {"type": "snapshot", "device_id", "ports": [...]} after subscribe
@@ -36,7 +40,22 @@ async def live(ws: WebSocket):
               {"type": "error", "message"}
     """
     await ws.accept()
-    if not token_ok(ws.app.state.settings, _ws_token(ws)):
+    token = _ws_token(ws)
+    if token is None:
+        try:
+            first = await asyncio.wait_for(ws.receive_json(), AUTH_WAIT_SECONDS)
+        except (TimeoutError, WebSocketDisconnect, RuntimeError, ValueError):
+            first = None
+        if isinstance(first, dict) and first.get("action") == "auth":
+            token = str(first.get("token") or "")
+    client = ws.client.host if ws.client else "unknown"
+    guard = ws.app.state.auth_guard if getattr(ws.app.state, "auth_guard", None) else None
+    if guard is not None and guard.blocked(client):
+        await ws.close(code=status.WS_1008_POLICY_VIOLATION, reason="too many attempts")
+        return
+    if not token_ok(ws.app.state.settings, token):
+        if token and guard is not None and guard.failed(client):
+            await record_block(ws.app, client)
         # Accept first so the client gets a readable close code and reason.
         await ws.close(code=status.WS_1008_POLICY_VIOLATION, reason="unauthorized")
         return

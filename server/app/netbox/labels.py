@@ -44,7 +44,22 @@ def qr_svg(data: str) -> str:
     return out.getvalue().decode("utf-8")
 
 
-def labels_page(devices: list[Device]) -> str:
+# Sheet layouts: label size in mm and columns; «single» is one label per page for a thermal printer.
+LAYOUTS = {
+    "normal": {"cols": 3, "h": 28, "qr": 22, "page": "A4", "margin": 10, "font": 9},
+    "small": {"cols": 4, "h": 20, "qr": 15, "page": "A4", "margin": 8, "font": 7},
+    "single": {"cols": 1, "h": 30, "qr": 24, "page": "50mm 30mm", "margin": 0, "font": 8},
+}
+
+
+def short_id(device: Device) -> str:
+    """The first characters of the id, printed under the name: a way to find the device without the app (search in the
+    web console takes it)."""
+    return str(device.id)[:8]
+
+
+def labels_page(devices: list[Device], layout: str = "normal") -> str:
+    lay = LAYOUTS.get(layout, LAYOUTS["normal"])
     cells = []
     for d in devices:
         ip = html.escape(str(d.ip_address)) if d.ip_address else ""
@@ -52,15 +67,17 @@ def labels_page(devices: list[Device]) -> str:
             '<div class="label">'
             f"{qr_svg(label_link(d))}"
             f'<div class="text"><b>{html.escape(d.name)}</b><br>{html.escape(d.device_type.title())}'
-            f"{'<br>' + ip if ip else ''}</div></div>"
+            f'{"<br>" + ip if ip else ""}<br><span class="sid">№ {short_id(d)}</span></div></div>'
         )
     return (
         '<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Наклейки ItManager</title><style>'
-        "@page{size:A4;margin:10mm}body{font-family:sans-serif;margin:0}"
-        ".grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4mm}"
-        ".label{display:flex;align-items:center;gap:3mm;border:1px dashed #888;padding:3mm;"
-        "break-inside:avoid;height:28mm}"
-        ".label svg{width:22mm;height:22mm;flex:none}.text{font-size:9pt;overflow:hidden;line-height:1.3}"
+        f"@page{{size:{lay['page']};margin:{lay['margin']}mm}}body{{font-family:sans-serif;margin:0}}"
+        f".grid{{display:grid;grid-template-columns:repeat({lay['cols']},1fr);gap:{4 if lay['cols'] > 1 else 0}mm}}"
+        f".label{{display:flex;align-items:center;gap:3mm;border:{'1px dashed #888' if lay['cols'] > 1 else 'none'};"
+        f"padding:{3 if lay['cols'] > 1 else 2}mm;break-inside:avoid;height:{lay['h']}mm;"
+        f"{'page-break-after:always;' if lay['cols'] == 1 else ''}}}"
+        f".label svg{{width:{lay['qr']}mm;height:{lay['qr']}mm;flex:none}}"
+        f".text{{font-size:{lay['font']}pt;overflow:hidden;line-height:1.3}}.sid{{color:#555;font-family:monospace}}"
         "</style></head><body>"
         f'<div class="grid">{"".join(cells)}</div></body></html>'
     )

@@ -5,6 +5,7 @@
     netadmin-agent backup              # one database backup now
     netadmin-agent restore FILE        # replace the database with a backup (service stopped)
     netadmin-agent restore-sync FILE   # put back a copy kept before a database sync
+    netadmin-agent rotate-token        # a new API token in the config (restart the service, then re-enter it)
     netadmin-agent init-config PATH …  # used by the installers, never overwrites
     netadmin-agent selfcheck           # build check: everything the frozen binary needs is inside
 
@@ -185,6 +186,25 @@ def cmd_restore_sync(args: argparse.Namespace) -> None:
     print("restored from the kept copy")
 
 
+def cmd_rotate_token(args: argparse.Namespace) -> None:
+    """Replaces API_TOKEN in the config file with a new random one and shows it; every phone and console must then
+    enter the new key. The service has to be restarted to use it."""
+    import re
+
+    config = Path(args.config)
+    _load(config)
+    text = config.read_text(encoding="utf-8")
+    new = secrets.token_urlsafe(32)
+    if re.search(r"^API_TOKEN=.*$", text, flags=re.M):
+        text = re.sub(r"^API_TOKEN=.*$", lambda _: f"API_TOKEN={new}", text, count=1, flags=re.M)
+    else:
+        text += f"\nAPI_TOKEN={new}\n"
+    config.write_text(text, encoding="utf-8")
+    os.environ["API_TOKEN"] = new
+    print(f"API-токен заменён в {config}. Перезапустите службу NetAdmin: старый ключ перестанет работать.\n")
+    cmd_info(argparse.Namespace(config=config, pause=False, no_token=False, no_qr=args.no_qr))
+
+
 def _addresses() -> list[str]:
     """This computer's IPv4 addresses, the one of the default route first: it is the likeliest
     to be reachable from the phone."""
@@ -299,6 +319,9 @@ def build_parser() -> argparse.ArgumentParser:
     rs.add_argument("file")
     rs.add_argument("--yes", action="store_true", help="do not ask")
     rs.set_defaults(func=cmd_restore_sync)
+    rt = with_config(sub.add_parser("rotate-token", help="replace the API token in the config and show the new one"))
+    rt.add_argument("--no-qr", action="store_true", help="do not draw the connection QR code")
+    rt.set_defaults(func=cmd_rotate_token)
     i = with_config(sub.add_parser("info", help="address and API token for the app"))
     i.add_argument("--pause", action="store_true", help=argparse.SUPPRESS)
     i.add_argument("--no-token", action="store_true", help="do not print the API token (nor the QR code)")

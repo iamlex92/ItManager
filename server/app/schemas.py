@@ -481,6 +481,8 @@ class PathOut(BaseModel):
 
     hops: list[PathHop]
     ends: list[PathHop]
+    # Mistakes in the cable records the line runs into: several cables in one port, a loop.
+    warnings: list[str] = []
 
 
 # --- device writes --------------------------------------------------------

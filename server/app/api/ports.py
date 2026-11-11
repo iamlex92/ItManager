@@ -161,10 +161,19 @@ async def port_path(port_id: uuid.UUID, session: SessionDep):
                 is_here=pid == port_id,
             )
         )
+    warnings = []
+    for h in hops:
+        # A port takes one cable; a patch panel or socket port is the middle of a line, so it has two neighbours.
+        limit = 2 if h.device_type in PASSIVE_TYPES else 1
+        if len(graph.adj.get(h.port_id, [])) > limit:
+            warnings.append(
+                f"В порт {h.port_name} устройства «{h.device_name}» заведено несколько кабелей: "
+                "показан только первый путь, проверьте записи о кабелях"
+            )
     ends = [h for h in (hops[0], hops[-1]) if h.device_type not in PASSIVE_TYPES] if hops else []
     if len(hops) == 1 or (len(ends) == 2 and ends[0].port_id == ends[1].port_id):
         ends = ends[:1]
-    return PathOut(hops=hops, ends=ends)
+    return PathOut(hops=hops, ends=ends, warnings=warnings)
 
 
 async def _switch_port(session, port_id: uuid.UUID) -> tuple[Device, Port]:

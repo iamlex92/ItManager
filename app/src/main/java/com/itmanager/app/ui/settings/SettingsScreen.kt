@@ -277,6 +277,18 @@ fun SettingsScreen(
             )
 
             Spacer(Modifier.height(24.dp))
+            OutlinedTextField(
+                value = state.operatorName,
+                onValueChange = viewModel::setOperatorName,
+                label = { Text("Ваше имя (для журнала)") },
+                supportingText = { Text("Необязательно: попадёт в журнал сервера рядом с вашими изменениями") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Spacer(Modifier.height(24.dp))
             Text("Резервный сервер", style = MaterialTheme.typography.titleMedium)
             Text(
                 "Второй сервер NetAdmin. Когда основной не отвечает, приложение само переходит на резервный, " +

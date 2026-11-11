@@ -74,3 +74,16 @@ def test_tag_payload_matches_the_nfc_tag_format():
     d = types.SimpleNamespace(id=uuid.uuid4(), device_type="ACCESS_POINT", name="АП-1")
     data = json.loads(tag_payload(d))  # type: ignore[arg-type]
     assert data == {"app": "netadmin", "v": 1, "id": str(d.id), "type": "access_point", "name": "АП-1"}
+
+
+def test_labels_layouts_and_the_number_under_the_qr(client):
+    devices = client.get("/api/v1/devices").json()
+    one = devices[0]
+    for layout, marker in (("normal", "repeat(3,1fr)"), ("small", "repeat(4,1fr)"), ("single", "50mm 30mm")):
+        r = client.get("/api/v1/export/labels.html", params={"ids": one["id"], "layout": layout})
+        assert r.status_code == 200 and marker in r.text, layout
+        assert f"№ {one['id'][:8]}" in r.text
+    assert client.get("/api/v1/export/labels.html", params={"layout": "huge"}).status_code == 422
+    # The number on the label finds the device in the console's search.
+    found = client.get("/api/v1/search", params={"q": one["id"][:8]}).json()
+    assert [d["id"] for d in found] == [one["id"]]

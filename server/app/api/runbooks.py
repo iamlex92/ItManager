@@ -12,7 +12,7 @@ from ..runbooks.emulator import RunbookEnvironment, RunResult
 from ..runbooks.real import REAL_CATEGORIES, Login, RealRunbooks
 from ..schemas import RunbookChoiceOut, RunbookOut, RunbookParamOut, RunbookRunIn, RunbookRunOut
 from . import scripts
-from .deps import SessionDep, not_found
+from .deps import SessionDep, not_found, who
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/runbooks", tags=["runbooks"])
@@ -96,12 +96,28 @@ async def run_runbook(runbook_id: str, body: RunbookRunIn, request: Request, ses
 
     # Scripts from the web console run where they say (scripts.execute), whatever RUNBOOK_MODE says.
     real = isinstance(env, RealRunbooks) and custom is None
-    client = request.client.host if request.client else "unknown"
-    triggered_by = f"{body.operator} · {client}" if body.operator else f"api:{client}"
+    triggered_by = who(request, body.operator)
     started_at = datetime.now(UTC)
     t0 = time.monotonic()
+    # The same script on the same computer twice at once is refused: the second run would trample the first.
+    if getattr(request.app.state, "scripts_running", None) is None:
+        request.app.state.scripts_running = set()
+    running = request.app.state.scripts_running
+    slot = (rb.id, params.get(scripts.HOST_PARAM, "") if custom is not None else "")
+    if custom is not None and not body.dry_run and slot in running:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "already_running",
+                "message": "Этот скрипт уже выполняется"
+                + (f" на {slot[1]}" if slot[1] else "")
+                + ": дождитесь его конца",
+            },
+        )
     try:
         if custom is not None:
+            if not body.dry_run:
+                running.add(slot)
             result, simulated = await scripts.execute(custom, params, request, session, body.dry_run)
             real = not simulated
         elif isinstance(env, RealRunbooks):
@@ -113,6 +129,8 @@ async def run_runbook(runbook_id: str, body: RunbookRunIn, request: Request, ses
     except Exception as e:
         log.exception("runbook %s failed", rb.id)
         result = RunResult(exit_code=1, stdout="", stderr=f"FAILED: {e!r}")
+    finally:
+        running.discard(slot)
     duration_ms = int((time.monotonic() - t0) * 1000)
 
     entry = ScriptAuditLog(

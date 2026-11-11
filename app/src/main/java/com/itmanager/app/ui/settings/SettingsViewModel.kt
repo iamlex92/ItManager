@@ -42,6 +42,8 @@ data class SettingsUiState(
     /** A second server the app turns to while the main one cannot be reached. */
     val backupUrl: String = "",
     val backupToken: String = "",
+    /** Who is using the app, for the journal. */
+    val operatorName: String = "",
     val backupError: String? = null,
     val backupCheck: ConnectionCheck = ConnectionCheck.Idle,
     /** Requests go to the backup server right now. */
@@ -50,7 +52,8 @@ data class SettingsUiState(
     val hasChanges: Boolean
         get() = saved != null && (
             saved.baseUrl != baseUrl.trim() || saved.apiToken != apiToken.trim() ||
-                saved.backupUrl != backupUrl.trim() || saved.backupToken != backupToken.trim()
+                saved.backupUrl != backupUrl.trim() || saved.backupToken != backupToken.trim() ||
+                saved.operatorName != operatorName.trim()
             )
 }
 
@@ -75,6 +78,7 @@ class SettingsViewModel @Inject constructor(
                 apiToken = current.apiToken,
                 backupUrl = current.backupUrl,
                 backupToken = current.backupToken,
+                operatorName = current.operatorName,
                 saved = current,
             )
             launch { failover.onBackup.collect { on -> _state.update { it.copy(onBackup = on) } } }
@@ -96,6 +100,8 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setApiToken(value: String) = _state.update { it.copy(apiToken = value) }
+
+    fun setOperatorName(value: String) = _state.update { it.copy(operatorName = value.take(60)) }
 
     fun setBackupUrl(value: String) = _state.update { it.copy(backupUrl = value, backupError = null, backupCheck = ConnectionCheck.Idle) }
 
@@ -221,7 +227,9 @@ class SettingsViewModel @Inject constructor(
             _state.update { it.copy(backupError = "Резервный сервер должен быть другим, не основным") }
             return false
         }
-        val new = ServerSettings(baseUrl = url, apiToken = s.apiToken.trim(), backupUrl = backup, backupToken = s.backupToken.trim())
+        val new = ServerSettings(baseUrl = url, apiToken = s.apiToken.trim(), backupUrl = backup, backupToken = s.backupToken.trim(),
+            operatorName = s.operatorName.trim(),
+        )
         _state.update { it.copy(baseUrl = url, backupUrl = backup, saved = new) }
         viewModelScope.launch { settings.save(new) }
         return true

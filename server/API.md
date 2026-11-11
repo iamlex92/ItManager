@@ -427,3 +427,11 @@ While `SYNC_ACCEPT` and `SYNC_READ_ONLY` (default on) are set, every `POST/PUT/P
 ## Addresses and retention
 
 `POST /devices` and `PATCH /devices/{id}` answer 409 `ip_in_use` (with `devices: [{id, name}]`) when a main or extra address is already another device's; repeat with `"allow_duplicate_ip": true` to save anyway. A PATCH checks only the addresses it adds. `GET /topology` nodes carry `extra_ips`. The journal (`AUDIT_KEEP_DAYS`, 365) and resolved events (`ALERTS_KEEP_DAYS`, 180) are cleaned once a day; unresolved events are kept.
+
+## Operator name, key protection, WebSocket auth
+
+- `X-Operator: <percent-encoded UTF-8 name>` on any request puts the name in the journal's «triggered by» (`Иван Петров · 10.0.0.5`); without it the address alone, as before. It is a label, not a login.
+- 10 wrong API keys from one address within a minute: that address gets 429 `too_many_attempts` (`Retry-After: 60`) for a minute, even with the right key; written to the journal as `auth:blocked`.
+- `/ws`: send `{"action": "auth", "token": "..."}` as the first message (within 5 s) instead of `?token=`; the query and header forms still work for older clients.
+- `GET /ports/{id}/path` has `warnings` (several cables in one port). `GET /export/labels.html?layout=normal|small|single`; the number printed on a label is the first 8 characters of the device id and works in `GET /devices?q=`.
+
