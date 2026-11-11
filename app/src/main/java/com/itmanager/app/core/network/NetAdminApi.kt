@@ -474,7 +474,7 @@ class NetAdminApi @Inject constructor(
             "wrong_port", "port_busy", "invalid_request", "invalid_subnet", "unknown_host", "no_login", "no_ad",
             "ad_failed", "pc_failed", "writes_disabled",
             "no_switch_login", "switch_unreachable", "switch_login_failed", "switch_timeout", "switch_closed",
-            "switch_rejected", "snmp_failed", "bad_setting", "cannot_restart", "gpo_failed", "not_found",
+            "switch_rejected", "snmp_failed", "bad_setting", "cannot_restart", "gpo_failed", "not_found", "backup_read_only",
         )
     }
 

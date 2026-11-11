@@ -417,5 +417,10 @@ The main server sends its database to the backup server; each keeps its own serv
 | POST | `/api/v1/sync/push` | Sends the database to `BACKUP_SERVER_URL` now with `BACKUP_SERVER_TOKEN`, as the scheduled sync does (`SYNC_TO_BACKUP`, every `SYNC_INTERVAL_MINUTES`). 422 `no_backup_server`, 502 `sync_failed` with the reason. Audited as `sync:push`. |
 | POST | `/api/v1/sync/receive` | On the backup server (`SYNC_ACCEPT=true`, else 403 `sync_not_accepted`): body `application/zip` from the main server, a manifest and every table but `server_settings` as COPY text. Replaces this server's tables in one transaction. 409 `sync_refused` for a different schema revision or `SECRET_KEY`, or a broken package; 413 over 2 GB. Audited as `sync:receive`. |
 
-`/health` also reports `sync_role` and, on the backup server, `last_sync_at`.
+| POST | `/api/v1/sync/promote` | On the backup server: stops taking packages (`sync_accept` off, saved) and accepts changes at once; `restart_required: true` (polling starts on the next start). 422 `not_backup`. Audited as `sync:promote`. |
+| POST | `/api/v1/sync/reset-source` | On the backup server: forgets which server packages are taken from, so a replaced main server may send. |
+
+While `SYNC_ACCEPT` and `SYNC_READ_ONLY` (default on) are set, every `POST/PUT/PATCH/DELETE` under `/api/v1` except `/sync/*` and `/server-settings/*` answers 409 `backup_read_only`. A package from this very server, from another source than the first one taken, or older than the last taken is refused with 409 `sync_refused`; the data it would replace is kept in `BACKUP_DIR/presync/` first.
+
+`/health` also reports `sync_role`, `read_only` and, on the backup server, `last_sync_at`.
 

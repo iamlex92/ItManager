@@ -128,7 +128,7 @@
       if (h.sync_role === "backup") {
         $("backup-role").textContent = "Это резервный сервер: данные приходят с основного" +
           (h.last_sync_at ? ` (последний раз ${new Date(h.last_sync_at).toLocaleString("ru-RU")})` : "") +
-          ". Изменения здесь заменятся при следующей синхронизации.";
+          (h.read_only ? ". Изменения здесь запрещены." : ". Изменения здесь заменятся при следующей синхронизации.");
       }
       serverDown(false);
       const hal = h.hal_mode === "emulator"

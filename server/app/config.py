@@ -171,6 +171,8 @@ class Settings(BaseSettings):
     sync_interval_minutes: int = Field(default=15, ge=1, le=1440)
     # This server is the backup: it takes the main server's database over its own (its settings stay).
     sync_accept: bool = False
+    # The backup server refuses changes (409 backup_read_only): they would be overwritten by the next copy.
+    sync_read_only: bool = True
 
     @field_validator("api_token")
     @classmethod

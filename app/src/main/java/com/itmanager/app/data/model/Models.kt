@@ -450,6 +450,10 @@ data class ServerHealth(
     val runbookWritesEnabled: Boolean? = null,
     /** "real": ping and SNMP polling of printers and ports; "emulator": no polling, made-up figures. */
     val monitorMode: String? = null,
+    /** A backup server that refuses changes (they would be replaced by the next copy from the main one). */
+    val readOnly: Boolean = false,
+    /** "main", "backup" or "". */
+    val syncRole: String = "",
 )
 
 fun parseColorHex(hex: String?, fallback: Long = 0xFF3498DB): Long {

@@ -6,6 +6,7 @@ import com.itmanager.app.core.nfc.DeepLinkInbox
 import com.itmanager.app.core.nfc.DeepLink
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.itmanager.app.core.network.BackupWriteGate
 import com.itmanager.app.core.network.toUserMessage
 import com.itmanager.app.core.nfc.NfcController
 import com.itmanager.app.core.nfc.TagScan
@@ -37,6 +38,9 @@ sealed interface AppNavigation {
     data object OpenSettings : AppNavigation
 }
 
+/** The app works through the backup server; [readOnly]: it refuses changes. */
+data class BackupState(val readOnly: Boolean)
+
 /** An alert that just arrived, with the device name resolved for the banner. */
 data class AlertNotice(val alert: Alert, val deviceName: String?)
 
@@ -48,7 +52,20 @@ class AppViewModel @Inject constructor(
     private val alertCenter: AlertCenter,
     private val appLock: AppLock,
     private val links: DeepLinkInbox,
+    private val writeGate: BackupWriteGate,
 ) : ViewModel() {
+
+    /**
+     * Null on the main server. On the backup one: whether it refuses changes. The app says so on every screen,
+     * because what is changed there is replaced by the next copy from the main server.
+     */
+    val backup: StateFlow<BackupState?> = combine(repository.usingBackup, repository.backupHealth) { on, health ->
+        if (on) BackupState(readOnly = health?.readOnly == true) else null
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** A question waiting for the user: send a change to a backup server that takes them? */
+    val writeQuestion = writeGate.pending
+
 
     val lock = appLock.state
 

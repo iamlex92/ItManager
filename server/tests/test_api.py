@@ -18,6 +18,7 @@ def test_health_is_public(client):
         "secrets_encrypted": False,
         "backup_server_url": "",
         "sync_role": "",
+        "read_only": False,
         "last_sync_at": None,
     }
 

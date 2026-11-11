@@ -82,6 +82,9 @@ log = logging.getLogger(__name__)
 STATIC_DIR = Path(__file__).parent / "static"
 
 # Requests that change the map or the inventory; the phone reloads when it hears about one.
+# On a read-only backup server these still go through: taking the main server's copy, and the settings.
+READ_ONLY_EXEMPT = ("/api/v1/sync", "/api/v1/server-settings")
+
 INVENTORY_WRITE = re.compile(
     r"^/api/v1/(?:(?:floors|vlans|connections|scripts|peripherals)(?:/.*)?"
     r"|devices(?:/[^/]+)?|devices/[^/]+/faceplate(?:/.*)?|ports(?:/[^/]+)?|discovery/scans/[^/]+/import)$"
@@ -166,7 +169,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.printer_driver = build_printer_driver(settings)
         sm, hub = app.state.sessionmaker, app.state.hub
         tasks: list[asyncio.Task] = []
-        if settings.poll_interval_seconds > 0:
+        # The backup server only takes the main server's data: what polling and ping would write here is replaced by
+        # the next copy, and would fight the copy for locks.
+        watching = not settings.sync_accept
+        if watching and settings.poll_interval_seconds > 0:
             interval = settings.poll_interval_seconds
             if settings.hal_mode is HalMode.REAL:
                 # Each poll is an SSH login per switch: not every 10 s.
@@ -181,16 +187,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 log.warning("switch ports: link state over SNMP every %g s (HAL_MODE=emulator)", interval)
             else:
                 tasks.append(asyncio.create_task(poller(sm, app.state.driver, hub, interval)))
-        if settings.printer_poll_interval_seconds > 0:
+        if watching and settings.printer_poll_interval_seconds > 0:
             tasks.append(
                 asyncio.create_task(
                     printer_service.poller(sm, app.state.printer_driver, hub, settings.printer_poll_interval_seconds)
                 )
             )
-        if settings.traffic_interval_seconds > 0:
+        if watching and settings.traffic_interval_seconds > 0:
             source = traffic_service.build_source(settings)
             tasks.append(asyncio.create_task(traffic_service.sampler(sm, settings, source)))
-        if settings.monitor_mode is MonitorMode.REAL and settings.heartbeat_interval_seconds > 0:
+        if watching and settings.monitor_mode is MonitorMode.REAL and settings.heartbeat_interval_seconds > 0:
             if heartbeat.ping_available():
                 tasks.append(
                     asyncio.create_task(
@@ -208,12 +214,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             tasks.append(asyncio.create_task(dbsync.sync_loop(settings, app.state.sync_status, app.state.sync_lock)))
             log.warning("database sync: to %s every %d min", settings.backup_server_url, settings.sync_interval_minutes)
         if settings.sync_accept:
-            log.warning("database sync: this is the backup server, it takes the main server's database")
+            log.warning(
+                "database sync: this is the backup server (%s): polling, ping and traffic are off",
+                "read-only" if settings.sync_read_only else "writes allowed",
+            )
         if settings.backup_dir:
             tasks.append(asyncio.create_task(backup.backup_loop(settings)))
             log.warning("database backups: every %g h to %s", settings.backup_interval_hours, settings.backup_dir)
         trap_transport = None
-        if settings.trap_listen_port > 0:
+        if watching and settings.trap_listen_port > 0:
             trap_transport = await traps.start_trap_listener(
                 sm, hub, settings.trap_listen_port, settings.trap_community
             )
@@ -278,6 +287,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             secrets_encrypted=crypto.box().enabled,
             backup_server_url=settings.backup_server_url.rstrip("/"),
             sync_role="backup" if settings.sync_accept else "main" if settings.sync_to_backup else "",
+            read_only=settings.sync_accept and settings.sync_read_only,
             last_sync_at=getattr(app.state, "sync_status", None) and app.state.sync_status.received_at,
         )
 
@@ -314,6 +324,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # WebSocket checks the token itself (query param or header).
     app.include_router(ws.router, prefix="/api/v1")
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+    @app.middleware("http")
+    async def backup_read_only(request: Request, call_next):
+        s = request.app.state.settings
+        if (
+            s.sync_accept
+            and s.sync_read_only
+            and request.method in ("POST", "PUT", "PATCH", "DELETE")
+            and request.url.path.startswith("/api/v1/")
+            and not request.url.path.startswith(READ_ONLY_EXEMPT)
+        ):
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "detail": {
+                        "code": "backup_read_only",
+                        "message": "Это резервный сервер: изменения запрещены, их заменит следующая синхронизация. "
+                        "Работайте на основном сервере или нажмите «Сделать этот сервер основным»",
+                    }
+                },
+            )
+        return await call_next(request)
 
     @app.middleware("http")
     async def announce_inventory_changes(request: Request, call_next):

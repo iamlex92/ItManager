@@ -13,9 +13,11 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
 
+from .. import serversettings as ss
 from ..models import ScriptAuditLog
 from ..services import dbsync
 from ..services.realtime import Hub
+from .deps import SessionDep
 
 log = logging.getLogger(__name__)
 
@@ -34,6 +36,7 @@ def _out(request: Request) -> dict:
     s = request.app.state.settings
     return {
         "role": "backup" if s.sync_accept else "main" if s.sync_to_backup else "",
+        "read_only": s.sync_accept and s.sync_read_only,
         "backup_server_url": s.backup_server_url.rstrip("/"),
         "interval_minutes": s.sync_interval_minutes,
         **_status(request).as_dict(),
@@ -54,7 +57,40 @@ async def _audit(request: Request, action: str, exit_code: int, text: str, param
 
 @router.get("")
 async def sync_status(request: Request):
+    st = _status(request)
+    try:
+        st.server_id = await dbsync.server_id(request.app.state.settings)
+    except Exception:
+        log.exception("sync: server id not read")
     return _out(request)
+
+
+@router.post("/reset-source")
+async def sync_reset_source(request: Request):
+    """The backup forgets which server it takes packages from, so another one (a replaced main server) may send."""
+    await dbsync.reset_source(request.app.state.settings)
+    _status(request).source_id = None
+    await _audit(request, "sync:reset-source", 0, "source forgotten", {})
+    return _out(request)
+
+
+@router.post("/promote")
+async def sync_promote(request: Request, session: SessionDep):
+    """This backup server becomes a main one: it stops taking packages and accepts changes at once. Polling and
+    ping start with the next restart (the saved setting «принимать базу» is off from then). Use when the main server
+    is lost."""
+    settings = request.app.state.settings
+    if not settings.sync_accept:
+        raise HTTPException(
+            422, detail={"code": "not_backup", "message": "Этот сервер и так не резервный: он не принимает базу"}
+        )
+    changed = await ss.save(session, {"sync_accept": False}, [])
+    await session.commit()
+    settings.sync_accept = False
+    await _audit(request, "sync:promote", 0, "backup server promoted to main", {"changed": changed})
+    out = _out(request)
+    out["restart_required"] = True
+    return out
 
 
 @router.post("/push")
@@ -113,6 +149,7 @@ async def sync_receive(request: Request):
     status.receive_error = None
     status.received_rows = sum(manifest["tables"].values())
     status.received_created_at = manifest.get("created_at")
+    status.source_id = manifest.get("source_id")
     # Screens open on this server reload what changed under them.
     hub: Hub = request.app.state.hub
     hub.publish(None, {"type": "inventory_changed"})

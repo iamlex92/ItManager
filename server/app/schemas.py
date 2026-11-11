@@ -675,6 +675,8 @@ class HealthOut(BaseModel):
     backup_server_url: str = ""
     # "main": sends its database to the backup server; "backup": takes it (changes made here are overwritten).
     sync_role: str = ""
+    # The backup server refuses changes (409 backup_read_only).
+    read_only: bool = False
     # On the backup server: when it last took the main server's database.
     last_sync_at: str | None = None
 

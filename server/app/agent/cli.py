@@ -4,6 +4,7 @@
     netadmin-agent info                # address and key to enter in the app
     netadmin-agent backup              # one database backup now
     netadmin-agent restore FILE        # replace the database with a backup (service stopped)
+    netadmin-agent restore-sync FILE   # put back a copy kept before a database sync
     netadmin-agent init-config PATH …  # used by the installers, never overwrites
     netadmin-agent selfcheck           # build check: everything the frozen binary needs is inside
 
@@ -165,6 +166,25 @@ def cmd_restore(args: argparse.Namespace) -> None:
     print("restored; start the service again")
 
 
+def cmd_restore_sync(args: argparse.Namespace) -> None:
+    """Puts back a package kept before the main server's copy replaced this server's data."""
+    _load(args.config)
+    from ..config import get_settings
+    from ..services import dbsync
+
+    package = Path(args.file)
+    if not package.is_file():
+        raise SystemExit(f"no such file: {package}")
+    if not args.yes:
+        answer = input(f"Replace ALL data in the NetAdmin database with {package.name}? [y/N] ")
+        if answer.strip().lower() not in {"y", "yes", "д", "да"}:
+            raise SystemExit("cancelled")
+    settings = get_settings()
+    with _database():
+        asyncio.run(dbsync.unpack(settings, package, force=True))
+    print("restored from the kept copy")
+
+
 def _addresses() -> list[str]:
     """This computer's IPv4 addresses, the one of the default route first: it is the likeliest
     to be reachable from the phone."""
@@ -275,6 +295,10 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("file")
     r.add_argument("--yes", action="store_true", help="do not ask")
     r.set_defaults(func=cmd_restore)
+    rs = with_config(sub.add_parser("restore-sync", help="put back a copy kept before a database sync"))
+    rs.add_argument("file")
+    rs.add_argument("--yes", action="store_true", help="do not ask")
+    rs.set_defaults(func=cmd_restore_sync)
     i = with_config(sub.add_parser("info", help="address and API token for the app"))
     i.add_argument("--pause", action="store_true", help=argparse.SUPPRESS)
     i.add_argument("--no-token", action="store_true", help="do not print the API token (nor the QR code)")
