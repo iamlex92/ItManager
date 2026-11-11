@@ -6,21 +6,13 @@ from .conftest import find, ports_of
 def test_health_is_public(client):
     r = client.get("/api/v1/health", headers={"Authorization": ""})
     assert r.status_code == 200
-    assert r.json() == {
-        "status": "ok",
-        "version": __version__,
-        "hal_mode": "emulator",
-        "device_writes_enabled": True,
-        "monitor_mode": "emulator",
-        "discovery_mode": "emulator",
-        "runbook_mode": "emulator",
-        "runbook_writes_enabled": True,
-        "secrets_encrypted": False,
-        "backup_server_url": "",
-        "sync_role": "",
-        "read_only": False,
-        "last_sync_at": None,
-    }
+    body = r.json()
+    # Only the keys the apps rely on: a new field must not break this test.
+    assert body["status"] == "ok" and body["version"] == __version__
+    assert body["min_app_version"]
+    assert body["hal_mode"] == "emulator" and body["monitor_mode"] == "emulator"
+    assert body["sync_role"] == "" and body["read_only"] is False and body["last_sync_at"] is None
+    assert body["secrets_encrypted"] is False and body["backup_server_url"] == ""
 
 
 def test_token_required(client):
@@ -233,3 +225,12 @@ def test_ten_wrong_keys_block_the_address_for_a_while(client):
     assert client.get("/api/v1/devices").status_code == 200
     entry = next(a for a in client.get("/api/v1/audit").json() if a["action"] == "auth:blocked")
     assert "заблокирован" in (entry["stdout"] or "")
+
+
+def test_status_lists_background_jobs(client):
+    r = client.get("/api/v1/status")
+    assert r.status_code == 200
+    jobs = {j["name"]: j for j in r.json()["jobs"]}
+    assert set(jobs) == {"ping", "traffic", "backup", "sync", "retention"}
+    assert jobs["ping"]["enabled"] is False and jobs["backup"]["enabled"] is False
+    assert client.get("/api/v1/status", headers={"Authorization": ""}).status_code == 401

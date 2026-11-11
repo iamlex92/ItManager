@@ -689,6 +689,8 @@ class PrinterOut(BaseModel):
 class HealthOut(BaseModel):
     status: str
     version: str
+    # The oldest app version this server works with.
+    min_app_version: str = ""
     hal_mode: str
     device_writes_enabled: bool
     monitor_mode: str = "emulator"

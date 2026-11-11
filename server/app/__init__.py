@@ -1,4 +1,6 @@
 __version__ = "1.1.0"
+# The oldest app this server works with; the app warns when it is older (shown by /health).
+MIN_APP_VERSION = "1.1.0"
 
 try:
     # Written by CI into the installer builds (server-agent.yml): the build number of that run.
