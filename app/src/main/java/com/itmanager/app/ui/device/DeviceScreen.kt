@@ -165,7 +165,7 @@ fun DeviceScreen(
     var commentError by remember { mutableStateOf<String?>(null) }
     var pickVlan by remember { mutableStateOf(false) }
     var merging by remember { mutableStateOf(false) }
-    var mergeSource by remember { mutableStateOf<Device?>(null) }
+    val mergeAsk by viewModel.mergeAsk.collectAsStateWithLifecycle()
 
     val details = (state as? UiState.Content)?.data
     val device = details?.device
@@ -303,29 +303,28 @@ fun DeviceScreen(
             candidates = details.others.filter { (it.type == DeviceType.RACK) == (details.device.type == DeviceType.RACK) },
             onPick = {
                 merging = false
-                mergeSource = it
+                viewModel.askMerge(it)
             },
             onDismiss = { merging = false },
         )
     }
-    mergeSource?.let { src ->
+    mergeAsk?.let { ask ->
         AlertDialog(
-            onDismissRequest = { mergeSource = null },
+            onDismissRequest = viewModel::cancelMerge,
             title = { Text("Объединить с ${device?.name}?") },
             text = {
-                Text(
-                    "«${src.name}» будет удалено из учёта. Его порты с кабелями, резервные копии конфигурации, события, " +
-                        "периферия и IP-адреса перейдут к «${device?.name}», пустые поля заполнятся из него. " +
-                        "Оборудование это не затрагивает.",
-                )
+                when {
+                    ask.loading -> LinearProgressIndicator(Modifier.fillMaxWidth())
+                    ask.error != null -> Text(ask.error, color = MaterialTheme.colorScheme.error)
+                    ask.preview != null -> Text(ask.preview.summary() + " Оборудование это не затрагивает.")
+                }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    mergeSource = null
-                    viewModel.merge(src)
-                }) { Text("Объединить", color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = viewModel::confirmMerge, enabled = ask.preview != null) {
+                    Text("Объединить", color = MaterialTheme.colorScheme.error)
+                }
             },
-            dismissButton = { TextButton(onClick = { mergeSource = null }) { Text("Отмена") } },
+            dismissButton = { TextButton(onClick = viewModel::cancelMerge) { Text("Отмена") } },
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         )
     }

@@ -2153,7 +2153,7 @@
   // ---------------------------------------------------------------- device dialog
 
   const DEFAULT_RACK_UNITS = 42;
-  let dialogDevice = null, dialogAt = null, dialogType = "SWITCH";
+  let dialogDevice = null, dialogAt = null, dialogType = "SWITCH", dupIpAllowed = false;
   for (const [id, label] of TYPES) {
     const b = document.createElement("button");
     b.type = "button";
@@ -2207,6 +2207,7 @@
   }
 
   function openDeviceDialog(device, at) {
+    dupIpAllowed = false;
     dialogDevice = device;
     dialogAt = at || null;
     $("device-heading").textContent = device ? device.name : "Новое устройство";
@@ -2278,6 +2279,8 @@
       host_id: dialogType === "VIRTUAL" ? $("device-host").value || null : null,
       comment: $("device-comment").value.trim() || null,
     };
+    // «Адрес уже занят» was confirmed: save it anyway this time.
+    if (dupIpAllowed) body.allow_duplicate_ip = true;
     if (dialogType === "SWITCH") body.ssh_credential_id = $("device-ssh").value || null;
     const community = $("device-snmp").value.trim();
     if (community && !$("device-snmp-label").hidden) body.snmp_community = community;
@@ -2308,11 +2311,19 @@
         const at = dialogAt || { x: w / 2, y: h / 2 };
         await api("POST", "devices", { ...body, floor_id: floor.id, x: round1(at.x), y: round1(at.y) });
       }
+      dupIpAllowed = false;
       $("device-dialog").close();
       await refreshTab();
     } catch (e) {
+      if (e.code === "ip_in_use" && !dupIpAllowed
+        && confirm(`${e.message.split(". Нажмите")[0]}.\n\nСохранить всё равно?`)) {
+        dupIpAllowed = true;
+        $("device-form").requestSubmit();
+        return;
+      }
+      dupIpAllowed = false;
       $("device-error").hidden = false;
-      $("device-error").textContent = e.status === 409 ? "Устройство с таким именем или IP уже есть." : e.message;
+      $("device-error").textContent = e.status === 409 && e.code === "integrity_error" ? "Устройство с таким именем или NFC-меткой уже есть." : e.message;
     }
   });
   $("device-delete").addEventListener("click", async () => {
@@ -2354,8 +2365,21 @@
     ev.preventDefault();
     const src = mergeCandidates.find((d) => d.id === $("merge-source").value);
     if (!src || !dialogDevice) { $("merge-error").hidden = false; $("merge-error").textContent = "Выберите устройство"; return; }
-    if (!confirm(`«${src.name}» будет удалено из учёта, его порты, кабели и адреса перейдут к «${dialogDevice.name}». Продолжить?`)) return;
     try {
+      // What would happen, before anything does.
+      const p = await api("POST", `devices/${dialogDevice.id}/merge?dry_run=true`, { source_id: src.id });
+      const moves = [
+        p.ports && `портов: ${p.ports}`, p.cables_moved && `кабелей: ${p.cables_moved}`, p.configs && `копий конфигурации: ${p.configs}`,
+        p.alerts && `событий: ${p.alerts}`, p.peripherals && `периферии: ${p.peripherals}`, p.guests && `виртуальных машин: ${p.guests}`,
+        p.rack_members && `устройств в стойке: ${p.rack_members}`, p.faceplate_moved && "схема панели",
+      ].filter(Boolean);
+      const text = [`«${p.source_name}» будет удалено из учёта и объединено с «${p.keep_name}».`,
+        moves.length ? `Перейдёт: ${moves.join(", ")}.` : "Переносить нечего.",
+        p.extra_ips_added.length ? `Адреса: ${p.extra_ips_added.join(", ")}.` : "",
+        p.cables_dropped ? `Кабелей между этими записями (будут удалены): ${p.cables_dropped}.` : "",
+        p.filled_fields.length ? `Заполнятся поля: ${p.filled_fields.join(", ")}.` : "",
+        "Запись «" + p.source_name + "» сохранится в журнале. Продолжить?"].filter(Boolean).join("\n");
+      if (!confirm(text)) return;
       const kept = await api("POST", `devices/${dialogDevice.id}/merge`, { source_id: src.id, confirm: true });
       if (cardId === src.id) { cardId = null; $("card-dialog").close(); }
       $("merge-dialog").close();

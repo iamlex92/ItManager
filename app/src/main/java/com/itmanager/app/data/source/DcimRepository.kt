@@ -35,6 +35,7 @@ import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.MergePreview
 import com.itmanager.app.data.model.PortPath
 import com.itmanager.app.data.model.ServerHealth
 import com.itmanager.app.data.model.StatusRefresh
@@ -203,7 +204,9 @@ class DcimRepository @Inject constructor(
         edit { moveDevice(id, floorId, x, y) }
     suspend fun deleteDevice(id: String): Result<Unit> = edit { deleteDevice(id) }
     suspend fun mergeDevice(id: String, sourceId: String): Result<Device> = edit { mergeDevice(id, sourceId) }
-    suspend fun refreshStatus(): Result<StatusRefresh> = edit { refreshStatus() }
+    suspend fun previewMerge(id: String, sourceId: String): Result<MergePreview> = load { previewMerge(id, sourceId) }
+    // A check, not an edit of the inventory: no «backup server» question for it.
+    suspend fun refreshStatus(): Result<StatusRefresh> = load { refreshStatus() }.onSuccess { inventoryVersion.value++ }
     suspend fun bulkUpdateDevices(ids: List<String>, change: DeviceBulkChange): Result<Int> =
         edit { bulkUpdateDevices(ids, change) }
     suspend fun bulkDeleteDevices(ids: List<String>): Result<Int> = edit { bulkDeleteDevices(ids) }

@@ -32,6 +32,7 @@ async def get_topology(session: SessionDep):
                 vendor=d.vendor,
                 model=d.model,
                 ip=str(d.ip_address) if d.ip_address is not None else None,
+                extra_ips=[str(ip) for ip in d.extra_ips or []],
                 is_online=d.is_online,
                 floor_id=d.floor_id,
                 host_id=d.host_id,

@@ -135,8 +135,9 @@ def build_zip(
                     p.connected_mac or "",
                 )
             )
-        if d.ip_address:
-            ip_rows.append((f"{d.ip_address}/32", "active", d.name))
+        for ip in [d.ip_address, *(d.extra_ips or [])]:
+            if ip:
+                ip_rows.append((f"{ip}/32", "active", d.name))
     files["interfaces.csv"] = _csv(["device", "name", "type", "enabled", "speed", "description"], iface_rows)
     files["ip_addresses.csv"] = _csv(["address", "status", "description"], ip_rows)
 

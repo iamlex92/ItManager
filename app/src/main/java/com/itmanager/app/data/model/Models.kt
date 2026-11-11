@@ -363,7 +363,48 @@ data class DeviceDraft(
     val metadata: Map<String, JsonElement>? = null,
     /** The device's other addresses, sent whole. */
     val extraIps: List<String> = emptyList(),
+    /** An address another device has is refused (409 ip_in_use) unless the user said «save anyway». */
+    val allowDuplicateIp: Boolean = false,
 )
+
+/** What a merge would do, asked before it is done (nothing was changed). */
+data class MergePreview(
+    val keepName: String,
+    val sourceName: String,
+    val ports: Int,
+    val cablesMoved: Int,
+    val cablesDropped: Int,
+    val configs: Int,
+    val alerts: Int,
+    val peripherals: Int,
+    val faceplateMoved: Boolean,
+    val guests: Int,
+    val rackMembers: Int,
+    val extraIpsAdded: List<String>,
+    val filledFields: List<String>,
+) {
+    /** The sentence the confirmation shows. */
+    fun summary(): String {
+        val moves = listOfNotNull(
+            ports.takeIf { it > 0 }?.let { "портов: $it" },
+            cablesMoved.takeIf { it > 0 }?.let { "кабелей: $it" },
+            configs.takeIf { it > 0 }?.let { "копий конфигурации: $it" },
+            alerts.takeIf { it > 0 }?.let { "событий: $it" },
+            peripherals.takeIf { it > 0 }?.let { "периферии: $it" },
+            guests.takeIf { it > 0 }?.let { "виртуальных машин: $it" },
+            rackMembers.takeIf { it > 0 }?.let { "устройств в стойке: $it" },
+            "схема панели".takeIf { faceplateMoved },
+        )
+        return buildList {
+            add("«$sourceName» будет удалено из учёта и объединено с «$keepName».")
+            add(if (moves.isEmpty()) "Переносить нечего." else "Перейдёт: ${moves.joinToString(", ")}.")
+            if (extraIpsAdded.isNotEmpty()) add("Адреса: ${extraIpsAdded.joinToString(", ")}.")
+            if (cablesDropped > 0) add("Кабелей между этими записями (будут удалены): $cablesDropped.")
+            if (filledFields.isNotEmpty()) add("Заполнятся поля: ${filledFields.joinToString(", ")}.")
+            add("Запись сохранится в журнале сервера.")
+        }.joinToString(" ")
+    }
+}
 
 /** What one «Обновить» round found: devices checked, answering, changed, and sources that failed. */
 data class StatusRefresh(val checked: Int, val online: Int, val changed: Int, val errors: List<String>)

@@ -243,6 +243,8 @@ class DeviceBase(BaseModel):
     rack_units: int | None = Field(default=None, ge=1, le=60)
     # A switch's SSH login for the real driver (None: SWITCH_CREDENTIAL).
     ssh_credential_id: uuid.UUID | None = None
+    # An address another device already has is a warning (409 ip_in_use); this saves it anyway.
+    allow_duplicate_ip: bool = False
 
     @field_validator("mac")
     @classmethod
@@ -310,6 +312,7 @@ class DeviceUpdate(BaseModel):
     rack_u: int | None = Field(default=None, ge=1, le=60)
     rack_h: int | None = Field(default=None, ge=1, le=60)
     rack_units: int | None = Field(default=None, ge=1, le=60)
+    allow_duplicate_ip: bool = False
 
     @field_validator("mac")
     @classmethod
@@ -361,6 +364,25 @@ class DeviceMerge(BaseModel):
 
     source_id: uuid.UUID
     confirm: bool = False
+
+
+class MergePreviewOut(BaseModel):
+    """What a merge would do, from `POST /devices/{id}/merge?dry_run=true`: nothing was changed."""
+
+    dry_run: bool = True
+    keep_name: str
+    source_name: str
+    ports: int
+    cables_moved: int
+    cables_dropped: int
+    configs: int
+    alerts: int
+    peripherals: int
+    faceplate_moved: bool
+    guests: int
+    rack_members: int
+    extra_ips_added: list[str]
+    filled_fields: list[str]
 
 
 class StatusRefreshOut(BaseModel):
@@ -1099,6 +1121,7 @@ class TopologyNodeOut(BaseModel):
     vendor: str | None
     model: str | None
     ip: str | None
+    extra_ips: list[str] = []
     is_online: bool
     floor_id: uuid.UUID | None
     host_id: uuid.UUID | None = None

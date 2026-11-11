@@ -9,6 +9,7 @@ import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceType
 import com.itmanager.app.data.model.FloorInfo
 import com.itmanager.app.data.model.FloorPlan
+import com.itmanager.app.data.model.MergePreview
 import com.itmanager.app.data.model.PlanRect
 import com.itmanager.app.data.model.PortMode
 import com.itmanager.app.data.model.Printer
@@ -164,6 +165,28 @@ data class PathHopDto(
 @Serializable
 data class PortPathDto(val hops: List<PathHopDto> = emptyList(), val ends: List<PathHopDto> = emptyList()) {
     fun toDomain() = PortPath(hops.map { it.toDomain() }, ends.map { it.toDomain() })
+}
+
+@Serializable
+data class MergePreviewDto(
+    @SerialName("keep_name") val keepName: String,
+    @SerialName("source_name") val sourceName: String,
+    val ports: Int = 0,
+    @SerialName("cables_moved") val cablesMoved: Int = 0,
+    @SerialName("cables_dropped") val cablesDropped: Int = 0,
+    val configs: Int = 0,
+    val alerts: Int = 0,
+    val peripherals: Int = 0,
+    @SerialName("faceplate_moved") val faceplateMoved: Boolean = false,
+    val guests: Int = 0,
+    @SerialName("rack_members") val rackMembers: Int = 0,
+    @SerialName("extra_ips_added") val extraIpsAdded: List<String> = emptyList(),
+    @SerialName("filled_fields") val filledFields: List<String> = emptyList(),
+) {
+    fun toDomain() = MergePreview(
+        keepName, sourceName, ports, cablesMoved, cablesDropped, configs, alerts, peripherals, faceplateMoved, guests,
+        rackMembers, extraIpsAdded, filledFields,
+    )
 }
 
 @Serializable

@@ -32,6 +32,7 @@ import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.MergePreview
 import com.itmanager.app.data.model.PortPath
 import com.itmanager.app.data.model.StatusRefresh
 import com.itmanager.app.data.model.DeviceBulkChange
@@ -184,6 +185,8 @@ interface DcimDataSource {
     suspend fun deleteDevice(id: String)
     /** [sourceId] is the same device entered twice: it is folded into [id] and removed. */
     suspend fun mergeDevice(id: String, sourceId: String): Device
+    /** What merging [sourceId] into [id] would do; nothing is changed. */
+    suspend fun previewMerge(id: String, sourceId: String): MergePreview
     /** One round of monitoring now: switch ports, then ping. */
     suspend fun refreshStatus(): StatusRefresh
     /** One change on many devices; returns how many were changed. */

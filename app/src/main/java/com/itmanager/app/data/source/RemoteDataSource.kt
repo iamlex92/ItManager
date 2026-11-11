@@ -67,6 +67,7 @@ import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.MergePreview
 import com.itmanager.app.data.model.PortPath
 import com.itmanager.app.data.model.StatusRefresh
 import com.itmanager.app.data.model.DeviceBulkChange
@@ -324,6 +325,7 @@ class RemoteDataSource(
                     sshCredentialId = draft.sshCredentialId,
                     snmpCommunity = draft.snmpCommunity,
                     extraIps = draft.extraIps,
+                    allowDuplicateIp = draft.allowDuplicateIp,
                 ),
             ).toDomain()
         }
@@ -339,6 +341,9 @@ class RemoteDataSource(
 
     override suspend fun mergeDevice(id: String, sourceId: String): Device =
         api.mergeDevice(settings, id, MergeBody(sourceId)).toDomain()
+
+    override suspend fun previewMerge(id: String, sourceId: String): MergePreview =
+        api.previewMerge(settings, id, MergeBody(sourceId)).toDomain()
 
     override suspend fun refreshStatus(): StatusRefresh = api.refreshStatus(settings).toDomain()
 

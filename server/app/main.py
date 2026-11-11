@@ -72,7 +72,7 @@ from .pcs.service import KeyInventory, port_open
 from .runbooks.emulator import RunbookEnvironment
 from .runbooks.real import RealRunbooks
 from .schemas import HealthOut
-from .services import backup, dbsync, heartbeat, linkstate, traps
+from .services import backup, dbsync, heartbeat, linkstate, retention, traps
 from .services import printers as printer_service
 from .services import traffic as traffic_service
 from .services.realtime import Hub
@@ -207,6 +207,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 )
             else:
                 log.error("ICMP heartbeat disabled: no ping binary found")
+        app.state.retention_status = {}
+        if watching:
+            tasks.append(asyncio.create_task(retention.retention_loop(sm, settings, app.state.retention_status)))
         # The backup server's copy of this database.
         app.state.sync_status = dbsync.SyncStatus()
         app.state.sync_lock = asyncio.Lock()
