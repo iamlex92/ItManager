@@ -393,6 +393,11 @@ class StatusRefreshOut(BaseModel):
     changed: int
     sources: list[str]
     errors: list[str] = []
+    # A round is a job: "running" until every source answered or timed out, then "done".
+    id: str = ""
+    state: str = "done"
+    done: int = 0
+    total: int = 0
 
 
 # --- ports ----------------------------------------------------------------

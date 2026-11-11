@@ -139,6 +139,11 @@ data class StatusRefreshDto(
     val online: Int = 0,
     val changed: Int = 0,
     val errors: List<String> = emptyList(),
+    val id: String = "",
+    /** "running" while the server is still checking (a slow switch); then "done". */
+    val state: String = "done",
+    val done: Int = 0,
+    val total: Int = 0,
 ) {
     fun toDomain() = StatusRefresh(checked, online, changed, errors)
 }

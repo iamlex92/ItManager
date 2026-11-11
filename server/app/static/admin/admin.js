@@ -2136,7 +2136,13 @@
     btn.disabled = true;
     btn.textContent = "Проверяю…";
     try {
-      const r = await api("POST", "devices/refresh-status");
+      // A slow round (a switch that does not answer) is a job: follow it instead of waiting on one request.
+      let r = await api("POST", "devices/refresh-status");
+      while (r.state === "running") {
+        btn.textContent = `Проверяю… ${r.done}/${r.total || "?"}`;
+        await new Promise((ok) => setTimeout(ok, 1000));
+        r = await api("GET", `devices/refresh-status/${r.id}`);
+      }
       await loadMap();
       const changed = r.changed ? `, изменилось: ${r.changed}` : "";
       toast(`В сети ${r.online} из ${r.checked}${changed}` + (r.errors.length ? `. ${r.errors.join("; ")}` : ""),

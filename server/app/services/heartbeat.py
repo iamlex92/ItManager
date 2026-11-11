@@ -72,12 +72,11 @@ async def heartbeat_once(
                 log.exception("ping %s failed", ip)
                 return False
 
-    async def answers(ips: list[str]) -> bool:
-        # The main address first; the others only when it is silent.
-        for ip in ips:
-            if await probe(ip):
-                return True
-        return False
+    async def answers(ips: list[str]) -> str | None:
+        # All of a device's addresses at once, the first to answer is the one reported: a switched-off server with
+        # five addresses costs one timeout, not five.
+        replies = await asyncio.gather(*(probe(ip) for ip in ips))
+        return next((ip for ip, up in zip(ips, replies, strict=True) if up), None)
 
     def addresses(main, extra) -> list[str]:
         return list(dict.fromkeys(str(ip) for ip in [main, *(extra or [])] if ip is not None))
@@ -87,12 +86,20 @@ async def heartbeat_once(
     async with sm() as session:
         flipped: list[Device] = []
         touched: list[DeviceAlert] = []
-        for (device_id, _, _), up in zip(rows, results, strict=True):
-            d = await session.get(Device, device_id)
+        # One query for every device of the round, not one per device.
+        devices = {
+            d.id: d for d in (await session.scalars(select(Device).where(Device.id.in_([r[0] for r in rows])))).all()
+        }
+        for (device_id, _, _), answered in zip(rows, results, strict=True):
+            d = devices.get(device_id)
             if d is None:
                 continue
+            up = answered is not None
             if up:
                 d.last_seen_at = now
+                # Which address answered, for the card; written only when it changes.
+                if (d.metadata_ or {}).get("answered_ip") != answered:
+                    d.metadata_ = {**(d.metadata_ or {}), "answered_ip": answered}
             if up != d.is_online:
                 d.is_online = up
                 flipped.append(d)

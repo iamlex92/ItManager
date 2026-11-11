@@ -13,7 +13,7 @@ router = APIRouter(prefix="/topology", tags=["topology"])
 async def get_topology(session: SessionDep):
     """Switches, routers, servers and end devices with the cables between them traced through sockets
     and patch panels, plus virtual machines tied to their hosts. Read from the inventory only."""
-    graph = await load_graph(session)
+    graph = await load_graph(session, cached=True)
     nodes = {d.id: d for d in graph.devices.values() if d.device_type not in NOT_NODES}
     links = [TopologyLinkOut(**link) for link in network_links(graph)]
     for d in nodes.values():

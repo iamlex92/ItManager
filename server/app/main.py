@@ -74,6 +74,7 @@ from .runbooks.real import RealRunbooks
 from .schemas import HealthOut
 from .services import backup, dbsync, heartbeat, linkstate, retention, traps
 from .services import printers as printer_service
+from .services import topology as topology_service
 from .services import traffic as traffic_service
 from .services.realtime import Hub
 from .services.switches import poller
@@ -107,6 +108,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         secrets_box = crypto.configure(settings.secret_key)
+        topology_service.invalidate_graph()
         engine = make_engine(settings.database_url)
         app.state.settings = settings
         app.state.engine = engine
@@ -353,6 +355,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.middleware("http")
     async def announce_inventory_changes(request: Request, call_next):
         response = await call_next(request)
+        if request.method in ("POST", "PUT", "PATCH", "DELETE") and request.url.path.startswith("/api/v1/"):
+            # The cached cable graph may be out of date now.
+            topology_service.invalidate_graph()
         if (
             request.method in ("POST", "PUT", "PATCH", "DELETE")
             and response.status_code < 400

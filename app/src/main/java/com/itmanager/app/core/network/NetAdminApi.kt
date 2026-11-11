@@ -98,6 +98,9 @@ class NetAdminApi @Inject constructor(
     /** Folds [body]'s device into [id]: ports, cables, history and addresses move, the other one is removed. */
     suspend fun mergeDevice(s: ServerSettings, id: String, body: MergeBody): DeviceDto = post(s, "devices/$id/merge", body)
 
+    /** The round started by [refreshStatus], while it is «running» and when it is done. */
+    suspend fun refreshJob(s: ServerSettings, id: String): StatusRefreshDto = fetch(s, "devices/refresh-status/$id")
+
     /** What [mergeDevice] would do: counts of what moves; nothing is changed. */
     suspend fun previewMerge(s: ServerSettings, id: String, body: MergeBody): MergePreviewDto =
         post(s, "devices/$id/merge?dry_run=true", body)

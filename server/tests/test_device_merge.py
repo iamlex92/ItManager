@@ -85,6 +85,18 @@ def test_refresh_status_in_the_emulator(client):
     assert r["checked"] > 10 and 0 < r["online"] <= r["checked"]
 
 
+def _refresh(client) -> dict:
+    """«Обновить» as the clients do it: start, and read the job until it is done (a slow SNMP read outlasts the wait)."""
+    import time
+
+    r = client.post(f"{API}/devices/refresh-status").json()
+    deadline = time.monotonic() + 120
+    while r["state"] != "done" and time.monotonic() < deadline:
+        time.sleep(0.5)
+        r = client.get(f"{API}/devices/refresh-status/{r['id']}").json()
+    return r
+
+
 def test_refresh_status_pings_every_address(seeded):
     app = create_app(make_settings(monitor_mode=MonitorMode.REAL, heartbeat_interval_seconds=0))
     with TestClient(app, headers=AUTH) as client:
@@ -96,11 +108,11 @@ def test_refresh_status_pings_every_address(seeded):
             return ip in answering
 
         app.state.pinger = pinger
-        r = client.post(f"{API}/devices/refresh-status").json()
+        r = _refresh(client)
         assert "ping" in r["sources"] and r["errors"] == [], r
         assert find(client, "SRV-1C-01")["is_online"] is True  # silent on its main address, answers on the other
         answering.clear()
-        r = client.post(f"{API}/devices/refresh-status").json()
+        r = _refresh(client)
         assert find(client, "SRV-1C-01")["is_online"] is False and r["changed"] >= 1
 
 
@@ -229,3 +241,35 @@ async def test_retention_deletes_old_journal_and_closed_events_only():
         assert "old closed" not in msgs and "old OPEN" in msgs
     finally:
         await engine.dispose()
+
+
+def test_refresh_status_is_a_job_with_progress(client):
+    """A slow round is answered as «running» and read back by id; a quick one comes back done at once."""
+    from app.services import status as status_service
+
+    first = client.post(f"{API}/devices/refresh-status").json()
+    assert first["state"] == "done" and first["id"] and first["done"] == first["total"] >= 1
+    again = client.get(f"{API}/devices/refresh-status/{first['id']}").json()
+    assert again["checked"] == first["checked"]
+    assert client.get(f"{API}/devices/refresh-status/nope").status_code == 404
+    assert status_service.WAIT_SECONDS > 0
+
+
+def test_device_list_pages_and_counts(client):
+    everything = client.get(f"{API}/devices")
+    total = int(everything.headers["x-total-count"])
+    assert total == len(everything.json()) > 10
+    page = client.get(f"{API}/devices", params={"limit": 5, "offset": 5})
+    assert [d["id"] for d in page.json()] == [d["id"] for d in everything.json()[5:10]]
+    assert page.headers["x-total-count"] == str(total)
+
+
+def test_a_write_drops_the_cached_graph(client):
+    pc = find(client, "PC-BUH-02")
+    before = client.get(f"{API}/devices/{pc['id']}").json()
+    assert before["switch_port_name"]
+    nic = ports_of(client, pc["id"])[0]
+    conn = next(c for c in client.get(f"{API}/connections").json() if nic["id"] in (c["port_a_id"], c["port_b_id"]))
+    assert client.delete(f"{API}/connections/{conn['id']}").status_code == 204
+    # The card is read from the cache a second ago; the delete dropped it.
+    assert client.get(f"{API}/devices/{pc['id']}").json()["switch_port_name"] is None

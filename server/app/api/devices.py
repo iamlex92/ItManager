@@ -5,7 +5,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from sqlalchemy import String, cast, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import ARRAY, INET
 from sqlalchemy.dialects.postgresql import array as pg_array
@@ -184,9 +184,12 @@ async def _get(session, device_id: uuid.UUID) -> Device:
 @router.get("", response_model=list[DeviceOut])
 async def list_devices(
     session: SessionDep,
+    response: Response,
     floor_id: uuid.UUID | None = None,
     type: DeviceType | None = None,
     q: str | None = Query(default=None, description="Substring of name, IP or MAC"),
+    limit: int | None = Query(default=None, ge=1, le=5000, description="Page size; without it every device"),
+    offset: int = Query(default=0, ge=0),
 ):
     stmt = select(Device).order_by(Device.device_type, Device.name)
     if floor_id:
@@ -195,8 +198,12 @@ async def list_devices(
         stmt = stmt.where(Device.device_type == type)
     if q:
         stmt = stmt.where(_search_clause(q))
+    total = await session.scalar(select(func.count()).select_from(stmt.order_by(None).subquery()))
+    if limit is not None:
+        stmt = stmt.limit(limit).offset(offset)
     devices = (await session.scalars(stmt)).all()
-    graph = await load_graph(session)
+    graph = await load_graph(session, cached=True)
+    response.headers["X-Total-Count"] = str(total or 0)
     return [device_out(d, graph) for d in devices]
 
 
@@ -258,6 +265,15 @@ async def refresh_status(request: Request):
     return await device_status.refresh_now(request.app.state)
 
 
+@router.get("/refresh-status/{job_id}", response_model=StatusRefreshOut)
+async def refresh_status_job(job_id: str, request: Request):
+    """The round started by `POST /devices/refresh-status`: «running» with its progress, then «done» with the result."""
+    job = device_status.get(request.app.state, job_id)
+    if job is None:
+        raise not_found("refresh job")
+    return job
+
+
 @router.get("/by-nfc/{uid}", response_model=DeviceOut)
 async def get_device_by_nfc(uid: str, session: SessionDep):
     try:
@@ -273,7 +289,7 @@ async def get_device_by_nfc(uid: str, session: SessionDep):
 @router.get("/{device_id}", response_model=DeviceOut)
 async def get_device(device_id: uuid.UUID, session: SessionDep):
     device = await _get(session, device_id)
-    return device_out(device, await load_graph(session))
+    return device_out(device, await load_graph(session, cached=True))
 
 
 @router.patch("/{device_id}", response_model=DeviceOut)
