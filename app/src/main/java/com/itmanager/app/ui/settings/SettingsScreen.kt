@@ -70,6 +70,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+import com.itmanager.app.data.model.isOlderVersion
 import com.itmanager.app.core.security.BiometricGate
 import com.itmanager.app.core.security.GateResult
 import com.itmanager.app.core.security.findFragmentActivity
