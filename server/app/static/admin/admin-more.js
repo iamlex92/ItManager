@@ -3,7 +3,7 @@
 // (VLAN view, history, traffic, config import). Builds on admin.js through window.NetAdmin.
 // Inventory and read-only views: nothing here writes to equipment.
 (() => {
-  const { $, api, toast, fail, OPERATOR, tabs } = window.NetAdmin;
+  const { $, api, toast, fail, OPERATOR, tabs, ask, askText } = window.NetAdmin;
 
   const el = (tag, props = {}, ...kids) => {
     const e = Object.assign(document.createElement(tag), props);
@@ -174,7 +174,7 @@
     ev.preventDefault();
     const params = {};
     for (const input of $("runbook-params").querySelectorAll("[name]")) if (input.value.trim()) params[input.name] = input.value.trim();
-    if (runbook.critical && !confirm(`«${runbook.title}» меняет данные. Запустить? Запуск попадёт в журнал.`)) return;
+    if (runbook.critical && !await ask(`«${runbook.title}» меняет данные. Запустить? Запуск попадёт в журнал.`)) return;
     $("runbook-run").disabled = true;
     try {
       const r = await api("POST", `runbooks/${runbook.id}/run`, {
@@ -219,7 +219,7 @@
       td(tr, el("button", {
         className: "danger", textContent: "Удалить",
         onclick: async () => {
-          if (!confirm(`Удалить «${c.name}»?`)) return;
+          if (!await ask(`Удалить «${c.name}»?`)) return;
           try { await api("DELETE", `credentials/${c.id}`); await loadCreds(); } catch (e) { fail(e); }
         },
       }));

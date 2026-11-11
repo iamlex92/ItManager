@@ -10,6 +10,8 @@
 <script src="/static/admin/admin-pcs.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-settings.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-gpo.js?v={{asset}}" defer></script>
+<script src="/static/admin/admin-tables.js?v={{asset}}" defer></script>
+<script src="/static/admin/admin-nav.js?v={{asset}}" defer></script>
 </head>
 <body>
 <div id="login" class="login" hidden>
@@ -48,25 +50,26 @@
 
   <div class="body">
   <nav class="side" id="tabs" aria-label="Разделы">
-    <button data-tab="map" class="active">Карта</button>
-    <button data-tab="devices">Устройства</button>
-    <button data-tab="alerts">События <span id="alerts-count" class="count" hidden></span></button>
+    <button type="button" id="side-toggle" class="side-toggle" title="Свернуть или развернуть список разделов" aria-label="Свернуть список разделов">«</button>
+    <button data-tab="map" data-ic="🗺" class="active">Карта</button>
+    <button data-tab="devices" data-ic="📋">Устройства</button>
+    <button data-tab="alerts" data-ic="🔔">События <span id="alerts-count" class="count" hidden></span></button>
     <div class="side-group">Учёт</div>
-    <button data-tab="topology">Схема сети</button>
-    <button data-tab="vlans">VLAN и подсети</button>
-    <button data-tab="ipam">IP-адреса</button>
-    <button data-tab="templates">Шаблоны устройств</button>
-    <button data-tab="peripherals">Периферия и склад</button>
+    <button data-tab="topology" data-ic="🕸">Схема сети</button>
+    <button data-tab="vlans" data-ic="🏷">VLAN и подсети</button>
+    <button data-tab="ipam" data-ic="🔢">IP-адреса</button>
+    <button data-tab="templates" data-ic="📄">Шаблоны устройств</button>
+    <button data-tab="peripherals" data-ic="🖥">Периферия и склад</button>
     <div class="side-group">Диагностика</div>
-    <button data-tab="scan">Сканер сети</button>
+    <button data-tab="scan" data-ic="📡">Сканер сети</button>
     <div class="side-group">Windows</div>
-    <button data-tab="pcs">Компьютеры домена</button>
-    <button data-tab="gpo">Групповые политики</button>
-    <button data-tab="runbooks">Сценарии</button>
-    <button data-tab="scripts">Свои скрипты</button>
+    <button data-tab="pcs" data-ic="💻">Компьютеры домена</button>
+    <button data-tab="gpo" data-ic="📜">Групповые политики</button>
+    <button data-tab="runbooks" data-ic="▶️">Сценарии</button>
+    <button data-tab="scripts" data-ic="📝">Свои скрипты</button>
     <div class="side-group">Система</div>
-    <button data-tab="audit">Журнал</button>
-    <button data-tab="settings">Сервер и доступ</button>
+    <button data-tab="audit" data-ic="🧾">Журнал</button>
+    <button data-tab="settings" data-ic="⚙️">Сервер и доступ</button>
   </nav>
   <main>
     <section id="tab-map" class="tab">
@@ -81,17 +84,25 @@
           <button data-layer="L2">VLAN</button>
           <button data-layer="L3">Подсети</button>
         </div>
-        <div class="seg" id="label-seg" title="Что подписывать под значками устройств">
-          <button data-label="name" class="active">Имя</button>
-          <button data-label="ip">IP</button>
-          <button data-label="vlan">VLAN</button>
-        </div>
         <select id="vlan-filter" title="Показать один VLAN" hidden></select>
         <button id="vlans-open" hidden title="Справочник VLAN и подсетей">VLAN и подсети…</button>
-        <label class="check" title="Виртуальные машины не существуют физически и не имеют кабелей"><input id="show-vms" type="checkbox"> ВМ</label>
+        <div class="menu-wrap">
+          <button type="button" id="view-toggle" aria-haspopup="true" aria-expanded="false" title="Подписи значков, виртуальные машины, весь план">Вид ▾</button>
+          <div id="view-menu" class="pop view-menu" hidden>
+            <div class="pop-group">Подписи под значками</div>
+            <div class="seg" id="label-seg" title="Что подписывать под значками устройств">
+              <button data-label="name" class="active">Имя</button>
+              <button data-label="ip">IP</button>
+              <button data-label="vlan">VLAN</button>
+            </div>
+            <label class="check" title="Виртуальные машины не существуют физически и не имеют кабелей"><input id="show-vms" type="checkbox"> Показывать виртуальные машины</label>
+            <label class="check"><input id="hints-on" type="checkbox" checked> Подсказки внизу карты</label>
+            <button id="map-fit" title="Показать весь план">Весь план</button>
+            <button id="map-list-open" title="Устройства этажа списком: для клавиатуры и экранного чтения">Устройства списком…</button>
+          </div>
+        </div>
         <div class="spacer"></div>
         <input id="map-search" type="search" placeholder="Найти: имя, IP, MAC">
-        <button id="map-fit" title="Показать весь план">Весь план</button>
         <button id="map-reload" title="Проверить, какие устройства в сети, и загрузить карту заново">Обновить</button>
       </div>
       <div class="toolbar edit-bar" id="edit-bar" hidden>
@@ -149,7 +160,7 @@
         <span class="muted small edit-note">Меняется только учёт, оборудование не затрагивается</span>
       </div>
       <div class="map-wrap">
-        <canvas id="map"></canvas>
+        <canvas id="map" role="img" aria-label="План этажа с устройствами. Те же устройства списком: «Вид» → «Устройства списком»"></canvas>
         <!-- Over the map, so picking a cable does not shift the plan under the pointer. -->
         <div id="route-opts" class="route-opts" hidden>
           <button id="route-point-delete" title="Удалить выбранную точку поворота (Delete)" disabled>Удалить точку</button>
@@ -157,6 +168,7 @@
           <button id="route-delete" class="danger">Удалить кабель</button>
         </div>
         <div id="map-hint" class="map-hint"></div>
+        <button id="hint-close" class="hint-close" title="Скрыть подсказки (вернуть: «Вид» → «Подсказки внизу карты»)" aria-label="Скрыть подсказки" hidden>✕</button>
         <div id="map-empty" class="map-empty card" hidden>
           <h2>В учёте пока нет устройств</h2>
           <p class="muted">Найдите их сканером сети или нарисуйте этаж: загрузите план и расставьте устройства.</p>
@@ -565,7 +577,7 @@
         <label class="grow">IP-адрес, если есть<input id="device-ip" maxlength="45" placeholder="10.0.0.1"><small class="field-error" id="device-ip-error" hidden></small></label>
         <label class="grow">MAC-адрес, если есть<input id="device-mac" maxlength="17" placeholder="aa:bb:cc:dd:ee:ff"><small class="field-error" id="device-mac-error" hidden></small></label>
       </div>
-      <label>Другие IP-адреса <span class="muted small">(другие интерфейсы того же устройства, через запятую или пробел: их тоже пингуем и находим поиском)</span><input id="device-extra-ips" placeholder="10.0.1.1, 192.168.82.1"><small class="field-error" id="device-extra-ips-error" hidden></small></label>
+      <label>Другие IP-адреса <span class="muted small">(другие интерфейсы того же устройства, через запятую или пробел: их тоже пингуем и находим поиском)</span><span id="device-extra-chips" class="chips-in"></span><input id="device-extra-ips" placeholder="Адрес и Enter" autocomplete="off"><small class="field-error" id="device-extra-ips-error" hidden></small></label>
       <label id="device-snmp-label">SNMP community <span class="muted small" id="device-snmp-state"></span><input id="device-snmp" maxlength="50" autocomplete="off" placeholder="public"></label>
       <label id="device-ssh-label" hidden>Логин SSH <span class="muted small">(для работы с коммутатором при HAL_MODE=real)</span><select id="device-ssh"></select></label>
     </fieldset>
@@ -592,6 +604,14 @@
       <button type="button" id="device-delete" class="danger">Удалить из учёта</button>
     </div>
   </form>
+</dialog>
+
+<dialog id="maplist-dialog">
+  <div class="dialog">
+    <div class="dialog-head"><h2 id="maplist-heading">Устройства этажа</h2><div class="spacer"></div><button type="button" id="maplist-close" aria-label="Закрыть">✕</button></div>
+    <input id="maplist-filter" type="search" placeholder="Фильтр: имя, IP" autocomplete="off">
+    <ul id="maplist" class="maplist"></ul>
+  </div>
 </dialog>
 
 <dialog id="path-dialog">
@@ -945,6 +965,11 @@
       <button type="button" id="plate-save" class="primary">Сохранить метки</button>
     </div>
   </div>
+</dialog>
+
+<dialog id="palette" class="palette" aria-label="Поиск">
+  <input id="palette-input" type="search" placeholder="Раздел, имя, IP, MAC, номер на этикетке… (Esc закрывает)" autocomplete="off">
+  <ul id="palette-list" role="listbox"></ul>
 </dialog>
 
 <div id="toast" class="toast" hidden></div>

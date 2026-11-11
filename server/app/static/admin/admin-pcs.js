@@ -2,7 +2,7 @@
 // Domain computers: what Connect-DomainPC.ps1 did from an admin's PC, done by the server over WinRM.
 // Builds on admin.js through window.NetAdmin. Changes ask «Да/Нет» first and are all in the audit log.
 (() => {
-  const { $, api, toast, fail, tabs } = window.NetAdmin;
+  const { $, api, toast, fail, tabs, ask, askText } = window.NetAdmin;
   const el = (tag, props = {}, ...kids) => {
     const e = Object.assign(document.createElement(tag), props);
     e.append(...kids);
@@ -154,9 +154,9 @@
         ["Групповые политики", d.samba_gpupdate ? "samba-gpupdate есть" : "нет samba-gpupdate (python3-samba)"]])));
   }
 
-  function admins(action, user) {
+  async function admins(action, user) {
     const q = action === "admin_add" ? `Выдать sudo пользователю ${user} на ${host}?` : `Снять sudo с ${user} на ${host}?`;
-    if (!confirm(q)) return;
+    if (!await ask(q)) return;
     run(action, user, true);
   }
 
@@ -219,27 +219,27 @@
       el("p", { className: "muted small", textContent: "Любой VNC-клиент: TigerVNC, RealVNC, Remmina. Соединение одно; после отключения x11vnc закрывается. Трафик VNC не шифруется — только внутри сети. Пароль администратора в окне повышения прав вы вводите сами: на Astra оно открывается на том же экране." }));
   }
 
-  function kill(name) {
-    if (!confirm(`Завершить все процессы ${name} на ${host}? Несохранённые данные в них пропадут.`)) return;
+  async function kill(name) {
+    if (!await ask(`Завершить все процессы ${name} на ${host}? Несохранённые данные в них пропадут.`)) return;
     run("kill", name, true);
   }
 
-  $("pc-actions").addEventListener("click", (ev) => {
+  $("pc-actions").addEventListener("click", async (ev) => {
     const b = ev.target.closest("button[data-pc]");
     if (!b || !host) return;
     const action = b.dataset.pc;
-    const ask = ASK[platform][action];
-    if (ask && !confirm(`${ask} на ${host}?`)) return;
+    const question = ASK[platform][action];
+    if (question && !await ask(`${question} на ${host}?`)) return;
     run(action, null, CONFIRMED.has(action));
   });
   // What the computer really applied (gpresult), drawn by admin-gpo.js.
   $("pc-gpresult").addEventListener("click", () => { if (host) window.NetAdmin.showAppliedGpo(host, $("pc-result")); });
   $("pc-open-form").addEventListener("submit", (ev) => { ev.preventDefault(); openPc($("pc-host").value).catch(fail); });
-  $("pc-console").addEventListener("submit", (ev) => {
+  $("pc-console").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const cmd = $("pc-command").value.trim();
     if (!cmd || !host) return;
-    if (!confirm(`Выполнить на ${host} ${platform === "astra" ? "от root" : "от имени администратора домена"}:\n\n${cmd}`)) return;
+    if (!await ask(`Выполнить на ${host} ${platform === "astra" ? "от root" : "от имени администратора домена"}:\n\n${cmd}`)) return;
     $("pc-command").dataset.last = cmd;
     run("command", cmd, true);
   });

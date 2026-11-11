@@ -66,15 +66,111 @@
   }
 
   let toastTimer = 0;
-  function toast(text, error = false) {
+  // A message stays long enough to read: a plain one 5 s, an error until it is closed (a click on it). The text can be
+  // selected and copied, so it can be sent to whoever helps.
+  // [action]: {label, run}, a button in the message («Отменить»); such a message waits 10 s.
+  function toast(text, error = false, action = null) {
     const t = $("toast");
-    t.textContent = text;
+    t.replaceChildren(document.createTextNode(text));
     t.className = error ? "toast error" : "toast";
     t.hidden = false;
+    t.title = error ? "Нажмите, чтобы закрыть. Текст можно выделить и скопировать" : "";
+    if (action) {
+      const b = Object.assign(document.createElement("button"), { type: "button", textContent: action.label, className: "toast-action" });
+      b.addEventListener("click", (ev) => { ev.stopPropagation(); t.hidden = true; action.run(); });
+      t.append(" ", b);
+    }
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { t.hidden = true; }, error ? 7000 : 3500);
+    if (!error) toastTimer = setTimeout(() => { t.hidden = true; }, action ? 10_000 : 5000);
   }
+  $("toast").addEventListener("click", () => { if (!getSelection().toString()) $("toast").hidden = true; });
+
+  // The last change that can be taken back (a deleted cable, a moved icon): the message offers «Отменить» for 10 s and
+  // Ctrl+Z does the same for a minute, except while typing in a field (there it undoes the text).
+  let lastUndo = null;
+  function undoable(label, run) {
+    const entry = { label, until: Date.now() + 60_000, run };
+    lastUndo = entry;
+    toast(label, false, { label: "Отменить", run: () => runUndo(entry) });
+  }
+  async function runUndo(entry) {
+    if (lastUndo !== entry) return;
+    lastUndo = null;
+    try { await entry.run(); toast("Отменено"); } catch (e) { fail(e); }
+  }
+  document.addEventListener("keydown", (ev) => {
+    if (!(ev.ctrlKey || ev.metaKey) || ev.key.toLowerCase() !== "z" || ev.shiftKey) return;
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(ev.target.tagName) || ev.target.isContentEditable) return;
+    if (lastUndo && Date.now() < lastUndo.until) { ev.preventDefault(); runUndo(lastUndo); }
+  });
   const fail = (e) => toast(e.message || String(e), true);
+
+  // ---------------------------------------------------------------- questions
+
+  // One dialog for every «are you sure?» and every «enter a name», in place of the browser's own boxes. The first line is
+  // the question, the rest the details. A destructive question (delete, stop, restart...) has a red button and starts on
+  // «Отмена», so Enter cannot confirm it by accident. [o.typed]: the name that must be typed to confirm.
+  const DANGER = /^(Удалить|Стереть|Убрать|Завершить|Перезапустить|Забыть|Сбросить|Очистить|Снять|Объединить)/i;
+  function ask(text, o = {}) {
+    return new Promise((done) => {
+      const [first, ...rest] = String(text).split("\n").filter((l, i, a) => l.trim() || (i > 0 && i < a.length - 1));
+      const danger = o.danger ?? DANGER.test(first || "");
+      const dlg = document.createElement("dialog");
+      dlg.className = "ask-dialog";
+      const typed = o.typed ? Object.assign(document.createElement("input"), { placeholder: o.typed, autocomplete: "off" }) : null;
+      const yes = Object.assign(document.createElement("button"), { type: "button", className: danger ? "danger" : "primary", textContent: o.action || (danger ? first.split(" ")[0] : "Продолжить") });
+      const no = Object.assign(document.createElement("button"), { type: "button", textContent: "Отмена" });
+      if (typed) { yes.disabled = true; typed.addEventListener("input", () => { yes.disabled = typed.value.trim() !== o.typed; }); }
+      const body = document.createElement("div");
+      body.className = "dialog";
+      const head = Object.assign(document.createElement("h2"), { textContent: first });
+      body.append(head, ...rest.filter((l) => l.trim()).map((l) => Object.assign(document.createElement("p"), { className: "muted", textContent: l })));
+      if (typed) body.append(Object.assign(document.createElement("p"), { className: "small", textContent: `Чтобы подтвердить, введите: ${o.typed}` }), typed);
+      const row = document.createElement("div");
+      row.className = "row";
+      const spacer = document.createElement("div");
+      spacer.className = "spacer";
+      row.append(spacer, no, yes);
+      body.append(row);
+      dlg.append(body);
+      const finish = (v) => { dlg.close(); dlg.remove(); done(v); };
+      yes.addEventListener("click", () => finish(true));
+      no.addEventListener("click", () => finish(false));
+      dlg.addEventListener("cancel", (ev) => { ev.preventDefault(); finish(false); });
+      document.body.append(dlg);
+      dlg.showModal();
+      (typed || (danger ? no : yes)).focus();
+    });
+  }
+
+  /** A single value asked for: the label, a start value; null when cancelled. */
+  function askText(label, value = "", o = {}) {
+    return new Promise((done) => {
+      const dlg = document.createElement("dialog");
+      dlg.className = "ask-dialog";
+      const input = Object.assign(document.createElement("input"), { value, placeholder: o.placeholder || "", autocomplete: "off" });
+      const form = document.createElement("form");
+      form.className = "dialog";
+      form.method = "dialog";
+      const ok = Object.assign(document.createElement("button"), { type: "submit", className: "primary", textContent: o.action || "Готово" });
+      const no = Object.assign(document.createElement("button"), { type: "button", textContent: "Отмена" });
+      const row = document.createElement("div");
+      row.className = "row";
+      const spacer = document.createElement("div");
+      spacer.className = "spacer";
+      row.append(spacer, no, ok);
+      form.append(Object.assign(document.createElement("h2"), { textContent: label }), input, row);
+      dlg.append(form);
+      const finish = (v) => { dlg.close(); dlg.remove(); done(v); };
+      form.addEventListener("submit", (ev) => { ev.preventDefault(); finish(input.value); });
+      no.addEventListener("click", () => finish(null));
+      dlg.addEventListener("cancel", (ev) => { ev.preventDefault(); finish(null); });
+      document.body.append(dlg);
+      dlg.showModal();
+      input.focus();
+      input.select();
+    });
+  }
 
   // ---------------------------------------------------------------- login
 
@@ -157,6 +253,7 @@
   // ---------------------------------------------------------------- tabs
 
   let currentTab = "map";
+  const INITIAL_HASH = location.hash.slice(1);
   $("tabs").addEventListener("click", (ev) => {
     const b = ev.target.closest("button[data-tab]");
     if (b) { closeMenus(); openTab(b.dataset.tab); }
@@ -182,7 +279,7 @@
   $("printers-link").addEventListener("click", () => openTab("printers"));
 
   // Small pop-up menus («+ Добавить»): one open at a time, closed by a click elsewhere or Esc.
-  const MENUS = [["add-toggle", "add-menu"]];
+  const MENUS = [["add-toggle", "add-menu"], ["view-toggle", "view-menu"]];
   function closeMenus(except) {
     for (const [btn, menu] of MENUS) {
       if (menu === except) continue;
@@ -203,6 +300,8 @@
 
   function openTab(name) {
     currentTab = name;
+    // The address says where you are (#devices, #device/<id>): a refresh stays here, a link can be sent on.
+    if (location.hash !== `#${name}` && !location.hash.startsWith("#device/")) history.replaceState(null, "", `#${name}`);
     const home = TAB_HOME[name] || name;
     for (const b of $("tabs").querySelectorAll("button[data-tab]")) b.classList.toggle("active", b.dataset.tab === home);
     for (const b of document.querySelectorAll(".subnav button[data-tab]")) b.classList.toggle("active", b.dataset.tab === name);
@@ -300,7 +399,17 @@
     clearInterval(alertTimer);
     alertTimer = setInterval(refreshAlertCount, 60_000);
     liveStart();
+    // A link to a section or a device opens it (the address as the page was opened, before the first section rewrote it).
+    const target = INITIAL_HASH;
+    if (target.startsWith("device/")) window.NetAdmin.openCard(target.slice(7));
+    else if (target && document.getElementById(`tab-${target}`)) openTab(target);
   }
+  window.addEventListener("hashchange", () => {
+    const target = location.hash.slice(1);
+    if (!token) return;
+    if (target.startsWith("device/")) window.NetAdmin.openCard(target.slice(7));
+    else if (target && target !== currentTab && document.getElementById(`tab-${target}`)) openTab(target);
+  });
 
   // ---------------------------------------------------------------- map state
 
@@ -419,11 +528,43 @@
     const note = document.createElement("div");
     note.className = "muted small";
     note.textContent = "Нажмите на тип, чтобы скрыть или показать";
-    box.replaceChildren(note, ...rows);
+    const how = document.createElement("div");
+    how.className = "legend-how small";
+    how.innerHTML = "";
+    for (const [mark, text] of [
+      ["●", "зелёная точка у значка: отвечает; красная: не отвечает"],
+      ["━", "сплошная линия: кабель с линком"],
+      ["┅", "пунктир: нет линка, или связь виртуальной машины с хостом"],
+      ["◯", "цветное кольцо у значка: VLAN (слои «VLAN» и «Подсети»)"],
+      ["①", "круг с числом: несколько устройств рядом, щелчок приближает"],
+    ]) how.append(Object.assign(document.createElement("div"), { textContent: `${mark}  ${text}` }));
+    const howTitle = Object.assign(document.createElement("div"), { className: "muted small", textContent: "Как читать карту" });
+    box.replaceChildren(note, ...rows, howTitle, how);
     $("legend-toggle").hidden = !rows.length;
     if (!rows.length) box.hidden = true;
   }
   $("legend-toggle").addEventListener("click", () => { $("legend").hidden = !$("legend").hidden; });
+  const setHints = (on) => { try { localStorage.setItem("netadmin.hintsOff", on ? "" : "1"); } catch { /* private mode */ } hint(); };
+  $("hint-close").addEventListener("click", () => setHints(false));
+  $("hints-on").addEventListener("change", (ev) => setHints(ev.target.checked));
+
+  // The devices of the floor as a list: reachable with the keyboard and read by a screen reader, which the canvas is not.
+  function fillMapList() {
+    const q = $("maplist-filter").value.trim().toLowerCase();
+    const rows = S.allHere.filter((d) => !q || [d.name, d.ip, ...(d.extra_ips || [])].some((v) => (v || "").toLowerCase().includes(q)));
+    $("maplist-heading").textContent = `Устройства этажа · ${rows.length}`;
+    $("maplist").replaceChildren(...rows.map((d) => {
+      const li = document.createElement("li");
+      const b = Object.assign(document.createElement("button"), { type: "button", className: "link" });
+      b.textContent = `${d.name} · ${typeOf(d).label}${d.ip ? ` · ${d.ip}` : ""} · ${PASSIVE.has(d.type) || d.type === "RACK" ? "пассивное" : d.is_online ? "в сети" : "не отвечает"}`;
+      b.addEventListener("click", () => { $("maplist-dialog").close(); window.NetAdmin.openCard(d.id); });
+      li.append(b);
+      return li;
+    }));
+  }
+  $("map-list-open").addEventListener("click", () => { closeMenus(); $("maplist-filter").value = ""; fillMapList(); $("maplist-dialog").showModal(); $("maplist-filter").focus(); });
+  $("maplist-filter").addEventListener("input", fillMapList);
+  $("maplist-close").addEventListener("click", () => $("maplist-dialog").close());
   $("show-vms").addEventListener("change", (ev) => { S.showVms = ev.target.checked; loadMap().catch(fail); });
 
   function floorTitle(f) {
@@ -602,7 +743,7 @@
     } catch (e) { $("zone-error").hidden = false; $("zone-error").textContent = e.message; }
   });
   $("zone-delete").addEventListener("click", async () => {
-    if (!confirm(`Удалить «${dialogZone.name}» с карты? Устройства останутся на своих местах.`)) return;
+    if (!await ask(`Удалить «${dialogZone.name}» с карты? Устройства останутся на своих местах.`)) return;
     try { await saveZones(zonesOf(S.floor).filter((z) => z.id !== dialogZone.id)); $("zone-dialog").close(); }
     catch (e) { $("zone-error").hidden = false; $("zone-error").textContent = e.message; }
   });
@@ -1327,7 +1468,11 @@
         ? "Перетащите план мышью, чтобы совместить его с устройствами. «−» и «+» меняют размер."
         : "Загрузите план здания: PNG, JPEG или SVG. PDF можно загрузить с телефона: приложение само превращает его в картинку.",
     };
-    $("map-hint").textContent = texts[S.tool];
+    // The hint under the map can be closed for good and brought back from «Вид».
+    const hintsOn = (() => { try { return localStorage.getItem("netadmin.hintsOff") !== "1"; } catch { return true; } })();
+    $("map-hint").textContent = hintsOn ? texts[S.tool] : "";
+    $("hint-close").hidden = !hintsOn;
+    $("hints-on").checked = hintsOn;
     $("link-hint").textContent = S.tool === "link" && S.linkFrom ? "выбрано первое устройство" : "";
     $("route-opts").hidden = !(S.tool === "link" && S.selLink);
     renderCableColors();
@@ -1447,7 +1592,13 @@
     const drag = S.drag;
     S.drag = null;
     if (g.kind === "device") {
-      if (g.moved) moveDevice(g.device).catch((e) => { g.device.x = drag.x0; g.device.y = drag.y0; draw(); fail(e); });
+      if (g.moved) {
+        const was = { x: drag.x0, y: drag.y0, floor_id: g.device.floor_id };
+        moveDevice(g.device).then(() => undoable(`«${g.device.name}» перемещён`, async () => {
+          await api("PATCH", `devices/${g.device.id}`, was);
+          await loadMap();
+        })).catch((e) => { g.device.x = drag.x0; g.device.y = drag.y0; draw(); fail(e); });
+      }
       else openDeviceDialog(g.device);
     } else if (g.kind === "link-device" && !g.moved) {
       linkTap(g.device);
@@ -1586,8 +1737,18 @@
   async function deleteLink(l) {
     const byId = new Map([...S.remote, ...devicesById()]);
     const names = `${byId.get(l.device_a_id)?.name || "?"} — ${byId.get(l.device_b_id)?.name || "?"}`;
-    if (!confirm(`Удалить кабель ${names} (${l.cable_type})?`)) return;
-    try { await api("DELETE", `connections/${l.id}`); S.selLink = null; S.selPoint = null; await loadMap(); } catch (e) { fail(e); }
+    if (!await ask(`Удалить кабель ${names} (${l.cable_type})?`)) return;
+    try {
+      await api("DELETE", `connections/${l.id}`);
+      S.selLink = null; S.selPoint = null;
+      await loadMap();
+      undoable(`Кабель ${names} удалён`, async () => {
+        const made = await api("POST", "connections", { port_a_id: l.port_a_id, port_b_id: l.port_b_id, cable_type: l.cable_type,
+          label: l.label, notes: l.notes, length_meters: l.length_meters, ...(l.color ? { color: l.color } : {}) });
+        if (l.waypoints && l.waypoints.length) await api("PATCH", `connections/${made.id}`, { waypoints: l.waypoints });
+        await loadMap();
+      });
+    } catch (e) { fail(e); }
   }
 
   async function saveDrawings(drawings) {
@@ -1666,7 +1827,7 @@
   });
   $("plan-remove").addEventListener("click", async () => {
     if (!S.floor || !S.floor.plan_image_url) return;
-    if (!confirm("Убрать план здания? Устройства, кабели и линии останутся.")) return;
+    if (!await ask("Убрать план здания? Устройства, кабели и линии останутся.")) return;
     try { S.floor = await api("DELETE", `floors/${S.floor.id}/plan-image`); await loadPlanImage(); draw(); hint(); }
     catch (e) { fail(e); }
   });
@@ -1777,8 +1938,8 @@
     const d = S.floor?.drawings || [];
     if (d.length) saveDrawings(d.slice(0, -1)).catch(fail);
   });
-  $("clear-lines").addEventListener("click", () => {
-    if ((S.floor?.drawings || []).length && confirm("Стереть все линии карандаша на этаже?")) saveDrawings([]).catch(fail);
+  $("clear-lines").addEventListener("click", async () => {
+    if ((S.floor?.drawings || []).length && await ask("Стереть все линии карандаша на этаже?")) saveDrawings([]).catch(fail);
   });
   /** The middle of what is on screen, kept inside the floor: where «Добавить» puts things. */
   function screenCentre() {
@@ -2009,7 +2170,7 @@
     }
   });
   $("template-delete").addEventListener("click", async () => {
-    if (!templateEditing || !confirm(`Удалить шаблон «${templateEditing.name}»? Созданные из него устройства останутся.`)) return;
+    if (!templateEditing || !await ask(`Удалить шаблон «${templateEditing.name}»? Созданные из него устройства останутся.`)) return;
     try { await api("DELETE", `device-templates/${templateEditing.id}`); $("template-dialog").close(); await loadTemplates(); }
     catch (e) { $("template-error").hidden = false; $("template-error").textContent = e.message; }
   });
@@ -2177,7 +2338,7 @@
   }
 
   async function deleteFloor(f) {
-    if (!confirm(`Удалить «${floorTitle(f)}»? Удаляется только пустой этаж: его план и линии.`)) return;
+    if (!await ask(`Удалить «${floorTitle(f)}»? Удаляется только пустой этаж: его план и линии.`)) return;
     try {
       floorsError(null);
       await api("DELETE", `floors/${f.id}`);
@@ -2286,13 +2447,17 @@
 
   function openDeviceDialog(device, at) {
     dupIpAllowed = false;
+    formDirty = false;
+    document.querySelectorAll("#device-form fieldset.section").forEach((f) => f.classList.remove("folded"));
     dialogDevice = device;
     dialogAt = at || null;
     $("device-heading").textContent = device ? device.name : "Новое устройство";
     $("device-name").value = device ? device.name : "";
     $("device-ip").value = (device && device.ip) || "";
     $("device-mac").value = (device && device.mac) || "";
-    $("device-extra-ips").value = ((device && device.extra_ips) || []).join(", ");
+    extraChips = [...((device && device.extra_ips) || [])];
+    $("device-extra-ips").value = "";
+    drawExtraChips();
     for (const f of ["device-name", "device-ip", "device-mac", "device-extra-ips"]) fieldError(f, null);
     $("device-vendor").value = (device && device.vendor) || "";
     $("device-model").value = (device && device.model) || "";
@@ -2328,19 +2493,67 @@
     $("device-name").focus();
   }
 
-  $("device-cancel").addEventListener("click", () => $("device-dialog").close());
+  // The other addresses as chips: Enter, comma or a space adds the typed one (checked at once), × removes it.
+  let extraChips = [];
+  function drawExtraChips() {
+    $("device-extra-chips").replaceChildren(...extraChips.map((ip) => {
+      const chip = document.createElement("span");
+      chip.className = "chip-in";
+      chip.append(ip, Object.assign(document.createElement("button"), { type: "button", textContent: "×", title: `Убрать ${ip}`, ariaLabel: `Убрать ${ip}`,
+        onclick: () => { extraChips = extraChips.filter((x) => x !== ip); drawExtraChips(); formChanged(); } }));
+      return chip;
+    }));
+  }
+  function commitExtraIp() {
+    const input = $("device-extra-ips");
+    for (const raw of input.value.split(/[\s,;]+/).filter(Boolean)) {
+      if (!IPV4.test(raw) && !raw.includes(":")) { fieldError("device-extra-ips", `«${raw}» — не IP-адрес`); return false; }
+      if (!extraChips.includes(raw)) extraChips.push(raw);
+    }
+    fieldError("device-extra-ips", null);
+    input.value = "";
+    drawExtraChips();
+    return true;
+  }
+  $("device-extra-ips").addEventListener("keydown", (ev) => {
+    if (["Enter", ",", " "].includes(ev.key) && $("device-extra-ips").value.trim()) { ev.preventDefault(); if (commitExtraIp()) formChanged(); }
+    else if (ev.key === "Backspace" && !$("device-extra-ips").value && extraChips.length) { extraChips.pop(); drawExtraChips(); formChanged(); }
+  });
+  $("device-extra-ips").addEventListener("blur", () => { if ($("device-extra-ips").value.trim()) commitExtraIp(); });
+
+  // Closing a form with changes in it asks first.
+  let formDirty = false;
+  const formChanged = () => { formDirty = true; };
+  $("device-form").addEventListener("input", formChanged);
+  $("device-form").addEventListener("change", formChanged);
+  async function closeDeviceForm() {
+    if (formDirty && !(await ask("Закрыть без сохранения?\nВнесённые изменения пропадут.", { action: "Закрыть", danger: false }))) return;
+    formDirty = false;
+    $("device-dialog").close();
+  }
+  $("device-cancel").addEventListener("click", closeDeviceForm);
+  $("device-dialog").addEventListener("cancel", (ev) => { ev.preventDefault(); closeDeviceForm(); });
+  // Sections fold by their title; «Заметки» starts folded when it is empty.
+  document.querySelectorAll("#device-form fieldset.section > legend").forEach((lg) => {
+    lg.classList.add("fold");
+    lg.tabIndex = 0;
+    lg.setAttribute("role", "button");
+    const toggle = () => lg.parentElement.classList.toggle("folded");
+    lg.addEventListener("click", toggle);
+    lg.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggle(); } });
+  });
   const IPV4 = /^((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/;
   const MAC = /^[0-9a-f]{2}([:-][0-9a-f]{2}){5}$/i;
   $("device-form").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const ip = $("device-ip").value.trim(), mac = $("device-mac").value.trim();
     const passive = $("device-net").hidden;
-    const extraIps = $("device-extra-ips").value.split(/[\s,;]+/).filter(Boolean);
-    const badExtra = extraIps.find((x) => !IPV4.test(x) && !x.includes(":"));
+    // An address typed but not yet entered counts.
+    if ($("device-extra-ips").value.trim() && !commitExtraIp()) return;
+    const extraIps = [...extraChips];
     // Errors under their fields, the first one focused; nothing goes to the server until they are fixed.
     const problems = [
       ["device-mac", !passive && mac && !MAC.test(mac) ? "Нужен адрес вида aa:bb:cc:dd:ee:ff" : null],
-      ["device-extra-ips", !passive && badExtra ? `«${badExtra}» — не IP-адрес` : null],
       ["device-ip", !passive && ip && !IPV4.test(ip) && !ip.includes(":") ? "Нужен адрес вида 10.0.0.1" : null],
       ["device-name", $("device-name").value.trim() ? null : "Укажите имя"],
     ];
@@ -2390,11 +2603,12 @@
         await api("POST", "devices", { ...body, floor_id: floor.id, x: round1(at.x), y: round1(at.y) });
       }
       dupIpAllowed = false;
+      formDirty = false;
       $("device-dialog").close();
       await refreshTab();
     } catch (e) {
       if (e.code === "ip_in_use" && !dupIpAllowed
-        && confirm(`${e.message.split(". Нажмите")[0]}.\n\nСохранить всё равно?`)) {
+        && await ask(`${e.message.split(". Нажмите")[0]}.\n\nСохранить всё равно?`)) {
         dupIpAllowed = true;
         $("device-form").requestSubmit();
         return;
@@ -2402,10 +2616,11 @@
       dupIpAllowed = false;
       $("device-error").hidden = false;
       $("device-error").textContent = e.status === 409 && e.code === "integrity_error" ? "Устройство с таким именем или NFC-меткой уже есть." : e.message;
+      $("device-error").scrollIntoView({ block: "center", behavior: "smooth" });
     }
   });
   $("device-delete").addEventListener("click", async () => {
-    if (!dialogDevice || !confirm(`Удалить ${dialogDevice.name}, его порты и кабели из учёта? Само оборудование это не затрагивает.`)) return;
+    if (!dialogDevice || !await ask(`Удалить ${dialogDevice.name}, его порты и кабели из учёта? Само оборудование это не затрагивает.`)) return;
     try {
       await api("DELETE", `devices/${dialogDevice.id}`);
       if (cardId === dialogDevice.id) { cardId = null; $("card-dialog").close(); }
@@ -2457,7 +2672,7 @@
         p.cables_dropped ? `Кабелей между этими записями (будут удалены): ${p.cables_dropped}.` : "",
         p.filled_fields.length ? `Заполнятся поля: ${p.filled_fields.join(", ")}.` : "",
         "Запись «" + p.source_name + "» сохранится в журнале. Продолжить?"].filter(Boolean).join("\n");
-      if (!confirm(text)) return;
+      if (!await ask(text)) return;
       const kept = await api("POST", `devices/${dialogDevice.id}/merge`, { source_id: src.id, confirm: true });
       if (cardId === src.id) { cardId = null; $("card-dialog").close(); }
       $("merge-dialog").close();
@@ -2502,7 +2717,7 @@
         });
       }
       del.addEventListener("click", async () => {
-        if (!confirm(`Удалить VLAN ${v.vlan_id} (${v.name}) из справочника?`)) return;
+        if (!await ask(`Удалить VLAN ${v.vlan_id} (${v.name}) из справочника?`)) return;
         try { vlanError(null); await api("DELETE", `vlans/${v.vlan_id}`); await loadVlans(); } catch (e) { vlanError(e); }
       });
       return tr;
@@ -2591,7 +2806,7 @@
       };
       for (const el of [name, uplink, mode, access, tagged, speed, poe]) el.addEventListener("change", () => { tr.classList.add("picked"); save(); });
       del.addEventListener("click", async () => {
-        if (!confirm(`Удалить порт ${p.number} (${p.name}) из учёта? Кабель на нём тоже уйдёт. Оборудование это не затрагивает.`)) return;
+        if (!await ask(`Удалить порт ${p.number} (${p.name}) из учёта? Кабель на нём тоже уйдёт. Оборудование это не затрагивает.`)) return;
         try { portsError(null); await api("DELETE", `ports/${p.id}`); await renderPorts(); } catch (e) { portsError(e); }
       });
       return tr;
@@ -3086,7 +3301,7 @@
     }
   });
   $("bulk-delete").addEventListener("click", async () => {
-    if (!confirm(`Удалить устройств: ${picked.size}? Они пропадут из учёта и с карты вместе с портами и кабелями. Само оборудование это не затрагивает.`)) return;
+    if (!await ask(`Удалить устройств: ${picked.size}? Они пропадут из учёта и с карты вместе с портами и кабелями. Само оборудование это не затрагивает.`)) return;
     try {
       await api("POST", "devices/bulk-delete", { ids: [...picked] });
       picked.clear();
@@ -3306,11 +3521,11 @@
   $("script-runs-on").addEventListener("change", scriptWhere);
   $("script-shell").addEventListener("change", scriptWhere);
 
-  function askParams(s) {
+  async function askParams(s) {
     const params = {};
     const list = (s.runs_on === "pc" ? [{ name: "host", label: "Компьютер", required: true, placeholder: "PC-BUH-01" }] : []).concat(s.params);
     for (const p of list) {
-      const v = prompt(`${p.label}${p.required ? "" : " (необязательно)"}`, p.placeholder || "");
+      const v = await askText(`${p.label}${p.required ? "" : " (необязательно)"}`, p.placeholder || "", { action: "Далее" });
       if (v === null) return null;
       if (v.trim()) params[p.name] = v.trim();
     }
@@ -3325,10 +3540,10 @@
 
   $("script-run").addEventListener("click", async () => {
     if (!editing) return;
-    const params = askParams(editing);
+    const params = await askParams(editing);
     if (!params) return;
     const where = editing.runs_on === "pc" ? `на ${params.host}` : "на сервере NetAdmin";
-    if (!confirm(`Запустить «${editing.title}» ${where}? Скрипт выполнится по-настоящему.`)) return;
+    if (!await ask(`Запустить «${editing.title}» ${where}? Скрипт выполнится по-настоящему.`)) return;
     $("script-msg").textContent = "Выполняется…";
     try {
       showRun(await api("POST", `runbooks/${editing.runbook_id}/run`, { params, confirm: true, operator: OPERATOR }));
@@ -3359,14 +3574,14 @@
   });
 
   $("script-delete").addEventListener("click", async () => {
-    if (!editing || !confirm(`Удалить скрипт «${editing.title}»?`)) return;
+    if (!editing || !await ask(`Удалить скрипт «${editing.title}»?`)) return;
     try { await api("DELETE", `scripts/${editing.id}`); editing = null; $("script-form").hidden = true; await loadScripts(); }
     catch (e) { fail(e); }
   });
 
   $("script-test").addEventListener("click", async () => {
     if (!editing) return;
-    const params = askParams(editing);
+    const params = await askParams(editing);
     if (!params) return;
     try {
       showRun(await api("POST", `runbooks/${editing.runbook_id}/run`, { params, confirm: true, dry_run: true, operator: OPERATOR }));
@@ -3492,7 +3707,7 @@
     }
   });
   $("per-delete").addEventListener("click", async () => {
-    if (!perEditing || !confirm("Удалить запись из учёта? Если вещь просто убрали, лучше выберите «На складе».")) return;
+    if (!perEditing || !await ask("Удалить запись из учёта? Если вещь просто убрали, лучше выберите «На складе».")) return;
     try { await api("DELETE", `peripherals/${perEditing.id}`); $("per-dialog").close(); await loadPeripherals(); }
     catch (e) { $("per-error").hidden = false; $("per-error").textContent = e.message; }
   });
@@ -3725,7 +3940,7 @@
         x.title = `Отключить: удалить кабель у порта ${(self ? l.a_port : l.b_port) || "?"}`;
         x.addEventListener("click", async (ev) => {
           ev.stopPropagation();
-          if (!confirm(`Удалить из учёта кабель у порта ${(self ? l.a_port : l.b_port) || "?"} (${n.name} → ${names.get(other) || "?"})? Розетки и патч-панели на пути остаются.`)) return;
+          if (!await ask(`Удалить из учёта кабель у порта ${(self ? l.a_port : l.b_port) || "?"} (${n.name} → ${names.get(other) || "?"})? Розетки и патч-панели на пути остаются.`)) return;
           try { await api("DELETE", `connections/${cut}`); toast("Кабель удалён"); await loadTopology(); } catch (e) { fail(e); }
         });
         const wrap = document.createElement("div");
@@ -3972,7 +4187,7 @@
     catch (e) { $("plate-error").hidden = false; $("plate-error").textContent = e.message; }
   });
   $("plate-delete").addEventListener("click", async () => {
-    if (!confirm("Удалить схему панели и все метки портов?")) return;
+    if (!await ask("Удалить схему панели и все метки портов?")) return;
     try { await api("DELETE", `devices/${P.device.id}/faceplate`); await loadPlate(); }
     catch (e) { fail(e); }
   });
@@ -3998,6 +4213,7 @@
     if (refresh && (cardId !== id || !$("card-dialog").open)) return;
     if (!d) { cardId = null; $("card-dialog").close(); toast("Устройство уже удалено из учёта.", true); return; }
     cardId = id;
+    if (location.hash !== `#device/${id}`) history.replaceState(null, "", `#device/${id}`);
     const byId = new Map(devices.map((x) => [x.id, x]));
     const vlanById = new Map(vlans.map((v) => [v.vlan_id, v]));
     const c = {
@@ -4065,7 +4281,12 @@
         ["Помещение", room ? room.name : null],
         ["Стойка", rack ? linkTo(`${rack.name}${d.rack_u ? ` · U${d.rack_u}${(d.rack_h || 1) > 1 ? `–${d.rack_u + d.rack_h - 1}` : ""}` : ""}`, () => openCard(rack.id).catch(fail)) : null],
       ];
-    const where = node("div", { className: "card" }, node("h3", { textContent: "Расположение" }), kv(place));
+    // When it last answered and on which address (the ping notes it): to tell a switched-off PC from a broken cable.
+    const seen = !PASSIVE.has(d.type) && d.type !== "RACK" ? [
+      ["Последний ответ", d.last_seen_at ? new Date(d.last_seen_at).toLocaleString("ru-RU") : "ни разу"],
+      ["Отвечает на адрес", (d.metadata || {}).answered_ip || null],
+    ] : [];
+    const where = node("div", { className: "card" }, node("h3", { textContent: "Расположение" }), kv([...place, ...seen]));
     if (d.type === "RACK") where.append(node("div", { className: "row" }, node("button", { textContent: "Вид стойки…", onclick: () => openRack(d) })));
     out.push(where);
 
@@ -4234,6 +4455,9 @@
   $("card-dialog").addEventListener("close", () => { cardId = null; });
   const cardDevice = () => allDevices.find((x) => x.id === cardId);
   $("card-edit").addEventListener("click", () => { const d = cardDevice(); if (d) openDeviceDialog(d); });
+  $("card-dialog").addEventListener("close", () => {
+    if (location.hash.startsWith("#device/")) history.replaceState(null, "", `#${currentTab}`);
+  });
   $("card-map").addEventListener("click", () => {
     const id = cardId;
     $("card-dialog").close();
@@ -4336,7 +4560,7 @@
 
   // What admin-more.js (the other tabs) builds on.
   window.NetAdmin = {
-    $, api, toast, fail, typeOf, glyphCanvas, OPERATOR, tabs: {},
+    $, api, toast, fail, ask, askText, typeOf, signedIn: () => !!token, glyphCanvas, OPERATOR, tabs: {},
     picked, listedIds: () => visibleDevices().map((d) => d.id), renderPorts: () => renderPorts(), portsDevice: () => portsDevice,
     openCard: (id) => openCard(id).catch(fail),
     openTab: (name) => openTab(name),

@@ -3,7 +3,7 @@
 // changes GPMC would make — state, links, settings, new and deleted GPOs — plus gpupdate on its computers.
 // Every change asks «Да/Нет» and is in the audit log.
 (() => {
-  const { $, api, toast, fail, tabs } = window.NetAdmin;
+  const { $, api, toast, fail, tabs, ask, askText } = window.NetAdmin;
   const el = (tag, props = {}, ...kids) => {
     const e = Object.assign(document.createElement(tag), props);
     e.append(...kids);
@@ -76,7 +76,7 @@
 
   async function change(question, method, path, body) {
     if (!canWrite()) { toast("Изменения выключены на сервере: «Настройки сервера» → «Разрешить изменения»", true); return; }
-    if (question && !confirm(question)) return;
+    if (question && !await ask(question)) return;
     try {
       const d = await write(method, path, body);
       toast("Изменено");
@@ -248,7 +248,7 @@
       s.computers.length && canWrite() ? el("button", { type: "button", className: "primary", textContent: "Применить сейчас (gpupdate /force)",
         onclick: async () => {
           const chosen = boxes.filter((b) => b.box.checked).map((b) => b.c.name);
-          if (!chosen.length || !confirm(`Обновить групповые политики на ${chosen.length} компьютерах сейчас?`)) return;
+          if (!chosen.length || !await ask(`Обновить групповые политики на ${chosen.length} компьютерах сейчас?`)) return;
           try {
             const job = await write("POST", `gpo/${g.id}/apply`, { computers: chosen.length === boxes.length ? null : chosen });
             pollApply(job.id, progress);
@@ -277,10 +277,9 @@
   }
   $("gpo-report-close").addEventListener("click", () => $("gpo-report-dialog").close());
 
-  function remove(g) {
-    const typed = prompt(`Удалить политику «${g.name}» из домена? Это нельзя отменить (кроме резервной копии GPO). Введите имя политики, чтобы подтвердить:`);
-    if (typed === null) return;
-    if (typed.trim() !== g.name) { toast("Имя не совпало — политика не удалена", true); return; }
+  async function remove(g) {
+    // The name must be typed: a policy applies to computers, deleting one is not something to click through.
+    if (!(await ask(`Удалить политику «${g.name}» из домена?\nЭто нельзя отменить (кроме резервной копии GPO).`, { typed: g.name, action: "Удалить политику" }))) return;
     write("POST", `gpo/${g.id}/delete`, {}).then(async () => {
       toast("Политика удалена");
       picked = null;
@@ -291,7 +290,7 @@
 
   $("gpo-new").addEventListener("click", async () => {
     if (!canWrite()) { toast("Изменения выключены на сервере", true); return; }
-    const name = prompt("Имя новой групповой политики:");
+    const name = await askText("Имя новой групповой политики", "", { action: "Создать" });
     if (!name || !name.trim()) return;
     try {
       const d = await write("POST", "gpo", { name: name.trim() });

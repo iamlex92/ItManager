@@ -2,7 +2,7 @@
 // «Настройки сервера»: everything that used to be edited in netadmin.env, as a form. The server describes the
 // settings itself (GET server-settings), so this page only draws them. Saved values act after a restart.
 (() => {
-  const { $, api, toast, fail, tabs } = window.NetAdmin;
+  const { $, api, toast, fail, tabs, ask, askText } = window.NetAdmin;
   const el = (tag, props = {}, ...kids) => {
     const e = Object.assign(document.createElement(tag), props);
     e.append(...kids);
@@ -61,14 +61,14 @@
         const promote = el("button", { type: "button", className: "danger", textContent: "Сделать этот сервер основным",
           title: "Основной сервер потерян: этот перестаёт принимать базу и разрешает изменения" });
         promote.addEventListener("click", async () => {
-          if (!confirm("Этот сервер перестанет принимать базу с основного и разрешит изменения. Продолжить?")) return;
+          if (!await ask("Этот сервер перестанет принимать базу с основного и разрешит изменения. Продолжить?")) return;
           try { await api("POST", "sync/promote"); toast("Сервер стал основным. Перезапустите его, чтобы заработали опрос и ping"); load(); }
           catch (e) { fail(e); }
         });
         const reset = el("button", { type: "button", textContent: "Принимать от другого сервера",
           title: "Если основной сервер заменён: этот забудет прежний источник и примет пакет от нового" });
         reset.addEventListener("click", async () => {
-          if (!confirm("Забыть прежний основной сервер? Следующий пакет от любого сервера будет принят.")) return;
+          if (!await ask("Забыть прежний основной сервер? Следующий пакет от любого сервера будет принят.")) return;
           try { draw(await api("POST", "sync/reset-source")); toast("Источник забыт"); } catch (e) { fail(e); }
         });
         extra.push(promote, reset);
@@ -136,7 +136,7 @@
         try {
           const url = typeof edits.ad_ldap_url === "string" ? edits.ad_ldap_url : "";
           const c = await api("POST", "server-settings/controller-certificate", { url });
-          const ok = confirm(`Сертификат контроллера:\n\nКому: ${c.subject}\nКем выдан: ${c.issuer}${c.self_signed ? " (самоподписанный)" : ""}\n`
+          const ok = await ask(`Сертификат контроллера:\n\nКому: ${c.subject}\nКем выдан: ${c.issuer}${c.self_signed ? " (самоподписанный)" : ""}\n`
             + `Действует до: ${new Date(c.not_after).toLocaleDateString("ru-RU")}\n\nОтпечаток SHA-256:\n${c.sha256}\n\n`
             + "Сверьте отпечаток на контроллере:\nopenssl x509 -in /var/lib/samba/private/tls/cert.pem -noout -fingerprint -sha256\n\nДоверять этому сертификату?");
           if (!ok) return;
@@ -165,7 +165,7 @@
   });
 
   $("settings-restart").addEventListener("click", async () => {
-    if (!confirm("Перезапустить сервер? Он будет недоступен 10–30 секунд, приложение и консоль переподключатся сами.")) return;
+    if (!await ask("Перезапустить сервер? Он будет недоступен 10–30 секунд, приложение и консоль переподключатся сами.")) return;
     try {
       await api("POST", "server-settings/restart");
       toast("Сервер перезапускается…");
