@@ -26,12 +26,25 @@
     showError(null);
     const [s, creds] = await Promise.all([api("GET", "server-settings"), api("GET", "credentials").catch(() => [])]);
     credentials = creds;
+    drawJobs();
     edits = {};
     resets = new Set();
     dirty();
     render(s);
   }
   tabs.settings = load;
+
+  const JOBS = { ping: "Проверка устройств (ping)", traffic: "Трафик портов", backup: "Копия базы",
+    sync: "Отправка на резервный сервер", retention: "Очистка журнала" };
+  async function drawJobs() {
+    try {
+      const st = await api("GET", "status");
+      $("settings-jobs-card").hidden = false;
+      $("settings-jobs").replaceChildren(...st.jobs.map((j) => el("p", { className: j.error ? "error small" : "small",
+        textContent: `${JOBS[j.name] || j.name}: ` + (!j.enabled ? "не работает" : j.error ? `ошибка — ${j.error}`
+          : j.last_at ? `${when(j.last_at)}` : "ещё ничего не сделала") })));
+    } catch { $("settings-jobs-card").hidden = true; }
+  }
 
   function render(s) {
     $("settings-pending").hidden = !s.restart_pending;

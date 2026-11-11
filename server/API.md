@@ -14,7 +14,7 @@ Clients should ignore unknown fields.
 | GET | `/api/v1/health` | `{status, version, hal_mode: "emulator"\|"real", device_writes_enabled, monitor_mode: "emulator"\|"real", backup_server_url}` (no auth); `backup_server_url` is the backup server the web console offers while this one is down («Резервный сервер» in the server settings), "" when none |
 | GET | `/api/v1/floors` | `[{id, building_name, floor_number, name, plan_image_url, scale_pixels_per_meter, width_px, height_px, created_at}]` |
 | GET | `/api/v1/floors/{id}/plan-image` | plan image uploaded for the floor (`plan_image_url` points here) |
-| GET | `/api/v1/devices?floor_id=&type=&q=` | Search `q` also matches `extra_ips` (a device's other addresses: pinged too; online when any answers). `[{id, name, type, vendor, model, ip, extra_ips, mac, floor_id, x, y, is_online, last_seen_at, vlan_id, is_active, nfc_tag_uid, snmp_community, metadata}]` |
+| GET | `/api/v1/devices?floor_id=&type=&q=` | Search `q` also matches `extra_ips` (a device's other addresses: pinged too; online when any answers). `[{id, name, type, vendor, model, ip, extra_ips, mac, floor_id, x, y, is_online, last_seen_at, vlan_id, is_active, nfc_tag_uid, has_snmp_community, metadata}]` |
 | GET | `/api/v1/devices/{id}` | one device |
 | GET | `/api/v1/devices/by-nfc/{uid}` | device bound to an NFC tag |
 | GET | `/api/v1/search?q=` | devices matching name, IP, MAC or NFC UID |
@@ -282,8 +282,13 @@ Server sends:
 {"type": "device_status", "device_id": "...", "is_online": false}
 {"type": "alert", "alert": {/* alert object, sent when created and when resolved */}}
 {"type": "printer_status", "device_id": "...", "printer": {/* printer object */}}
+{"type": "inventory_changed"}                        // the inventory was changed by someone: reload lists
+{"type": "status_refresh", "id": "...", "state": "running|done", "done": 1, "total": 2, "checked": 0, "online": 0, "changed": 0}
 {"type": "error", "message": "..."}
 ```
+
+All event types: `snapshot`, `port_status`, `device_status`, `alert`, `printer_status`, `inventory_changed`,
+`status_refresh`, `error`.
 
 A bad token closes the socket with code 1008.
 
@@ -413,7 +418,9 @@ The main server sends its database to the backup server; each keeps its own serv
 
 | Method | Path | Notes |
 |---|---|---|
+| GET | `/api/v1/status` | `{role, jobs: [{name: ping\|traffic\|backup\|sync\|retention, enabled, last_at, error}]}`: when each background job last produced something (read from its traces) |
 | GET | `/api/v1/sync` | `{role: "main"\|"backup"\|"", backup_server_url, interval_minutes, pushed_at, push_error, push_bytes, push_tables, push_rows, received_at, receive_error, received_rows, received_created_at}` |
+| POST | `/api/v1/sync/check` | asks the backup server whether a push would be taken: `{ok, checks: [{name, ok, text}]}`; sends nothing |
 | POST | `/api/v1/sync/push` | Sends the database to `BACKUP_SERVER_URL` now with `BACKUP_SERVER_TOKEN`, as the scheduled sync does (`SYNC_TO_BACKUP`, every `SYNC_INTERVAL_MINUTES`). 422 `no_backup_server`, 502 `sync_failed` with the reason. Audited as `sync:push`. |
 | POST | `/api/v1/sync/receive` | On the backup server (`SYNC_ACCEPT=true`, else 403 `sync_not_accepted`): body `application/zip` from the main server, a manifest and every table but `server_settings` as COPY text. Replaces this server's tables in one transaction. 409 `sync_refused` for a different schema revision or `SECRET_KEY`, or a broken package; 413 over 2 GB. Audited as `sync:receive`. |
 

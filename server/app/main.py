@@ -13,7 +13,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 
-from . import FULL_VERSION, crypto, serversettings
+from . import FULL_VERSION, MIN_APP_VERSION, crypto, serversettings
 from .api import (
     alerts,
     audit,
@@ -44,6 +44,9 @@ from .api import (
 )
 from .api import (
     serversettings as serversettings_api,
+)
+from .api import (
+    status as status_api,
 )
 from .api import (
     sync as sync_api,
@@ -283,6 +286,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return HealthOut(
             status="ok",
             version=FULL_VERSION,
+            min_app_version=MIN_APP_VERSION,
             hal_mode=settings.hal_mode.value,
             device_writes_enabled=settings.device_writes_enabled,
             monitor_mode=settings.monitor_mode.value,
@@ -320,6 +324,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         peripherals,
         faceplates,
         topology,
+        status_api,
     )
     for module in (*routers, credentials, traffic, history, serversettings_api, sync_api):
         api.include_router(module.router)
