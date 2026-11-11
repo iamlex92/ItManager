@@ -18,6 +18,7 @@ from typing import Any
 from ..config import Settings
 from ..runbooks.real import Login, Shell, winrm_shell
 from . import scripts
+from .shadow import shadow_out
 
 # A computer name (NetBIOS or FQDN) or an IPv4 address: what may follow -ComputerName.
 HOST = re.compile(r"^(?=.{1,253}$)[A-Za-z0-9]([A-Za-z0-9-]{0,62})(\.[A-Za-z0-9]([A-Za-z0-9-]{0,62}))*$")
@@ -35,6 +36,8 @@ class Action(StrEnum):
     REBOOT = "reboot"
     KILL = "kill"
     COMMAND = "command"
+    # Which user sessions a Windows computer has, and the mstsc /shadow command for one of them.
+    SHADOW = "shadow"
     # Remote help: msra for Windows, x11vnc with the user's consent for Astra Linux.
     ASSIST = "assist"
     # Astra Linux only.
@@ -43,7 +46,7 @@ class Action(StrEnum):
     ADMIN_REMOVE = "admin_remove"
 
 
-READ_ACTIONS = {Action.INFO, Action.DISKS, Action.FOLDERS, Action.PROCESSES}
+READ_ACTIONS = {Action.INFO, Action.DISKS, Action.FOLDERS, Action.PROCESSES, Action.SHADOW}
 # Asked again with a fingerprint on the phone (and «Да» in the web console) before they run.
 CONFIRM_ACTIONS = {
     Action.CLEANUP,
@@ -65,6 +68,7 @@ WINDOWS_ACTIONS = {
     Action.KILL,
     Action.COMMAND,
     Action.ASSIST,
+    Action.SHADOW,
 }
 
 
@@ -112,6 +116,7 @@ def script_for(action: Action, arg: str | None) -> str:
         Action.DISKS: scripts.DISKS,
         Action.FOLDERS: scripts.FOLDERS,
         Action.PROCESSES: scripts.PROCESSES,
+        Action.SHADOW: scripts.QWINSTA,
         Action.CLEANUP: scripts.CLEANUP,
         Action.GPUPDATE: scripts.GPUPDATE,
         Action.REBOOT: scripts.REBOOT,
@@ -184,6 +189,8 @@ class RealPcs:
             data = normalize_licences(data)
         if action in (Action.DISKS, Action.FOLDERS, Action.PROCESSES):
             data = as_list(data)
+        if action is Action.SHADOW:
+            data = shadow_out(host, str((data or {}).get("raw", "")) if isinstance(data, dict) else "")
         return PcResult(True, data=data)
 
     async def run_script(self, host: str, script: str, login: Login | None) -> PcResult:
@@ -267,6 +274,15 @@ class EmulatedPcs:
                     ("ProgramData", 3.2), ("$Recycle.Bin", round((n % 70) / 10, 1))]  # fmt: skip
             data = [{"name": a, "size_gb": b} for a, b in sorted(rows, key=lambda r: -r[1]) if b > 0.1]
             return PcResult(True, data=data, simulated=True)
+        if action is Action.SHADOW:
+            user = (_USERS[n % len(_USERS)] or "FACTORY\\ivanova").split("\\")[-1]
+            raw = (
+                " SESSIONNAME       USERNAME                 ID  STATE   TYPE        DEVICE\n"
+                " services                                    0  Disc\n"
+                f">console           {user:<20} {1 + n % 2:>5}  Active\n"
+                " rdp-tcp                                 65536  Listen\n"
+            )
+            return PcResult(True, data=shadow_out(host, raw), simulated=True)
         if action is Action.PROCESSES:
             gone = self.processes_stopped.get(host.lower(), set())
             names = ["chrome", "1cv8c", "Teams", "OUTLOOK", "explorer", "MsMpEng", "svchost", "WINWORD", "EXCEL",

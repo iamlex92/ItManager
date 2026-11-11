@@ -428,6 +428,7 @@
           <div id="pc-actions" class="row wrap" hidden>
             <button data-pc="info" class="primary">Сведения</button>
             <button data-pc="assist" class="primary">Удалённая помощь</button>
+            <button data-pc="shadow" class="primary" data-only="windows" title="Теневое подключение RDP (mstsc /shadow): сервер находит сеанс пользователя и готовит команду">Подключиться напрямую</button>
             <button data-pc="disks">Свободное место</button>
             <button data-pc="folders">Крупные папки</button>
             <button data-pc="processes">Процессы</button>
@@ -637,6 +638,7 @@
       <button type="button" id="card-plate" title="Схема лицевой панели (SVG) и места портов">Схема панели</button>
       <button type="button" id="card-pc" title="Диски, процессы, лицензии, очистка, перезагрузка: Windows по WinRM, Astra Linux по SSH" hidden>Управление ПК</button>
       <button type="button" id="card-assist" title="Подключиться к экрану пользователя: msra для Windows, VNC с согласия пользователя для Astra Linux" hidden>Удалённая помощь</button>
+      <button type="button" id="card-shadow" title="Теневое подключение RDP: сервер находит сеанс пользователя и готовит команду mstsc /shadow" hidden>Подключиться напрямую</button>
     </div>
     <div class="seg" id="card-tabs">
       <button data-part="overview" class="active">Обзор</button>

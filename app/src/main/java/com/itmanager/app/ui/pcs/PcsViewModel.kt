@@ -81,7 +81,7 @@ class PcsViewModel @Inject constructor(
     private var opened = false
 
     /** Remote help asked for together with opening the computer: started once its details are in. */
-    private var assistAfterInfo = false
+    private var afterInfo: PcAction? = null
 
     init {
         loadStatus()
@@ -96,10 +96,14 @@ class PcsViewModel @Inject constructor(
     }
 
     /** Opened from a device card: once per screen, so coming back from the share sheet does not run it again. */
-    fun openOnce(host: String, assist: Boolean = false) {
+    fun openOnce(host: String, assist: Boolean = false, shadow: Boolean = false) {
         if (opened || host.isBlank()) return
         opened = true
-        assistAfterInfo = assist
+        afterInfo = when {
+            shadow -> PcAction.SHADOW
+            assist -> PcAction.ASSIST
+            else -> null
+        }
         open(host)
     }
 
@@ -138,9 +142,10 @@ class PcsViewModel @Inject constructor(
         when (val o = r.outcome) {
             is PcOutcome.Info -> {
                 _session.value = current.copy(running = null, info = o.info, result = r)
-                if (assistAfterInfo) {
-                    assistAfterInfo = false
-                    run(PcAction.ASSIST)
+                afterInfo?.let { next ->
+                    afterInfo = null
+                    // The computer's platform is known now: shadowing is for Windows only.
+                    if (!(next == PcAction.SHADOW && current.platform == PcPlatform.ASTRA)) run(next)
                 }
             }
             is PcOutcome.Stopped -> {

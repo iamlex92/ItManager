@@ -47,6 +47,9 @@ import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
+import com.itmanager.app.data.model.ShadowInfo
+import androidx.compose.material3.Switch
+import androidx.compose.material.icons.outlined.DesktopWindows
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
@@ -105,6 +108,7 @@ fun PcsScreen(
     initialHost: String = "",
     /** Opened with «Удалённая помощь» from a device card: help starts right after the computer's details. */
     initialAssist: Boolean = false,
+    initialShadow: Boolean = false,
     viewModel: PcsViewModel = hiltViewModel(),
 ) {
     val status by viewModel.status.collectAsStateWithLifecycle()
@@ -114,7 +118,7 @@ fun PcsScreen(
     val scope = rememberCoroutineScope()
     var pending by remember { mutableStateOf<PendingAction?>(null) }
 
-    LaunchedEffect(initialHost) { viewModel.openOnce(initialHost, initialAssist) }
+    LaunchedEffect(initialHost) { viewModel.openOnce(initialHost, initialAssist, initialShadow) }
     LaunchedEffect(viewModel) {
         viewModel.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
     }
@@ -410,6 +414,7 @@ private fun ModeNote(status: PcStatus?, error: String?) {
 private val ACTION_ICONS = mapOf(
     PcAction.INFO to Icons.Outlined.Info,
     PcAction.ASSIST to Icons.Outlined.ScreenShare,
+    PcAction.SHADOW to Icons.Outlined.DesktopWindows,
     PcAction.DISKS to Icons.Outlined.Storage,
     PcAction.FOLDERS to Icons.Outlined.FolderOpen,
     PcAction.PROCESSES to Icons.Outlined.Memory,
@@ -444,7 +449,7 @@ private fun PcPage(
     ) {
         item(key = "actions") { Column {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ACTION_ICONS.filter { (action, _) -> astra || !action.astraOnly }.forEach { (action, icon) ->
+                ACTION_ICONS.filter { (action, _) -> if (astra) !action.windowsOnly else !action.astraOnly }.forEach { (action, icon) ->
                     // Help on an Astra computer starts x11vnc there, a change; on Windows it only shows the msra command.
                     val changes = action.changes || (action == PcAction.ASSIST && astra)
                     ActionChip(icon, action.title, enabled = session.running == null && !(changes && readOnly)) { onRun(action, null) }
@@ -502,6 +507,7 @@ private fun PcPage(
                     InfoView(o.info, enabled = session.running == null && !readOnly, onRun = onRun)
                 }
                 is PcOutcome.Assist -> item(key = "assist") { AssistView(o.help, onRun = onRun, onMessage = onMessage) }
+                is PcOutcome.Shadow -> item(key = "shadow") { ShadowView(o.shadow, onMessage = onMessage) }
                 is PcOutcome.Disks -> items(o.disks, key = { "disk-${it.drive}" }) { d ->
                     Card("${d.drive} ${d.label.orEmpty()}".trim()) {
                         Text("Свободно ${d.freeGb} ГБ из ${d.totalGb} ГБ · занято ${d.usedPercent} %")
@@ -732,6 +738,56 @@ private fun AssistView(help: RemoteHelp, onRun: (PcAction, String?) -> Unit, onM
         Text(
             "Соединение одно; после отключения x11vnc закрывается. VNC не шифруется — только внутри сети. " +
                 "Пароль администратора в окне повышения прав вы вводите сами: на Astra оно на том же экране.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+    }
+}
+
+/** RDP shadowing: the command for the administrator's own Windows computer, copied or sent there. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ShadowView(info: ShadowInfo, onMessage: (String) -> Unit) {
+    val context = LocalContext.current
+    if (info.command == null) {
+        Card("Подключиться напрямую") {
+            Text(info.message ?: "Нет сеанса, к которому можно подключиться.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            info.sessions.forEach { Text("${it.id} · ${it.user.ifBlank { it.name }} · ${it.state}", style = MonoStyle) }
+        }
+        return
+    }
+    var id by rememberSaveable(info.host) { mutableStateOf((info.sessionId ?: 0).toString()) }
+    var watch by rememberSaveable(info.host) { mutableStateOf(false) }
+    val full = info.commands[id] ?: info.command
+    val command = if (watch) info.viewOf(full) else full
+    Card("Подключиться напрямую (теневое подключение RDP)") {
+        Text("Сеанс пользователя ${info.user.orEmpty()} на ${info.host} найден. Выполните на своём компьютере с Windows:")
+        Text(command, style = MonoStyle, modifier = Modifier.padding(vertical = 8.dp))
+        val shadowable = info.sessions.filter { it.shadowable }
+        if (shadowable.size > 1) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                shadowable.forEach { s ->
+                    FilterChip(selected = id == s.id.toString(), onClick = { id = s.id.toString() }, label = { Text("${s.id} · ${s.user}") })
+                }
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Switch(checked = watch, onCheckedChange = { watch = it })
+            Spacer(Modifier.width(8.dp))
+            Text("Только наблюдать, без управления")
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+            Button(onClick = { copy(context, "команда", command, onMessage) }) { Text("Копировать") }
+            TextButton(onClick = {
+                val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, command)
+                context.startActivity(Intent.createChooser(send, "Отправить команду на компьютер"))
+            }) { Text("Отправить на ПК") }
+        }
+        Text(
+            "Без запроса пользователю: нужна политика «Установить правила удаленного управления для пользовательских " +
+                "сеансов служб удаленных рабочих столов» = «Полный контроль без разрешения пользователя», и вы — " +
+                "администратор этого компьютера.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 8.dp),

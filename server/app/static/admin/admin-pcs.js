@@ -91,6 +91,8 @@
     if (action === "info" && r.platform === "astra") {
       $("pc-user").textContent = d.user || "никто не вошёл";
       out.replaceChildren(sim, astraInfo(d));
+    } else if (action === "shadow") {
+      out.replaceChildren(sim, shadowHelp(d));
     } else if (action === "assist") {
       out.replaceChildren(sim, d.method === "msra" ? msraHelp(d) : vncHelp(d));
     } else if (action === "admin_add" || action === "admin_remove") {
@@ -171,6 +173,40 @@
       el("div", { className: "row" }, el("a", { className: "button", href: URL.createObjectURL(cmd), download: `Помощь ${d.host}.cmd`, textContent: "Скачать ярлык (.cmd)" })),
       el("p", { className: "muted small", textContent: "Пользователь увидит запрос и разрешит подключение. Если msra отвечает, что предлагать помощь нельзя, нужны шаблоны групповой политики:" }),
       el("ul", {}, ...d.needs.map((n) => el("li", { className: "small", textContent: n }))));
+  }
+
+  // «Подключиться напрямую»: RDP shadowing. The server found the sessions; the command runs on the helper's computer.
+  function shadowHelp(d) {
+    const sessions = d.sessions.filter((s) => s.shadowable);
+    if (!d.command) {
+      return section("Подключиться напрямую (теневое подключение RDP)", el("p", { className: "muted", textContent: d.message || "Нет сеанса, к которому можно подключиться." }),
+        d.sessions.length ? table(["ID", "Сеанс", "Пользователь", "Состояние"], d.sessions.map((s) => [String(s.id), s.name, s.user, s.state])) : "");
+    }
+    let id = String(d.session_id), control = true;
+    const cmdText = () => (control ? d.commands[id] : d.commands[id].replace(" /control", ""));
+    const code = el("code", { className: "mono grow", textContent: cmdText() });
+    const copy = el("button", { type: "button", className: "primary", textContent: "Копировать команду",
+      onclick: () => navigator.clipboard.writeText(cmdText()).then(() => toast("Скопировано: вставьте в «Выполнить» (Win+R) или в cmd"), () => toast("Не удалось скопировать", true)) });
+    const download = el("a", { className: "button", textContent: "Скачать ярлык (.cmd)" });
+    const refresh = () => {
+      code.textContent = cmdText();
+      const blob = new Blob([`@echo off\r\nstart "" ${cmdText()}\r\n`], { type: "application/octet-stream" });
+      download.href = URL.createObjectURL(blob);
+      download.download = `Подключение ${d.host} (сеанс ${id}).cmd`;
+    };
+    const pick = el("select", { onchange: () => { id = pick.value; refresh(); } },
+      ...sessions.map((s) => new Option(`${s.id} · ${s.user}${s.active ? "" : ` (${s.state})`}`, String(s.id))));
+    pick.value = id;
+    const view = el("label", { className: "check" }, el("input", { type: "checkbox", onchange: (ev) => { control = !ev.target.checked; refresh(); } }), "Только наблюдать, без управления");
+    refresh();
+    return section("Подключиться напрямую (теневое подключение RDP)",
+      el("p", { textContent: `Сеанс пользователя ${d.user} на ${d.host} найден (ID ${d.session_id}). Выполните на своём компьютере:` }),
+      el("div", { className: "row" }, code, copy),
+      sessions.length > 1 ? el("label", {}, "Сеанс", pick) : "",
+      view,
+      el("div", { className: "row" }, download),
+      el("p", { className: "muted small", textContent: "Подключение без запроса пользователю: нужна политика «Установить правила удаленного управления для пользовательских сеансов служб удаленных рабочих столов» = «Полный контроль без разрешения пользователя», и вы — администратор этого компьютера." }),
+      d.sessions.length ? table(["ID", "Сеанс", "Пользователь", "Состояние"], d.sessions.map((s) => [String(s.id), s.name, s.user, s.state])) : "");
   }
 
   function vncHelp(d) {
@@ -285,6 +321,13 @@
     window.NetAdmin.openTab("pcs");
     $("pc-host").value = name;
     openPc(name).then(() => run("assist")).catch(fail);
+  };
+
+  // From the device card: the computer's page with the sessions looked up and the mstsc command ready.
+  window.NetAdmin.shadowPc = (name) => {
+    window.NetAdmin.openTab("pcs");
+    $("pc-host").value = name;
+    openPc(name).then(() => run("shadow")).catch(fail);
   };
 
   // From the device card: the computer's page, opened at once.

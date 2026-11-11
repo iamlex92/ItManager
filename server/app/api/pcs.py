@@ -3,7 +3,8 @@
 GET  /pcs/status                 mode, whether changes are allowed and the login is set
 POST /pcs/sweep                  ping a subnet and name what answers (menu item 1)
 POST /pcs/{host}/{action}        info, disks, folders, processes, cleanup, gpupdate, reboot, kill, command,
-                                 assist (remote help); Astra Linux also update, admin_add, admin_remove
+                                 assist (remote help), shadow (RDP shadowing: the sessions and the ready mstsc
+                                 /shadow command); Astra Linux also update, admin_add, admin_remove
 
 Windows computers are reached over WinRM, Astra Linux ones over SSH with sudo (pcs/astra.py): whichever port
 answers decides, so the same page serves both.
@@ -263,7 +264,10 @@ async def act(host: str, action: Action, body: PcActionIn, request: Request, ses
 
     # Reads are logged without what they returned (the keys stay out of the log); changes keep their output.
     output = None
-    if action is Action.ASSIST and isinstance(result.data, dict):
+    if action is Action.SHADOW and isinstance(result.data, dict):
+        d = result.data
+        output = f"{d.get('command') or 'нет сеанса'} · пользователь {d.get('user') or '—'}"
+    elif action is Action.ASSIST and isinstance(result.data, dict):
         # Never the one-time VNC password.
         d = result.data
         output = f"{d.get('method')}: {d.get('command') or d.get('url')} · пользователь {d.get('user') or '—'}"
