@@ -1,4 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">ItManager</string>
+
+    <!-- Settings: appearance, backup server, connection check -->
+    <string name="settings_appearance">Оформление</string>
+    <string name="theme_dark">Тёмная</string>
+    <string name="theme_light">Светлая</string>
+    <string name="theme_system">Как в системе</string>
+    <string name="settings_theme_note">Тёмная читается лучше в серверной; на ярком свету выберите светлую. Карта и панели портов рисуются в цветах для тёмной темы.</string>
+    <string name="backup_return_now">Вернуться на основной сейчас</string>
+    <string name="backup_scan_qr">Сканировать QR резервного сервера</string>
+    <string name="settings_unsaved_hint">Соединение проверено, но настройки ещё не сохранены: нажмите «Сохранить».</string>
+    <string name="app_too_old">Приложение %1$s старее, чем нужно серверу (%2$s): обновите приложение.</string>
+
+    <!-- Shown on every screen when no server answers -->
+    <string name="offline_pill">Нет связи · данные на %1$s · изменения отключены</string>
 </resources>
