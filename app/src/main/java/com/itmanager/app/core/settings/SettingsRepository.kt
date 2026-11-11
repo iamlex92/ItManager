@@ -77,6 +77,13 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[KEY_APP_LOCK] = enabled }
     }
 
+    /** "dark" (the default: server rooms, shop floor), "light" or "system". */
+    val themeMode: Flow<String> = dataStore.data.map { it[KEY_THEME] ?: "dark" }.distinctUntilChanged()
+
+    suspend fun setThemeMode(mode: String) {
+        dataStore.edit { it[KEY_THEME] = mode }
+    }
+
     /** The factory VPN through Cisco Secure Client; off until set up. */
     val vpnSettings: Flow<VpnSettings> = dataStore.data
         .map { p ->
@@ -115,6 +122,7 @@ class SettingsRepository @Inject constructor(
     }
 
     private companion object {
+        val KEY_THEME = stringPreferencesKey("theme_mode")
         val KEY_BASE_URL = stringPreferencesKey("server_base_url")
         val KEY_API_TOKEN = stringPreferencesKey("server_api_token")
         val KEY_BACKUP_URL = stringPreferencesKey("backup_base_url")

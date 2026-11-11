@@ -73,6 +73,9 @@ class AppViewModel @Inject constructor(
         if (on) BackupState(readOnly = health?.readOnly == true, syncedAt = syncClock(health?.lastSyncAt)) else null
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    /** The time (ms) of the saved state the app shows while no server can be reached, else null. */
+    val offlineSince: StateFlow<Long?> = repository.offlineSince
+
     /** A question waiting for the user: send a change to a backup server that takes them? */
     val writeQuestion = writeGate.pending
 

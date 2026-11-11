@@ -117,6 +117,7 @@ fun AppRoot(appViewModel: AppViewModel = hiltViewModel()) {
     val notice by appViewModel.notice.collectAsStateWithLifecycle()
     val binding by appViewModel.binding.collectAsStateWithLifecycle()
     val backup by appViewModel.backup.collectAsStateWithLifecycle()
+    val offlineSince by appViewModel.offlineSince.collectAsStateWithLifecycle()
     val writeQuestion by appViewModel.writeQuestion.collectAsStateWithLifecycle()
     val haptics = LocalHapticFeedback.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -181,6 +182,23 @@ fun AppRoot(appViewModel: AppViewModel = hiltViewModel()) {
                 onOpenDevice = appViewModel::openDevice,
             )
 
+            // No server answers: the last saved state is shown, read-only.
+            offlineSince?.let { since ->
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = padding.calculateBottomPadding() + 8.dp),
+                ) {
+                    Text(
+                        "Нет связи · данные на " + (syncClock(java.time.Instant.ofEpochMilli(since).toString()) ?: "") + " · изменения отключены",
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    )
+                }
+            }
             // On the backup server on every screen: what is changed there is replaced by the next copy.
             backup?.let { state ->
                 Surface(
