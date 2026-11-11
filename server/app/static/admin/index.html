@@ -311,6 +311,11 @@
         <p id="settings-pending" class="banner warn" hidden>Есть сохранённые изменения, которые ещё не действуют: перезапустите сервер.</p>
         <p id="settings-error" class="error-box" hidden></p>
       </div>
+      <div class="settings-bar">
+        <input type="search" id="settings-search" placeholder="Найти параметр…" aria-label="Найти параметр" autocomplete="off">
+        <nav id="settings-toc" class="toc" aria-label="Разделы настроек"></nav>
+        <span id="settings-dirty" class="muted small" hidden></span>
+      </div>
       <div id="settings-groups" class="settings-groups"></div>
     </section>
 

@@ -11,8 +11,10 @@ import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
+import httpx
 from fastapi import APIRouter, HTTPException, Request
 
+from .. import FULL_VERSION
 from .. import serversettings as ss
 from ..models import ScriptAuditLog
 from ..services import dbsync
@@ -39,6 +41,7 @@ def _out(request: Request) -> dict:
         "read_only": s.sync_accept and s.sync_read_only,
         "backup_server_url": s.backup_server_url.rstrip("/"),
         "interval_minutes": s.sync_interval_minutes,
+        "key": dbsync.key_fingerprint(s.secret_key),
         **_status(request).as_dict(),
     }
 
@@ -62,6 +65,50 @@ async def sync_status(request: Request):
     except Exception:
         log.exception("sync: server id not read")
     return _out(request)
+
+
+@router.post("/check")
+async def sync_check(request: Request):
+    """Asks the backup server whether a push would be taken: reachable, token accepted, receiving on, same SECRET_KEY.
+    Sends nothing and changes nothing; the answer is a list of checks, each ok or not."""
+    s = request.app.state.settings
+    base = s.backup_server_url.rstrip("/")
+    checks: list[dict] = []
+
+    def add(name: str, ok: bool, text: str) -> None:
+        checks.append({"name": name, "ok": ok, "text": text})
+
+    if not base:
+        add("Адрес", False, "адрес резервного сервера не задан")
+        return {"ok": False, "checks": checks}
+    transport = getattr(request.app.state, "sync_transport", None)
+    try:
+        async with httpx.AsyncClient(timeout=10, transport=transport) as client:
+            h = await client.get(f"{base}/api/v1/health")
+            add("Связь", h.status_code == 200, f"ответил {h.status_code}")
+            if h.status_code != 200:
+                return {"ok": False, "checks": checks}
+            info = h.json()
+            add("Версия", True, f"{info.get('version', '?')} (здесь {FULL_VERSION})")
+            r = await client.get(f"{base}/api/v1/sync", headers={"Authorization": f"Bearer {s.backup_server_token}"})
+    except (httpx.HTTPError, ValueError) as e:
+        add("Связь", False, f"сервер недоступен: {e}")
+        return {"ok": False, "checks": checks}
+    if r.status_code == 401:
+        add("Токен", False, "резервный сервер не принял API-токен")
+        return {"ok": False, "checks": checks}
+    add("Токен", r.status_code == 200, "принят" if r.status_code == 200 else f"ответил {r.status_code}")
+    if r.status_code == 200:
+        there = r.json()
+        add(
+            "Приём базы",
+            there.get("role") == "backup",
+            "включён" if there.get("role") == "backup" else "выключен: на резервном сервере включите «Принимать базу»",
+        )
+        mine = dbsync.key_fingerprint(s.secret_key)
+        same = there.get("key", "") == mine
+        add("Ключ шифрования", same, "совпадает" if same else "SECRET_KEY на серверах разный")
+    return {"ok": all(c["ok"] for c in checks), "checks": checks}
 
 
 @router.post("/reset-source")

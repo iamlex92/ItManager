@@ -50,7 +50,7 @@
     else if (body !== undefined) { payload = JSON.stringify(body); headers["Content-Type"] = "application/json"; }
     let r;
     try { r = await fetch(`/api/v1/${path}`, { method, headers, body: payload }); }
-    catch { serverDown(true); throw new ApiError(0, "network", "Нет связи с агентом"); }
+    catch { serverDown(true); throw new ApiError(0, "network", "Сервер не отвечает"); }
     serverDown(false);
     if (r.status === 401) {
       logout("Ключ не подошёл или сменился. Войдите снова.");
@@ -243,6 +243,10 @@
       const monitor = h.monitor_mode === "emulator" ? "опрос устройств выключен" : "опрос устройств включён";
       $("mode").textContent = `${hal} · ${monitor}`;
       $("mode").classList.toggle("warn", h.monitor_mode === "emulator");
+      // The badge leads to the settings that decide it.
+      $("mode").tabIndex = 0;
+      $("mode").setAttribute("role", "link");
+      $("mode").title = "Открыть настройки сервера";
       window.NetAdmin.monitorEmulated = h.monitor_mode === "emulator";
     } catch (e) {
       $("mode").textContent = "";
@@ -296,6 +300,15 @@
     });
   }
   document.addEventListener("click", (ev) => { if (!ev.target.closest(".pop")) closeMenus(); });
+  $("mode").addEventListener("click", () => openTab("settings"));
+  $("mode").addEventListener("keydown", (ev) => { if (ev.key === "Enter") openTab("settings"); });
+  // A dialog gives the focus back to the button that opened it, so the keyboard does not start over from the top.
+  const showModal = HTMLDialogElement.prototype.showModal;
+  HTMLDialogElement.prototype.showModal = function () {
+    const from = document.activeElement;
+    if (from && from !== document.body) this.addEventListener("close", () => { if (from.isConnected) from.focus({ preventScroll: true }); }, { once: true });
+    return showModal.call(this);
+  };
   document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") closeMenus(); });
 
   function openTab(name) {
@@ -303,7 +316,10 @@
     // The address says where you are (#devices, #device/<id>): a refresh stays here, a link can be sent on.
     if (location.hash !== `#${name}` && !location.hash.startsWith("#device/")) history.replaceState(null, "", `#${name}`);
     const home = TAB_HOME[name] || name;
-    for (const b of $("tabs").querySelectorAll("button[data-tab]")) b.classList.toggle("active", b.dataset.tab === home);
+    for (const b of $("tabs").querySelectorAll("button[data-tab]")) {
+      b.classList.toggle("active", b.dataset.tab === home);
+      if (b.dataset.tab === home) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
+    }
     for (const b of document.querySelectorAll(".subnav button[data-tab]")) b.classList.toggle("active", b.dataset.tab === name);
     for (const s of document.querySelectorAll("main > .tab")) s.hidden = s.id !== `tab-${name}`;
     if (name === "map") loadMap().catch(fail);
@@ -2985,6 +3001,15 @@
   const picked = new Set();
   let typeFilter = "";
   async function loadDevices() {
+    const rows = $("device-rows");
+    if (!rows.children.length) {
+      rows.replaceChildren(...Array.from({ length: 6 }, () => {
+        const tr = document.createElement("tr");
+        tr.className = "skeleton";
+        tr.append(Object.assign(document.createElement("td"), { colSpan: 8 }));
+        return tr;
+      }));
+    }
     [allDevices, S.floors] = await Promise.all([api("GET", "devices"), api("GET", "floors")]);
     for (const id of [...picked]) if (!allDevices.some((d) => d.id === id)) picked.delete(id);
     renderDevices();

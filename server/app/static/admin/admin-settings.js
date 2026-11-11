@@ -15,7 +15,12 @@
   let credentials = [];
 
   const showError = (e) => { $("settings-error").hidden = !e; $("settings-error").textContent = e ? e.message : ""; };
-  const dirty = () => { $("settings-save").disabled = !Object.keys(edits).length && !resets.size; };
+  const dirty = () => {
+    const n = Object.keys(edits).length + resets.size;
+    $("settings-save").disabled = !n;
+    $("settings-dirty").hidden = !n;
+    $("settings-dirty").textContent = n ? `Не сохранено: ${n}` : "";
+  };
 
   async function load() {
     showError(null);
@@ -38,7 +43,33 @@
       g.note ? el("p", { className: "muted small", textContent: g.note }) : "",
       ...g.fields.map(row),
       g.title === "Резервный сервер" ? syncBox() : "")));
+    $("settings-toc").replaceChildren(...[...$("settings-groups").children].map((card) => {
+      const a = el("button", { type: "button", className: "toc-item", textContent: card.querySelector("h3").textContent });
+      a.addEventListener("click", () => card.scrollIntoView({ behavior: "smooth", block: "start" }));
+      return a;
+    }));
+    applySearch();
   }
+
+  // The search hides the groups and rows that do not match; a group whose title matches stays whole.
+  function applySearch() {
+    const q = $("settings-search").value.trim().toLowerCase();
+    for (const card of $("settings-groups").children) {
+      const title = card.querySelector("h3").textContent.toLowerCase();
+      let any = !q || title.includes(q);
+      for (const r of card.querySelectorAll(".setting")) {
+        const hit = !q || title.includes(q) || r.textContent.toLowerCase().includes(q);
+        r.hidden = !hit;
+        any ||= hit;
+      }
+      card.hidden = !any;
+    }
+  }
+  $("settings-search").addEventListener("input", applySearch);
+  // Leaving with unsaved values asks first.
+  window.addEventListener("beforeunload", (ev) => {
+    if (Object.keys(edits).length || resets.size) { ev.preventDefault(); ev.returnValue = ""; }
+  });
 
   // What the last sync did, and a way to run one now; filled in after the page is drawn.
   const when = (iso) => (iso ? new Date(iso).toLocaleString("ru-RU") : "ещё не было");
@@ -83,7 +114,20 @@
         try { draw(await api("POST", "sync/push")); toast("База отправлена на резервный сервер"); }
         catch (e) { fail(e); api("GET", "sync").then(draw).catch(() => {}); }
       });
-      box.replaceChildren(...lines.map((t) => el("p", { className: t.startsWith("Ошибка") || t.startsWith("Последняя попытка") ? "error small" : "small", textContent: t })), now, ...extra);
+      const check = el("button", { type: "button", textContent: "Проверить связь",
+        title: "Дойдёт ли база до резервного сервера: связь, токен, приём, ключ шифрования. Ничего не отправляет" });
+      check.hidden = st.role === "backup" || !st.backup_server_url;
+      const verdict = el("div", { className: "sync-check" });
+      check.addEventListener("click", async () => {
+        check.disabled = true;
+        try {
+          const r = await api("POST", "sync/check");
+          verdict.replaceChildren(...r.checks.map((c) => el("p", { className: c.ok ? "small" : "error small", textContent: `${c.ok ? "✓" : "✗"} ${c.name}: ${c.text}` })));
+        } catch (e) { fail(e); }
+        check.disabled = false;
+      });
+      extra.unshift(check);
+      box.replaceChildren(...lines.map((t) => el("p", { className: t.startsWith("Ошибка") || t.startsWith("Последняя попытка") ? "error small" : "small", textContent: t })), now, ...extra, verdict);
     };
     api("GET", "sync").then(draw).catch((e) => box.replaceChildren(el("p", { className: "error small", textContent: e.message })));
     return box;
