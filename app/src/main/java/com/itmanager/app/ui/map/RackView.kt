@@ -217,8 +217,8 @@ fun RackDialog(
                     )
                     Text("Юниты ${device.rackU}–${device.rackTop}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     device.comment?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                    if (device.type == DeviceType.SWITCH) {
-                        TextButton(onClick = { picked = null; onOpenSwitch(device.id) }) { Text("Открыть панель портов") }
+                    TextButton(onClick = { picked = null; onOpenSwitch(device.id) }) {
+                        Text(if (device.type == DeviceType.SWITCH) "Открыть панель портов" else "Открыть карточку")
                     }
                     TextButton(onClick = { picked = null; onEditFaceplate(device) }) {
                         Text(if (plate == null) "Добавить схему панели (SVG)" else "Схема панели и порты…")

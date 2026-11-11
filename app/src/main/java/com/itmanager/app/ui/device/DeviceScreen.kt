@@ -939,6 +939,15 @@ private fun PortPathSheet(
                     }
                 }
             }
+            if (path != null && path.hops.isNotEmpty()) {
+                val context = androidx.compose.ui.platform.LocalContext.current
+                TextButton(onClick = {
+                    val text = path.hops.joinToString(" → ") { it.deviceName }
+                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Путь", text))
+                    Toast.makeText(context, "Путь скопирован", Toast.LENGTH_SHORT).show()
+                }) { Text("Скопировать путь текстом") }
+            }
             path?.mapTarget(device?.id.orEmpty())?.let { target ->
                 TextButton(onClick = { onShowOnMap(target.deviceId) }) { Text("Показать линию на карте") }
             }

@@ -90,6 +90,8 @@ class SettingsViewModel @Inject constructor(
     }
 
     /** Turning the lock off is confirmed with biometrics by the screen first. */
+    fun tryMainNow() = failover.tryMainNow()
+
     fun setAppLock(enabled: Boolean) {
         viewModelScope.launch { settings.setAppLock(enabled) }
     }

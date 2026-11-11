@@ -43,6 +43,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -302,8 +303,11 @@ fun SettingsScreen(
                     "Сейчас приложение работает через резервный сервер: основной недоступен.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.tertiary,
-                    modifier = Modifier.padding(bottom = 8.dp),
+                    modifier = Modifier.padding(bottom = 4.dp),
                 )
+                TextButton(onClick = viewModel::tryMainNow, modifier = Modifier.padding(bottom = 8.dp)) {
+                    Text("Вернуться на основной сейчас")
+                }
             }
             OutlinedTextField(
                 value = state.backupUrl,
