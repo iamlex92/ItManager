@@ -14,6 +14,7 @@
 <script src="/static/admin/admin-settings.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-gpo.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-tables.js?v={{asset}}" defer></script>
+<script src="/static/admin/admin-home.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-nav.js?v={{asset}}" defer></script>
 </head>
 <body>
@@ -21,6 +22,8 @@
 <svg class="sprite" width="0" height="0" aria-hidden="true" focusable="false">
 <symbol id="i-map" viewBox="0 0 24 24"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z" /> <path d="M15 5.764v15" /> <path d="M9 3.236v15" /></symbol>
 <symbol id="i-monitor" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="3" rx="2" /> <line x1="8" x2="16" y1="21" y2="21" /> <line x1="12" x2="12" y1="17" y2="21" /></symbol>
+<symbol id="i-layout-dashboard" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
 <symbol id="i-bell" viewBox="0 0 24 24"><path d="M10.268 21a2 2 0 0 0 3.464 0" /> <path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" /></symbol>
 <symbol id="i-network" viewBox="0 0 24 24"><rect x="16" y="16" width="6" height="6" rx="1" /> <rect x="2" y="16" width="6" height="6" rx="1" /> <rect x="9" y="2" width="6" height="6" rx="1" /> <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" /> <path d="M12 12V8" /></symbol>
 <symbol id="i-tag" viewBox="0 0 24 24"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" /> <circle cx="7.5" cy="7.5" r=".5" fill="currentColor" /></symbol>
@@ -62,6 +65,7 @@
 <div id="app" class="app" hidden>
   <header class="top">
     <div class="brand">NetAdmin <span class="muted small">веб-консоль · {{version}}</span></div>
+    <button type="button" id="search-open" class="search-open" title="Найти раздел, устройство, порт, VLAN, компьютер (Ctrl+K или «/»)"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg><span>Поиск</span><kbd>Ctrl K</kbd></button>
     <div class="right">
       <span id="live" class="badge warn" hidden title="Нет живого обновления: данные обновляются при открытии разделов и кнопкой «Обновить»">без автообновления</span>
       <span id="mode" class="status-strip"></span>
@@ -79,7 +83,8 @@
   <div class="body">
   <nav class="side" id="tabs" aria-label="Разделы">
     <button type="button" id="side-toggle" class="side-toggle" title="Свернуть или развернуть список разделов" aria-label="Свернуть список разделов">«</button>
-    <button data-tab="map" class="active"><svg class="ic" aria-hidden="true"><use href="#i-map"/></svg>Карта</button>
+    <button data-tab="home" class="active"><svg class="ic" aria-hidden="true"><use href="#i-layout-dashboard"/></svg>Сводка</button>
+    <button data-tab="map"><svg class="ic" aria-hidden="true"><use href="#i-map"/></svg>Карта</button>
     <button data-tab="devices"><svg class="ic" aria-hidden="true"><use href="#i-monitor"/></svg>Устройства</button>
     <button data-tab="alerts"><svg class="ic" aria-hidden="true"><use href="#i-bell"/></svg>События <span id="alerts-count" class="count" hidden></span></button>
     <div class="side-group">Учёт</div>
@@ -100,7 +105,25 @@
     <button data-tab="settings"><svg class="ic" aria-hidden="true"><use href="#i-server-cog"/></svg>Сервер и доступ</button>
   </nav>
   <main>
-    <section id="tab-map" class="tab">
+    <section id="tab-home" class="tab">
+      <div class="home-head">
+        <h2>Сводка</h2>
+        <span id="home-updated" class="muted small"></span>
+      </div>
+      <div class="tiles" id="home-tiles"></div>
+      <div class="home-grid">
+        <div class="panel"><h3>Не отвечают</h3><ul id="home-down" class="feed"></ul></div>
+        <div class="panel"><h3>Открытые события</h3><ul id="home-alerts" class="feed"></ul></div>
+        <div class="panel wide"><h3>Последние действия</h3><ul id="home-recent" class="feed"></ul></div>
+      </div>
+      <div class="home-actions">
+        <button type="button" data-go="map">Открыть карту</button>
+        <button type="button" data-go="scan">Сканировать сеть</button>
+        <button type="button" data-go="topology">Схема сети</button>
+        <button type="button" data-go="pcs">Компьютеры домена</button>
+      </div>
+    </section>
+    <section id="tab-map" class="tab" hidden>
       <div class="toolbar">
         <select id="floor-select" title="Этаж"></select>
         <div class="seg" id="mode-seg" title="Просмотр: щелчок открывает карточку устройства. Правка: всё, что меняет карту">
@@ -1028,7 +1051,7 @@
 </dialog>
 
 <dialog id="palette" class="palette" aria-label="Поиск">
-  <input id="palette-input" type="search" placeholder="Раздел, имя, IP, MAC, номер на этикетке… (Esc закрывает)" autocomplete="off">
+  <input id="palette-input" type="search" placeholder="Раздел, устройство, IP, MAC, порт, VLAN, периферия… (Esc закрывает)" autocomplete="off">
   <ul id="palette-list" role="listbox"></ul>
 </dialog>
 
