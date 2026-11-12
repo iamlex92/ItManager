@@ -23,8 +23,6 @@ import kotlinx.coroutines.withContext
 import java.net.InetAddress
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
@@ -123,6 +121,8 @@ import com.itmanager.app.ui.components.TabTopBar
 import com.itmanager.app.ui.components.UiState
 import com.itmanager.app.ui.components.icon
 import com.itmanager.app.ui.components.pressScale
+import com.itmanager.app.ui.components.Led
+import com.itmanager.app.ui.components.NamePlate
 import com.itmanager.app.ui.theme.MonoStyle
 import com.itmanager.app.ui.theme.StatusColors
 
@@ -590,11 +590,11 @@ private fun DeviceRow(
     val haptics = LocalHapticFeedback.current
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(8.dp)
     val scheme = MaterialTheme.colorScheme
-    // The stripe on the left says the state without reading: green answers, red does not, grey is passive.
-    val stripe = when {
-        passive -> scheme.outline
+    // The lamp before the name says the state without reading: green answers, red does not, grey is off (passive).
+    val lamp = when {
+        passive -> StatusColors.LedOff
         device.isOnline -> StatusColors.Online
         else -> StatusColors.Offline
     }
@@ -610,7 +610,6 @@ private fun DeviceRow(
             .pressScale(interaction, pressedScale = 0.98f)
             .clip(shape)
             .then(fill)
-            .drawBehind { drawRect(stripe, size = Size(4.dp.toPx(), size.height)) }
             .combinedClickable(
                 interactionSource = interaction,
                 indication = null,
@@ -640,13 +639,9 @@ private fun DeviceRow(
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    device.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
+                Led(lamp, lit = !passive)
+                Spacer(Modifier.width(8.dp))
+                NamePlate(device.name, modifier = Modifier.weight(1f, fill = false))
                 if (device.isDown) {
                     Spacer(Modifier.width(8.dp))
                     StatusBadge("не отвечает", StatusColors.Offline, StatusColors.DangerContainer)

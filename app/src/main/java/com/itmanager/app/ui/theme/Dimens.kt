@@ -11,5 +11,5 @@ object Dimens {
     val CardGap = 12.dp
     val RowGap = 8.dp
     val CardPadding = 16.dp
-    val CardCorner = 16.dp
+    val CardCorner = 8.dp
 }
