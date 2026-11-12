@@ -131,3 +131,35 @@ def test_uac_prompts_reach_the_helper():
     assert describe(t, rows)["values"] == {"uia_toggle": True, "no_secure_desktop": True}
     # Back to the remote-assistance-only setting: the secure desktop comes back for everything else.
     assert ("remove", system, "PromptOnSecureDesktop") in plan(t, "enabled", {"no_secure_desktop": False}, rows)
+
+
+def test_winrm_template_writes_listener_policy_and_service_start():
+    from app.gpo.backend import GpoError
+    from app.gpo.templates import WINRM, WINRM_SERVICE
+
+    t = TEMPLATES["winrm_service"]
+    ops = plan(t, "enabled", {"sources": "192.168.82.24, 192.168.82.0-192.168.82.255", "autostart": True}, [])
+    got = {(op[1], op[2]): (op[3], op[4]) for op in ops}
+    assert got == {
+        (WINRM, "AllowAutoConfig"): ("DWord", 1),
+        (WINRM, "IPv4Filter"): ("String", "192.168.82.24,192.168.82.0-192.168.82.255"),
+        (WINRM, "IPv6Filter"): ("String", "*"),
+        (WINRM_SERVICE, "Start"): ("DWord", 2),
+    }
+    rows = [{"key": k, "name": n, "type": ty, "value": str(v), "state": "Set"} for (k, n), (ty, v) in got.items()]
+    assert _state(rows, "winrm_service") == (
+        "enabled",
+        {"sources": "192.168.82.24,192.168.82.0-192.168.82.255", "autostart": True},
+    )
+    # Without autostart the service value goes away; turning the policy off only says so and keeps the rest quiet.
+    off_auto = plan(t, "enabled", {"sources": "*", "autostart": False}, rows)
+    assert [op[2] for op in off_auto if op[0] == "remove"] == ["Start"]
+    disabled = plan(t, "disabled", {}, rows)
+    assert [op[2] for op in disabled if op[0] == "set"] == ["AllowAutoConfig"]
+    assert sorted(op[2] for op in disabled if op[0] == "remove") == ["IPv4Filter", "IPv6Filter", "Start"]
+    for bad in ("192.168.82.0/24", "any", "10.0.0.1; rm"):
+        try:
+            plan(t, "enabled", {"sources": bad, "autostart": True}, [])
+        except GpoError:
+            continue
+        raise AssertionError(f"{bad!r} must be refused")
