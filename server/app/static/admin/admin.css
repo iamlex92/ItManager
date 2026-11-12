@@ -541,3 +541,33 @@ dialog.card-dialog { position: fixed; inset: var(--drawer-top, 0px) 0 0 auto; ma
 @media (min-width: 981px) {
   body.card-open .body > main { margin-right: min(520px, 100%); }
 }
+
+/* ---- Start screen and the search button ---- */
+.search-open { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; margin-right: 12px; min-width: 220px; justify-content: flex-start; color: var(--muted); background: var(--surface); }
+.search-open kbd { margin-left: auto; font: 11px var(--mono, "IBM Plex Mono", monospace); color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; }
+.home-head { display: flex; align-items: baseline; gap: 12px; }
+.home-head h2 { margin: 0; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.tile { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 14px 16px; text-align: left; background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--led-off); border-radius: 6px; }
+.tile.ok { border-left-color: var(--ok); }
+.tile.warn { border-left-color: var(--warn); }
+.tile.bad { border-left-color: var(--danger); }
+.tile-n { font: 500 28px/1.1 "IBM Plex Mono", monospace; }
+.tile-l { color: var(--muted); font-size: 13px; }
+.home-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 980px) { .home-grid { grid-template-columns: 1fr; } }
+.home-grid .wide { grid-column: 1 / -1; }
+.home-grid .panel { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; }
+.home-grid h3 { margin: 0 0 8px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.feed { list-style: none; margin: 0; padding: 0; }
+.feed-row { display: flex; align-items: center; gap: 10px; padding: 7px 4px; border-top: 1px solid var(--line); }
+.feed-row:first-child { border-top: 0; }
+.feed-row.clickable { cursor: pointer; }
+.feed-row.clickable:hover { background: var(--raised); }
+.feed-t { font-weight: 500; }
+.feed-s { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feed-w { margin-left: auto; white-space: nowrap; }
+.feed-empty { padding: 10px 4px; }
+.home-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 980px) { .search-open { min-width: 0; margin-right: 6px; } .search-open span, .search-open kbd { display: none; } }
+.search-open + .right { margin-left: 0; }

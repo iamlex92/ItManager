@@ -56,12 +56,26 @@
     draw();
     if (q.length < 2) return;
     try {
-      const devices = await api("GET", `search?q=${encodeURIComponent(q)}`);
+      const r = await api("GET", `search/all?q=${encodeURIComponent(q)}`);
       if (mine !== seq) return; // a newer search is on its way
-      items = [...found, ...devices.map((d) => ({
-        label: d.name, hint: [window.NetAdmin.typeOf(d).label, d.ip, ...(d.extra_ips || [])].filter(Boolean).join(" · "),
-        run: () => window.NetAdmin.openCard(d.id),
-      }))];
+      const NA = window.NetAdmin;
+      items = [
+        ...found,
+        ...r.devices.map((d) => ({
+          label: d.name, hint: [NA.typeOf({ type: d.type }).label, d.ip].filter(Boolean).join(" · "), run: () => NA.openCard(d.id),
+        })),
+        ...r.ports.map((p) => ({
+          label: `${p.device} · ${p.port}`, hint: ["порт", p.mac].filter(Boolean).join(" · "), run: () => NA.openCard(p.device_id),
+        })),
+        ...r.vlans.map((v) => ({
+          label: `VLAN ${v.vlan_id} · ${v.name}`, hint: ["VLAN", v.subnet].filter(Boolean).join(" · "), run: () => NA.openTab("vlans"),
+        })),
+        ...r.peripherals.map((p) => ({
+          label: p.title, hint: ["периферия", p.device && `у ${p.device}`, p.serial || p.inventory].filter(Boolean).join(" · "),
+          run: () => (p.device_id ? NA.openCard(p.device_id) : NA.openTab("peripherals")),
+        })),
+      ];
+      at = 0;
       draw();
     } catch { /* the sections still work */ }
   }
@@ -79,6 +93,7 @@
     else if (ev.key === "ArrowUp") { ev.preventDefault(); at = Math.max(at - 1, 0); draw(); }
     else if (ev.key === "Enter") { ev.preventDefault(); choose(at); }
   });
+  $("search-open").addEventListener("click", open);
   dlg.addEventListener("click", (ev) => { if (ev.target === dlg) dlg.close(); });
   document.addEventListener("keydown", (ev) => {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(ev.target.tagName) || ev.target.isContentEditable;

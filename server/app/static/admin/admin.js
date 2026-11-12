@@ -286,7 +286,7 @@
 
   // ---------------------------------------------------------------- tabs
 
-  let currentTab = "map";
+  let currentTab = "home";
   const INITIAL_HASH = location.hash.slice(1);
   $("tabs").addEventListener("click", (ev) => {
     const b = ev.target.closest("button[data-tab]");

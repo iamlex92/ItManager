@@ -37,6 +37,7 @@ from .api import (
     printers,
     runbooks,
     scripts,
+    summary,
     topology,
     traffic,
     vlans,
@@ -325,6 +326,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         faceplates,
         topology,
         status_api,
+        summary,
     )
     for module in (*routers, credentials, traffic, history, serversettings_api, sync_api):
         api.include_router(module.router)
