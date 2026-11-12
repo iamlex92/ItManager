@@ -15,4 +15,27 @@
 
     <!-- Shown on every screen when no server answers -->
     <string name="offline_pill">Нет связи · данные на %1$s · изменения отключены</string>
+
+    <!-- Settings screen -->
+    <string name="settings_welcome">Добро пожаловать в ItManager</string>
+    <string name="settings_section_security">Безопасность</string>
+    <string name="settings_biometric_login">Вход по биометрии</string>
+    <string name="settings_credentials">Учётные данные</string>
+    <string name="settings_section_vpn">VPN завода (Cisco Secure Client)</string>
+    <string name="settings_section_server">Сервер NetAdmin</string>
+    <string name="settings_scan_server_qr">Сканировать QR-код сервера</string>
+    <string name="settings_server_address">Адрес сервера</string>
+    <string name="settings_api_token">API-токен</string>
+    <string name="settings_api_token_hint">Выдаётся администратором сервера</string>
+    <string name="settings_check_connection">Проверить соединение</string>
+    <string name="settings_operator_name">Ваше имя (для журнала)</string>
+    <string name="settings_operator_name_hint">Необязательно: попадёт в журнал сервера рядом с вашими изменениями</string>
+    <string name="settings_section_backup">Резервный сервер</string>
+    <string name="backup_server_address">Адрес резервного сервера</string>
+    <string name="backup_api_token">API-токен резервного сервера</string>
+    <string name="backup_api_token_hint">Пусто — тот же, что у основного.</string>
+    <string name="backup_check">Проверить резервный сервер</string>
+    <string name="action_save">Сохранить</string>
+    <string name="check_running">Проверяю…</string>
+    <string name="check_server_ok">Сервер отвечает</string>
 </resources>

@@ -120,7 +120,7 @@ fun SettingsScreen(
                 .padding(horizontal = 16.dp),
         ) {
             if (welcome) {
-                Text("Добро пожаловать в ItManager", style = MaterialTheme.typography.headlineSmall)
+                Text(stringResource(R.string.settings_welcome), style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(8.dp))
                 Text(
                     "Все данные (карта, устройства, сеть, события) хранятся на сервере NetAdmin вашего предприятия. " +
@@ -149,7 +149,7 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 6.dp, bottom = 16.dp),
                 )
-                SectionLabel("Безопасность")
+                SectionLabel(stringResource(R.string.settings_section_security))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -158,7 +158,7 @@ fun SettingsScreen(
                         .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("Вход по биометрии", style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.settings_biometric_login), style = MaterialTheme.typography.titleMedium)
                         Text(
                             "Отпечаток, Face Unlock или PIN при запуске и после 5 минут в фоне.",
                             style = MaterialTheme.typography.bodySmall,
@@ -201,7 +201,7 @@ fun SettingsScreen(
                         .padding(start = 16.dp, end = 12.dp, top = 14.dp, bottom = 14.dp),
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text("Учётные данные", style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.settings_credentials), style = MaterialTheme.typography.titleMedium)
                         Text(
                             "Логины SSH, SNMPv3 и WinRM. Секреты хранятся на сервере зашифрованными и в приложение не возвращаются.",
                             style = MaterialTheme.typography.bodySmall,
@@ -212,11 +212,11 @@ fun SettingsScreen(
                     Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null)
                 }
                 Spacer(Modifier.height(24.dp))
-                SectionLabel("VPN завода (Cisco Secure Client)")
+                SectionLabel(stringResource(R.string.settings_section_vpn))
                 VpnSection()
             }
             Spacer(Modifier.height(24.dp))
-            SectionLabel("Сервер NetAdmin")
+            SectionLabel(stringResource(R.string.settings_section_server))
             OutlinedButton(
                 onClick = {
                     val options = GmsBarcodeScannerOptions.Builder()
@@ -236,7 +236,7 @@ fun SettingsScreen(
             ) {
                 Icon(Icons.Outlined.QrCodeScanner, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("Сканировать QR-код сервера")
+                Text(stringResource(R.string.settings_scan_server_qr))
             }
             Text(
                 "Код показывает ярлык «Адрес и ключ для приложения» на сервере Windows или sudo netadmin-agent info на Debian.",
@@ -247,7 +247,7 @@ fun SettingsScreen(
             OutlinedTextField(
                 value = state.baseUrl,
                 onValueChange = viewModel::setBaseUrl,
-                label = { Text("Адрес сервера") },
+                label = { Text(stringResource(R.string.settings_server_address)) },
                 placeholder = { Text("http://10.0.0.5:8000") },
                 singleLine = true,
                 isError = state.urlError != null,
@@ -263,7 +263,7 @@ fun SettingsScreen(
             OutlinedTextField(
                 value = state.apiToken,
                 onValueChange = viewModel::setApiToken,
-                label = { Text("API-токен") },
+                label = { Text(stringResource(R.string.settings_api_token)) },
                 singleLine = true,
                 visualTransformation = if (tokenVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
@@ -274,7 +274,7 @@ fun SettingsScreen(
                         )
                     }
                 },
-                supportingText = { Text("Выдаётся администратором сервера") },
+                supportingText = { Text(stringResource(R.string.settings_api_token_hint)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done, autoCorrectEnabled = false),
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier.fillMaxWidth(),
@@ -285,7 +285,7 @@ fun SettingsScreen(
                 onClick = viewModel::checkConnection,
                 enabled = state.baseUrl.isNotBlank() && state.check != ConnectionCheck.Running,
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("Проверить соединение") }
+            ) { Text(stringResource(R.string.settings_check_connection)) }
             Spacer(Modifier.height(12.dp))
             AnimatedContent(
                 targetState = state.check,
@@ -304,8 +304,8 @@ fun SettingsScreen(
             OutlinedTextField(
                 value = state.operatorName,
                 onValueChange = viewModel::setOperatorName,
-                label = { Text("Ваше имя (для журнала)") },
-                supportingText = { Text("Необязательно: попадёт в журнал сервера рядом с вашими изменениями") },
+                label = { Text(stringResource(R.string.settings_operator_name)) },
+                supportingText = { Text(stringResource(R.string.settings_operator_name_hint)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                 shape = RoundedCornerShape(14.dp),
@@ -313,7 +313,7 @@ fun SettingsScreen(
             )
 
             Spacer(Modifier.height(24.dp))
-            Text("Резервный сервер", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.settings_section_backup), style = MaterialTheme.typography.titleMedium)
             Text(
                 "Второй сервер NetAdmin. Когда основной не отвечает, приложение само переходит на резервный, " +
                     "а через минуту снова пробует основной и возвращается, как только он ответит.",
@@ -335,7 +335,7 @@ fun SettingsScreen(
             OutlinedTextField(
                 value = state.backupUrl,
                 onValueChange = viewModel::setBackupUrl,
-                label = { Text("Адрес резервного сервера") },
+                label = { Text(stringResource(R.string.backup_server_address)) },
                 placeholder = { Text("http://10.0.0.6:8000") },
                 singleLine = true,
                 isError = state.backupError != null,
@@ -349,7 +349,7 @@ fun SettingsScreen(
             OutlinedTextField(
                 value = state.backupToken,
                 onValueChange = viewModel::setBackupToken,
-                label = { Text("API-токен резервного сервера") },
+                label = { Text(stringResource(R.string.backup_api_token)) },
                 singleLine = true,
                 visualTransformation = if (backupTokenVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
@@ -360,7 +360,7 @@ fun SettingsScreen(
                         )
                     }
                 },
-                supportingText = { Text("Пусто — тот же, что у основного.") },
+                supportingText = { Text(stringResource(R.string.backup_api_token_hint)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done, autoCorrectEnabled = false),
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier.fillMaxWidth(),
@@ -370,7 +370,7 @@ fun SettingsScreen(
                 onClick = viewModel::checkBackup,
                 enabled = state.backupUrl.isNotBlank() && state.backupCheck != ConnectionCheck.Running,
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("Проверить резервный сервер") }
+            ) { Text(stringResource(R.string.backup_check)) }
             OutlinedButton(
                 onClick = {
                     val options = GmsBarcodeScannerOptions.Builder()
@@ -415,7 +415,7 @@ fun SettingsScreen(
                 },
                 enabled = state.hasChanges,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
-            ) { Text("Сохранить") }
+            ) { Text(stringResource(R.string.action_save)) }
             Spacer(Modifier.height(16.dp))
             val appVersion = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() }
             Text(
@@ -435,12 +435,12 @@ private fun ConnectionCheckResult(check: ConnectionCheck) {
         ConnectionCheck.Running -> Row(verticalAlignment = Alignment.CenterVertically) {
             CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
             Spacer(Modifier.width(10.dp))
-            Text("Проверяю…", style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.check_running), style = MaterialTheme.typography.bodyMedium)
         }
         is ConnectionCheck.Ok -> Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = StatusColors.Online)
             Column {
-                Text("Сервер отвечает", style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.check_server_ok), style = MaterialTheme.typography.titleSmall)
                 val h = check.health
                 val mode = when (h.halMode) {
                     "emulator" -> if (h.monitorMode == "real") "коммутаторы: линки по SNMP, управление эмулируется" else "эмулятор оборудования"
