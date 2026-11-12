@@ -251,10 +251,14 @@ async def act(host: str, action: Action, body: PcActionIn, request: Request, ses
         platform = await detect_platform(host, s, not real, request.app.state.pc_platforms, request.app.state.pc_probe)
     except PcError as e:
         raise _bad("pc_failed", str(e), 409) from e
-    # What answered is the computer's system: remembered on its inventory record.
+    # What answered is a first guess at the computer's system, kept only when nothing better is known: the check
+    # of the whole inventory (ping TTL, several ports) decides better than the port an action happened to use.
     for device in await inventory_pcs(session):
         if matches(device, host):
-            osdetect.remember(device, platform, "ports" if real else "name")
+            if osdetect.os_of(device) is None:
+                osdetect.remember(
+                    device, platform, "ports" if real else "name", "по порту, на котором ответил компьютер"
+                )
             break
     backend = request.app.state.astra if platform == "astra" else windows
     try:

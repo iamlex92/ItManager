@@ -1,8 +1,10 @@
 """Which computers run Windows and which run Astra Linux, remembered on the device (metadata «os»).
 
-Signals, strongest first: the ports a computer answers on (WinRM, RDP or RPC mean Windows; SSH means Linux), then the
-TTL of a ping reply (Windows answers with 128, Linux with 64: a guess, marked as such). A value the operator set by
-hand is never overwritten. Nothing is sent to a computer except a connection attempt and one ping."""
+Signals: WinRM or RPC (135) open means Windows for certain. RDP and SSH say little on their own (xrdp runs on Linux,
+OpenSSH on Windows), so the TTL of a ping reply decides next (Windows answers with 128, Linux with 64: a guess,
+marked as such). Only when nothing answers ping are the ports used, and RDP together with SSH is left undecided
+rather than guessed. What the verdict rests on is kept in the note. A value the operator set by hand is never
+overwritten. Nothing is sent to a computer except connection attempts and one ping."""
 
 import asyncio
 import re
@@ -15,6 +17,7 @@ from ..models import Device
 
 OS_KEY = "os"
 SOURCE_KEY = "os_source"
+NOTE_KEY = "os_note"
 LABELS = {"windows": "Windows", "astra": "Astra Linux"}
 # ports: WinRM/RDP/RPC or SSH; ttl: a guess from the ping reply; name: emulator mode; manual: set by the operator
 SOURCES = ("ports", "ttl", "name", "manual")
@@ -35,14 +38,14 @@ def is_manual(device: Device) -> bool:
     return (device.metadata_ or {}).get(SOURCE_KEY) == "manual"
 
 
-def remember(device: Device, os_name: str, source: str) -> bool:
+def remember(device: Device, os_name: str, source: str, note: str = "") -> bool:
     """Writes the detected system unless the operator set one by hand; True when something changed."""
     if is_manual(device) or os_name not in LABELS:
         return False
     meta = device.metadata_ or {}
-    if meta.get(OS_KEY) == os_name and meta.get(SOURCE_KEY) == source:
+    if meta.get(OS_KEY) == os_name and meta.get(SOURCE_KEY) == source and meta.get(NOTE_KEY, "") == note:
         return False
-    device.metadata_ = {**meta, OS_KEY: os_name, SOURCE_KEY: source}
+    device.metadata_ = {**meta, OS_KEY: os_name, SOURCE_KEY: source, NOTE_KEY: note}
     return True
 
 
@@ -68,17 +71,27 @@ def from_ttl(ttl: int) -> str:
     return "astra" if ttl <= 64 else "windows"
 
 
-async def detect(host: str, settings: Settings, probe: Probe, ttl: TtlProbe) -> tuple[str, str] | None:
-    """(system, source) for one computer, or None when it answers nothing."""
+async def detect(host: str, settings: Settings, probe: Probe, ttl: TtlProbe) -> tuple[str, str, str] | None:
+    """(system, source, note) for one computer, or None when it cannot be told."""
     winrm = settings.winrm_port or (5986 if settings.winrm_https else 5985)
-    windows_ports = [winrm, RDP_PORT, RPC_PORT]
-    results = await asyncio.gather(*(probe(host, p) for p in [*windows_ports, settings.linux_ssh_port]))
-    if any(results[:-1]):
-        return "windows", "ports"
-    if results[-1]:
-        return "astra", "ports"
+    ports = {winrm: "WinRM", RPC_PORT: "RPC", RDP_PORT: "RDP", settings.linux_ssh_port: "SSH"}
+    answers = await asyncio.gather(*(probe(host, p) for p in ports))
+    opened = {p for p, ok in zip(ports, answers, strict=True) if ok}
     value = await ttl(host)
-    return (from_ttl(value), "ttl") if value is not None else None
+    note = "; ".join(
+        [f"открыты порты: {', '.join(f'{ports[p]} {p}' for p in ports if p in opened)}" if opened else "порты закрыты"]
+        + ([f"TTL {value}"] if value is not None else ["ping не отвечает"])
+    )
+    if winrm in opened or RPC_PORT in opened:
+        return "windows", "ports", note
+    if value is not None:
+        return from_ttl(value), "ttl", note
+    rdp, ssh = RDP_PORT in opened, settings.linux_ssh_port in opened
+    if rdp and not ssh:
+        return "windows", "ports", note
+    if ssh and not rdp:
+        return "astra", "ports", note
+    return None
 
 
 def from_name(name: str) -> str:
@@ -98,7 +111,7 @@ async def detect_all(
             summary["manual"] += 1
             return
         if emulated:
-            found: tuple[str, str] | None = (from_name(d.name), "name")
+            found: tuple[str, str, str] | None = (from_name(d.name), "name", "по имени (эмулятор)")
         else:
             host = str(d.ip_address) if d.ip_address is not None else (d.extra_ips or [None])[0]
             if host is None:
