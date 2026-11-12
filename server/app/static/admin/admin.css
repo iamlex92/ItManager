@@ -424,3 +424,4 @@ tr.skeleton td::after { content: ""; display: block; height: 12px; border-radius
 @keyframes sk { to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { tr.skeleton td::after { animation: none; } }
 #mode[role=link] { cursor: pointer; }
+.mt-12 { margin-top: 12px; }
