@@ -2442,6 +2442,7 @@
     $("device-rack-open").hidden = !dialogDevice || id !== "RACK";
     $("device-net").hidden = id === "RACK" || id === "SOCKET" || id === "PATCH_PANEL";
     $("device-ssh-label").hidden = id !== "SWITCH";
+    $("device-os-label").hidden = !PC_KINDS.has(id);
     // Read-only SNMP: links and traffic of switches, toner and pages of printers.
     $("device-snmp-label").hidden = !["SWITCH", "PRINTER", "ROUTER", "FIREWALL", "ACCESS_POINT", "UPS"].includes(id);
     for (const b of $("device-types").children) b.classList.toggle("active", b.dataset.type === id);
@@ -2475,6 +2476,8 @@
     for (const f of ["device-name", "device-ip", "device-mac", "device-extra-ips"]) fieldError(f, null);
     $("device-vendor").value = (device && device.vendor) || "";
     $("device-model").value = (device && device.model) || "";
+    // The system (shown for computers by selectType): «automatic» unless the operator set one by hand.
+    $("device-os").value = device && (device.metadata || {}).os_source === "manual" ? osOf(device) || "" : "";
     $("device-delete").hidden = !device;
     $("device-merge").hidden = !device;
     const floorSel = $("device-floor");
@@ -2587,6 +2590,13 @@
     // «Адрес уже занят» was confirmed: save it anyway this time.
     if (dupIpAllowed) body.allow_duplicate_ip = true;
     if (dialogType === "SWITCH") body.ssh_credential_id = $("device-ssh").value || null;
+    // The system chosen by hand is kept apart from what the server detects; «automatic» drops the manual mark.
+    if (PC_KINDS.has(dialogType)) {
+      const meta = { ...((dialogDevice && dialogDevice.metadata) || {}) };
+      const picked = $("device-os").value;
+      if (picked) { meta.os = picked; meta.os_source = "manual"; } else if (meta.os_source === "manual") { delete meta.os; delete meta.os_source; }
+      body.metadata = meta;
+    }
     const community = $("device-snmp").value.trim();
     if (community && !$("device-snmp-label").hidden) body.snmp_community = community;
     if (dialogType === "RACK") {
@@ -2632,6 +2642,18 @@
       $("device-error").textContent = e.status === 409 && e.code === "integrity_error" ? "Устройство с таким именем или NFC-меткой уже есть." : e.message;
       $("device-error").scrollIntoView({ block: "center", behavior: "smooth" });
     }
+  });
+  $("device-detect-os").addEventListener("click", async () => {
+    const button = $("device-detect-os");
+    button.disabled = true;
+    button.textContent = "Проверяю…";
+    try {
+      const r = await api("POST", "pcs/detect-os");
+      toast(`Windows: ${r.windows}, Astra Linux: ${r.astra}, не определено: ${r.unknown}` + (r.manual ? `, задано вручную: ${r.manual}` : ""));
+      await loadDevices();
+    } catch (e) { fail(e); }
+    button.disabled = false;
+    button.textContent = "Определить ОС";
   });
   $("device-delete").addEventListener("click", async () => {
     if (!dialogDevice || !await ask(`Удалить ${dialogDevice.name}, его порты и кабели из учёта? Само оборудование это не затрагивает.`)) return;
@@ -3014,7 +3036,12 @@
   }
 
   const isDown = (d) => !d.is_online && !PASSIVE.has(d.type) && d.type !== "RACK";
-  const matchesQuery = (d, q) => !q || [d.name, d.ip, ...(d.extra_ips || []), d.mac, typeOf(d).label, d.vendor, d.model, (roomOf(d) || {}).name, d.comment]
+  // The system of a computer, remembered by the server (metadata.os) or set by hand.
+  const OS_LABEL = { windows: "Windows", astra: "Astra Linux" };
+  const osOf = (d) => ((d.metadata || {}).os in OS_LABEL ? d.metadata.os : null);
+  const osGuess = (d) => (d.metadata || {}).os_source === "ttl";
+  const matchesQuery = (d, q) => !q || [d.name, d.ip, ...(d.extra_ips || []), d.mac, typeOf(d).label, d.vendor, d.model, (roomOf(d) || {}).name, d.comment,
+    osOf(d) ? `${OS_LABEL[osOf(d)]} ${osOf(d) === "astra" ? "linux" : ""}` : ""]
     .join(" ").toLowerCase().includes(q);
   // Kinds of device the «Устройства» tab opens with: what people look for, not the 15 inventory types.
   const CATEGORIES = [
@@ -3063,6 +3090,11 @@
   /** Sections of the list, as in the app: by kind, by floor (bottom to top) or by room on the floor's plan. */
   function groupsOf(list, by) {
     const byName = (a, b) => a.name.localeCompare(b.name, "ru");
+    if (by === "os") {
+      const named = Object.entries(OS_LABEL).map(([id, label]) => ({ title: label, items: list.filter((d) => osOf(d) === id).sort(byName) }));
+      const rest = list.filter((d) => !osOf(d));
+      return [...named, { title: "Система не определена", items: rest.sort(byName) }].filter((g) => g.items.length);
+    }
     if (by === "type") {
       return TYPES.map(([id, label]) => ({ title: label, items: list.filter((d) => d.type === id).sort(byName) })).filter((g) => g.items.length);
     }
@@ -3180,7 +3212,7 @@
 
   function renderDevices() {
     const home = deviceHome && !$("device-filter").value.trim();
-    for (const id of ["type-filter", "group-by-label", "device-count", "device-table"]) $(id).hidden = home;
+    for (const id of ["type-filter", "group-by-label", "device-count", "device-table", "device-detect-os"]) $(id).hidden = home;
     $("device-home").hidden = !home;
     $("device-back").hidden = home;
     if (home) {
@@ -3231,7 +3263,14 @@
     name.classList.add("dev-name");
     if (isDown(d)) name.append(Object.assign(document.createElement("span"), { className: "down-mark", textContent: "не отвечает" }));
     if (d.comment && d.comment.trim()) name.append(Object.assign(document.createElement("div"), { className: "dev-note", textContent: d.comment, title: d.comment }));
-    cell(tr, "").append(glyphCanvas(d.type), typeOf(d).label);
+    const typeCell = cell(tr, "");
+    typeCell.append(glyphCanvas(d.type), typeOf(d).label);
+    if (osOf(d)) {
+      typeCell.append(Object.assign(document.createElement("span"), {
+        className: `os-tag os-${osOf(d)}`, textContent: osOf(d) === "windows" ? "Win" : "Linux",
+        title: `${OS_LABEL[osOf(d)]}${osGuess(d) ? " (предположение по ответу ping)" : ""}`,
+      }));
+    }
     const ipCell = cell(tr, "");
     if (d.ip) {
       // A click on the address copies it: what people do with it.
@@ -4043,12 +4082,15 @@
         ["Помещение", room ? room.name : null],
         ["Стойка", rack ? linkTo(`${rack.name}${d.rack_u ? ` · U${d.rack_u}${(d.rack_h || 1) > 1 ? `–${d.rack_u + d.rack_h - 1}` : ""}` : ""}`, () => openCard(rack.id).catch(fail)) : null],
       ];
+    const system = PC_KINDS.has(d.type) && d.type !== "VIRTUAL" || d.type === "VIRTUAL" && osOf(d)
+      ? [["Система", osOf(d) ? `${OS_LABEL[osOf(d)]}${osGuess(d) ? " (предположение)" : (d.metadata || {}).os_source === "manual" ? " (задана вручную)" : ""}` : "не определена"]]
+      : [];
     // When it last answered and on which address (the ping notes it): to tell a switched-off PC from a broken cable.
     const seen = !PASSIVE.has(d.type) && d.type !== "RACK" ? [
       ["Последний ответ", d.last_seen_at ? new Date(d.last_seen_at).toLocaleString("ru-RU") : "ни разу"],
       ["Отвечает на адрес", (d.metadata || {}).answered_ip || null],
     ] : [];
-    const where = node("div", { className: "card" }, node("h3", { textContent: "Расположение" }), kv([...place, ...seen]));
+    const where = node("div", { className: "card" }, node("h3", { textContent: "Расположение" }), kv([...system, ...place, ...seen]));
     if (d.type === "RACK") where.append(node("div", { className: "row" }, node("button", { textContent: "Вид стойки…", onclick: () => openRack(d) })));
     out.push(where);
 

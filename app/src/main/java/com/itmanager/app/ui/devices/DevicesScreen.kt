@@ -665,7 +665,8 @@ private fun DeviceRow(
                 )
             }
             Text(
-                listOfNotNull(device.vendor, device.model).joinToString(" ").ifEmpty { device.type.label },
+                listOfNotNull(device.systemName, listOfNotNull(device.vendor, device.model).joinToString(" ").ifEmpty { device.type.label })
+                    .joinToString(" · "),
                 style = MaterialTheme.typography.bodySmall,
                 color = scheme.onSurfaceVariant,
                 maxLines = 1,

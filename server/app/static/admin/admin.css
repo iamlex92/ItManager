@@ -425,3 +425,8 @@ tr.skeleton td::after { content: ""; display: block; height: 12px; border-radius
 @media (prefers-reduced-motion: reduce) { tr.skeleton td::after { animation: none; } }
 #mode[role=link] { cursor: pointer; }
 .mt-12 { margin-top: 12px; }
+
+/* The system of a computer, beside its kind in the list. */
+.os-tag { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; font-size: 11px; line-height: 16px; border: 1px solid var(--line-strong); color: var(--muted); }
+.os-tag.os-windows { color: #4c9eff; border-color: #4c9eff; }
+.os-tag.os-astra { color: #e5a23a; border-color: #e5a23a; }

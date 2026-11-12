@@ -188,11 +188,12 @@
         <input id="device-filter" type="search" placeholder="Найти среди всех: имя, IP, MAC, тип, модель">
         <select id="type-filter" title="Показать только одну категорию"></select>
         <label class="inline" id="group-by-label">Группировать<select id="group-by">
-          <option value="type">по типу</option><option value="floor">по этажу</option><option value="room">по помещению</option>
+          <option value="type">по типу</option><option value="os">по системе (Windows / Linux)</option><option value="floor">по этажу</option><option value="room">по помещению</option>
         </select></label>
         <span id="device-count" class="muted small"></span>
         <button id="printers-link" type="button" data-tab="printers" hidden>Расходники МФУ</button>
         <div class="spacer"></div>
+        <button id="device-detect-os" type="button" title="Сервер проверит компьютеры: Windows это или Astra Linux. Вручную заданное не меняется">Определить ОС</button>
         <button id="device-new" class="primary">+ Добавить устройство</button>
       </div>
       <div id="bulk-bar" class="bulk-bar" hidden>
@@ -583,6 +584,7 @@
         <label class="grow">Производитель<input id="device-vendor" maxlength="50"></label>
         <label class="grow">Модель<input id="device-model" maxlength="100"></label>
       </div>
+      <label id="device-os-label" hidden>Операционная система <span class="muted small">(по умолчанию сервер определяет сам: по портам и ответу ping)</span><select id="device-os"><option value="">Определять автоматически</option><option value="windows">Windows</option><option value="astra">Astra Linux</option></select></label>
     </fieldset>
     <fieldset class="section" id="device-net"><legend>Сеть</legend>
       <div class="row">
