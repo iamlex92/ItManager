@@ -247,19 +247,39 @@
       }
       serverDown(false);
       const hal = h.hal_mode === "emulator"
-        ? (h.monitor_mode === "real" ? "коммутаторы: линки по SNMP, управление эмулируется" : "коммутаторы: эмулятор")
-        : `коммутаторы: ${h.hal_mode} · запись ${h.device_writes_enabled ? "включена" : "выключена"}`;
+        ? (h.monitor_mode === "real" ? "Коммутаторы: линки по SNMP, управление эмулируется" : "Коммутаторы: эмулятор, ничего не уходит на оборудование")
+        : `Коммутаторы: ${h.hal_mode}, запись ${h.device_writes_enabled ? "включена" : "выключена"}`;
       // Without polling the printer and ping figures are made up: that must be seen at a glance.
-      const monitor = h.monitor_mode === "emulator" ? "опрос устройств выключен" : "опрос устройств включён";
-      $("mode").textContent = `${hal} · ${monitor}`;
-      $("mode").classList.toggle("warn", h.monitor_mode === "emulator");
+      const monitor = h.monitor_mode === "emulator"
+        ? "Опрос устройств выключен: уровни тонера, страницы и ping ненастоящие"
+        : "Опрос устройств включён: ping и SNMP настоящие";
+      // The strip: one LED and one word each, the sentence is in the tooltip.
+      const lamp = (led, word, tip) => Object.assign(document.createElement("span"), { className: "st", title: tip, textContent: word },)
+        && (() => {
+          const el = document.createElement("span");
+          el.className = "st";
+          el.title = tip;
+          el.append(Object.assign(document.createElement("i"), { className: `led ${led}` }), word);
+          return el;
+        })();
+      const parts = [
+        // A lit-amber lamp says what is not real, in words: made-up figures must be seen at a glance.
+        lamp(h.monitor_mode === "emulator" ? "warn" : "up", h.monitor_mode === "emulator" ? "Опрос выключен" : "Опрос", monitor),
+        lamp(
+          h.hal_mode === "emulator" && h.monitor_mode !== "real" ? "warn" : "up",
+          h.hal_mode === "emulator" ? "Коммутаторы: эмулятор" : "Коммутаторы",
+          hal,
+        ),
+      ];
+      if (h.sync_role === "main") parts.push(lamp("up", "Резерв", "Отправка базы на резервный сервер включена"));
+      $("mode").replaceChildren(...parts);
       // The badge leads to the settings that decide it.
       $("mode").tabIndex = 0;
       $("mode").setAttribute("role", "link");
-      $("mode").title = "Открыть настройки сервера";
+      $("mode").title = "Что включено на сервере: открыть настройки";
       window.NetAdmin.monitorEmulated = h.monitor_mode === "emulator";
     } catch (e) {
-      $("mode").textContent = "";
+      $("mode").replaceChildren();
       if (e instanceof TypeError) serverDown(true);
     }
   }
@@ -3986,8 +4006,25 @@
     if (c.peripherals) renderCardPeripherals(c);
     renderCardConfig(c);
     showCardPart(cardPart);
-    if (!$("card-dialog").open) $("card-dialog").showModal();
+    openDrawer();
   }
+
+  // The card is a panel on the right, not a window: the map or the list stays in view and clickable beside it, and the
+  // next device clicked takes its place. Esc or ✕ closes it.
+  function openDrawer() {
+    const dlg = $("card-dialog");
+    const top = document.querySelector(".body").getBoundingClientRect().top;
+    dlg.style.setProperty("--drawer-top", `${Math.max(0, Math.round(top))}px`);
+    if (!dlg.open) dlg.show();
+    document.body.classList.add("card-open");
+  }
+  $("card-dialog").addEventListener("close", () => document.body.classList.remove("card-open"));
+  // Esc closes the panel unless a form over it is open or something is being typed.
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Escape" || !$("card-dialog").open || document.querySelector("dialog:modal")) return;
+    if (ev.target.closest && ev.target.closest("input, textarea, select")) return;
+    $("card-dialog").close();
+  });
 
   function renderCardHead({ d }) {
     const g = $("card-glyph").getContext("2d");
