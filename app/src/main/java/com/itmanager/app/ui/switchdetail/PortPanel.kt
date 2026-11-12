@@ -57,6 +57,7 @@ import com.itmanager.app.ui.components.pressScale
 import com.itmanager.app.ui.theme.Ink950
 import com.itmanager.app.ui.theme.Motion
 import com.itmanager.app.ui.theme.LineStrong
+import com.itmanager.app.ui.components.Led
 import com.itmanager.app.ui.theme.StatusColors
 
 val PortStatus.color: Color
@@ -211,12 +212,12 @@ private fun PortCell(port: SwitchPort, selected: Boolean, sfp: Boolean, look: Po
                     byVlan -> vlanFill(port, look.palette)
                     else -> SolidColor(statusFill)
                 },
-                RoundedCornerShape(5.dp),
+                RoundedCornerShape(4.dp),
             )
             .border(
                 width = if (selected) 2.dp else if (!byVlan && !byLoad && port.status == PortStatus.DOWN) 1.dp else 0.dp,
                 color = if (selected) Color.White else if (!byVlan && !byLoad && port.status == PortStatus.DOWN) LineStrong else Color.Transparent,
-                shape = RoundedCornerShape(5.dp),
+                shape = RoundedCornerShape(4.dp),
             )
             .clickable(interactionSource = interaction, indication = null, role = Role.Button) { onClick(port) }
             .semantics { contentDescription = "Порт ${port.name}, ${port.status.label}$vlanText" },
@@ -230,6 +231,17 @@ private fun PortCell(port: SwitchPort, selected: Boolean, sfp: Boolean, look: Po
                     .padding(bottom = 3.dp)
                     .size(width = 14.dp, height = 2.dp)
                     .background(textColor, RoundedCornerShape(1.dp)),
+            )
+        }
+        if ((byVlan || byLoad) && port.status != PortStatus.DISABLED) {
+            // In the VLAN and load views the fill carries the VLAN or the load, so the link state rides on a small lamp,
+            // as on a real switch: lit when there is a link, dark when there is none.
+            val up = port.status != PortStatus.DOWN
+            Led(
+                color = if (up) port.status.color else StatusColors.LedOff,
+                lit = up,
+                size = 5.dp,
+                modifier = Modifier.align(Alignment.TopStart).padding(3.dp),
             )
         }
         if (port.isPoeActive) {
