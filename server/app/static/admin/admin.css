@@ -519,3 +519,25 @@ dialog { border-radius: 10px; }
 /* The kind glyph is drawn light for the dark theme: flip its lightness in the light one. */
 @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .glyph { filter: invert(1) hue-rotate(180deg); } }
 :root[data-theme="light"] .glyph { filter: invert(1) hue-rotate(180deg); }
+
+
+/* ============ Stage 2: status strip, full-bleed map, the card as a panel ============ */
+.status-strip { display: inline-flex; align-items: center; gap: 14px; cursor: pointer; padding: 2px 8px; border-radius: 4px; color: var(--muted); font-size: 12px; }
+.status-strip:hover { background: var(--raised); color: var(--text); }
+.status-strip .st { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.status-strip .led { width: 8px; height: 8px; }
+
+/* Map: the whole area of the section, with its tools in one bar above it. */
+#tab-map { padding: 0; gap: 0; }
+#tab-map > .toolbar { padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--line); }
+#tab-map > .edit-bar { border-radius: 0; border-width: 0 0 1px; }
+#tab-map .map-wrap { border: 0; border-radius: 0; }
+
+/* The device card: a panel docked to the right under the header. */
+dialog.card-dialog { position: fixed; inset: var(--drawer-top, 0px) 0 0 auto; margin: 0; width: min(520px, 100%); max-width: none; height: auto; max-height: none;
+  border-radius: 0; border-width: 0 0 0 1px; border-color: var(--line); box-shadow: -12px 0 32px rgba(0, 0, 0, .28); z-index: 5; }
+.card-dialog .dialog { height: 100%; padding: 14px; }
+.card-dialog .info { grid-template-columns: 1fr; }
+@media (min-width: 981px) {
+  body.card-open .body > main { margin-right: min(520px, 100%); }
+}
