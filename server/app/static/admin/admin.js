@@ -4083,7 +4083,8 @@
         ["Стойка", rack ? linkTo(`${rack.name}${d.rack_u ? ` · U${d.rack_u}${(d.rack_h || 1) > 1 ? `–${d.rack_u + d.rack_h - 1}` : ""}` : ""}`, () => openCard(rack.id).catch(fail)) : null],
       ];
     const system = PC_KINDS.has(d.type) && d.type !== "VIRTUAL" || d.type === "VIRTUAL" && osOf(d)
-      ? [["Система", osOf(d) ? `${OS_LABEL[osOf(d)]}${osGuess(d) ? " (предположение)" : (d.metadata || {}).os_source === "manual" ? " (задана вручную)" : ""}` : "не определена"]]
+      ? [["Система", osOf(d) ? `${OS_LABEL[osOf(d)]}${osGuess(d) ? " (предположение)" : (d.metadata || {}).os_source === "manual" ? " (задана вручную)" : ""}` : "не определена"],
+        ...((d.metadata || {}).os_note && (d.metadata || {}).os_source !== "manual" ? [["Чем определена", d.metadata.os_note]] : [])]
       : [];
     // When it last answered and on which address (the ping notes it): to tell a switched-off PC from a broken cable.
     const seen = !PASSIVE.has(d.type) && d.type !== "RACK" ? [
