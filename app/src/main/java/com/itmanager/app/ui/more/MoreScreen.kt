@@ -72,7 +72,7 @@ enum class MoreItem(val title: String, val subtitle: String, val icon: ImageVect
     PERIPHERALS("Периферия и склад", "Мониторы, клавиатуры, док-станции: где что стоит", Icons.Outlined.Inventory2),
     SCANNER("Сканер сети", "Найти устройства в подсетях и добавить в учёт", Icons.Outlined.TravelExplore),
     TOOLS("Сетевые утилиты", "Ping, трассировка, порты, SNMP, iperf3, Wake-on-LAN", Icons.Outlined.Construction),
-    PCS("Компьютеры домена", "Сведения и ключи, диски, процессы, очистка, перезагрузка", Icons.Outlined.Computer),
+    PCS("Обследование ПК и ключи", "Найти ПК в подсети, ключи Windows, Office и 1С; любой ПК по имени", Icons.Outlined.Computer),
     GPO("Групповые политики", "Какие действуют, где и на каких ПК; правка и применение", Icons.Outlined.Policy),
     RUNBOOKS("Сценарии", "Сброс пароля AD, права на папки, резервные копии", Icons.Outlined.Terminal),
     AUDIT("Журнал", "Кто, когда и что запускал и менял", Icons.AutoMirrored.Outlined.ManageSearch),
@@ -80,10 +80,11 @@ enum class MoreItem(val title: String, val subtitle: String, val icon: ImageVect
 }
 
 private val GROUPS = listOf(
-    "Учёт" to listOf(MoreItem.TOPOLOGY, MoreItem.VLANS, MoreItem.IPAM, MoreItem.TEMPLATES, MoreItem.PERIPHERALS),
-    "Диагностика" to listOf(MoreItem.SCANNER, MoreItem.TOOLS),
-    "Windows" to listOf(MoreItem.PCS, MoreItem.GPO, MoreItem.RUNBOOKS),
-    "Система" to listOf(MoreItem.AUDIT, MoreItem.ACCESS),
+    "Оборудование" to listOf(MoreItem.PERIPHERALS, MoreItem.TEMPLATES, MoreItem.PCS),
+    "Сеть" to listOf(MoreItem.TOPOLOGY, MoreItem.VLANS, MoreItem.IPAM, MoreItem.SCANNER, MoreItem.TOOLS),
+    "Политики" to listOf(MoreItem.GPO),
+    "Обслуживание" to listOf(MoreItem.RUNBOOKS, MoreItem.AUDIT),
+    "Настройки" to listOf(MoreItem.ACCESS),
 )
 
 /** The parts of «Сервер и доступ»; each opens the screen that already existed for it. */

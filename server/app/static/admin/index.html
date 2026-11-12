@@ -83,25 +83,26 @@
   <div class="body">
   <nav class="side" id="tabs" aria-label="Разделы">
     <button type="button" id="side-toggle" class="side-toggle" title="Свернуть или развернуть список разделов" aria-label="Свернуть список разделов">«</button>
+    <div class="side-group">Обзор</div>
     <button data-tab="home" class="active"><svg class="ic" aria-hidden="true"><use href="#i-layout-dashboard"/></svg>Сводка</button>
     <button data-tab="map"><svg class="ic" aria-hidden="true"><use href="#i-map"/></svg>Карта</button>
-    <button data-tab="devices"><svg class="ic" aria-hidden="true"><use href="#i-monitor"/></svg>Устройства</button>
     <button data-tab="alerts"><svg class="ic" aria-hidden="true"><use href="#i-bell"/></svg>События <span id="alerts-count" class="count" hidden></span></button>
-    <div class="side-group">Учёт</div>
+    <div class="side-group">Оборудование</div>
+    <button data-tab="devices"><svg class="ic" aria-hidden="true"><use href="#i-monitor"/></svg>Устройства и ПК</button>
+    <button data-tab="peripherals"><svg class="ic" aria-hidden="true"><use href="#i-keyboard"/></svg>Периферия и склад</button>
+    <button data-tab="templates"><svg class="ic" aria-hidden="true"><use href="#i-file-text"/></svg>Шаблоны устройств</button>
+    <div class="side-group">Сеть</div>
     <button data-tab="topology"><svg class="ic" aria-hidden="true"><use href="#i-network"/></svg>Схема сети</button>
     <button data-tab="vlans"><svg class="ic" aria-hidden="true"><use href="#i-tag"/></svg>VLAN и подсети</button>
     <button data-tab="ipam"><svg class="ic" aria-hidden="true"><use href="#i-hash"/></svg>IP-адреса</button>
-    <button data-tab="templates"><svg class="ic" aria-hidden="true"><use href="#i-file-text"/></svg>Шаблоны устройств</button>
-    <button data-tab="peripherals"><svg class="ic" aria-hidden="true"><use href="#i-keyboard"/></svg>Периферия и склад</button>
-    <div class="side-group">Диагностика</div>
     <button data-tab="scan"><svg class="ic" aria-hidden="true"><use href="#i-radar"/></svg>Сканер сети</button>
-    <div class="side-group">Windows</div>
-    <button data-tab="pcs"><svg class="ic" aria-hidden="true"><use href="#i-monitor-smartphone"/></svg>Компьютеры домена</button>
+    <div class="side-group">Политики</div>
     <button data-tab="gpo"><svg class="ic" aria-hidden="true"><use href="#i-scroll-text"/></svg>Групповые политики</button>
+    <div class="side-group">Обслуживание</div>
     <button data-tab="runbooks"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg>Сценарии</button>
     <button data-tab="scripts"><svg class="ic" aria-hidden="true"><use href="#i-file-code"/></svg>Свои скрипты</button>
-    <div class="side-group">Система</div>
     <button data-tab="audit"><svg class="ic" aria-hidden="true"><use href="#i-clipboard-list"/></svg>Журнал</button>
+    <div class="side-group">Настройки</div>
     <button data-tab="settings"><svg class="ic" aria-hidden="true"><use href="#i-server-cog"/></svg>Сервер и доступ</button>
   </nav>
   <main>
@@ -241,6 +242,7 @@
         </select></label>
         <span id="device-count" class="muted small"></span>
         <button id="printers-link" type="button" data-tab="printers" hidden>Расходники МФУ</button>
+        <button id="pcs-link" type="button" data-tab="pcs" title="Найти компьютеры в подсети, собрать ключи Windows, Office и 1С, открыть любой ПК по имени">Обследование ПК и ключи…</button>
         <div class="spacer"></div>
         <button id="device-detect-os" type="button" title="Сервер проверит компьютеры: Windows это или Astra Linux. Вручную заданное не меняется">Определить ОС</button>
         <button id="device-new" class="primary">+ Добавить устройство</button>
@@ -746,6 +748,7 @@
       <button type="button" id="card-pc" title="Диски, процессы, лицензии, очистка, перезагрузка: Windows по WinRM, Astra Linux по SSH" hidden>Управление ПК</button>
       <button type="button" id="card-assist" title="Подключиться к экрану пользователя: msra для Windows, VNC с согласия пользователя для Astra Linux" hidden>Удалённая помощь</button>
       <button type="button" id="card-shadow" title="Теневое подключение RDP: сервер находит сеанс пользователя и готовит команду mstsc /shadow" hidden>Подключиться напрямую</button>
+      <div class="menu-wrap" id="card-more-wrap"><button type="button" id="card-more-toggle" aria-haspopup="true" aria-expanded="false" title="Остальные действия">Ещё ▾</button><div id="card-more-menu" class="pop card-more" hidden></div></div>
     </div>
     <div class="seg" id="card-tabs">
       <button data-part="overview" class="active">Обзор</button>

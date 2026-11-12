@@ -426,10 +426,13 @@ private fun StatusHeader(
         }
         Spacer(Modifier.height(10.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (onShowOnMap != null) ActionChip(Icons.Outlined.Map, "На карте", onShowOnMap)
-            if (onPing != null) ActionChip(Icons.Outlined.NetworkPing, "Ping", onPing)
-            if (onManagePc != null) ActionChip(Icons.Outlined.Computer, "Управление ПК", onManagePc)
-            if (onAssistPc != null) ActionChip(Icons.Outlined.ScreenShare, "Удалённая помощь", onAssistPc)
+            // The main action depends on what the device is: a computer is helped or managed (those chips come first and
+            // are filled), anything else is looked at on the map or pinged. The rest follows in plain chips.
+            val computer = onManagePc != null
+            if (onAssistPc != null) ActionChip(Icons.Outlined.ScreenShare, "Удалённая помощь", onAssistPc, main = true)
+            if (onManagePc != null) ActionChip(Icons.Outlined.Computer, "Управление ПК", onManagePc, main = true)
+            if (onShowOnMap != null) ActionChip(Icons.Outlined.Map, "На карте", onShowOnMap, main = !computer)
+            if (onPing != null) ActionChip(Icons.Outlined.NetworkPing, "Ping", onPing, main = !computer)
             if (onShadowPc != null) ActionChip(Icons.Outlined.DesktopWindows, "Подключиться напрямую", onShadowPc)
             ActionChip(Icons.Outlined.Nfc, "NFC-метка", onNfc)
         }
@@ -437,9 +440,18 @@ private fun StatusHeader(
 }
 
 @Composable
-private fun ActionChip(icon: ImageVector, label: String, onClick: () -> Unit) {
+private fun ActionChip(icon: ImageVector, label: String, onClick: () -> Unit, main: Boolean = false) {
     AssistChip(
         onClick = onClick,
+        colors = if (main) {
+            AssistChipDefaults.assistChipColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                leadingIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        } else {
+            AssistChipDefaults.assistChipColors()
+        },
         label = { Text(label) },
         leadingIcon = { Icon(icon, contentDescription = null, modifier = Modifier.size(AssistChipDefaults.IconSize)) },
     )

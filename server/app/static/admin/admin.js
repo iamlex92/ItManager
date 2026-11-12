@@ -305,15 +305,16 @@
   }
 
   // «Сервер и доступ» is one section with two views; sections with no menu entry light the one they belong to.
-  const TAB_HOME = { creds: "settings", printers: "devices" };
+  const TAB_HOME = { creds: "settings", printers: "devices", pcs: "devices" };
   document.addEventListener("click", (ev) => {
     const b = ev.target.closest(".subnav button[data-tab]");
     if (b) openTab(b.dataset.tab);
   });
   $("printers-link").addEventListener("click", () => openTab("printers"));
+  $("pcs-link").addEventListener("click", () => openTab("pcs"));
 
   // Small pop-up menus («+ Добавить»): one open at a time, closed by a click elsewhere or Esc.
-  const MENUS = [["add-toggle", "add-menu"], ["view-toggle", "view-menu"]];
+  const MENUS = [["add-toggle", "add-menu"], ["view-toggle", "view-menu"], ["card-more-toggle", "card-more-menu"]];
   function closeMenus(except) {
     for (const [btn, menu] of MENUS) {
       if (menu === except) continue;
@@ -4045,7 +4046,30 @@
     $("card-assist").hidden = !PC_KINDS.has(d.type);
     // RDP shadowing is for Windows computers; the server says so if the one chosen is an Astra Linux one.
     $("card-shadow").hidden = !PC_KINDS.has(d.type);
+    arrangeCardActions(d);
   }
+
+  // The main action of a card depends on what the device is: a computer is helped or managed, a switch is looked at on
+  // the map or pinged. Everything else is one click away under «Ещё», so the row does not shout nine buttons.
+  const CARD_ACTIONS = ["card-map", "card-ping", "card-plate", "card-pc", "card-assist", "card-shadow"];
+  const CARD_INLINE = {
+    WORKSTATION: ["card-assist", "card-pc"], SERVER: ["card-assist", "card-pc"], VIRTUAL: ["card-pc"],
+    PRINTER: ["card-map"], SOCKET: ["card-map"], PATCH_PANEL: ["card-map"], RACK: ["card-map"],
+  };
+  function arrangeCardActions(d) {
+    const inline = CARD_INLINE[d.type] || ["card-map", "card-ping"];
+    const menu = $("card-more-menu");
+    let hiddenInMenu = true;
+    for (const id of CARD_ACTIONS) {
+      const b = $(id);
+      if (inline.includes(id)) { $("card-more-wrap").before(b); b.classList.remove("in-menu"); }
+      else { menu.append(b); b.classList.add("in-menu"); if (!b.hidden) hiddenInMenu = false; }
+    }
+    menu.hidden = true;
+    $("card-more-toggle").setAttribute("aria-expanded", "false");
+    $("card-more-wrap").hidden = hiddenInMenu;
+  }
+  $("card-more-menu").addEventListener("click", (ev) => { if (ev.target.closest("button")) closeMenus(); });
 
   function kv(rows) {
     const box = node("div", { className: "kv" });
