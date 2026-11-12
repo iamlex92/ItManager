@@ -131,3 +131,31 @@ def test_scripts_carry_arguments_safely():
     norm = normalize_licences({"windows_bios_key": "  ", "office_keys": "ABCDE", "one_c": {"name": "1.lic"}})
     assert norm["windows_bios_key"] is None and norm["office_keys"] == ["ABCDE"]
     assert norm["one_c"] == [{"name": "1.lic"}]
+
+
+def test_unreachable_computer_says_why():
+    import asyncio
+
+    from app.pcs.service import PcError, detect_platform
+
+    async def closed(host: str, port: int) -> bool:
+        return False
+
+    async def known(host: str) -> str | None:
+        return "192.168.82.55"
+
+    async def unknown(host: str) -> str | None:
+        return None
+
+    settings = make_settings()
+
+    async def run(resolve):
+        return await detect_platform("PC-01", settings, False, {}, closed, resolve)
+
+    for resolve, expected in ((known, ("192.168.82.55", "служба WinRM", "gpupdate")), (unknown, ("DNS",))):
+        try:
+            asyncio.run(run(resolve))
+        except PcError as e:
+            assert all(part in str(e) for part in expected), str(e)
+        else:
+            raise AssertionError("a computer that answers nowhere must be reported")
