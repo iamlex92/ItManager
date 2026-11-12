@@ -40,6 +40,7 @@ PC_ACTIONS = {
     "kill": "ПК: завершение процесса",
     "command": "ПК: команда в консоли",
     "assist": "ПК: удалённая помощь",
+    "detect-os": "ПК: определение ОС (Windows / Astra Linux)",
     "update": "ПК: обновление пакетов (Astra)",
     "admin_add": "ПК: выдача sudo (Astra)",
     "admin_remove": "ПК: снятие sudo (Astra)",

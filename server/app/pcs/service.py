@@ -73,12 +73,42 @@ async def port_open(host: str, port: int, timeout: float = 2.5) -> bool:
     return True
 
 
+async def resolve_ipv4(host: str, timeout: float = 3.0) -> str | None:
+    """The address the name resolves to (as the server sees it), or None when DNS does not know it."""
+    try:
+        infos = await asyncio.wait_for(
+            asyncio.get_running_loop().getaddrinfo(host, None, family=socket.AF_INET), timeout
+        )
+    except (OSError, TimeoutError):
+        return None
+    return infos[0][4][0] if infos else None
+
+
+async def _unreachable(
+    host: str, winrm_port: int, ssh_port: int, resolve: Callable[[str], Awaitable[str | None]]
+) -> str:
+    """Why a computer answered on neither port, as far as the server can tell from here."""
+    ip = await resolve(host)
+    if ip is None:
+        return (
+            f"{host}: имя не находится в DNS. Проверьте, что компьютер в домене и записан в DNS, "
+            "или укажите его IP-адрес"
+        )
+    return (
+        f"{host} ({ip}) не отвечает ни по WinRM (порт {winrm_port}), ни по SSH (порт {ssh_port}). Возможные причины: "
+        "компьютер выключен или адрес в DNS устарел; на нём не запущена служба WinRM или нет слушателя (шаблон GPO "
+        "«WinRM: служба и слушатель»); порт закрыт брандмауэром (шаблон GPO «Брандмауэр» → WinRM); политика не "
+        "применилась (компьютер не в домене, gpupdate /force)"
+    )
+
+
 async def detect_platform(
     host: str,
     settings: Settings,
     emulated: bool,
     cache: dict[str, tuple[str, float]],
     probe: Callable[[str, int], Awaitable[bool]] = port_open,
+    resolve: Callable[[str], Awaitable[str | None]] = resolve_ipv4,
 ) -> str:
     """«windows» when WinRM answers, «astra» when only SSH does; remembered for ten minutes."""
     import re
@@ -98,10 +128,7 @@ async def detect_platform(
         elif ssh:
             platform = "astra"
         else:
-            raise PcError(
-                f"{host} не отвечает ни по WinRM (порт {winrm_port}), ни по SSH (порт {settings.linux_ssh_port}): "
-                "выключен, не в сети или порты закрыты брандмауэром"
-            )
+            raise PcError(await _unreachable(host, winrm_port, settings.linux_ssh_port, resolve))
     cache[key] = (platform, time.monotonic())
     return platform
 

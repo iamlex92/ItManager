@@ -486,6 +486,7 @@ private fun OverviewTab(
         details.printer?.let { PrinterCard(it, isPolling = pollingPrinter, onPoll = onPollPrinter) }
 
         Section("Расположение") {
+            device.systemName?.let { InfoRow("Система", it) }
             if (device.type == DeviceType.VIRTUAL) {
                 InfoRow("Хост", details.host?.name ?: "не указан", onClick = details.host?.let { h -> { onOpenDevice(h.id) } })
             } else {

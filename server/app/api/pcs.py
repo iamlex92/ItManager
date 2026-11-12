@@ -22,6 +22,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 
 from ..config import DiscoveryMode
 from ..models import ScriptAuditLog
+from ..pcs import osdetect
 from ..pcs.astra import ASTRA_ACTIONS, program
 from ..pcs.backend import (
     CONFIRM_ACTIONS,
@@ -39,6 +40,7 @@ from ..pcs.service import (
     allowed_host,
     detect_platform,
     inventory_pcs,
+    matches,
     office_text,
     one_c_text,
     run_key_job,
@@ -100,6 +102,30 @@ async def sweep_subnet(body: PcSweepIn, request: Request, session: SessionDep):
     except PcError as e:
         raise _bad("invalid_subnet", str(e)) from e
     return [PcSweepHitOut(ip=h.ip, name=h.name, device_id=h.device_id, device_name=h.device_name) for h in hits]
+
+
+@router.post("/detect-os")
+async def detect_os(request: Request, session: SessionDep):
+    """Finds out which computers of the inventory run Windows and which Astra Linux and remembers it on each
+    (metadata «os», shown in the lists and cards). A value set by hand stays. Only connection attempts and one ping."""
+    s = request.app.state.settings
+    emulated = isinstance(_backend(request), EmulatedPcs)
+    devices = await inventory_pcs(session)
+    ttl = getattr(request.app.state, "pc_ttl", None) or osdetect.ping_ttl
+    summary = await osdetect.detect_all(devices, s, emulated, request.app.state.pc_probe, ttl)
+    session.add(
+        ScriptAuditLog(
+            script_name=f"{AUDIT_PREFIX}detect-os",
+            triggered_by=who(request),
+            parameters=summary,
+            exit_code=0,
+            output_log=(
+                f"Windows: {summary['windows']}, Astra Linux: {summary['astra']}, не определено: {summary['unknown']}"
+            ),
+        )
+    )
+    await session.commit()
+    return summary
 
 
 @router.post("/keys", response_model=PcKeyJobOut, status_code=202)
@@ -225,6 +251,11 @@ async def act(host: str, action: Action, body: PcActionIn, request: Request, ses
         platform = await detect_platform(host, s, not real, request.app.state.pc_platforms, request.app.state.pc_probe)
     except PcError as e:
         raise _bad("pc_failed", str(e), 409) from e
+    # What answered is the computer's system: remembered on its inventory record.
+    for device in await inventory_pcs(session):
+        if matches(device, host):
+            osdetect.remember(device, platform, "ports" if real else "name")
+            break
     backend = request.app.state.astra if platform == "astra" else windows
     try:
         # A bad process name, an empty command, a Linux-only action on Windows: refused before anything runs.

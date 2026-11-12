@@ -2,6 +2,8 @@ package com.itmanager.app.data.model
 
 import java.time.Instant
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 /** Domain models shared by all screens. Colors are ARGB longs so the data layer stays free of Compose. */
 
@@ -69,6 +71,13 @@ data class Device(
     /** Every address, the main one first. */
     val allIps: List<String> get() = listOfNotNull(ip) + extraIps
 
+    /** "Windows" or "Astra Linux" when the server knows the system of this computer (metadata «os»), else null. */
+    val systemName: String? get() = when ((metadata["os"] as? JsonPrimitive)?.contentOrNull) {
+        "windows" -> "Windows"
+        "astra" -> "Astra Linux"
+        else -> null
+    }
+
     /** The unit number the device's top edge reaches in its rack. */
     val rackTop: Int? get() = rackU?.let { it + (rackH ?: 1) - 1 }
 
@@ -84,7 +93,8 @@ data class Device(
         return name.contains(q, ignoreCase = true) ||
             allIps.any { it.contains(q) } ||
             mac?.replace("-", ":")?.contains(q.replace("-", ":"), ignoreCase = true) == true ||
-            model?.contains(q, ignoreCase = true) == true
+            model?.contains(q, ignoreCase = true) == true ||
+            systemName?.contains(q, ignoreCase = true) == true
     }
 }
 
