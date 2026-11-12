@@ -2722,6 +2722,19 @@
 
   const vlanError = (e) => { $("vlan-error").hidden = !e; $("vlan-error").textContent = e ? e.message : ""; };
 
+  $("vlan-cleanup").addEventListener("click", async () => {
+    try {
+      const found = await api("POST", "vlans/cleanup");
+      if (!found.count) { toast("Неиспользуемых VLAN нет: каждый есть на порту или у него задана подсеть или описание"); return; }
+      const names = found.vlans.map((v) => (v.name && v.name !== `VLAN ${v.vlan_id}` ? `${v.vlan_id} «${v.name}»` : String(v.vlan_id)));
+      const list = names.length > 40 ? `${names.slice(0, 40).join(", ")} и ещё ${names.length - 40}` : names.join(", ");
+      if (!await ask(`Удалить неиспользуемые VLAN: ${found.count}?\nИх нет ни на одном порту, подсеть и описание не заданы. VLAN 1 остаётся. Если один из них нужен как запись плана нумерации, задайте ему описание, и его не тронут.\n${list}`, { action: "Удалить" })) return;
+      const done = await api("POST", "vlans/cleanup?dry_run=false");
+      toast(`Удалено VLAN: ${done.count}`);
+      await loadVlans();
+    } catch (e) { fail(e); }
+  });
+
   async function loadVlans() {
     const vlans = await api("GET", "vlans");
     if (!vlans.length) {

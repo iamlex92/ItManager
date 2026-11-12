@@ -217,3 +217,50 @@ def test_garbage_and_missing_device(client):
     assert client.post(f"/api/v1/devices/{sw['id']}/config-import", json={"text": "hello world"}).status_code == 422
     missing = "00000000-0000-0000-0000-000000000000"
     assert client.post(f"/api/v1/devices/{missing}/config-import", json={"text": CONFIG}).status_code == 404
+
+
+def test_vlans_a_config_only_declares_are_not_added(client):
+    sw = find(client, "SW-ACC-01")
+    base = max(_vlans(client)) + 100
+    used, idle = base, base + 1
+    text = (
+        f"vlan {used},{idle}\n"
+        f"interface Gi1/0/5\n switchport access vlan {used}\n"
+        "interface Gi1/0/6\n switchport mode trunk\n switchport trunk allowed vlan all\n"
+    )
+    out = client.post(f"/api/v1/devices/{sw['id']}/config-import", json={"text": text, "apply": True}).json()
+    assert str(used) in out["new_vlans"] and str(idle) not in out["new_vlans"]
+    assert used in _vlans(client) and idle not in _vlans(client)
+    # `show vlan brief` rows without ports are the switch's table, not the inventory.
+    brief = (
+        f"VLAN Name Status Ports\n---- ---- ------ -----\n{idle + 1}  Spare  active\n{used}  Used  active  Gi1/0/5\n"
+    )
+    preview = client.post(f"/api/v1/devices/{sw['id']}/config-import", json={"text": brief}).json()
+    assert str(idle + 1) not in preview["new_vlans"]
+
+
+def test_cleanup_removes_only_vlans_nothing_uses(client):
+    sw = find(client, "SW-ACC-01")
+    base = max(_vlans(client)) + 200
+    for vid, extra in ((base, {}), (base + 1, {"subnet_cidr": "10.99.1.0/24"}), (base + 2, {"description": "Камеры"}),
+                       (base + 3, {}), (base + 4, {})):  # fmt: skip
+        r = client.post("/api/v1/vlans", json={"vlan_id": vid, "name": f"V{vid}", **extra})
+        assert r.status_code == 201, r.text
+    # base+3 sits on a port, base+4 is carried tagged.
+    port = ports_of(client, sw["id"])[0]
+    assert client.patch(f"/api/v1/ports/{port['id']}", json={"access_vlan": base + 3}).status_code == 200
+    other = ports_of(client, sw["id"])[1]
+    r = client.patch(f"/api/v1/ports/{other['id']}", json={"mode": "TRUNK", "tagged_vlans": [base + 4]})
+    assert r.status_code == 200, r.text
+
+    preview = client.post("/api/v1/vlans/cleanup").json()
+    assert preview["dry_run"] is True
+    mine = {v["vlan_id"] for v in preview["vlans"]} & {base, base + 1, base + 2, base + 3, base + 4}
+    assert mine == {base}
+    assert base in _vlans(client)  # a preview removes nothing
+
+    done = client.post("/api/v1/vlans/cleanup", params={"dry_run": "false"}).json()
+    assert base in {v["vlan_id"] for v in done["vlans"]} and done["dry_run"] is False
+    left = _vlans(client)
+    assert base not in left and {base + 1, base + 2, base + 3, base + 4} <= left and 1 in left
+    assert any("vlan_cleanup" in str(a) for a in audit_rows())
