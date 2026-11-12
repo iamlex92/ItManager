@@ -571,3 +571,5 @@ dialog.card-dialog { position: fixed; inset: var(--drawer-top, 0px) 0 0 auto; ma
 .home-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 @media (max-width: 980px) { .search-open { min-width: 0; margin-right: 6px; } .search-open span, .search-open kbd { display: none; } }
 .search-open + .right { margin-left: 0; }
+.card-more { left: auto; right: 0; }
+#card-more-wrap { position: relative; }
