@@ -94,6 +94,9 @@ fun VlansScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Назад") }
                 },
+                actions = {
+                    TextButton(onClick = viewModel::askCleanup) { Text("Убрать лишние") }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
@@ -129,6 +132,25 @@ fun VlansScreen(
                 }
             }
         }
+    }
+
+    val unused by viewModel.cleanup.collectAsStateWithLifecycle()
+    unused?.let { found ->
+        val names = found.vlans.map { it.label }
+        val shown = if (names.size > 40) names.take(40).joinToString(", ") + " и ещё ${names.size - 40}" else names.joinToString(", ")
+        AlertDialog(
+            onDismissRequest = viewModel::dismissCleanup,
+            title = { Text("Удалить неиспользуемые VLAN: ${found.vlans.size}?") },
+            text = {
+                Text(
+                    "Их нет ни на одном порту, подсеть и описание не заданы. VLAN 1 остаётся. " +
+                        "Если VLAN нужен как запись плана нумерации, задайте ему описание, и его не тронут.\n\n$shown",
+                )
+            },
+            confirmButton = { TextButton(onClick = viewModel::confirmCleanup) { Text("Удалить", color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = viewModel::dismissCleanup) { Text("Отмена") } },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        )
     }
 
     editor?.let { e ->

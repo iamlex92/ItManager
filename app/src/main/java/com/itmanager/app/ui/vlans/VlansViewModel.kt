@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.itmanager.app.core.network.toUserMessage
 import com.itmanager.app.data.model.VLAN_COLORS
 import com.itmanager.app.data.model.Vlan
+import com.itmanager.app.data.model.VlanCleanup
 import com.itmanager.app.data.model.VlanDraft
 import com.itmanager.app.data.source.DcimRepository
 import com.itmanager.app.ui.components.UiState
@@ -40,6 +41,10 @@ class VlansViewModel @Inject constructor(
     private val _editor = MutableStateFlow<VlanEditor?>(null)
     val editor: StateFlow<VlanEditor?> = _editor.asStateFlow()
 
+    /** The unused VLANs the server found, waiting for the user's yes or no. */
+    private val _cleanup = MutableStateFlow<VlanCleanup?>(null)
+    val cleanup: StateFlow<VlanCleanup?> = _cleanup.asStateFlow()
+
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
     val messages: SharedFlow<String> = _messages.asSharedFlow()
 
@@ -56,6 +61,35 @@ class VlansViewModel @Inject constructor(
             onSuccess = { list -> _state.value = UiState.Content(list.sortedBy { it.id }) },
             onFailure = { e -> if (_state.value !is UiState.Content) _state.value = UiState.Error(e.toUserMessage()) },
         )
+    }
+
+    /** Asks the server which VLANs nothing uses; nothing is removed until [confirmCleanup]. */
+    fun askCleanup() {
+        viewModelScope.launch {
+            repository.vlanCleanupPreview().fold(
+                onSuccess = { found ->
+                    if (found.vlans.isEmpty()) _messages.tryEmit("Неиспользуемых VLAN нет") else _cleanup.value = found
+                },
+                onFailure = { e -> _messages.tryEmit(e.toUserMessage()) },
+            )
+        }
+    }
+
+    fun dismissCleanup() {
+        _cleanup.value = null
+    }
+
+    fun confirmCleanup() {
+        _cleanup.value = null
+        viewModelScope.launch {
+            repository.cleanUpVlans().fold(
+                onSuccess = { done ->
+                    _messages.tryEmit("Удалено VLAN: ${done.vlans.size}")
+                    load()
+                },
+                onFailure = { e -> _messages.tryEmit(e.toUserMessage()) },
+            )
+        }
     }
 
     fun openNew() {

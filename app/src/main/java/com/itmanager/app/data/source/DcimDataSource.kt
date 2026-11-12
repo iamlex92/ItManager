@@ -87,6 +87,9 @@ interface DcimDataSource {
     /** Refused while ports are in the VLAN. */
     suspend fun deleteVlan(id: Int)
 
+    /** The VLANs nothing uses; with [delete] they are removed too. */
+    suspend fun vlanCleanup(delete: Boolean): VlanCleanup
+
     // Ports as the inventory records them. Never sent to the switch.
 
     suspend fun createPort(deviceId: String, draft: PortDraft): SwitchPort

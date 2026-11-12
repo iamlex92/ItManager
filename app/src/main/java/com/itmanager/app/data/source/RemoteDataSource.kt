@@ -178,6 +178,8 @@ class RemoteDataSource(
 
     override suspend fun deleteVlan(id: Int) = api.deleteVlan(settings, id)
 
+    override suspend fun vlanCleanup(delete: Boolean): VlanCleanup = api.vlanCleanup(settings, delete).toDomain()
+
     override suspend fun previewPortChange(switchId: String, portId: String, change: PortChange): List<String> =
         api.previewPortConfig(settings, portId, change).commands
 

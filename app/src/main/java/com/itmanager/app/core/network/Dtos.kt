@@ -245,6 +245,15 @@ data class VlanDto(
     fun toDomain() = Vlan(vlanId, name, subnetCidr, parseColorHex(colorHex), description?.takeIf { it.isNotBlank() })
 }
 
+/** What «remove unused VLANs» found (or removed): the VLANs no port carries and that have no subnet or description. */
+@Serializable
+data class VlanCleanupDto(val count: Int = 0, val vlans: List<VlanCleanupItemDto> = emptyList()) {
+    fun toDomain() = VlanCleanup(vlans.map { VlanCleanupItem(it.vlanId, it.name) })
+}
+
+@Serializable
+data class VlanCleanupItemDto(@SerialName("vlan_id") val vlanId: Int, val name: String = "")
+
 /** The VLAN form, nulls included: a cleared subnet or description is cleared on the server too. */
 fun VlanDraft.toBody(withId: Boolean): JsonObject =
     buildJsonObject {
