@@ -36,6 +36,7 @@ def test_console_page_needs_no_token_but_locks_itself_down(seeded):
         assert c.get("/static/admin/admin-pcs.js").status_code == 200
         assert c.get("/static/admin/admin-settings.js").status_code == 200
         assert c.get("/static/admin/admin-gpo.js").status_code == 200
+        assert "admin-vlans.js" in r.text and c.get("/static/admin/admin-vlans.js").status_code == 200
         assert "admin-scripts.js" in r.text and c.get("/static/admin/admin-scripts.js").status_code == 200
         assert "admin-scan.js" in r.text and c.get("/static/admin/admin-scan.js").status_code == 200
         tabs = ("vlans", "devices", "map", "alerts", "audit", "runbooks", "printers", "creds", "topology", "templates")
