@@ -67,18 +67,31 @@ async def import_config(device_id: uuid.UUID, body: ConfigImportIn, request: Req
     text_vlans: dict[int, tuple[str, str | None]] = {}
     hostname: str | None = None
 
+    declared: dict[int, str] = {}
+
     def mention(vid: int, name: str = "", subnet: str | None = None) -> int:
         old_name, old_subnet = text_vlans.get(vid, ("", None))
-        text_vlans[vid] = (name or old_name, subnet or old_subnet)
+        text_vlans[vid] = (name or old_name or declared.get(vid, ""), subnet or old_subnet)
         return vid
 
     if looks_like_running_config(body.text):
         kind = "running-config"
         cfg = parse_running_config(body.text)
         hostname = cfg.hostname
-        for vid, name in cfg.vlan_names.items():
-            mention(vid, name, cfg.vlan_subnets.get(vid))
-        every_vlan = sorted(set(known) | set(cfg.vlan_names))
+        # A VLAN the config only declares (`vlan 30` in the switch's database) is not added: only the ones a port
+        # carries or an address sits on. That keeps a switch's whole VLAN table out of the inventory.
+        declared.update(cfg.vlan_names)
+        for vid in cfg.vlan_subnets:
+            mention(vid, subnet=cfg.vlan_subnets.get(vid))
+        carried: set[int] = set()
+        for i in cfg.ports:
+            if i.routed:
+                continue
+            if i.mode == "TRUNK":
+                carried.update(i.allowed_vlans or [])
+            else:
+                carried.add(i.access_vlan or 1)
+        every_vlan = sorted(set(known) | carried | set(text_vlans))
         for i in cfg.ports:
             # Cisco and Eltex print `shutdown` only for a port that is off.
             w: dict = {"is_admin_up": not i.shutdown}
@@ -99,7 +112,10 @@ async def import_config(device_id: uuid.UUID, body: ConfigImportIn, request: Req
     elif looks_like_vlan_brief(body.text):
         kind = "vlan-brief"
         for row in parse_vlan_brief(body.text):
-            mention(row.vlan_id, row.name)
+            declared[row.vlan_id] = row.name
+            # A VLAN without ports in the listing is just in the switch's table: not added.
+            if any(if_family(normalize_if_name(n)) in PHYSICAL for n in row.ports):
+                mention(row.vlan_id, row.name)
             for name in row.ports:
                 key = normalize_if_name(name)
                 if if_family(key) in PHYSICAL:

@@ -1,10 +1,10 @@
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Request, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
-from ..models import ScriptAuditLog, Vlan
+from ..models import Port, ScriptAuditLog, Vlan
 from ..schemas import VlanCreate, VlanOut, VlanUpdate
 from .deps import SessionDep, conflict, not_found, who
 
@@ -16,6 +16,7 @@ ACTIONS = {
     "vlan_create": "Добавление VLAN",
     "vlan_update": "Изменение VLAN",
     "vlan_delete": "Удаление VLAN",
+    "vlan_cleanup": "Удаление неиспользуемых VLAN",
 }
 
 
@@ -36,6 +37,49 @@ def _audit(request: Request, action: str, vlan: Vlan, changed: dict | None = Non
 @router.get("", response_model=list[VlanOut])
 async def list_vlans(session: SessionDep):
     return (await session.scalars(select(Vlan).order_by(Vlan.vlan_id))).all()
+
+
+async def unused_vlans(session) -> list[Vlan]:
+    """VLANs nothing refers to: no port has them (access or tagged), no subnet and no description is set. VLAN 1 is the
+    switches' default and stays."""
+    used = set((await session.scalars(select(Port.access_vlan).where(Port.access_vlan.is_not(None)))).all())
+    tagged = await session.scalars(select(func.unnest(Port.tagged_vlans)).distinct())
+    used |= set(tagged.all())
+    rows = (await session.scalars(select(Vlan).order_by(Vlan.vlan_id))).all()
+    return [
+        v
+        for v in rows
+        if v.vlan_id != 1 and v.vlan_id not in used and not v.subnet_cidr and not (v.description or "").strip()
+    ]
+
+
+@router.post("/cleanup")
+async def cleanup_vlans(request: Request, session: SessionDep, dry_run: bool = True):
+    """VLANs that no port uses and that have no subnet: usually what a switch config listed but never used.
+    By default only says which (dry_run); `?dry_run=false` removes them and writes one journal entry."""
+    victims = await unused_vlans(session)
+    listed = [{"vlan_id": v.vlan_id, "name": v.name} for v in victims]
+    if dry_run or not victims:
+        return {"dry_run": dry_run, "count": len(listed), "vlans": listed}
+    for v in victims:
+        await session.delete(v)
+    try:
+        await session.flush()
+    except IntegrityError:
+        raise conflict("vlan_in_use", "Какой-то VLAN появился на порту во время очистки: повторите") from None
+    ids = ", ".join(str(x["vlan_id"]) for x in listed)
+    session.add(
+        ScriptAuditLog(
+            script_name="vlan_cleanup",
+            triggered_by=who(request),
+            parameters={"vlans": listed},
+            executed_at=datetime.now(UTC),
+            exit_code=0,
+            output_log=f"{ACTIONS['vlan_cleanup']}: {len(listed)} ({ids[:500]})",
+        )
+    )
+    await session.commit()
+    return {"dry_run": False, "count": len(listed), "vlans": listed}
 
 
 @router.post("", response_model=VlanOut, status_code=status.HTTP_201_CREATED)

@@ -213,7 +213,10 @@
 
     <section id="tab-vlans" class="tab" hidden>
       <div class="card">
-        <h2>VLAN и подсети</h2>
+        <div class="row wrap">
+          <h2 class="grow">VLAN и подсети</h2>
+          <button type="button" id="vlan-cleanup" title="VLAN, которых нет ни на одном порту и у которых нет подсети и описания: обычно их просто перечислила конфигурация коммутатора">Убрать неиспользуемые…</button>
+        </div>
         <p class="muted small">Справочник сетей: порты коммутаторов ссылаются на эти номера, слои «VLAN» и «Подсети» на карте красят по ним устройства. Меняется только учёт, на оборудование ничего не отправляется.</p>
         <div class="table-wrap">
           <table class="grid">

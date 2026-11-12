@@ -22,6 +22,7 @@ Clients should ignore unknown fields.
 | GET | `/api/v1/ports/{id}/trace` | `{hops: [{device_id, device_name, device_type, port_id, port_name}]}`, e.g. PC → socket → patch panel → switch |
 | GET | `/api/v1/ports/{id}/path` | The whole line through a port, both ways: for a patch panel or socket port the computer on one side and the switch on the other. `{hops: [{device_id, device_name, device_type, port_id, port_name, ip, is_online, cable_type, cable_label, is_here}], ends: [...]}`; `hops` run from the far end to the switch, `cable_type` is the cable to the next hop, `ends` are the active devices at the ends. |
 | GET | `/api/v1/vlans` | `[{vlan_id, name, subnet_cidr, color_hex, description}]` |
+| POST | `/api/v1/vlans/cleanup?dry_run=true` | VLANs no port carries (access or tagged) and that have no subnet or description, VLAN 1 excepted: `{dry_run, count, vlans: [{vlan_id, name}]}`. `dry_run=false` deletes them (one journal entry `vlan_cleanup`). |
 | GET | `/api/v1/connections?device_id=` | `[{id, port_a_id, port_b_id, device_a_id, device_b_id, cable_type, length_meters, label, notes, waypoints}]` |
 | GET | `/api/v1/printers` | `[{id, name, ip, model, is_online, total_pages, consumables: [{name, color_hex, kind, level_percent}], low_supply, polled_at}]` |
 | GET | `/api/v1/printers/{id}` | one printer |
@@ -343,8 +344,9 @@ Errors: 415 `bad_svg`, 413 `svg_too_big`, 422 `bad_port` / `duplicate_port`.
 
 `POST /api/v1/devices/{id}/config-import` `{text, apply}` reads a pasted running-config (Cisco IOS, Eltex MES) or
 `show vlan brief` into the inventory. Response: `{kind, hostname, applied, ports: [{port, matched, changes}],
-new_ports, new_vlans, changed_ports}`. `matched: false` is a port that will be (or was) added. On apply, VLANs from
-the text the server does not have are added (name, subnet from the VLAN interface's address), then the ports.
+new_ports, new_vlans, changed_ports}`. `matched: false` is a port that will be (or was) added. On apply, VLANs the server does not have are added if a port in the text carries them (access, or an explicit
+trunk list) or an address sits on them (name, subnet from the VLAN interface's address), then the ports; VLANs the
+text only declares are not added.
 A placeholder port `portN` drawn on the map takes the real name of the N-th interface. Nothing is sent to the switch.
 `GET /api/v1/devices` also returns `switch_id`, `switch_port_id`, `switch_port_name`: the switch port a device is
 cabled to. A VLAN's `subnet_cidr` may be null.
