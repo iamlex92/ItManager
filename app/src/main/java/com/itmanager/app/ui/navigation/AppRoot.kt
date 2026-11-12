@@ -242,15 +242,15 @@ fun AppRoot(appViewModel: AppViewModel = hiltViewModel()) {
     writeQuestion?.let { answer ->
         AlertDialog(
             onDismissRequest = { answer.complete(false) },
-            title = { Text("Вы на резервном сервере") },
+            title = { Text(stringResource(R.string.app_root_01)) },
             text = {
                 Text(
                     "Основной сервер недоступен. Изменение, сделанное на резервном, пропадёт при следующей " +
                         "синхронизации с основным. Всё равно сохранить?",
                 )
             },
-            confirmButton = { TextButton(onClick = { answer.complete(true) }) { Text("Сохранить") } },
-            dismissButton = { TextButton(onClick = { answer.complete(false) }) { Text("Отмена") } },
+            confirmButton = { TextButton(onClick = { answer.complete(true) }) { Text(stringResource(R.string.action_save)) } },
+            dismissButton = { TextButton(onClick = { answer.complete(false) }) { Text(stringResource(R.string.form_sheet_02)) } },
         )
     }
 

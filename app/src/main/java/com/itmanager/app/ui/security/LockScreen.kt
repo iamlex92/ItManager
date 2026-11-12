@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.security
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -96,7 +98,7 @@ private fun LockContent(lifecycleOwner: LifecycleOwner, onUnlocked: () -> Unit) 
     ) {
         Icon(Icons.Outlined.Fingerprint, contentDescription = null, modifier = Modifier.size(56.dp), tint = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(16.dp))
-        Text("NetAdmin заблокирован", style = MaterialTheme.typography.titleLarge)
+        Text(stringResource(R.string.lock_screen_01), style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(8.dp))
         Text(
             unavailable?.let { "$it Настройте блокировку экрана, чтобы вход в приложение был защищён." }

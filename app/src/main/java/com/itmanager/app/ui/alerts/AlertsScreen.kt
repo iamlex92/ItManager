@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.alerts
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -113,7 +115,7 @@ fun AlertsScreen(
                         selected = showResolved,
                         onClick = { viewModel.setShowResolved(true) },
                         shape = SegmentedButtonDefaults.itemShape(1, 2),
-                    ) { Text("Все") }
+                    ) { Text(stringResource(R.string.alerts_screen_01)) }
                 }
                 LazyColumn(
                     contentPadding = PaddingValues(
@@ -185,14 +187,14 @@ private fun AlertCard(
             modifier = Modifier.padding(end = 8.dp),
         )
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-            TextButton(onClick = onOpenDevice) { Text("Открыть устройство") }
+            TextButton(onClick = onOpenDevice) { Text(stringResource(R.string.alerts_screen_02)) }
             Spacer(Modifier.weight(1f))
             if (!alert.isResolved) {
                 FilledTonalButton(onClick = onResolve, enabled = !isResolving) {
                     if (isResolving) {
                         CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                     } else {
-                        Text("Решено")
+                        Text(stringResource(R.string.alerts_screen_03))
                     }
                 }
             }

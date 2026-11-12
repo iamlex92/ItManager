@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.automation
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
@@ -97,7 +99,7 @@ fun TerminalBlock(stdout: String, stderr: String, modifier: Modifier = Modifier)
         if (stdout.isNotBlank()) Text(stdout, style = MonoStyle, softWrap = false)
         if (stderr.isNotBlank()) Text(stderr, style = MonoStyle, softWrap = false, color = MaterialTheme.colorScheme.error)
         if (stdout.isBlank() && stderr.isBlank()) {
-            Text("Вывода нет", style = MonoStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.terminal_01), style = MonoStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.ipam
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -58,7 +60,7 @@ fun IpamScreen(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text("IP-адреса", style = MaterialTheme.typography.titleLarge) },
+                title = { Text(stringResource(R.string.ipam_screen_01), style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Назад") }
                 },
@@ -94,10 +96,10 @@ private fun IpamContent(data: IpamOverview, check: IpamCheckState, viewModel: Ip
             items(data.conflicts, key = { "c-${it.kind}-${it.ip}-${it.devices.joinToString()}" }) { ConflictRow(it) }
         } else {
             item(key = "no-conflicts") {
-                Text("Конфликтов адресов нет.", style = MaterialTheme.typography.bodyMedium, color = StatusColors.Online)
+                Text(stringResource(R.string.ipam_screen_02), style = MaterialTheme.typography.bodyMedium, color = StatusColors.Online)
             }
         }
-        item(key = "subnets-title") { Text("Подсети", style = MaterialTheme.typography.titleMedium) }
+        item(key = "subnets-title") { Text(stringResource(R.string.ipam_screen_03), style = MaterialTheme.typography.titleMedium) }
         if (data.subnets.isEmpty()) {
             item(key = "no-subnets") {
                 Text(
@@ -116,7 +118,7 @@ private fun CheckCard(check: IpamCheckState, viewModel: IpamViewModel) {
     Column(
         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(16.dp)).padding(14.dp),
     ) {
-        Text("Проверить адрес", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.ipam_screen_04), style = MaterialTheme.typography.titleMedium)
         Text(
             "Свободен ли адрес и входит ли он в подсеть VLAN. Ничего не назначает.",
             style = MaterialTheme.typography.bodySmall,
@@ -126,13 +128,13 @@ private fun CheckCard(check: IpamCheckState, viewModel: IpamViewModel) {
         OutlinedTextField(
             value = check.ip,
             onValueChange = viewModel::setIp,
-            label = { Text("IP-адрес") },
+            label = { Text(stringResource(R.string.ipam_screen_05)) },
             textStyle = MonoStyle,
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(8.dp))
-        OutlinedButton(onClick = viewModel::checkAddress, enabled = check.ip.isNotBlank() && !check.busy) { Text("Проверить") }
+        OutlinedButton(onClick = viewModel::checkAddress, enabled = check.ip.isNotBlank() && !check.busy) { Text(stringResource(R.string.ipam_screen_06)) }
         if (check.busy) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 8.dp))
         check.error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp)) }
         check.result?.let { r ->

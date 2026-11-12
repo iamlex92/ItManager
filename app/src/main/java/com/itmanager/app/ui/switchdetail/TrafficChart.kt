@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.switchdetail
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -47,13 +49,13 @@ private val clock = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemD
 @Composable
 fun PortTrafficSection(traffic: PortTraffic?, modifier: Modifier = Modifier) {
     Column(modifier) {
-        Text("Загрузка за 24 часа", style = MaterialTheme.typography.titleSmall)
+        Text(stringResource(R.string.traffic_chart_01), style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(8.dp))
         when {
             traffic == null || (traffic.series == null && traffic.error == null) -> Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.width(16.dp).height(16.dp), strokeWidth = 2.dp)
                 Spacer(Modifier.width(8.dp))
-                Text("Загружаю…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.traffic_chart_02), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             traffic.error != null -> Text(traffic.error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             traffic.series!!.points.isEmpty() -> Text(

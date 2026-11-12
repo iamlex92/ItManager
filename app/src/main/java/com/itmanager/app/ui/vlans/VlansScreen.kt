@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.vlans
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -88,7 +90,7 @@ fun VlansScreen(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text("VLAN и подсети") },
+                title = { Text(stringResource(R.string.vlans_screen_01)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Назад") }
                 },
@@ -191,7 +193,7 @@ fun VlanDialog(
                 OutlinedTextField(
                     value = if (d.id == 0) "" else d.id.toString(),
                     onValueChange = { v -> onChange(d.copy(id = v.filter(Char::isDigit).take(4).toIntOrNull() ?: 0)) },
-                    label = { Text("Номер VLAN (1–4094)") },
+                    label = { Text(stringResource(R.string.vlans_screen_02)) },
                     isError = idError != null,
                     supportingText = if (idError != null) ({ Text(idError) }) else null,
                     singleLine = true,
@@ -203,8 +205,8 @@ fun VlanDialog(
             OutlinedTextField(
                 value = d.name,
                 onValueChange = { onChange(d.copy(name = it.take(50))) },
-                label = { Text("Название") },
-                placeholder = { Text("Офис, АСУ ТП, Камеры") },
+                label = { Text(stringResource(R.string.credentials_screen_02)) },
+                placeholder = { Text(stringResource(R.string.vlans_screen_03)) },
                 isError = nameError != null,
                 supportingText = if (nameError != null) ({ Text(nameError) }) else null,
                 singleLine = true,
@@ -216,7 +218,7 @@ fun VlanDialog(
             OutlinedTextField(
                 value = d.subnet,
                 onValueChange = { onChange(d.copy(subnet = it.trim().take(18))) },
-                label = { Text("Подсеть, если есть") },
+                label = { Text(stringResource(R.string.vlans_screen_04)) },
                 placeholder = { Text("10.10.20.0/24") },
                 isError = subnetError != null && (show || d.subnet.contains('/')),
                 supportingText = { Text(subnetError?.takeIf { show || d.subnet.contains('/') } ?: "По ней слой «Подсети» собирает устройства, IPAM считает адреса.") },
@@ -244,7 +246,7 @@ fun VlanDialog(
             OutlinedTextField(
                 value = d.description.orEmpty(),
                 onValueChange = { onChange(d.copy(description = it.take(500))) },
-                label = { Text("Описание") },
+                label = { Text(stringResource(R.string.vlans_screen_05)) },
                 minLines = 1,
                 maxLines = 3,
                 modifier = Modifier.fillMaxWidth(),

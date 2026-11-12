@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.serverconfig
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -99,7 +101,7 @@ fun ServerConfigScreen(
 
     Column(Modifier.fillMaxSize()) {
         TabTopBar(title = "Настройки сервера", subtitle = "Вместо правки netadmin.env", onBack = onBack) {
-            TextButton(onClick = ::confirmAndSave, enabled = !edits.isEmpty && !busy) { Text("Сохранить") }
+            TextButton(onClick = ::confirmAndSave, enabled = !edits.isEmpty && !busy) { Text(stringResource(R.string.action_save)) }
         }
         if (busy || restarting) LinearProgressIndicator(Modifier.fillMaxWidth())
         when (val s = state) {
@@ -135,7 +137,7 @@ fun ServerConfigScreen(
                                     if (!restarting) {
                                         Spacer(Modifier.height(8.dp))
                                         if (config.canRestart) {
-                                            FilledTonalButton(onClick = { askRestart = true }) { Text("Перезапустить сервер") }
+                                            FilledTonalButton(onClick = { askRestart = true }) { Text(stringResource(R.string.server_config_screen_01)) }
                                         } else {
                                             Text(
                                                 "Сервер запущен не как служба: перезапустите его вручную.",
@@ -177,7 +179,7 @@ fun ServerConfigScreen(
                     }
                     item(key = "save") {
                         Button(onClick = ::confirmAndSave, enabled = !edits.isEmpty && !busy, modifier = Modifier.fillMaxWidth()) {
-                            Text("Сохранить")
+                            Text(stringResource(R.string.action_save))
                         }
                     }
                 }
@@ -188,7 +190,7 @@ fun ServerConfigScreen(
     certificate?.let { c ->
         androidx.compose.material3.AlertDialog(
             onDismissRequest = viewModel::dismissCertificate,
-            title = { Text("Сертификат контроллера") },
+            title = { Text(stringResource(R.string.server_config_screen_02)) },
             text = {
                 Text(
                     "Кому: ${c.subject}\nКем выдан: ${c.issuer}${if (c.selfSigned) " (самоподписанный)" else ""}\n" +
@@ -196,18 +198,18 @@ fun ServerConfigScreen(
                         "Сверьте на контроллере: openssl x509 -in /var/lib/samba/private/tls/cert.pem -noout -fingerprint -sha256",
                 )
             },
-            confirmButton = { TextButton(onClick = { viewModel.acceptCertificate("ad_ca_pem") }) { Text("Доверять") } },
-            dismissButton = { TextButton(onClick = viewModel::dismissCertificate) { Text("Отмена") } },
+            confirmButton = { TextButton(onClick = { viewModel.acceptCertificate("ad_ca_pem") }) { Text(stringResource(R.string.server_config_screen_03)) } },
+            dismissButton = { TextButton(onClick = viewModel::dismissCertificate) { Text(stringResource(R.string.form_sheet_02)) } },
         )
     }
 
     if (askRestart) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { askRestart = false },
-            title = { Text("Перезапустить сервер?") },
-            text = { Text("Он будет недоступен 10–30 секунд, затем начнут действовать сохранённые настройки.") },
-            confirmButton = { TextButton(onClick = { askRestart = false; viewModel.restart() }) { Text("Перезапустить") } },
-            dismissButton = { TextButton(onClick = { askRestart = false }) { Text("Отмена") } },
+            title = { Text(stringResource(R.string.server_config_screen_04)) },
+            text = { Text(stringResource(R.string.server_config_screen_05)) },
+            confirmButton = { TextButton(onClick = { askRestart = false; viewModel.restart() }) { Text(stringResource(R.string.server_config_screen_06)) } },
+            dismissButton = { TextButton(onClick = { askRestart = false }) { Text(stringResource(R.string.form_sheet_02)) } },
         )
     }
 }
@@ -255,7 +257,7 @@ private fun FieldRow(
                 val kind = CredentialKind.entries.firstOrNull { it.wire == field.credentialKind }
                 val fitting = credentials.filter { it.kind == kind }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilterChip(selected = value.text().isEmpty(), onClick = { onChange(JsonPrimitive("")) }, label = { Text("Не выбрана") })
+                    FilterChip(selected = value.text().isEmpty(), onClick = { onChange(JsonPrimitive("")) }, label = { Text(stringResource(R.string.server_config_screen_07)) })
                     fitting.forEach { c ->
                         FilterChip(selected = value.text() == c.name, onClick = { onChange(JsonPrimitive(c.name)) }, label = { Text(c.name) })
                     }
@@ -293,12 +295,12 @@ private fun FieldRow(
                 )
             }
         }
-        if (field.kind == "pem") TextButton(onClick = onFetchCertificate) { Text("Получить с контроллера") }
+        if (field.kind == "pem") TextButton(onClick = onFetchCertificate) { Text(stringResource(R.string.server_config_screen_08)) }
         if (field.help.isNotBlank()) {
             Text(field.help, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (field.source == "ui" && !resetting) {
-            TextButton(onClick = onReset, contentPadding = PaddingValues(0.dp)) { Text("Вернуть из netadmin.env") }
+            TextButton(onClick = onReset, contentPadding = PaddingValues(0.dp)) { Text(stringResource(R.string.server_config_screen_09)) }
         }
     }
 }

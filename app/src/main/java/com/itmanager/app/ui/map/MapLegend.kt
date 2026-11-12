@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.map
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -98,7 +100,7 @@ fun MapLegend(
                     }
                 }
                 if (hidden.isNotEmpty()) {
-                    TextButton(onClick = onShowAll) { Text("Показать всё") }
+                    TextButton(onClick = onShowAll) { Text(stringResource(R.string.map_legend_01)) }
                 }
             }
         }

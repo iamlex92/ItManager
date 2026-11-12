@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.settings
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -83,7 +85,7 @@ fun VpnSection(viewModel: VpnViewModel = hiltViewModel()) {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Подключать автоматически", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.vpn_section_01), style = MaterialTheme.typography.titleMedium)
                 Text(
                     "Если сервер не отвечает, приложение само попросит Cisco Secure Client подключиться и вернётся. " +
                         "На работе и при уже поднятом туннеле ничего не происходит.",
@@ -96,7 +98,7 @@ fun VpnSection(viewModel: VpnViewModel = hiltViewModel()) {
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Отключать при выходе", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.vpn_section_02), style = MaterialTheme.typography.titleMedium)
                 Text(
                     "Выход кнопкой «Назад» с главного экрана отключает VPN завода, если его подключало приложение. " +
                         "После «Домой» — кнопка «Отключить» в уведомлении «VPN завода подключён».",
@@ -117,15 +119,15 @@ fun VpnSection(viewModel: VpnViewModel = hiltViewModel()) {
         OutlinedTextField(
             value = v.name,
             onValueChange = { s -> viewModel.edit { it.copy(name = s) } },
-            label = { Text("Подключение в AnyConnect") },
-            placeholder = { Text("Завод") },
+            label = { Text(stringResource(R.string.vpn_section_03)) },
+            placeholder = { Text(stringResource(R.string.vpn_section_04)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
         OutlinedTextField(
             value = v.host,
             onValueChange = { s -> viewModel.edit { it.copy(host = s) } },
-            label = { Text("Адрес ASA") },
+            label = { Text(stringResource(R.string.vpn_section_05)) },
             placeholder = { Text("vpn.zavod.ru") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
@@ -133,7 +135,7 @@ fun VpnSection(viewModel: VpnViewModel = hiltViewModel()) {
         OutlinedTextField(
             value = v.username,
             onValueChange = { s -> viewModel.edit { it.copy(username = s) } },
-            label = { Text("Логин (подставится в форму входа)") },
+            label = { Text(stringResource(R.string.vpn_section_06)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -141,9 +143,9 @@ fun VpnSection(viewModel: VpnViewModel = hiltViewModel()) {
             Button(
                 enabled = v.isConfigured,
                 onClick = { context.findFragmentActivity()?.let { a -> scope.launch { viewModel.vpn.connectNow(a) } } },
-            ) { Text("Подключить") }
+            ) { Text(stringResource(R.string.vpn_section_07)) }
             OutlinedButton(onClick = { context.findFragmentActivity()?.let(viewModel.vpn::disconnect) }) {
-                Text("Отключить VPN завода")
+                Text(stringResource(R.string.vpn_section_08))
             }
         }
         Text(

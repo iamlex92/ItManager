@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.scanner
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -92,7 +94,7 @@ fun ScannerScreen(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text("Сканер сети", style = MaterialTheme.typography.titleLarge) },
+                title = { Text(stringResource(R.string.map_screen_06), style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Назад") }
                 },
@@ -218,9 +220,9 @@ private fun ScanForm(
         OutlinedTextField(
             value = state.subnets,
             onValueChange = onSubnets,
-            label = { Text("Подсети") },
+            label = { Text(stringResource(R.string.ipam_screen_03)) },
             placeholder = { Text("10.99.0.0/24, 10.10.30.0/24") },
-            supportingText = { Text("Только внутренние адреса, до /22 каждая, не больше 8 подсетей") },
+            supportingText = { Text(stringResource(R.string.scanner_screen_01)) },
             enabled = !state.running,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
             minLines = 1,
@@ -245,7 +247,7 @@ private fun ScanForm(
         OutlinedTextField(
             value = state.community,
             onValueChange = onCommunity,
-            label = { Text("SNMP community (только чтение)") },
+            label = { Text(stringResource(R.string.map_editor_26)) },
             singleLine = true,
             enabled = !state.running,
             visualTransformation = if (showCommunity) VisualTransformation.None else PasswordVisualTransformation(),
@@ -258,7 +260,7 @@ private fun ScanForm(
                 }
             },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-            supportingText = { Text("Используется только для этого сканирования и нигде не сохраняется") },
+            supportingText = { Text(stringResource(R.string.scanner_screen_02)) },
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(12.dp))
@@ -266,9 +268,9 @@ private fun ScanForm(
             if (state.running) {
                 CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Идёт сканирование")
+                Text(stringResource(R.string.scanner_screen_03))
             } else {
-                Text("Сканировать")
+                Text(stringResource(R.string.pcs_screen_03))
             }
         }
     }
@@ -375,7 +377,7 @@ private fun ImportBar(count: Int, withLinks: Boolean, importing: Boolean, onWith
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Со связями", style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.scanner_screen_04), style = MaterialTheme.typography.titleSmall)
                 Text(
                     "Найденные кабели появятся на карте",
                     style = MaterialTheme.typography.bodySmall,
@@ -444,12 +446,12 @@ private fun ReportCard(report: ImportReport, onOpenMap: () -> Unit, onDismiss: (
         }
         Spacer(Modifier.height(8.dp))
         Row {
-            TextButton(onClick = onDismiss) { Text("Скрыть") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.scanner_screen_05)) }
             Spacer(Modifier.weight(1f))
             Button(onClick = onOpenMap) {
                 Icon(Icons.Outlined.Map, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Открыть карту")
+                Text(stringResource(R.string.scanner_screen_06))
             }
         }
     }

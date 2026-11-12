@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.peripherals
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -147,7 +149,7 @@ fun DevicePeripheralsContent(device: Device, viewModel: PeripheralsViewModel, al
             FilledTonalButton(onClick = { viewModel.openNew(PeripheralDraft(PeripheralKind.MONITOR, deviceId = device.id)) }) {
                 Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Добавить")
+                Text(stringResource(R.string.credentials_screen_01))
             }
             OutlinedButton(onClick = { pickStock = true }, enabled = stock.isNotEmpty()) {
                 Icon(Icons.Outlined.Inventory2, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -193,13 +195,13 @@ fun StockPickerDialog(stock: List<Peripheral>, onPick: (Peripheral) -> Unit, onD
     val shown = stock.filter { it.matches(query) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Со склада") },
+        title = { Text(stringResource(R.string.peripherals_ui_01)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it.take(50) },
-                    label = { Text("Поиск: модель, S/N, инв. номер") },
+                    label = { Text(stringResource(R.string.peripherals_ui_02)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -209,7 +211,7 @@ fun StockPickerDialog(stock: List<Peripheral>, onPick: (Peripheral) -> Unit, onD
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.form_sheet_02)) } },
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
     )
 }
@@ -221,13 +223,13 @@ fun DevicePickerDialog(devices: List<Device>, current: String?, onPick: (Device?
     val shown = devices.filter { it.matches(query) }.take(300)
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Куда подключено") },
+        title = { Text(stringResource(R.string.peripherals_ui_03)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it.take(50) },
-                    label = { Text("Имя, IP или модель") },
+                    label = { Text(stringResource(R.string.peripherals_ui_04)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -246,7 +248,7 @@ fun DevicePickerDialog(devices: List<Device>, current: String?, onPick: (Device?
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.form_sheet_02)) } },
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
     )
 }
@@ -327,17 +329,17 @@ fun PeripheralEditorDialog(
                     .padding(12.dp),
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("Подключено к", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.peripherals_ui_05), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(deviceName ?: "На складе", style = MaterialTheme.typography.bodyLarge)
                 }
-                Text("Изменить", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Text(stringResource(R.string.map_editor_09), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             }
         }
         FormSection("Заметки") {
             OutlinedTextField(
                 value = draft.comment.orEmpty(),
                 onValueChange = { onChange(draft.copy(comment = it.take(4000))) },
-                label = { Text("Комментарий") },
+                label = { Text(stringResource(R.string.map_editor_33)) },
                 minLines = 2,
                 maxLines = 5,
                 modifier = Modifier.fillMaxWidth(),

@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.devices
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -56,9 +58,9 @@ fun BulkEditDialog(count: Int, state: BulkEditState, onApply: (DeviceBulkChange)
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Text("Категория", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.bulk_edit_dialog_01), style = MaterialTheme.typography.labelLarge)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilterChip(selected = type == null, onClick = { type = null }, label = { Text("Не менять") })
+                    FilterChip(selected = type == null, onClick = { type = null }, label = { Text(stringResource(R.string.bulk_edit_dialog_02)) })
                     DEVICE_TYPES_IN_ORDER.forEach { t ->
                         FilterChip(
                             selected = t == type,
@@ -69,18 +71,18 @@ fun BulkEditDialog(count: Int, state: BulkEditState, onApply: (DeviceBulkChange)
                     }
                 }
                 if (type == DeviceType.VIRTUAL && state.hosts.isNotEmpty()) {
-                    Text("Хост виртуализации", style = MaterialTheme.typography.labelLarge)
+                    Text(stringResource(R.string.bulk_edit_dialog_03), style = MaterialTheme.typography.labelLarge)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        FilterChip(selected = hostId == null, onClick = { hostId = null }, label = { Text("Не менять") })
+                        FilterChip(selected = hostId == null, onClick = { hostId = null }, label = { Text(stringResource(R.string.bulk_edit_dialog_02)) })
                         state.hosts.forEach { h ->
                             FilterChip(selected = h.id == hostId, onClick = { hostId = h.id }, label = { Text(h.name) })
                         }
                     }
                 }
                 if (state.floors.size > 1) {
-                    Text("Этаж", style = MaterialTheme.typography.labelLarge)
+                    Text(stringResource(R.string.bulk_edit_dialog_04), style = MaterialTheme.typography.labelLarge)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        FilterChip(selected = floorId == null, onClick = { floorId = null }, label = { Text("Не менять") })
+                        FilterChip(selected = floorId == null, onClick = { floorId = null }, label = { Text(stringResource(R.string.bulk_edit_dialog_02)) })
                         state.floors.forEach { f ->
                             FilterChip(selected = f.id == floorId, onClick = { floorId = f.id }, label = { Text(f.title) })
                         }
@@ -89,8 +91,8 @@ fun BulkEditDialog(count: Int, state: BulkEditState, onApply: (DeviceBulkChange)
                 OutlinedTextField(
                     value = vendor,
                     onValueChange = { vendor = it.take(50) },
-                    label = { Text("Производитель") },
-                    placeholder = { Text("Пусто: не менять") },
+                    label = { Text(stringResource(R.string.bulk_edit_dialog_05)) },
+                    placeholder = { Text(stringResource(R.string.bulk_edit_dialog_06)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -98,9 +100,9 @@ fun BulkEditDialog(count: Int, state: BulkEditState, onApply: (DeviceBulkChange)
             }
         },
         confirmButton = {
-            TextButton(onClick = { onApply(change) }, enabled = !state.busy && !change.isEmpty) { Text("Применить") }
+            TextButton(onClick = { onApply(change) }, enabled = !state.busy && !change.isEmpty) { Text(stringResource(R.string.bulk_edit_dialog_07)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.form_sheet_02)) } },
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
     )
 }

@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.map
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import android.graphics.Picture
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -185,7 +187,7 @@ fun FaceplateEditorDialog(
                     Icon(device.type.icon, contentDescription = null, tint = device.type.tint)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Схема панели", style = MaterialTheme.typography.titleLarge)
+                        Text(stringResource(R.string.faceplate_ui_01), style = MaterialTheme.typography.titleLarge)
                         Text(
                             listOfNotNull(device.name, device.model).joinToString(" · "),
                             style = MaterialTheme.typography.bodySmall,
@@ -212,7 +214,7 @@ fun FaceplateEditorDialog(
                 } else {
                     Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                            Text("Масштаб", style = MaterialTheme.typography.labelLarge)
+                            Text(stringResource(R.string.faceplate_ui_02), style = MaterialTheme.typography.labelLarge)
                             listOf(1f, 2f, 4f, 8f).forEach { z ->
                                 FilterChip(selected = zoom == z, onClick = { zoom = z }, label = { Text(if (z == 1f) "Вписать" else "×${z.toInt()}") })
                             }
@@ -228,16 +230,16 @@ fun FaceplateEditorDialog(
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 16.dp)) {
-                            Text("Порядок", style = MaterialTheme.typography.labelLarge)
-                            FilterChip(selected = state.step == 1, onClick = { viewModel.setStep(1) }, label = { Text("Подряд") })
-                            FilterChip(selected = state.step == 2, onClick = { viewModel.setStep(2) }, label = { Text("Через один") })
+                            Text(stringResource(R.string.faceplate_ui_03), style = MaterialTheme.typography.labelLarge)
+                            FilterChip(selected = state.step == 1, onClick = { viewModel.setStep(1) }, label = { Text(stringResource(R.string.faceplate_ui_04)) })
+                            FilterChip(selected = state.step == 2, onClick = { viewModel.setStep(2) }, label = { Text(stringResource(R.string.faceplate_ui_05)) })
                         }
                         SizeSlider("Ширина метки", state.markW, 0.004f..0.12f) { viewModel.setMarkSize(it, state.markH) }
                         SizeSlider("Высота метки", state.markH, 0.04f..1f) { viewModel.setMarkSize(state.markW, it) }
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(horizontal = 16.dp)) {
-                            OutlinedButton(onClick = viewModel::continueRow, enabled = state.selectedPort != null) { Text("Продолжить ряд") }
-                            OutlinedButton(onClick = viewModel::removeMark, enabled = state.selectedPortId in state.marks) { Text("Убрать метку") }
-                            TextButton(onClick = viewModel::clearMarks, enabled = state.marks.isNotEmpty()) { Text("Снять все") }
+                            OutlinedButton(onClick = viewModel::continueRow, enabled = state.selectedPort != null) { Text(stringResource(R.string.faceplate_ui_06)) }
+                            OutlinedButton(onClick = viewModel::removeMark, enabled = state.selectedPortId in state.marks) { Text(stringResource(R.string.faceplate_ui_07)) }
+                            TextButton(onClick = viewModel::clearMarks, enabled = state.marks.isNotEmpty()) { Text(stringResource(R.string.faceplate_ui_08)) }
                         }
                         Spacer(Modifier.height(8.dp))
                         Text(
@@ -266,10 +268,10 @@ fun FaceplateEditorDialog(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                     ) {
-                        TextButton(onClick = { pickSvg.launch(arrayOf("image/svg+xml", "text/xml", "application/xml", "*/*")) }, enabled = !state.busy) { Text("Заменить SVG") }
-                        TextButton(onClick = { confirmDelete = true }, enabled = !state.busy) { Text("Удалить", color = MaterialTheme.colorScheme.error) }
+                        TextButton(onClick = { pickSvg.launch(arrayOf("image/svg+xml", "text/xml", "application/xml", "*/*")) }, enabled = !state.busy) { Text(stringResource(R.string.faceplate_ui_09)) }
+                        TextButton(onClick = { confirmDelete = true }, enabled = !state.busy) { Text(stringResource(R.string.form_sheet_01), color = MaterialTheme.colorScheme.error) }
                         Spacer(Modifier.weight(1f))
-                        Button(onClick = viewModel::saveMarks, enabled = state.dirty && !state.busy) { Text("Сохранить") }
+                        Button(onClick = viewModel::saveMarks, enabled = state.dirty && !state.busy) { Text(stringResource(R.string.action_save)) }
                     }
                 }
             }
@@ -282,20 +284,20 @@ fun FaceplateEditorDialog(
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text("Удалить схему панели?") },
+            title = { Text(stringResource(R.string.faceplate_ui_10)) },
             text = { Text("Схема и все метки портов ${device.name} будут удалены. Сами порты и устройство не меняются.") },
-            confirmButton = { TextButton(onClick = { confirmDelete = false; viewModel.deleteDrawing() }) { Text("Удалить", color = MaterialTheme.colorScheme.error) } },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Отмена") } },
+            confirmButton = { TextButton(onClick = { confirmDelete = false; viewModel.deleteDrawing() }) { Text(stringResource(R.string.form_sheet_01), color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.form_sheet_02)) } },
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         )
     }
     if (confirmClose) {
         AlertDialog(
             onDismissRequest = { confirmClose = false },
-            title = { Text("Метки не сохранены") },
-            text = { Text("Закрыть без сохранения? Расставленные метки пропадут.") },
-            confirmButton = { TextButton(onClick = { confirmClose = false; viewModel.closeEditor() }) { Text("Закрыть", color = MaterialTheme.colorScheme.error) } },
-            dismissButton = { TextButton(onClick = { confirmClose = false }) { Text("Остаться") } },
+            title = { Text(stringResource(R.string.faceplate_ui_11)) },
+            text = { Text(stringResource(R.string.faceplate_ui_12)) },
+            confirmButton = { TextButton(onClick = { confirmClose = false; viewModel.closeEditor() }) { Text(stringResource(R.string.device_screen_09), color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = { confirmClose = false }) { Text(stringResource(R.string.faceplate_ui_13)) } },
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         )
     }
@@ -313,13 +315,13 @@ private fun NoDrawing(hasSources: Boolean, busy: Boolean, onUpload: () -> Unit, 
         FilledTonalButton(onClick = onUpload, enabled = !busy) {
             Icon(Icons.Outlined.UploadFile, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Text("Загрузить SVG")
+            Text(stringResource(R.string.faceplate_ui_14))
         }
         if (hasSources) {
             OutlinedButton(onClick = onCopy, enabled = !busy) {
                 Icon(Icons.Outlined.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Скопировать с такого же устройства")
+                Text(stringResource(R.string.faceplate_ui_15))
             }
         }
     }
@@ -404,7 +406,7 @@ private fun PortChip(port: SwitchPort, marked: Boolean, selected: Boolean, onCli
 private fun SourcePicker(sources: List<Device>, onPick: (Device) -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Скопировать схему с…") },
+        title = { Text(stringResource(R.string.faceplate_ui_16)) },
         text = {
             Column {
                 Text(
@@ -430,7 +432,7 @@ private fun SourcePicker(sources: List<Device>, onPick: (Device) -> Unit, onDism
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.form_sheet_02)) } },
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
     )
 }

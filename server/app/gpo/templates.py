@@ -25,6 +25,8 @@ STORAGE = "HKLM\\Software\\Policies\\Microsoft\\Windows\\RemovableStorageDevices
 STORAGE_DISKS = f"{STORAGE}\\{{53f5630d-b6bf-11d0-94f2-00a0c91efb8b}}"
 EXPLORER = "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer"
 SYSTEM = "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System"
+WINRM = "HKLM\\Software\\Policies\\Microsoft\\Windows\\WinRM\\Service"
+WINRM_SERVICE = "HKLM\\SYSTEM\\CurrentControlSet\\Services\\WinRM"
 
 STATES = ("enabled", "disabled", "not_configured")
 
@@ -345,7 +347,8 @@ FIREWALL_IN = Template(
     title="Брандмауэр: входящие подключения",
     path="Компьютер → Параметры Windows → Параметры безопасности → Брандмауэр Защитника Windows → Правила для "
     "входящих подключений",
-    help="Правила для профиля «Домен». Нужны для «Предлагать удалённую помощь», удалённого рабочего стола и WinRM.",
+    help="Правила для профиля «Домен». Нужны для «Предлагать удалённую помощь», удалённого рабочего стола и WinRM "
+    "(для WinRM ещё нужен шаблон «WinRM: служба и слушатель»: правило открывает порт, но слушать его должна служба).",
     fields=(
         Field("ra", "Удалённый помощник", "bool", True, "DCOM (порт 135), raserver.exe, msra.exe"),
         Field("rdp", "Удалённый рабочий стол", "bool", False, "TCP и UDP 3389"),
@@ -534,9 +537,71 @@ AUTOPLAY = Template(
 )
 
 
+# --- WinRM service and listener ---------------------------------------------------------------------------------------
+
+WINRM_FILTER = re.compile(r"^[0-9.*,\-\s]+$")
+
+
+def _winrm(v: dict) -> list[Op]:
+    sources = re.sub(r"\s+", "", v.get("sources") or "*") or "*"
+    if not WINRM_FILTER.match(sources):
+        raise GpoError(
+            "Откуда принимать: «*» или адреса и диапазоны IPv4 через запятую, например 192.168.82.0-192.168.82.255"
+        )
+    ops = [_dword(WINRM, "AllowAutoConfig", 1), _sz(WINRM, "IPv4Filter", sources), _sz(WINRM, "IPv6Filter", "*")]
+    if v.get("autostart"):
+        ops.append(_dword(WINRM_SERVICE, "Start", 2))
+    return ops
+
+
+WINRM_SERVICE_TEMPLATE = Template(
+    id="winrm_service",
+    title="WinRM: служба и слушатель",
+    path="Компьютер → Административные шаблоны → Компоненты Windows → Удалённое управление Windows (WinRM) → "
+    "Служба WinRM → Разрешить удалённое управление сервером через WinRM",
+    help="Создаёт слушатель WinRM на порту 5985 и запускает службу автоматически. Порт в брандмауэре открывает "
+    "шаблон «Брандмауэр» (WinRM). Служба стартует после перезагрузки компьютера или командой Start-Service WinRM; "
+    "«Не задано» убирает политику из GPO, но тип запуска службы на уже настроенных компьютерах не меняет.",
+    fields=(
+        Field(
+            "sources",
+            "Откуда принимать подключения (IPv4)",
+            "text",
+            "*",
+            "«*» — отовсюду. Или адреса и диапазоны через запятую: 192.168.82.24, 192.168.82.0-192.168.82.255.",
+        ),
+        Field(
+            "autostart",
+            "Запускать службу WinRM автоматически",
+            "bool",
+            True,
+            "На клиентских Windows она по умолчанию вручную.",
+        ),
+    ),
+    owns=((WINRM, "AllowAutoConfig"), (WINRM, "IPv4Filter"), (WINRM, "IPv6Filter"), (WINRM_SERVICE, "Start")),
+    enable=_winrm,
+    disable=lambda v: [_dword(WINRM, "AllowAutoConfig", 0)],
+    read=lambda r: (
+        _on(r, WINRM, "AllowAutoConfig"),
+        {"sources": r.get(WINRM, "IPv4Filter") or "*", "autostart": r.get(WINRM_SERVICE, "Start") == "2"},
+    ),
+)
+
+
 TEMPLATES: dict[str, Template] = {
     t.id: t
-    for t in (RA_SOLICIT, RA_OFFER, RA_UAC, FIREWALL_IN, RDP, WINDOWS_UPDATE, SCREEN_LOCK, REMOVABLE_STORAGE, AUTOPLAY)
+    for t in (
+        RA_SOLICIT,
+        RA_OFFER,
+        RA_UAC,
+        FIREWALL_IN,
+        WINRM_SERVICE_TEMPLATE,
+        RDP,
+        WINDOWS_UPDATE,
+        SCREEN_LOCK,
+        REMOVABLE_STORAGE,
+        AUTOPLAY,
+    )
 }
 
 

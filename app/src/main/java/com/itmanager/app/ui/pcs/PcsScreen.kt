@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.pcs
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -207,8 +209,8 @@ fun PcsScreen(
             onDismissRequest = { pending = null },
             title = { Text(p.action.title) },
             text = { Text(p.question) },
-            confirmButton = { TextButton(onClick = { confirmed(p) }) { Text("Да") } },
-            dismissButton = { TextButton(onClick = { pending = null }) { Text("Нет") } },
+            confirmButton = { TextButton(onClick = { confirmed(p) }) { Text(stringResource(R.string.gpo_screen_01)) } },
+            dismissButton = { TextButton(onClick = { pending = null }) { Text(stringResource(R.string.gpo_screen_02)) } },
         )
     }
 }
@@ -237,14 +239,14 @@ private fun PcsHome(viewModel: PcsViewModel, status: PcStatus?, statusError: Str
                 OutlinedTextField(
                     value = host,
                     onValueChange = { host = it },
-                    label = { Text("Имя или IP-адрес") },
+                    label = { Text(stringResource(R.string.pcs_screen_01)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go),
                     keyboardActions = KeyboardActions(onGo = { viewModel.open(host) }),
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(8.dp))
-                Button(onClick = { viewModel.open(host) }, enabled = host.isNotBlank()) { Text("Открыть") }
+                Button(onClick = { viewModel.open(host) }, enabled = host.isNotBlank()) { Text(stringResource(R.string.devices_screen_03)) }
             }
         }
         item(key = "sweep") {
@@ -258,7 +260,7 @@ private fun PcsHome(viewModel: PcsViewModel, status: PcStatus?, statusError: Str
                 OutlinedTextField(
                     value = prefix,
                     onValueChange = { prefix = it },
-                    label = { Text("Подсеть") },
+                    label = { Text(stringResource(R.string.pcs_screen_02)) },
                     placeholder = { Text("192.168.82") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Search),
@@ -267,7 +269,7 @@ private fun PcsHome(viewModel: PcsViewModel, status: PcStatus?, statusError: Str
                 )
                 Spacer(Modifier.height(8.dp))
                 FilledTonalButton(onClick = { viewModel.sweep(prefix) }, enabled = prefix.isNotBlank() && sweep?.running != true) {
-                    Text("Сканировать")
+                    Text(stringResource(R.string.pcs_screen_03))
                 }
                 sweep?.let { sw ->
                     Spacer(Modifier.height(8.dp))
@@ -277,7 +279,7 @@ private fun PcsHome(viewModel: PcsViewModel, status: PcStatus?, statusError: Str
                             LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 4.dp))
                         }
                         sw.error != null -> Text(sw.error.orEmpty(), color = MaterialTheme.colorScheme.error)
-                        sw.hits.isNullOrEmpty() -> Text("Активных узлов не найдено.", style = MaterialTheme.typography.bodySmall)
+                        sw.hits.isNullOrEmpty() -> Text(stringResource(R.string.pcs_screen_04), style = MaterialTheme.typography.bodySmall)
                         else -> {
                             val hits = sw.hits.orEmpty()
                             Text("Откликнулись: ${hits.size}", style = MaterialTheme.typography.labelLarge)
@@ -312,14 +314,14 @@ private fun PcsHome(viewModel: PcsViewModel, status: PcStatus?, statusError: Str
                 )
                 Spacer(Modifier.height(8.dp))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = keySource == "ad", onClick = { keySource = "ad" }, label = { Text("Все ПК из AD") })
-                    FilterChip(selected = keySource == "subnet", onClick = { keySource = "subnet" }, label = { Text("Подсеть") })
+                    FilterChip(selected = keySource == "ad", onClick = { keySource = "ad" }, label = { Text(stringResource(R.string.pcs_screen_05)) })
+                    FilterChip(selected = keySource == "subnet", onClick = { keySource = "subnet" }, label = { Text(stringResource(R.string.pcs_screen_02)) })
                 }
                 if (keySource == "subnet") {
                     OutlinedTextField(
                         value = keyPrefix,
                         onValueChange = { keyPrefix = it },
-                        label = { Text("Подсеть") },
+                        label = { Text(stringResource(R.string.pcs_screen_02)) },
                         placeholder = { Text("192.168.82") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -330,7 +332,7 @@ private fun PcsHome(viewModel: PcsViewModel, status: PcStatus?, statusError: Str
                 FilledTonalButton(
                     onClick = { viewModel.startKeys(keySource, keyPrefix.takeIf { keySource == "subnet" }) },
                     enabled = keys?.running != true && (keySource == "ad" || keyPrefix.isNotBlank()),
-                ) { Text("Собрать") }
+                ) { Text(stringResource(R.string.pcs_screen_06)) }
                 keysError?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp)) }
                 keys?.let { KeyJobView(it, onShare = viewModel::shareKeys, onOpen = viewModel::open) }
             }
@@ -357,7 +359,7 @@ private fun KeyJobView(job: PcKeyJob, onShare: () -> Unit, onOpen: (String) -> U
             Button(onClick = onShare, enabled = job.rows.isNotEmpty()) {
                 Icon(Icons.Outlined.Share, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Отправить CSV")
+                Text(stringResource(R.string.pcs_screen_07))
             }
             job.rows.forEach { r ->
                 Column(Modifier.fillMaxWidth().clickable { onOpen(r.host) }.padding(vertical = 8.dp)) {
@@ -484,7 +486,7 @@ private fun PcPage(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        if (a.gpos.isEmpty()) Text("Политики не применены")
+                        if (a.gpos.isEmpty()) Text(stringResource(R.string.pcs_screen_08))
                         a.gpos.forEach { g ->
                             Column(Modifier.padding(vertical = 3.dp)) {
                                 Text(g.name + if (g.applied) "" else " — ${g.reason}", style = MaterialTheme.typography.bodyMedium)
@@ -499,7 +501,7 @@ private fun PcPage(
         if (r != null) {
             if (r.simulated) {
                 item(key = "sim") {
-                    Text("Эмуляция: данные ненастоящие.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.pcs_screen_09), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             when (val o = r.outcome) {
@@ -516,7 +518,7 @@ private fun PcPage(
                 }
                 is PcOutcome.Folders -> item(key = "folders") {
                     Card(if (astra) "Крупные папки" else "Крупные папки на C:\\") {
-                        if (o.folders.isEmpty()) Text("Папок больше 0,1 ГБ нет")
+                        if (o.folders.isEmpty()) Text(stringResource(R.string.pcs_screen_10))
                         o.folders.forEach { f -> Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                             Text(f.name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text("${f.sizeGb} ГБ", style = MonoStyle)
@@ -532,7 +534,7 @@ private fun PcPage(
                                     Text("PID ${p.id} · ${p.ramMb} МБ", style = MonoStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 TextButton(onClick = { onRun(PcAction.KILL, p.name) }, enabled = session.running == null && !readOnly) {
-                                    Text("Завершить", color = MaterialTheme.colorScheme.error)
+                                    Text(stringResource(R.string.pcs_screen_11), color = MaterialTheme.colorScheme.error)
                                 }
                             }
                         }
@@ -573,7 +575,7 @@ private fun PcPage(
                 OutlinedTextField(
                     value = command,
                     onValueChange = { command = it },
-                    label = { Text("Команда") },
+                    label = { Text(stringResource(R.string.pcs_screen_12)) },
                     placeholder = { Text(if (astra) "ip -br addr" else "Get-Service spooler") },
                     textStyle = MonoStyle,
                     enabled = !readOnly,
@@ -583,10 +585,10 @@ private fun PcPage(
                     FilledTonalButton(
                         onClick = { onRun(PcAction.COMMAND, command.trim()) },
                         enabled = command.isNotBlank() && session.running == null && !readOnly,
-                    ) { Text("Выполнить") }
+                    ) { Text(stringResource(R.string.pcs_screen_13)) }
                     if (session.console.isNotEmpty()) {
                         Spacer(Modifier.width(8.dp))
-                        TextButton(onClick = onClearConsole) { Text("Очистить") }
+                        TextButton(onClick = onClearConsole) { Text(stringResource(R.string.pcs_screen_14)) }
                     }
                 }
             }
@@ -641,19 +643,19 @@ private fun AstraInfoView(info: PcInfo, enabled: Boolean, onRun: (PcAction, Stri
             Line("ОЗУ", info.ramGb?.let { "$it ГБ" })
         }
         Card("Администраторы (sudo)") {
-            if (info.admins.isEmpty()) Text("Через консоль никому не выдавалось; группа astra-admin пуста", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (info.admins.isEmpty()) Text(stringResource(R.string.pcs_screen_15), color = MaterialTheme.colorScheme.onSurfaceVariant)
             info.admins.forEach { a ->
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Text(a, Modifier.weight(1f), style = MonoStyle)
                     TextButton(onClick = { onRun(PcAction.ADMIN_REMOVE, a) }, enabled = enabled) {
-                        Text("Снять", color = MaterialTheme.colorScheme.error)
+                        Text(stringResource(R.string.pcs_screen_16), color = MaterialTheme.colorScheme.error)
                     }
                 }
             }
             OutlinedTextField(
                 value = user,
                 onValueChange = { user = it },
-                label = { Text("Пользователь") },
+                label = { Text(stringResource(R.string.pcs_screen_17)) },
                 placeholder = { Text("ECOTEHS\\ivanova") },
                 singleLine = true,
                 textStyle = MonoStyle,
@@ -664,7 +666,7 @@ private fun AstraInfoView(info: PcInfo, enabled: Boolean, onRun: (PcAction, Stri
                 onClick = { onRun(PcAction.ADMIN_ADD, user.trim()) },
                 enabled = enabled && user.isNotBlank(),
                 modifier = Modifier.padding(top = 8.dp),
-            ) { Text("Выдать sudo") }
+            ) { Text(stringResource(R.string.pcs_screen_18)) }
             Text(
                 "Пишется в /etc/sudoers.d/netadmin-admins и проверяется visudo. При включённом МКЦ может понадобиться " +
                     "и уровень целостности (pdpl-user -i 63).",
@@ -687,18 +689,18 @@ private fun AssistView(help: RemoteHelp, onRun: (PcAction, String?) -> Unit, onM
     if (!help.isVnc) {
         val command = help.command.orEmpty()
         Card("Удалённая помощь Windows") {
-            Text("Запустите на своём компьютере с Windows (вы — в списке помощников политики):")
+            Text(stringResource(R.string.pcs_screen_19))
             Text(command, style = MonoStyle, modifier = Modifier.padding(vertical = 8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilledTonalButton(onClick = { copy(context, "команда msra", command, onMessage) }) {
                     Icon(Icons.Outlined.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Копировать")
+                    Text(stringResource(R.string.pcs_screen_20))
                 }
                 TextButton(onClick = {
                     val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, command)
                     context.startActivity(Intent.createChooser(send, "Отправить команду"))
-                }) { Text("Отправить на ПК") }
+                }) { Text(stringResource(R.string.pcs_screen_21)) }
             }
             Text(
                 "Пользователь увидит запрос и разрешит подключение. Если msra отвечает, что предлагать помощь нельзя, " +
@@ -722,7 +724,7 @@ private fun AssistView(help: RemoteHelp, onRun: (PcAction, String?) -> Unit, onM
                     Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(value, style = MonoStyle)
                 }
-                TextButton(onClick = { copy(context, label, value, onMessage) }) { Text("Копировать") }
+                TextButton(onClick = { copy(context, label, value, onMessage) }) { Text(stringResource(R.string.pcs_screen_20)) }
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
@@ -732,8 +734,8 @@ private fun AssistView(help: RemoteHelp, onRun: (PcAction, String?) -> Unit, onM
                 } catch (_: ActivityNotFoundException) {
                     onMessage("Нет VNC-клиента: установите, например, RealVNC Viewer или bVNC")
                 }
-            }) { Text("Открыть в VNC-клиенте") }
-            if (!help.viewOnly) TextButton(onClick = { onRun(PcAction.ASSIST, "view") }) { Text("Только просмотр") }
+            }) { Text(stringResource(R.string.pcs_screen_22)) }
+            if (!help.viewOnly) TextButton(onClick = { onRun(PcAction.ASSIST, "view") }) { Text(stringResource(R.string.pcs_screen_23)) }
         }
         Text(
             "Соединение одно; после отключения x11vnc закрывается. VNC не шифруется — только внутри сети. " +
@@ -775,14 +777,14 @@ private fun ShadowView(info: ShadowInfo, onMessage: (String) -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Switch(checked = watch, onCheckedChange = { watch = it })
             Spacer(Modifier.width(8.dp))
-            Text("Только наблюдать, без управления")
+            Text(stringResource(R.string.pcs_screen_24))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
-            Button(onClick = { copy(context, "команда", command, onMessage) }) { Text("Копировать") }
+            Button(onClick = { copy(context, "команда", command, onMessage) }) { Text(stringResource(R.string.pcs_screen_20)) }
             TextButton(onClick = {
                 val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, command)
                 context.startActivity(Intent.createChooser(send, "Отправить команду на компьютер"))
-            }) { Text("Отправить на ПК") }
+            }) { Text(stringResource(R.string.pcs_screen_21)) }
         }
         Text(
             "Без запроса пользователю: нужна политика «Установить правила удаленного управления для пользовательских " +

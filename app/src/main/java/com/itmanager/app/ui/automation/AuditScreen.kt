@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.automation
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -81,7 +83,7 @@ fun AuditScreen(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text("Журнал аудита", style = MaterialTheme.typography.titleLarge) },
+                title = { Text(stringResource(R.string.audit_screen_01), style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Назад") }
                 },

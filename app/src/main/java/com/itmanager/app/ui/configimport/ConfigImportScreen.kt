@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.configimport
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -54,7 +56,7 @@ fun ConfigImportScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Импорт конфигурации", style = MaterialTheme.typography.titleLarge)
+                        Text(stringResource(R.string.config_import_screen_01), style = MaterialTheme.typography.titleLarge)
                         switchName?.let {
                             Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
@@ -84,13 +86,13 @@ fun ConfigImportScreen(
             )
             Spacer(Modifier.height(12.dp))
             FilledTonalButton(onClick = viewModel::fromSwitch, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
-                Text("Снять копию с коммутатора и показать изменения")
+                Text(stringResource(R.string.config_import_screen_02))
             }
             Spacer(Modifier.height(12.dp))
             OutlinedTextField(
                 value = state.text,
                 onValueChange = viewModel::setText,
-                label = { Text("Текст конфигурации") },
+                label = { Text(stringResource(R.string.config_import_screen_03)) },
                 textStyle = MonoStyle,
                 minLines = 8,
                 maxLines = 14,
@@ -99,13 +101,13 @@ fun ConfigImportScreen(
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = viewModel::preview, enabled = state.text.isNotBlank() && !state.busy) {
-                    Text("Показать изменения")
+                    Text(stringResource(R.string.config_import_screen_04))
                 }
                 val r = state.result
                 Button(
                     onClick = viewModel::apply,
                     enabled = r != null && !r.applied && r.hasChanges && !state.busy,
-                ) { Text("Применить в учёт") }
+                ) { Text(stringResource(R.string.config_import_screen_05)) }
                 if (state.busy) CircularProgressIndicator(Modifier.padding(start = 4.dp).height(32.dp))
             }
             state.error?.let {
@@ -156,7 +158,7 @@ private fun ResultView(r: ConfigImportResult) {
         }
         if (r.unknownVlans.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
-            Text("VLAN, которых нет в учёте (не созданы):", style = MaterialTheme.typography.titleSmall, color = StatusColors.Warning)
+            Text(stringResource(R.string.config_import_screen_06), style = MaterialTheme.typography.titleSmall, color = StatusColors.Warning)
             Text(
                 r.unknownVlans.entries.joinToString { "${it.key} ${it.value}".trim() },
                 style = MaterialTheme.typography.bodySmall,
@@ -164,7 +166,7 @@ private fun ResultView(r: ConfigImportResult) {
         }
         if (r.unmatchedInterfaces.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
-            Text("Интерфейсы без порта в учёте:", style = MaterialTheme.typography.titleSmall, color = StatusColors.Warning)
+            Text(stringResource(R.string.config_import_screen_07), style = MaterialTheme.typography.titleSmall, color = StatusColors.Warning)
             Text(r.unmatchedInterfaces.joinToString(", "), style = MonoStyle)
         }
     }

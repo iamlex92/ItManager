@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.map
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -190,26 +192,26 @@ fun MapEditToolbar(
                             FilledTonalButton(onClick = { addMenu = true }, modifier = Modifier.fillMaxWidth()) {
                                 Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(8.dp))
-                                Text("Добавить в центр экрана")
+                                Text(stringResource(R.string.map_editor_01))
                             }
                             DropdownMenu(expanded = addMenu, onDismissRequest = { addMenu = false }) {
                                 DropdownMenuItem(
-                                    text = { Text("Устройство") },
+                                    text = { Text(stringResource(R.string.map_editor_02)) },
                                     leadingIcon = { Icon(DeviceType.WORKSTATION.icon, contentDescription = null) },
                                     onClick = { addMenu = false; onAddDevice() },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Из шаблона…") },
+                                    text = { Text(stringResource(R.string.map_editor_03)) },
                                     leadingIcon = { Icon(Icons.Outlined.Dashboard, contentDescription = null) },
                                     onClick = { addMenu = false; onAddFromTemplate() },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Стойка") },
+                                    text = { Text(stringResource(R.string.map_editor_04)) },
                                     leadingIcon = { Icon(DeviceType.RACK.icon, contentDescription = null) },
                                     onClick = { addMenu = false; onAddRack() },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Метка: номер кабинета") },
+                                    text = { Text(stringResource(R.string.map_editor_05)) },
                                     leadingIcon = { Icon(Icons.Outlined.PushPin, contentDescription = null) },
                                     onClick = { addMenu = false; onAddMark() },
                                 )
@@ -227,7 +229,7 @@ fun MapEditToolbar(
                         IconButton(onClick = onDeletePoint, enabled = state.selectedPoint != null) {
                             Icon(Icons.Outlined.RemoveCircleOutline, contentDescription = "Удалить точку поворота")
                         }
-                        TextButton(onClick = onStraighten) { Text("Выпрямить") }
+                        TextButton(onClick = onStraighten) { Text(stringResource(R.string.map_editor_06)) }
                         IconButton(onClick = onDeleteLink) { Icon(Icons.Outlined.DeleteOutline, contentDescription = "Удалить кабель") }
                         IconButton(onClick = onDoneLink) { Icon(Icons.Outlined.Close, contentDescription = "Закончить с кабелем") }
                     } else if (linkFromName != null) {
@@ -240,8 +242,8 @@ fun MapEditToolbar(
                         )
                         IconButton(onClick = onCancelLink) { Icon(Icons.Outlined.Close, contentDescription = "Отменить выбор") }
                     } else {
-                        FilterChip(state.cable == CABLE_COPPER, onClick = { onCable(CABLE_COPPER) }, label = { Text("Медь Cat6") })
-                        FilterChip(state.cable == CABLE_FIBER, onClick = { onCable(CABLE_FIBER) }, label = { Text("Оптика OM3") })
+                        FilterChip(state.cable == CABLE_COPPER, onClick = { onCable(CABLE_COPPER) }, label = { Text(stringResource(R.string.map_editor_07)) })
+                        FilterChip(state.cable == CABLE_FIBER, onClick = { onCable(CABLE_FIBER) }, label = { Text(stringResource(R.string.map_editor_08)) })
                     }
                     EditTool.DRAW -> {
                         PEN_COLORS.forEach { color ->
@@ -268,7 +270,7 @@ fun MapEditToolbar(
                             Text("Углов: ${state.zoneDraft.size / 2}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                             IconButton(onClick = onUndoZone) { Icon(Icons.AutoMirrored.Outlined.Undo, contentDescription = "Убрать последний угол") }
                             IconButton(onClick = onCancelZone) { Icon(Icons.Outlined.Close, contentDescription = "Отменить зону") }
-                            FilledTonalButton(onClick = onFinishZone, enabled = state.zoneDraft.size >= 6) { Text("Готово") }
+                            FilledTonalButton(onClick = onFinishZone, enabled = state.zoneDraft.size >= 6) { Text(stringResource(R.string.runbook_sheet_05)) }
                         }
                         selectedZoneName != null -> {
                             Text(
@@ -278,13 +280,13 @@ fun MapEditToolbar(
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f),
                             )
-                            TextButton(onClick = onEditZone) { Text("Изменить") }
+                            TextButton(onClick = onEditZone) { Text(stringResource(R.string.map_editor_09)) }
                             IconButton(onClick = onCancelZone) { Icon(Icons.Outlined.Close, contentDescription = "Снять выбор") }
                         }
-                        else -> Text("Касайтесь углов по очереди, затем «Готово»", style = MaterialTheme.typography.bodyMedium)
+                        else -> Text(stringResource(R.string.map_editor_10), style = MaterialTheme.typography.bodyMedium)
                     }
                     EditTool.MARKS -> if (state.arrowStart != null) {
-                        Text("Коснитесь, куда указывает стрелка", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                        Text(stringResource(R.string.map_editor_11), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                         IconButton(onClick = onCancelArrow) { Icon(Icons.Outlined.Close, contentDescription = "Отменить стрелку") }
                     } else {
                         AnnotationKind.entries.forEach { kind ->
@@ -312,14 +314,14 @@ fun MapEditToolbar(
                         FilledTonalButton(onClick = onPickPlan, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
                             Icon(Icons.Outlined.UploadFile, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Загрузить план (PDF, PNG, JPEG, SVG)")
+                            Text(stringResource(R.string.map_editor_12))
                         }
                     } else {
                         IconButton(onClick = { onScalePlan(1f / 1.1f) }) { Icon(Icons.Outlined.Remove, contentDescription = "Уменьшить план") }
                         IconButton(onClick = { onScalePlan(1.1f) }) { Icon(Icons.Outlined.Add, contentDescription = "Увеличить план") }
                         IconButton(onClick = onFitPlan) { Icon(Icons.Outlined.FitScreen, contentDescription = "Вписать план в этаж") }
                         Spacer(Modifier.weight(1f))
-                        TextButton(onClick = onPickPlan, enabled = !state.busy) { Text("Заменить") }
+                        TextButton(onClick = onPickPlan, enabled = !state.busy) { Text(stringResource(R.string.map_editor_13)) }
                         IconButton(onClick = onRemovePlan) { Icon(Icons.Outlined.DeleteOutline, contentDescription = "Убрать план") }
                     }
                 }
@@ -327,8 +329,8 @@ fun MapEditToolbar(
             if (state.tool == EditTool.LINK && selectedLinkName != null) {
                 Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Цвет", style = MaterialTheme.typography.labelLarge)
-                    FilterChip(selected = selectedLinkColor == null, onClick = { onCableColor(null) }, label = { Text("Авто") })
+                    Text(stringResource(R.string.map_editor_14), style = MaterialTheme.typography.labelLarge)
+                    FilterChip(selected = selectedLinkColor == null, onClick = { onCableColor(null) }, label = { Text(stringResource(R.string.map_editor_15)) })
                     CABLE_COLORS.forEach { color ->
                         Box(
                             Modifier
@@ -372,9 +374,9 @@ private fun SshLoginPicker(selected: String?, onPick: (String?) -> Unit) {
     val viewModel: SshLoginsViewModel = hiltViewModel()
     val logins by viewModel.logins.collectAsStateWithLifecycle()
     LaunchedEffect(viewModel) { viewModel.load() }
-    Text("Логин SSH", style = MaterialTheme.typography.labelLarge)
+    Text(stringResource(R.string.map_editor_16), style = MaterialTheme.typography.labelLarge)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        FilterChip(selected = selected == null, onClick = { onPick(null) }, label = { Text("По умолчанию сервера") })
+        FilterChip(selected = selected == null, onClick = { onPick(null) }, label = { Text(stringResource(R.string.map_editor_17)) })
         logins.forEach { c ->
             FilterChip(selected = c.id == selected, onClick = { onPick(c.id) }, label = { Text(c.name) })
         }
@@ -479,10 +481,10 @@ fun DeviceFormDialog(
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it.take(100) },
-                label = { Text("Имя") },
-                placeholder = { Text("Например, SW-ACC-04") },
+                label = { Text(stringResource(R.string.gpo_screen_04)) },
+                placeholder = { Text(stringResource(R.string.map_editor_18)) },
                 isError = nameError,
-                supportingText = if (nameError) ({ Text("Укажите имя") }) else null,
+                supportingText = if (nameError) ({ Text(stringResource(R.string.map_editor_19)) }) else null,
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -490,14 +492,14 @@ fun DeviceFormDialog(
                 OutlinedTextField(
                     value = vendor,
                     onValueChange = { vendor = it.take(50) },
-                    label = { Text("Производитель") },
+                    label = { Text(stringResource(R.string.bulk_edit_dialog_05)) },
                     singleLine = true,
                     modifier = Modifier.weight(1f),
                 )
                 OutlinedTextField(
                     value = model,
                     onValueChange = { model = it.take(100) },
-                    label = { Text("Модель") },
+                    label = { Text(stringResource(R.string.map_editor_20)) },
                     singleLine = true,
                     modifier = Modifier.weight(1f),
                 )
@@ -508,9 +510,9 @@ fun DeviceFormDialog(
                 OutlinedTextField(
                     value = ip,
                     onValueChange = { ip = it.take(45) },
-                    label = { Text("IP-адрес, если есть") },
+                    label = { Text(stringResource(R.string.map_editor_21)) },
                     isError = ipError,
-                    supportingText = if (ipError) ({ Text("Нужен адрес вида 10.0.0.1 или fd00::1") }) else null,
+                    supportingText = if (ipError) ({ Text(stringResource(R.string.map_editor_22)) }) else null,
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                     modifier = Modifier.fillMaxWidth(),
@@ -518,7 +520,7 @@ fun DeviceFormDialog(
                 OutlinedTextField(
                     value = extraIps,
                     onValueChange = { extraIps = it.take(600) },
-                    label = { Text("Другие IP-адреса") },
+                    label = { Text(stringResource(R.string.map_editor_23)) },
                     placeholder = { Text("10.0.1.1, 192.168.82.1") },
                     isError = badExtraIp != null,
                     supportingText = {
@@ -532,10 +534,10 @@ fun DeviceFormDialog(
                 OutlinedTextField(
                     value = mac,
                     onValueChange = { mac = it.take(17) },
-                    label = { Text("MAC-адрес, если есть") },
+                    label = { Text(stringResource(R.string.map_editor_24)) },
                     placeholder = { Text("aa:bb:cc:dd:ee:ff") },
                     isError = macError,
-                    supportingText = if (macError) ({ Text("Нужен адрес вида aa:bb:cc:dd:ee:ff") }) else null,
+                    supportingText = if (macError) ({ Text(stringResource(R.string.map_editor_25)) }) else null,
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -543,7 +545,7 @@ fun DeviceFormDialog(
                     OutlinedTextField(
                         value = snmpCommunity,
                         onValueChange = { snmpCommunity = it.take(50) },
-                        label = { Text("SNMP community (только чтение)") },
+                        label = { Text(stringResource(R.string.map_editor_26)) },
                         placeholder = {
                             Text(
                                 when {
@@ -553,7 +555,7 @@ fun DeviceFormDialog(
                                 },
                             )
                         },
-                        supportingText = { Text("Линк и загрузка портов, тонер и счётчики МФУ.") },
+                        supportingText = { Text(stringResource(R.string.map_editor_27)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -567,32 +569,32 @@ fun DeviceFormDialog(
                 OutlinedTextField(
                     value = rackUnits,
                     onValueChange = { rackUnits = it.filter(Char::isDigit).take(2) },
-                    label = { Text("Высота стойки, U") },
-                    supportingText = { Text("Коммутаторы и серверы ставятся в стойку в её виде.") },
+                    label = { Text(stringResource(R.string.map_editor_28)) },
+                    supportingText = { Text(stringResource(R.string.map_editor_29)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                 )
                 if (device != null && device.type == DeviceType.RACK && onOpenRack != null) {
                     FilledTonalButton(onClick = { onOpenRack(device.id) }, modifier = Modifier.fillMaxWidth()) {
-                        Text("Открыть вид стойки и расставить устройства")
+                        Text(stringResource(R.string.map_editor_30))
                     }
                 }
             }
             if (type == DeviceType.VIRTUAL) {
-                Text("Хост виртуализации", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.bulk_edit_dialog_03), style = MaterialTheme.typography.labelLarge)
                 if (hostChoices.isEmpty()) {
-                    Text("В учёте нет серверов.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.map_editor_31), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilterChip(selected = hostId == null, onClick = { hostId = null }, label = { Text("Не указан") })
+                    FilterChip(selected = hostId == null, onClick = { hostId = null }, label = { Text(stringResource(R.string.map_editor_32)) })
                     hostChoices.forEach { h ->
                         FilterChip(selected = h.id == hostId, onClick = { hostId = h.id }, label = { Text(h.name) })
                     }
                 }
             }
             if (floors.size > 1) {
-                Text("Этаж", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.bulk_edit_dialog_04), style = MaterialTheme.typography.labelLarge)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     floors.forEach { f ->
                         FilterChip(selected = f.id == form.floorId, onClick = { onFloor(f.id) }, label = { Text(f.title) })
@@ -610,7 +612,7 @@ fun DeviceFormDialog(
             OutlinedTextField(
                 value = comment,
                 onValueChange = { comment = it.take(4000) },
-                label = { Text("Комментарий") },
+                label = { Text(stringResource(R.string.map_editor_33)) },
                 minLines = 2,
                 maxLines = 6,
                 modifier = Modifier.fillMaxWidth(),
@@ -624,10 +626,10 @@ fun DeviceFormDialog(
 fun DeleteLinkDialog(link: Connection, names: Pair<String, String>, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Удалить кабель?") },
+        title = { Text(stringResource(R.string.map_editor_34)) },
         text = { Text("${names.first} — ${names.second} · ${link.cableType}${link.label?.let { " · $it" }.orEmpty()}") },
-        confirmButton = { TextButton(onClick = onConfirm) { Text("Удалить", color = MaterialTheme.colorScheme.error) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        confirmButton = { TextButton(onClick = onConfirm) { Text(stringResource(R.string.form_sheet_01), color = MaterialTheme.colorScheme.error) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.form_sheet_02)) } },
     )
 }
 
@@ -639,7 +641,7 @@ fun ConfirmDialog(title: String, text: String, action: String, onConfirm: () -> 
         title = { Text(title) },
         text = { Text(text) },
         confirmButton = { TextButton(onClick = onConfirm) { Text(action, color = MaterialTheme.colorScheme.error) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.form_sheet_02)) } },
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
     )
 }

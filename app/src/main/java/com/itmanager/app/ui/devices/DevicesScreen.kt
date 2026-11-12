@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.devices
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -183,14 +185,14 @@ fun DevicesScreen(
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text("Удалить устройств: ${state.selected.size}?") },
-            text = { Text("Они пропадут из учёта и с карты вместе со своими портами и кабелями. Само оборудование это не затрагивает.") },
+            text = { Text(stringResource(R.string.devices_screen_01)) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
                     viewModel.deleteSelected()
-                }) { Text("Удалить", color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.form_sheet_01), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Отмена") } },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.form_sheet_02)) } },
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         )
     }
@@ -266,7 +268,7 @@ fun DevicesScreen(
             }
         }
         if (state.filter == DeviceFilter.PRINTERS) {
-            TextButton(onClick = onOpenPrinters, modifier = Modifier.padding(start = 8.dp)) { Text("Тонер, барабаны и счётчики страниц") }
+            TextButton(onClick = onOpenPrinters, modifier = Modifier.padding(start = 8.dp)) { Text(stringResource(R.string.devices_screen_02)) }
         }
         GroupingRow(
             shown = (state.devices as? UiState.Content)?.data?.size,
@@ -531,7 +533,7 @@ private fun SearchField(value: String, onValueChange: (String) -> Unit, modifier
         value = value,
         onValueChange = onValueChange,
         singleLine = true,
-        placeholder = { Text("Имя, IP или MAC") },
+        placeholder = { Text(stringResource(R.string.device_screen_11)) },
         leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
         trailingIcon = {
             if (value.isNotEmpty()) {
@@ -708,7 +710,7 @@ private fun DeviceActions(device: Device, onOpen: () -> Unit, onShowOnMap: (() -
     Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         device.mac?.let { Text("MAC $it", style = MonoStyle, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onOpen) { Text("Открыть") }
+            Button(onClick = onOpen) { Text(stringResource(R.string.devices_screen_03)) }
             device.ip?.let { ip ->
                 FilledTonalButton(
                     enabled = !pinging,
@@ -732,10 +734,10 @@ private fun DeviceActions(device: Device, onOpen: () -> Unit, onShowOnMap: (() -
                         }
                     },
                 ) { Text(if (pinging) "Ping…" else "Ping") }
-                FilledTonalButton(onClick = { copy(ip, ip) }) { Text("Копировать IP") }
+                FilledTonalButton(onClick = { copy(ip, ip) }) { Text(stringResource(R.string.devices_screen_04)) }
             }
-            device.mac?.let { mac -> FilledTonalButton(onClick = { copy(mac, mac) }) { Text("Копировать MAC") } }
-            onShowOnMap?.let { FilledTonalButton(onClick = it) { Text("На карте") } }
+            device.mac?.let { mac -> FilledTonalButton(onClick = { copy(mac, mac) }) { Text(stringResource(R.string.devices_screen_05)) } }
+            onShowOnMap?.let { FilledTonalButton(onClick = it) { Text(stringResource(R.string.devices_screen_06)) } }
         }
         result?.let {
             Text(it, style = MonoStyle, color = if (reached) StatusColors.Online else StatusColors.Offline)

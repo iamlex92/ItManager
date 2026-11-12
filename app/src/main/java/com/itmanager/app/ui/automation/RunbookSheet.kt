@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.automation
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import android.content.ClipData
 import android.content.ClipDescription
 import android.content.ClipboardManager
@@ -118,22 +120,22 @@ fun RunbookSheet(
                         session.running -> {
                             CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                             Spacer(Modifier.width(10.dp))
-                            Text("Выполняется…")
+                            Text(stringResource(R.string.runbook_sheet_01))
                         }
                         rb.critical -> {
                             Icon(Icons.Outlined.Fingerprint, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Подтвердить и запустить")
+                            Text(stringResource(R.string.runbook_sheet_02))
                         }
-                        else -> Text("Запустить")
+                        else -> Text(stringResource(R.string.runbook_sheet_03))
                     }
                 }
             } else {
                 RunResult(result)
                 Spacer(Modifier.height(16.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(onClick = onAgain, modifier = Modifier.weight(1f)) { Text("Ещё раз") }
-                    Button(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("Готово") }
+                    OutlinedButton(onClick = onAgain, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.runbook_sheet_04)) }
+                    Button(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.runbook_sheet_05)) }
                 }
             }
         }
@@ -224,7 +226,7 @@ private fun SecretCard(secret: String) {
             .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(14.dp))
             .padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
     ) {
-        Text("Временный пароль", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+        Text(stringResource(R.string.runbook_sheet_06), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 secret,

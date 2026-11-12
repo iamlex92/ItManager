@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.map
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -767,7 +769,7 @@ private fun MapTopPanel(
                                 )
                             }
                             DropdownMenuItem(
-                                text = { Text("Настроить этажи…") },
+                                text = { Text(stringResource(R.string.map_screen_01)) },
                                 onClick = {
                                     floorMenu = false
                                     onManageFloors()
@@ -902,7 +904,7 @@ private fun MapTopPanel(
                             )
                             DropdownMenu(expanded = vlanMenu, onDismissRequest = { vlanMenu = false }) {
                                 DropdownMenuItem(
-                                    text = { Text("Все VLAN") },
+                                    text = { Text(stringResource(R.string.map_screen_02)) },
                                     onClick = {
                                         vlanMenu = false
                                         onVlanFilter(null)
@@ -948,7 +950,7 @@ private fun MapSearch(
             value = query,
             onValueChange = { query = it },
             singleLine = true,
-            placeholder = { Text("Имя, IP, MAC или розетка") },
+            placeholder = { Text(stringResource(R.string.map_screen_03)) },
             leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
             trailingIcon = {
                 IconButton(onClick = onClose) { Icon(Icons.Outlined.Close, contentDescription = "Закрыть поиск") }
@@ -1132,12 +1134,12 @@ private fun DeviceCard(
             Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(end = 12.dp).fillMaxWidth()) {
                 Button(onClick = onOpenSwitch, modifier = Modifier.weight(1f)) {
-                    Text("Открыть")
+                    Text(stringResource(R.string.devices_screen_03))
                     Spacer(Modifier.width(8.dp))
                     Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
                 }
                 if (onOpenRack != null) {
-                    FilledTonalButton(onClick = onOpenRack, modifier = Modifier.weight(1f)) { Text("Вид стойки") }
+                    FilledTonalButton(onClick = onOpenRack, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.map_screen_04)) }
                 }
             }
         }
@@ -1166,7 +1168,7 @@ private fun EmptyMapView(
                 modifier = Modifier.size(40.dp),
             )
             Spacer(Modifier.height(16.dp))
-            Text("На сервере пока нет устройств", style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+            Text(stringResource(R.string.map_screen_05), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
             Spacer(Modifier.height(8.dp))
             Text(
                 "Найдите коммутаторы и принтеры сканером сети: он только читает (ping и SNMP GET) и ничего не меняет. " +
@@ -1176,9 +1178,9 @@ private fun EmptyMapView(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(20.dp))
-            Button(onClick = onOpenScanner) { Text("Сканер сети") }
-            FilledTonalButton(onClick = onDraw, modifier = Modifier.padding(top = 8.dp)) { Text("Нарисовать вручную") }
-            TextButton(onClick = onOpenSettings) { Text("Настройки") }
+            Button(onClick = onOpenScanner) { Text(stringResource(R.string.map_screen_06)) }
+            FilledTonalButton(onClick = onDraw, modifier = Modifier.padding(top = 8.dp)) { Text(stringResource(R.string.map_screen_07)) }
+            TextButton(onClick = onOpenSettings) { Text(stringResource(R.string.common_01)) }
         }
     }
 }

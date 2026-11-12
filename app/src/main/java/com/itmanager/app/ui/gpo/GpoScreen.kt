@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.gpo
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -171,25 +173,25 @@ fun GpoScreen(
             onDismissRequest = { ask = null },
             title = { Text(a.title) },
             text = { Text(a.question) },
-            confirmButton = { TextButton(onClick = { confirmed(a) }) { Text("Да") } },
-            dismissButton = { TextButton(onClick = { ask = null }) { Text("Нет") } },
+            confirmButton = { TextButton(onClick = { confirmed(a) }) { Text(stringResource(R.string.gpo_screen_01)) } },
+            dismissButton = { TextButton(onClick = { ask = null }) { Text(stringResource(R.string.gpo_screen_02)) } },
         )
     }
     if (creating) {
         var name by remember { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { creating = false },
-            title = { Text("Новая групповая политика") },
-            text = { OutlinedTextField(value = name, onValueChange = { name = it.take(200) }, label = { Text("Имя") }, singleLine = true) },
+            title = { Text(stringResource(R.string.gpo_screen_03)) },
+            text = { OutlinedTextField(value = name, onValueChange = { name = it.take(200) }, label = { Text(stringResource(R.string.gpo_screen_04)) }, singleLine = true) },
             confirmButton = {
                 TextButton(enabled = name.isNotBlank(), onClick = {
                     creating = false
                     confirm("Создать политику", "Создать «${name.trim()}»? Она начнёт действовать, когда её свяжут с подразделением.") {
                         viewModel.create(name, it)
                     }
-                }) { Text("Создать") }
+                }) { Text(stringResource(R.string.gpo_screen_05)) }
             },
-            dismissButton = { TextButton(onClick = { creating = false }) { Text("Отмена") } },
+            dismissButton = { TextButton(onClick = { creating = false }) { Text(stringResource(R.string.form_sheet_02)) } },
         )
     }
 }
@@ -209,7 +211,7 @@ private fun GpoList(gpos: List<Gpo>, onOpen: (String) -> Unit) {
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
-                    placeholder = { Text("Найти политику") },
+                    placeholder = { Text(stringResource(R.string.gpo_screen_06)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -246,7 +248,7 @@ private fun GpoList(gpos: List<Gpo>, onOpen: (String) -> Unit) {
                 )
             }
         }
-        if (shown.isEmpty()) item(key = "empty") { Text("Ничего не найдено", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        if (shown.isEmpty()) item(key = "empty") { Text(stringResource(R.string.gpo_screen_07), color = MaterialTheme.colorScheme.onSurfaceVariant) }
     }
 }
 
@@ -297,7 +299,7 @@ private fun GpoPageView(
         }
         item(key = "links") {
             Card("Где действует (связи)") {
-                if (g.links.isEmpty()) Text("Ни с чем не связана — не действует.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (g.links.isEmpty()) Text(stringResource(R.string.gpo_screen_08), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 g.links.forEachIndexed { i, l ->
                     if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -308,12 +310,12 @@ private fun GpoPageView(
                                     confirm("Связь", "${if (l.enforced) "Снять принудительность" else "Сделать принудительной"} связь с ${l.targetName}?") {
                                         viewModel.change("PATCH", "links", GpoChange(target = l.target, enforced = !l.enforced), it)
                                     }
-                                }, label = { Text("Принудительно") })
+                                }, label = { Text(stringResource(R.string.gpo_screen_09)) })
                                 TextButton(enabled = writes, onClick = {
                                     confirm("Убрать связь", "Убрать связь «${g.name}» с ${l.targetName}? Там политика перестанет действовать.") {
                                         viewModel.change("POST", "links/remove", GpoChange(target = l.target), it)
                                     }
-                                }) { Text("Убрать") }
+                                }) { Text(stringResource(R.string.gpo_screen_10)) }
                             }
                         }
                         Switch(checked = l.enabled, enabled = writes, onCheckedChange = { on ->
@@ -323,7 +325,7 @@ private fun GpoPageView(
                         })
                     }
                 }
-                if (writes) FilledTonalButton(onClick = { linking = true }) { Text("Связать с подразделением") }
+                if (writes) FilledTonalButton(onClick = { linking = true }) { Text(stringResource(R.string.gpo_screen_11)) }
             }
         }
         item(key = "templates") {
@@ -361,7 +363,7 @@ private fun GpoPageView(
         item(key = "registry") {
             Card("Параметры (административные шаблоны)") {
                 if (d.registry.isEmpty()) {
-                    Text("Параметров реестра нет. Другие разделы (сценарии, безопасность) видны в отчёте в веб-консоли.",
+                    Text(stringResource(R.string.gpo_screen_12),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 d.registry.forEach { r ->
@@ -372,7 +374,7 @@ private fun GpoPageView(
                 }
                 if (writes) {
                     FilledTonalButton(onClick = { editing = GpoRegistryValue("HKLM\\Software\\Policies\\", "", "DWord", "", false) }) {
-                        Text("Добавить параметр")
+                        Text(stringResource(R.string.gpo_screen_13))
                     }
                 }
             }
@@ -387,7 +389,7 @@ private fun GpoPageView(
                 val s = page.scope
                 when {
                     page.scopeLoading -> LinearProgressIndicator(Modifier.fillMaxWidth())
-                    s == null -> FilledTonalButton(onClick = viewModel::loadScope) { Text("Показать компьютеры") }
+                    s == null -> FilledTonalButton(onClick = viewModel::loadScope) { Text(stringResource(R.string.gpo_screen_14)) }
                     else -> {
                         Text(
                             "${s.computers.size} компьютеров${if (s.filtered) " (с учётом фильтра безопасности)" else ""}. " +
@@ -403,7 +405,7 @@ private fun GpoPageView(
                                 confirm("Применить политику", "Обновить групповые политики (gpupdate /force) на ${s.computers.size} компьютерах сейчас?") {
                                     viewModel.apply(null, it)
                                 }
-                            }) { Text("Применить сейчас") }
+                            }) { Text(stringResource(R.string.gpo_screen_15)) }
                         }
                     }
                 }
@@ -459,14 +461,14 @@ private fun GpoPageView(
         var enforced by remember { mutableStateOf(false) }
         AlertDialog(
             onDismissRequest = { linking = false },
-            title = { Text("Связать с подразделением") },
+            title = { Text(stringResource(R.string.gpo_screen_11)) },
             text = {
                 Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = enforced, onCheckedChange = { enforced = it })
-                        Text("Принудительно")
+                        Text(stringResource(R.string.gpo_screen_09))
                     }
-                    if (free.isEmpty()) Text("Свободных подразделений нет.")
+                    if (free.isEmpty()) Text(stringResource(R.string.gpo_screen_16))
                     free.forEach { o ->
                         Text(
                             o.name,
@@ -480,7 +482,7 @@ private fun GpoPageView(
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { linking = false }) { Text("Отмена") } },
+            confirmButton = { TextButton(onClick = { linking = false }) { Text(stringResource(R.string.form_sheet_02)) } },
         )
     }
 }
@@ -503,7 +505,7 @@ private fun RegistryDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.verticalScroll(rememberScrollState())) {
                 OutlinedTextField(value = key, onValueChange = { key = it }, label = { Text("Раздел (HKLM\\… или HKCU\\…)") }, textStyle = MonoStyle)
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Параметр") }, singleLine = true)
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text(stringResource(R.string.gpo_screen_17)) }, singleLine = true)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     GPO_TYPES.forEach { t -> FilterChip(selected = type == t, onClick = { type = t }, label = { Text(t) }) }
                 }
@@ -513,13 +515,13 @@ private fun RegistryDialog(
                     label = { Text(if (type == "MultiString") "Значения, по одному в строке" else "Значение") },
                     singleLine = type != "MultiString",
                 )
-                if (onDelete != null) TextButton(onClick = onDelete) { Text("Удалить параметр", color = MaterialTheme.colorScheme.error) }
+                if (onDelete != null) TextButton(onClick = onDelete) { Text(stringResource(R.string.gpo_screen_18), color = MaterialTheme.colorScheme.error) }
             }
         },
         confirmButton = {
-            TextButton(enabled = key.isNotBlank() && name.isNotBlank(), onClick = { onSave(key.trim(), name.trim(), type, text) }) { Text("Записать") }
+            TextButton(enabled = key.isNotBlank() && name.isNotBlank(), onClick = { onSave(key.trim(), name.trim(), type, text) }) { Text(stringResource(R.string.gpo_screen_19)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.form_sheet_02)) } },
     )
 }
 
@@ -599,9 +601,9 @@ private fun TemplateDialog(
                     f.id to (if (f.kind == "bool") JsonPrimitive(v == "true") else JsonPrimitive(v))
                 }
                 onSave(state, values)
-            }) { Text("Записать") }
+            }) { Text(stringResource(R.string.gpo_screen_19)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.form_sheet_02)) } },
     )
 }
 

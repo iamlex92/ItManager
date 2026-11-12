@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.configdiff
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
@@ -66,7 +68,7 @@ fun ConfigDiffScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Сравнение конфигурации", style = MaterialTheme.typography.titleLarge)
+                        Text(stringResource(R.string.config_diff_screen_01), style = MaterialTheme.typography.titleLarge)
                         switchName?.let {
                             Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
@@ -93,8 +95,8 @@ fun ConfigDiffScreen(
                     Spacer(Modifier.height(12.dp))
                     Text(s.message, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyLarge)
                     Spacer(Modifier.height(16.dp))
-                    FilledTonalButton(onClick = viewModel::backup) { Text("Сделать резервную копию сейчас") }
-                    OutlinedButton(onClick = viewModel::load, modifier = Modifier.padding(top = 8.dp)) { Text("Повторить") }
+                    FilledTonalButton(onClick = viewModel::backup) { Text(stringResource(R.string.config_diff_screen_02)) }
+                    OutlinedButton(onClick = viewModel::load, modifier = Modifier.padding(top = 8.dp)) { Text(stringResource(R.string.common_02)) }
                 }
                 is UiState.Content -> DiffContent(s.data, onBackup = viewModel::backup, onImport = onImportFromSwitch)
             }
@@ -135,10 +137,10 @@ private fun DiffContent(diff: ConfigDiff, onBackup: () -> Unit, onImport: () -> 
         OutlinedButton(onClick = onBackup, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Text("Сохранить текущую как новую копию")
+            Text(stringResource(R.string.config_diff_screen_03))
         }
         FilledTonalButton(onClick = onImport, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-            Text("Снять копию и обновить учёт портов")
+            Text(stringResource(R.string.config_diff_screen_04))
         }
         Text(
             "Копия хранится на сервере. Сравнение только читает конфигурацию коммутатора и ничего в ней не меняет.",
