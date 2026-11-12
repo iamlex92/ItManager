@@ -3203,8 +3203,16 @@
     box.addEventListener("change", () => { togglePick(d.id, box.checked); tr.classList.toggle("picked", box.checked); });
     pickCell.appendChild(box);
     tr.appendChild(pickCell);
-    const name = cell(tr, d.name);
+    const name = cell(tr, "");
     name.classList.add("dev-name");
+    // The LED says the state, the plate carries the name as printed on a label.
+    name.append(
+      Object.assign(document.createElement("span"), {
+        className: `led ${isDown(d) ? "down" : PASSIVE.has(d.type) || d.type === "RACK" ? "off" : "up"}`,
+        title: isDown(d) ? "Не отвечает" : PASSIVE.has(d.type) || d.type === "RACK" ? "Пассивное устройство: состояния нет" : "В сети",
+      }),
+      Object.assign(document.createElement("span"), { className: "plate", textContent: d.name }),
+    );
     if (isDown(d)) name.append(Object.assign(document.createElement("span"), { className: "down-mark", textContent: "не отвечает" }));
     if (d.comment && d.comment.trim()) name.append(Object.assign(document.createElement("div"), { className: "dev-note", textContent: d.comment, title: d.comment }));
     const typeCell = cell(tr, "");
