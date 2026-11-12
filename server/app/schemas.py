@@ -804,6 +804,30 @@ class RunbookRunOut(BaseModel):
 
 # --- custom scripts (web console) ---------------------------------------------
 
+
+class ScriptJobOut(BaseModel):
+    """A script run in the background. The output is the part after `out_from` / `err_from`; `out_len` / `err_len`
+    are the whole length so far, to ask for the next part."""
+
+    id: uuid.UUID
+    runbook_id: str
+    title: str
+    host: str = ""
+    runs_on: str
+    # running, done (it ended, any exit code), stopped (by the operator), failed (refused or broke)
+    state: str
+    exit_code: int | None = None
+    stdout: str = ""
+    stderr: str = ""
+    out_len: int = 0
+    err_len: int = 0
+    simulated: bool = False
+    started_at: datetime
+    finished_at: datetime | None = None
+    error: str = ""
+    audit_id: uuid.UUID | None = None
+
+
 ScriptShell = Literal["powershell", "bash", "cmd", "python"]
 # emulator: only shown; pc: on a domain computer chosen at the run; server: on the NetAdmin server.
 ScriptTarget = Literal["emulator", "pc", "server"]

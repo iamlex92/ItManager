@@ -11,12 +11,14 @@ bash and Python on Linux), so its own quotes and line breaks never meet the comm
 
 import asyncio
 import base64
+import codecs
 import json
 import os
 import re
 import shutil
 import sys
 import tempfile
+from collections.abc import Callable
 
 from .emulator import RunResult
 
@@ -100,8 +102,25 @@ def linux_command(shell: str, source: str) -> str:
     return f"sudo -S -p '' -- bash -c 'eval \"$(printf %s {b64} | base64 -d)\"'"
 
 
-async def run_on_server(shell: str, source: str) -> RunResult:
-    """On the NetAdmin server, as the service's own user: Python with the server's interpreter, bash where it is."""
+Sink = Callable[[str, str], None]
+
+
+async def _pump(stream: asyncio.StreamReader, kind: str, sink: Sink | None, parts: list[str]) -> None:
+    """Reads one pipe as it fills: the text is kept (up to the limit) and handed to [sink] at once."""
+    decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+    size = 0
+    while chunk := await stream.read(4096):
+        text = decoder.decode(chunk)
+        if size < MAX_OUTPUT:
+            parts.append(text[: MAX_OUTPUT - size])
+            size += len(text)
+        if sink is not None and text:
+            sink(kind, text)
+
+
+async def run_on_server(shell: str, source: str, sink: Sink | None = None) -> RunResult:
+    """On the NetAdmin server, as the service's own user: Python with the server's interpreter, bash where it is.
+    [sink] gets the output as it appears (kind «out» or «err»), for a job the web console follows live."""
     if shell == "python":
         exe = [sys.executable]
         suffix = ".py"
@@ -117,21 +136,29 @@ async def run_on_server(shell: str, source: str) -> RunResult:
         proc = await asyncio.create_subprocess_exec(
             *exe, path, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
+        out_parts: list[str] = []
+        err_parts: list[str] = []
+        assert proc.stdout is not None and proc.stderr is not None
         try:
-            out, err = await asyncio.wait_for(proc.communicate(), SERVER_TIMEOUT)
+            await asyncio.wait_for(
+                asyncio.gather(
+                    _pump(proc.stdout, "out", sink, out_parts), _pump(proc.stderr, "err", sink, err_parts), proc.wait()
+                ),
+                SERVER_TIMEOUT,
+            )
         except TimeoutError:
             proc.kill()
             await proc.wait()
-            return RunResult(exit_code=124, stdout="", stderr=f"Скрипт не закончился за {SERVER_TIMEOUT // 60} минут")
+            return RunResult(
+                exit_code=124,
+                stdout="".join(out_parts),
+                stderr="".join(err_parts) + f"\nСкрипт не закончился за {SERVER_TIMEOUT // 60} минут",
+            )
         except asyncio.CancelledError:
-            # The request was dropped (the tab was closed): the script must not go on running unseen.
+            # The request was dropped, or the operator pressed «Остановить»: the script must not go on running.
             proc.kill()
             await proc.wait()
             raise
-        return RunResult(
-            exit_code=proc.returncode or 0,
-            stdout=out.decode("utf-8", "replace")[:MAX_OUTPUT],
-            stderr=err.decode("utf-8", "replace")[:MAX_OUTPUT],
-        )
+        return RunResult(exit_code=proc.returncode or 0, stdout="".join(out_parts), stderr="".join(err_parts))
     finally:
         os.unlink(path)

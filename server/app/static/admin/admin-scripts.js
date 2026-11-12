@@ -66,7 +66,56 @@
     $("script-run").hidden = !s || (s.runs_on || "emulator") === "emulator";
     $("script-output").hidden = true;
     $("script-msg").textContent = "";
+    $("script-stop").hidden = true;
+    $("script-run").disabled = false;
+    clearTimeout(jobTimer);
+    current = null;
     renderScriptList();
+    // A script that is still running (the page was reloaded, or another tab started it) is followed again.
+    if (s) {
+      api("GET", "scripts/jobs").then((jobs) => {
+        const running = jobs.find((x) => x.runbook_id === s.runbook_id && x.state === "running");
+        if (running && editing === s) follow(running);
+      }).catch(() => {});
+    }
+  }
+
+  // A script that really runs is a job: its output is followed while it goes on and it can be stopped.
+  let jobTimer = 0, current = null;
+
+  function renderJob(job) {
+    const out = $("script-output");
+    out.hidden = false;
+    const head = job.state === "running" ? "Выполняется…"
+      : job.state === "stopped" ? "Остановлено"
+        : job.state === "failed" ? "Не выполнено"
+          : `Код выхода: ${job.exit_code}`;
+    const extra = job.error && job.state !== "running" ? `\n\n${job.error}` : "";
+    out.textContent = `${head}\n${current.out}${current.err ? `\n\n${current.err}` : ""}${extra}`;
+    out.scrollTop = out.scrollHeight;
+    $("script-stop").hidden = job.state !== "running";
+    $("script-run").disabled = job.state === "running";
+    $("script-msg").textContent = job.state === "running" ? "Выполняется…" : "";
+  }
+
+  async function follow(job) {
+    clearTimeout(jobTimer);
+    current = { id: job.id, out: "", err: "", outLen: 0, errLen: 0 };
+    const mine = current;
+    const tick = async () => {
+      if (current !== mine) return;
+      try {
+        const j = await api("GET", `scripts/jobs/${mine.id}?out_from=${mine.outLen}&err_from=${mine.errLen}`);
+        if (current !== mine) return;
+        mine.out += j.stdout;
+        mine.err += j.stderr;
+        mine.outLen = j.out_len;
+        mine.errLen = j.err_len;
+        renderJob(j);
+        if (j.state === "running") jobTimer = setTimeout(tick, 700);
+      } catch (e) { fail(e); }
+    };
+    await tick();
   }
 
   // What the chosen language and place mean, under the form.
@@ -112,11 +161,19 @@
     if (!params) return;
     const where = editing.runs_on === "pc" ? `на ${params.host}` : "на сервере NetAdmin";
     if (!await ask(`Запустить «${editing.title}» ${where}? Скрипт выполнится по-настоящему.`)) return;
-    $("script-msg").textContent = "Выполняется…";
     try {
-      showRun(await api("POST", `runbooks/${editing.runbook_id}/run`, { params, confirm: true, operator: OPERATOR }));
-      $("script-msg").textContent = "";
+      await follow(await api("POST", `scripts/${editing.id}/jobs`, { params, confirm: true, operator: OPERATOR }));
     } catch (e) { $("script-msg").textContent = ""; fail(e); }
+  });
+
+  $("script-stop").addEventListener("click", async () => {
+    if (!current) return;
+    const onPc = editing && editing.runs_on === "pc";
+    if (!await ask(`Остановить скрипт?${onPc ? "\nСоединение с компьютером закроется, но уже запущенное там может доработать само." : ""}`, { action: "Остановить", danger: true })) return;
+    try {
+      await api("POST", `scripts/jobs/${current.id}/stop`);
+      await follow({ id: current.id });
+    } catch (e) { fail(e); }
   });
 
   $("script-new").addEventListener("click", () => editScript(null));
