@@ -101,6 +101,7 @@ import com.itmanager.app.data.model.RunbookRun
 import com.itmanager.app.data.model.SwitchPort
 import com.itmanager.app.data.model.TrafficSeries
 import com.itmanager.app.data.model.Vlan
+import com.itmanager.app.data.model.VlanCleanup
 import com.itmanager.app.data.model.VlanDraft
 import com.itmanager.app.data.model.Waypoint
 import com.itmanager.app.data.model.Zone
