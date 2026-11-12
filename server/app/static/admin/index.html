@@ -9,6 +9,7 @@
 <script src="/static/admin/admin-more.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-pcs.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-scan.js?v={{asset}}" defer></script>
+<script src="/static/admin/admin-scripts.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-settings.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-gpo.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-tables.js?v={{asset}}" defer></script>
@@ -441,7 +442,7 @@
           <h2>Найденные компьютеры</h2>
           <p id="pc-sweep-note" class="muted small">Просканируйте подсеть: сервер пингует адреса и спрашивает их имена в DNS. Учётная запись при этом никуда не отправляется.</p>
           <ul id="pc-sweep-list" class="list"></ul>
-          <h2 style="margin-top:12px">Инвентаризация ключей</h2>
+          <h2 class="mt-12">Инвентаризация ключей</h2>
           <p class="muted small">Windows (BIOS и реестр), MS Office, файлы лицензий 1С со всех включённых компьютеров.</p>
           <div class="row wrap">
             <label>Откуда<select id="keys-source"><option value="ad">Все ПК из Active Directory</option><option value="subnet">Подсеть</option></select></label>
