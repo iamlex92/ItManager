@@ -4,19 +4,24 @@ GET  /server-settings          every editable setting by group: its saved value,
                                a restart is still needed for it
 PUT  /server-settings          save values (and drop the ones to reset to netadmin.env); audited
 POST /server-settings/restart  restart the service so the saved values take effect
+POST /server-settings/rotate-token  a new API token: written to the settings file and in force at once
 """
 
 import asyncio
 import logging
+import os
+import re
+import secrets
 from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 
 from .. import serversettings as ss
+from ..agent import configfile, connectqr
 from ..config import Settings
 from ..models import ScriptAuditLog
-from ..schemas import ServerSettingsIn, ServerSettingsOut
+from ..schemas import RotateTokenIn, RotateTokenOut, ServerSettingsIn, ServerSettingsOut
 from .deps import SessionDep, who
 
 log = logging.getLogger(__name__)
@@ -144,3 +149,71 @@ async def restart_server(request: Request, session: SessionDep):
     # After the answer has gone out.
     asyncio.get_running_loop().call_later(RESTART_DELAY_SECONDS, restart)
     return {"restarting": True}
+
+
+def _replace_token(text: str, new: str) -> str:
+    if re.search(r"^API_TOKEN=.*$", text, flags=re.M):
+        return re.sub(r"^API_TOKEN=.*$", lambda _: f"API_TOKEN={new}", text, count=1, flags=re.M)
+    return text.rstrip("\n") + f"\nAPI_TOKEN={new}\n"
+
+
+@router.post("/rotate-token", response_model=RotateTokenOut)
+async def rotate_token(body: RotateTokenIn, request: Request, session: SessionDep):
+    """Replaces the API token: the new one goes into the settings file (so it survives a restart) and works at once; the
+    old one stops working. Every phone and console must then enter the new key: the answer carries it with the QR code
+    that the app scans, once and nowhere else (the journal says only that it happened)."""
+    if body.confirm is not True:
+        raise HTTPException(
+            400,
+            detail={
+                "code": "confirmation_required",
+                "message": 'Смена ключа отключает все телефоны и консоли: повторите с "confirm": true',
+            },
+        )
+    path = configfile.default_path()
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        raise HTTPException(
+            409,
+            detail={
+                "code": "config_missing",
+                "message": f"Файл настроек {path} не найден: сервер запущен не из пакета. Смените API_TOKEN там, "
+                "где он задан (например, в .env у Docker), и перезапустите сервер",
+            },
+        ) from None
+    new = secrets.token_urlsafe(32)
+    try:
+        # In place: the owner and the mode of the file stay as the installer made them.
+        path.write_text(_replace_token(text, new), encoding="utf-8")
+    except OSError:
+        raise HTTPException(
+            409,
+            detail={
+                "code": "config_not_writable",
+                "message": f"Служба не может записать {path}. Смените ключ командой «sudo netadmin-agent rotate-token» "
+                "и перезапустите службу, либо дайте службе право записи в файл (на Debian: sudo chmod g+w "
+                "/etc/netadmin/netadmin.env)",
+            },
+        ) from None
+    request.app.state.settings.api_token = new
+    os.environ["API_TOKEN"] = new
+    session.add(
+        ScriptAuditLog(
+            script_name="token_rotate",
+            triggered_by=who(request, body.operator),
+            parameters={},
+            executed_at=datetime.now(UTC),
+            exit_code=0,
+            output_log="Смена API-токена: прежний ключ больше не принимается",
+        )
+    )
+    await session.commit()
+    log.warning("API token replaced from %s", request.client.host if request.client else "unknown")
+    from ..agent.cli import _addresses
+
+    port = request.url.port or int(os.environ.get("API_PORT", "8000"))
+    seen = [request.url.hostname] if request.url.hostname else []
+    addresses = list(dict.fromkeys([*seen, *_addresses()]))[: connectqr.MAX_ADDRESSES]
+    link = connectqr.payload(addresses, port, new)
+    return RotateTokenOut(token=new, link=link, qr_svg=connectqr.svg(link), addresses=addresses, config=str(path))

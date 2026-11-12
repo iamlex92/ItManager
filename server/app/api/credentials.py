@@ -17,6 +17,7 @@ ACTIONS = {
     "credential_create": "Добавление учётных данных",
     "credential_update": "Изменение учётных данных",
     "credential_delete": "Удаление учётных данных",
+    "token_rotate": "Смена API-токена",
 }
 
 

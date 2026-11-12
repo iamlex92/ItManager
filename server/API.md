@@ -342,6 +342,12 @@ Errors: 415 `bad_svg`, 413 `svg_too_big`, 422 `bad_port` / `duplicate_port`.
 
 ## Config import
 
+`POST /api/v1/server-settings/rotate-token` `{confirm: true, operator?}` replaces `API_TOKEN` in the settings file
+(`NETADMIN_CONFIG`, default `/etc/netadmin/netadmin.env`) and in the running server; the old token stops working at once.
+Answer: `{token, link, qr_svg, addresses, config}` (`link` is the `netadmin://connect?...` payload the app scans). 400
+`confirmation_required` without confirm; 409 `config_missing` / `config_not_writable` when the file cannot be changed
+(then nothing changes). Journal: `token_rotate`, never the token.
+
 Custom scripts as background jobs (web console; the app keeps `POST /runbooks/{id}/run`):
 `POST /api/v1/scripts/{id}/jobs` `{params, confirm: true, operator?}` (202, same refusals as a run: 400
 `confirmation_required`, 409 `already_running`, 403 writes off is reported as a failed job) starts a script that runs for real

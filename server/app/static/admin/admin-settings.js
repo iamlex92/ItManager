@@ -248,6 +248,27 @@
     } catch (e) { showError(e); }
   });
 
+  $("settings-token").addEventListener("click", async () => {
+    if (!await ask("Сменить ключ доступа?\nПрежний ключ сразу перестанет работать: все телефоны и другие консоли придётся подключить заново (по QR-коду или вручную). Эта консоль продолжит сама.", { action: "Сменить", danger: true })) return;
+    try {
+      const r = await api("POST", "server-settings/rotate-token", { confirm: true, operator: window.NetAdmin.OPERATOR });
+      window.NetAdmin.replaceToken(r.token);
+      $("token-value").textContent = r.token;
+      // The picture comes from this server and holds only the code's own squares.
+      $("token-qr").replaceChildren(new DOMParser().parseFromString(r.qr_svg, "image/svg+xml").documentElement);
+      $("token-addresses").textContent = `В коде адреса: ${r.addresses.join(", ")}`;
+      $("token-dialog").showModal();
+      toast("Ключ доступа заменён");
+    } catch (e) { showError(e); }
+  });
+  $("token-copy").addEventListener("click", () => {
+    const text = $("token-value").textContent;
+    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(
+      () => toast("Скопировано"), () => toast("Выделите ключ и скопируйте вручную", true));
+  });
+  $("token-close").addEventListener("click", () => { $("token-dialog").close(); $("token-value").textContent = ""; $("token-qr").replaceChildren(); });
+  $("token-dialog").addEventListener("close", () => { $("token-value").textContent = ""; $("token-qr").replaceChildren(); });
+
   $("settings-restart").addEventListener("click", async () => {
     if (!await ask("Перезапустить сервер? Он будет недоступен 10–30 секунд, приложение и консоль переподключатся сами.")) return;
     try {

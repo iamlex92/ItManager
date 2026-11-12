@@ -29,3 +29,12 @@ def terminal(data: str) -> str:
     for top, bottom in zip(rows[::2], rows[1::2], strict=True):
         lines.append("".join(glyph[t, b] for t, b in zip(top, bottom, strict=True)))
     return "\n".join(lines)
+
+
+def svg(data: str) -> str:
+    """The same code as an inline SVG, for a page (the web console shows it after a token change)."""
+    import io
+
+    out = io.BytesIO()
+    segno.make(data, error="m", micro=False).save(out, kind="svg", scale=5, border=2, xmldecl=False, svgns=True)
+    return out.getvalue().decode("utf-8")

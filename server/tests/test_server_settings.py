@@ -194,3 +194,47 @@ def test_backup_server_reaches_the_console_through_health(seeded):
     # Saved settings apply from the next start.
     with TestClient(create_app(make_settings()), headers=AUTH) as c:
         assert c.get("/api/v1/health").json()["backup_server_url"] == "http://10.0.0.6:8000"
+
+
+def test_token_is_replaced_in_the_file_and_at_once(seeded, tmp_path, monkeypatch):
+    config = tmp_path / "netadmin.env"
+    config.write_text("DATABASE_URL=x\nAPI_TOKEN=old-token-0123456789abcdef\nAPI_PORT=8000\n", encoding="utf-8")
+    monkeypatch.setenv("NETADMIN_CONFIG", str(config))
+    with TestClient(create_app(make_settings()), headers=AUTH) as c:
+        # Confirmed first: it cuts off every phone and console.
+        assert c.post("/api/v1/server-settings/rotate-token", json={}).status_code == 400
+        r = c.post("/api/v1/server-settings/rotate-token", json={"confirm": True, "operator": "Иванов"})
+        assert r.status_code == 200, r.text
+        out = r.json()
+        new = out["token"]
+        assert len(new) >= 32 and out["link"].startswith("netadmin://connect?") and f"t={new}" in out["link"]
+        assert out["qr_svg"].startswith("<svg") and out["config"] == str(config)
+        lines = config.read_text(encoding="utf-8").splitlines()
+        assert lines == ["DATABASE_URL=x", f"API_TOKEN={new}", "API_PORT=8000"]
+        # The old key is refused at once, the new one works.
+        assert c.get("/api/v1/devices").status_code == 401
+        assert c.get("/api/v1/devices", headers={"Authorization": f"Bearer {new}"}).status_code == 200
+        entry = next(a for a in audit_rows() if "token_rotate" in str(a))
+        assert new not in str(entry)
+        journal = c.get("/api/v1/audit", headers={"Authorization": f"Bearer {new}"}).json()
+        row = next(a for a in journal if a["action"] == "token_rotate")
+        assert row["triggered_by"].startswith("Иванов") and new not in str(row)
+
+
+def test_token_stays_when_the_file_cannot_be_written(seeded, tmp_path, monkeypatch):
+    monkeypatch.setenv("NETADMIN_CONFIG", str(tmp_path / "missing" / "netadmin.env"))
+    with TestClient(create_app(make_settings()), headers=AUTH) as c:
+        r = c.post("/api/v1/server-settings/rotate-token", json={"confirm": True})
+        assert r.status_code == 409 and r.json()["detail"]["code"] == "config_missing"
+        assert c.get("/api/v1/devices").status_code == 200  # nothing changed
+    config = tmp_path / "readonly.env"
+    config.write_text("API_TOKEN=old-token-0123456789abcdef\n", encoding="utf-8")
+    config.chmod(0o444)
+    monkeypatch.setenv("NETADMIN_CONFIG", str(config))
+    import os
+
+    if os.geteuid() != 0:  # root writes anywhere, so the check only means something for a normal user
+        with TestClient(create_app(make_settings()), headers=AUTH) as c:
+            r = c.post("/api/v1/server-settings/rotate-token", json={"confirm": True})
+            assert r.status_code == 409 and r.json()["detail"]["code"] == "config_not_writable"
+            assert c.get("/api/v1/devices").status_code == 200

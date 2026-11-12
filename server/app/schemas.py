@@ -1376,6 +1376,21 @@ class ServerSettingsGroupOut(BaseModel):
     fields: list[ServerSettingOut]
 
 
+class RotateTokenIn(BaseModel):
+    confirm: bool = False
+    operator: str | None = Field(default=None, max_length=60)
+
+
+class RotateTokenOut(BaseModel):
+    """The new API token, shown once; `link` is what the app's QR scanner reads (netadmin://connect?...)."""
+
+    token: str
+    link: str
+    qr_svg: str
+    addresses: list[str]
+    config: str
+
+
 class ServerSettingsOut(BaseModel):
     groups: list[ServerSettingsGroupOut]
     restart_pending: bool

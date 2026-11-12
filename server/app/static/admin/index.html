@@ -312,9 +312,10 @@
           <h2 class="grow">Настройки сервера</h2>
           <button type="button" id="settings-save" class="primary" disabled>Сохранить</button>
           <button type="button" id="settings-restart">Перезапустить сервер</button>
+          <button type="button" id="settings-token" title="Новый ключ доступа: прежний сразу перестанет работать, а телефоны и консоли надо подключить заново">Сменить ключ доступа…</button>
         </div>
         <p class="muted small">Значения сохраняются на сервере и заменяют <code>netadmin.env</code>; начинают действовать после перезапуска
-          сервера. Адрес базы, API-токен, ключ шифрования и адрес прослушивания остаются в файле.</p>
+          сервера. Адрес базы, ключ шифрования и адрес прослушивания остаются в файле; API-токен меняется кнопкой «Сменить ключ доступа…» (она пишет в файл).</p>
         <p id="settings-pending" class="banner warn" hidden>Есть сохранённые изменения, которые ещё не действуют: перезапустите сервер.</p>
         <p id="settings-error" class="error-box" hidden></p>
       </div>
@@ -573,6 +574,21 @@
   </main>
   </div>
 </div>
+
+<dialog id="token-dialog" class="wide-dialog">
+  <div class="dialog">
+    <div class="dialog-head"><h2>Новый ключ доступа</h2><div class="spacer"></div><button type="button" id="token-close" aria-label="Закрыть">✕</button></div>
+    <p class="muted small">Покажется один раз. Прежний ключ уже не работает: телефоны и другие консоли ждут нового. Эта консоль продолжит с ним сама.</p>
+    <div class="row wrap">
+      <code id="token-value" class="mono grow"></code>
+      <button type="button" id="token-copy">Скопировать</button>
+    </div>
+    <p class="muted small">В приложении: ⚙ → Сервер → «Сканировать QR-код сервера», либо введите ключ вручную.</p>
+    <div id="token-qr" class="token-qr"></div>
+    <p class="muted small" id="token-addresses"></p>
+    <p class="muted small">Если этот сервер — резервный, обновите его ключ на основном сервере («Резервный сервер» → «API-токен резервного сервера») и в приложении.</p>
+  </div>
+</dialog>
 
 <dialog id="device-dialog" class="sheet">
   <form id="device-form" method="dialog" class="dialog" novalidate>
