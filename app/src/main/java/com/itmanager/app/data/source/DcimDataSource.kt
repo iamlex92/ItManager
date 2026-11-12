@@ -66,6 +66,7 @@ import com.itmanager.app.data.model.RunbookRun
 import com.itmanager.app.data.model.SwitchPort
 import com.itmanager.app.data.model.TrafficSeries
 import com.itmanager.app.data.model.Vlan
+import com.itmanager.app.data.model.VlanCleanup
 import com.itmanager.app.data.model.VlanDraft
 import com.itmanager.app.data.model.Waypoint
 import kotlinx.coroutines.flow.Flow
@@ -86,6 +87,9 @@ interface DcimDataSource {
     suspend fun saveVlan(isNew: Boolean, draft: VlanDraft): Vlan
     /** Refused while ports are in the VLAN. */
     suspend fun deleteVlan(id: Int)
+
+    /** The VLANs nothing uses; with [delete] they are removed too. */
+    suspend fun vlanCleanup(delete: Boolean): VlanCleanup
 
     // Ports as the inventory records them. Never sent to the switch.
 

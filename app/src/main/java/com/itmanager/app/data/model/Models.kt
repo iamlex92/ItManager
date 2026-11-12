@@ -107,6 +107,15 @@ data class Vlan(
     val description: String? = null,
 )
 
+/** One VLAN that nothing uses. */
+data class VlanCleanupItem(val id: Int, val name: String) {
+    /** "30 «Cameras»", or just the number when the name is the default one. */
+    val label: String get() = if (name.isBlank() || name == "VLAN $id") "$id" else "$id «$name»"
+}
+
+/** The unused VLANs the server found (a preview) or removed. */
+data class VlanCleanup(val vlans: List<VlanCleanupItem>)
+
 /** What the VLAN form sends; [subnet] blank clears it. */
 data class VlanDraft(
     val id: Int,

@@ -181,6 +181,16 @@
     } catch { /* storage blocked: the key lives until the tab closes */ }
   }
 
+  /** The key was replaced from here: this console goes on with the new one, remembered the way the old one was. */
+  function replaceToken(next) {
+    let remembered = false;
+    try { remembered = localStorage.getItem(KEY) !== null; } catch { /* storage blocked */ }
+    token = next;
+    store(remembered);
+    liveStop();
+    liveStart();
+  }
+
   function logout(message) {
     token = "";
     liveStop();
@@ -4299,7 +4309,7 @@
 
   // What admin-more.js (the other tabs) builds on.
   window.NetAdmin = {
-    $, api, toast, fail, ask, askText, emptyRow, fieldError, typeOf, signedIn: () => !!token, glyphCanvas, OPERATOR, tabs: {},
+    $, api, toast, fail, ask, askText, emptyRow, fieldError, replaceToken, typeOf, signedIn: () => !!token, glyphCanvas, OPERATOR, tabs: {},
     picked, listedIds: () => visibleDevices().map((d) => d.id), renderPorts: () => renderPorts(), portsDevice: () => portsDevice,
     openCard: (id) => openCard(id).catch(fail),
     openTab: (name) => openTab(name),

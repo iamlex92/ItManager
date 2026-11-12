@@ -101,6 +101,7 @@ import com.itmanager.app.data.model.RunbookRun
 import com.itmanager.app.data.model.SwitchPort
 import com.itmanager.app.data.model.TrafficSeries
 import com.itmanager.app.data.model.Vlan
+import com.itmanager.app.data.model.VlanCleanup
 import com.itmanager.app.data.model.VlanDraft
 import com.itmanager.app.data.model.Waypoint
 import com.itmanager.app.data.model.Zone
@@ -177,6 +178,8 @@ class RemoteDataSource(
         }
 
     override suspend fun deleteVlan(id: Int) = api.deleteVlan(settings, id)
+
+    override suspend fun vlanCleanup(delete: Boolean): VlanCleanup = api.vlanCleanup(settings, delete).toDomain()
 
     override suspend fun previewPortChange(switchId: String, portId: String, change: PortChange): List<String> =
         api.previewPortConfig(settings, portId, change).commands

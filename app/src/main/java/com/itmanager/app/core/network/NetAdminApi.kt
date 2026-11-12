@@ -221,6 +221,10 @@ class NetAdminApi @Inject constructor(
         vlanCall { guarded { client.delete("${requireBase(s)}/api/v1/vlans/$id") { auth(s) } } }
     }
 
+    /** Unused VLANs: with [delete] false only the list, with true they are removed (one journal entry on the server). */
+    suspend fun vlanCleanup(s: ServerSettings, delete: Boolean): VlanCleanupDto =
+        vlanCall { post(s, if (delete) "vlans/cleanup?dry_run=false" else "vlans/cleanup", EmptyBody()) }
+
     private suspend inline fun <T> vlanCall(block: () -> T): T = try {
         block()
     } catch (e: UserFacingException) {

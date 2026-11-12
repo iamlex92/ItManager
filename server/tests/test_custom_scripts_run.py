@@ -174,3 +174,90 @@ async def test_a_dropped_request_kills_the_server_script():
     # The temporary script file names the process; the bracket keeps pgrep from matching its own shell.
     alive = os.popen('pgrep -f "[n]etadmin-script-" || true').read().split()
     assert alive == []
+
+
+def _wait(c, job_id, states=("done", "stopped", "failed"), seconds=15):
+    import time
+
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        job = c.get(f"/api/v1/scripts/jobs/{job_id}").json()
+        if job["state"] in states:
+            return job
+        time.sleep(0.1)
+    raise AssertionError(f"the job did not reach {states}: {job}")
+
+
+def test_a_script_runs_as_a_job_and_the_output_is_followed(seeded):
+    with TestClient(create_app(make_settings(allow_runbook_writes=True)), headers=AUTH) as c:
+        s = _script(
+            c,
+            runs_on="server",
+            body="import sys, time\nprint('first', flush=True)\ntime.sleep(1.5)\nprint('second')\nsys.exit(3)",
+            params=[],
+        )
+        url = f"/api/v1/scripts/{s['id']}/jobs"
+        # Confirmed like any real run.
+        assert c.post(url, json={}).status_code == 400
+        started = c.post(url, json={"confirm": True, "operator": "Иванов"})
+        assert started.status_code == 202, started.text
+        job = started.json()
+        assert job["state"] == "running" and job["runs_on"] == "server"
+        # The second start while it runs is refused.
+        assert c.post(url, json={"confirm": True}).status_code == 409
+        # The first line is there before the script ends.
+        import time
+
+        seen = ""
+        deadline = time.monotonic() + 8
+        while "first" not in seen and time.monotonic() < deadline:
+            part = c.get(f"/api/v1/scripts/jobs/{job['id']}", params={"out_from": len(seen)}).json()
+            seen += part["stdout"]
+            time.sleep(0.1)
+        assert "first" in seen and part["state"] == "running"
+        done = _wait(c, job["id"])
+        assert done["state"] == "done" and done["exit_code"] == 3
+        assert done["stdout"].split() == ["first", "second"] and done["out_len"] == len("first\nsecond\n")
+        # Only the new part when asked from an offset.
+        tail = c.get(f"/api/v1/scripts/jobs/{job['id']}", params={"out_from": done["out_len"]}).json()
+        assert tail["stdout"] == "" and tail["out_len"] == done["out_len"]
+        audit = c.get("/api/v1/audit", params={"kind": "runbook"}).json()[0]
+        assert audit["exit_code"] == 3 and "first" in str(audit) and audit["triggered_by"].startswith("Иванов")
+        assert c.app.state.scripts_running == set()
+        assert [j["id"] for j in c.get("/api/v1/scripts/jobs").json()][0] == job["id"]
+
+
+def test_a_running_script_can_be_stopped(seeded):
+    import os
+
+    with TestClient(create_app(make_settings(allow_runbook_writes=True)), headers=AUTH) as c:
+        s = _script(c, runs_on="server", body="import time\nprint('start', flush=True)\ntime.sleep(60)", params=[])
+        job = c.post(f"/api/v1/scripts/{s['id']}/jobs", json={"confirm": True}).json()
+        _wait(c, job["id"], states=("running",))
+        stopped = c.post(f"/api/v1/scripts/jobs/{job['id']}/stop").json()
+        assert stopped["state"] == "stopped" and stopped["exit_code"] == 130 and "Остановлено" in stopped["error"]
+        assert c.app.state.scripts_running == set()
+        # Stopping what has ended changes nothing; the process is gone.
+        assert c.post(f"/api/v1/scripts/jobs/{job['id']}/stop").json()["state"] == "stopped"
+        assert os.popen('pgrep -f "[n]etadmin-script-" || true').read().split() == []
+        audit = c.get("/api/v1/audit", params={"kind": "runbook"}).json()[0]
+        assert audit["exit_code"] == 130
+        # It can be started again at once.
+        again = c.post(f"/api/v1/scripts/{s['id']}/jobs", json={"confirm": True})
+        assert again.status_code == 202
+        c.post(f"/api/v1/scripts/jobs/{again.json()['id']}/stop")
+
+
+def test_job_refusals(seeded):
+    with TestClient(create_app(make_settings(allow_runbook_writes=False)), headers=AUTH) as c:
+        shown = _script(c, title="shown")
+        assert (
+            c.post(f"/api/v1/scripts/{shown['id']}/jobs", json={"confirm": True}).status_code == 422
+        )  # nothing to run
+        real = _script(c, title="real", runs_on="server")
+        job = c.post(f"/api/v1/scripts/{real['id']}/jobs", json={"params": {"who": "a"}, "confirm": True}).json()
+        # Writes are off: the job fails with the reason, and the slot is given back.
+        failed = _wait(c, job["id"])
+        assert failed["state"] == "failed" and "Разрешить изменения" in failed["error"]
+        assert c.app.state.scripts_running == set()
+        assert c.get("/api/v1/scripts/jobs/00000000-0000-0000-0000-000000000000").status_code == 404

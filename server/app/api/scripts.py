@@ -8,22 +8,36 @@ parameters are filled in as quoted strings, never as code (runbooks/custom.py).
 """
 
 import asyncio
+import logging
+import time
 import uuid
+from datetime import UTC, datetime
+from types import SimpleNamespace
 
 from fastapi import APIRouter, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from ..models import CustomScript
+from ..models import CustomScript, ScriptAuditLog
 from ..pcs.backend import PcError, RealPcs, valid_host
 from ..pcs.service import allowed_host, detect_platform
 from ..runbooks import custom
-from ..runbooks.catalog import Category, Param, Runbook
+from ..runbooks.catalog import Category, InvalidParams, Param, Runbook, validate
 from ..runbooks.emulator import RunResult
-from ..schemas import RunbookOut, RunbookParamOut, ScriptCreate, ScriptOut, ScriptUpdate
-from .deps import SessionDep, conflict, not_found
+from ..schemas import (
+    RunbookOut,
+    RunbookParamOut,
+    RunbookRunIn,
+    ScriptCreate,
+    ScriptJobOut,
+    ScriptOut,
+    ScriptUpdate,
+)
+from ..services import scriptjobs
+from .deps import SessionDep, conflict, not_found, who
 
 router = APIRouter(prefix="/scripts", tags=["scripts"])
+log = logging.getLogger(__name__)
 
 RUNBOOK_PREFIX = "custom-"
 CATEGORY = "Свои скрипты"
@@ -123,7 +137,7 @@ def _refuse(status_code: int, code: str, message: str) -> HTTPException:
 
 
 async def execute(
-    script: CustomScript, params: dict[str, str], request: Request, session, dry_run: bool
+    script: CustomScript, params: dict[str, str], request: Request, session, dry_run: bool, sink=None
 ) -> tuple[RunResult, bool]:
     """The run itself; (result, simulated). Refusals (writes off, an unknown computer, a value cmd cannot take)
     are raised before anything is sent anywhere."""
@@ -142,7 +156,7 @@ async def execute(
 
     if script.runs_on == "server":
         try:
-            return await custom.run_on_server(script.shell, source), False
+            return await custom.run_on_server(script.shell, source, sink), False
         except custom.ScriptError as e:
             raise _refuse(422, "invalid_request", str(e)) from e
 
@@ -234,6 +248,14 @@ async def create_script(body: ScriptCreate, session: SessionDep):
     return await _save(session, script)
 
 
+# Before «/{script_id}»: «jobs» is not a script id.
+@router.get("/jobs", response_model=list[ScriptJobOut])
+async def list_jobs(request: Request):
+    """The latest runs, newest first, without their output (a page that was reloaded finds its running job here)."""
+    jobs = sorted(scriptjobs.registry(request.app.state).values(), key=lambda j: j.started_at, reverse=True)
+    return [job_out(j, out_from=len(j.stdout), err_from=len(j.stderr)) for j in jobs]
+
+
 @router.get("/{script_id}", response_model=ScriptOut)
 async def get_script(script_id: uuid.UUID, session: SessionDep):
     script = await session.get(CustomScript, script_id)
@@ -260,3 +282,141 @@ async def delete_script(script_id: uuid.UUID, session: SessionDep):
         raise not_found("script")
     await session.delete(script)
     await session.commit()
+
+
+# --- running in the background -------------------------------------------------------------------------------------
+
+
+def job_out(job: scriptjobs.ScriptJob, out_from: int = 0, err_from: int = 0) -> ScriptJobOut:
+    return ScriptJobOut(
+        id=job.id,
+        runbook_id=job.runbook_id,
+        title=job.title,
+        host=job.host,
+        runs_on=job.runs_on,
+        state=job.state,
+        exit_code=job.exit_code,
+        stdout=job.stdout[out_from:],
+        stderr=job.stderr[err_from:],
+        out_len=len(job.stdout),
+        err_len=len(job.stderr),
+        simulated=job.simulated,
+        started_at=job.started_at,
+        finished_at=job.finished_at,
+        error=job.error,
+        audit_id=job.audit_id,
+    )
+
+
+def _job(request: Request, job_id: uuid.UUID) -> scriptjobs.ScriptJob:
+    job = scriptjobs.registry(request.app.state).get(job_id)
+    if job is None:
+        raise not_found("job")
+    return job
+
+
+@router.get("/jobs/{job_id}", response_model=ScriptJobOut)
+async def get_job(job_id: uuid.UUID, request: Request, out_from: int = 0, err_from: int = 0):
+    return job_out(_job(request, job_id), max(0, out_from), max(0, err_from))
+
+
+@router.post("/jobs/{job_id}/stop", response_model=ScriptJobOut)
+async def stop_job(job_id: uuid.UUID, request: Request):
+    """Stops a running script. On the server it is killed; on a computer the connection is closed and the wait ends:
+    what already started there may finish on its own."""
+    job = _job(request, job_id)
+    if job.state == "running" and job.task is not None:
+        job.task.cancel()
+        await asyncio.wait({job.task}, timeout=10)
+    return job_out(job)
+
+
+@router.post("/{script_id}/jobs", response_model=ScriptJobOut, status_code=status.HTTP_202_ACCEPTED)
+async def start_job(script_id: uuid.UUID, body: RunbookRunIn, request: Request, session: SessionDep):
+    """Runs a script that really runs (on a computer or on the server) in the background; the answer is the job."""
+    script = await session.get(CustomScript, script_id)
+    if script is None:
+        raise not_found("script")
+    if script.runs_on == "emulator":
+        raise _refuse(422, "not_a_job", "Этот скрипт только показывается: запускать в фоне нечего")
+    rb = as_runbook(script)
+    try:
+        params = validate(rb, body.params)
+    except InvalidParams as e:
+        raise _refuse(422, "invalid_params", str(e)) from e
+    if rb.critical and body.confirm is not True:
+        raise _refuse(
+            400, "confirmation_required", 'critical runbook: confirm on the phone and repeat with "confirm": true'
+        )
+    host = params.get(HOST_PARAM, "") if script.runs_on == "pc" else ""
+    running = request.app.state.__dict__.setdefault("scripts_running", set())
+    slot = (rb.id, host)
+    if slot in running:
+        where = f" на {host}" if host else ""
+        raise _refuse(409, "already_running", f"Этот скрипт уже выполняется{where}: дождитесь его конца")
+    snapshot = SimpleNamespace(
+        id=script.id, title=script.title, shell=script.shell, body=script.body, params=list(script.params),
+        runs_on=script.runs_on,
+    )  # fmt: skip
+    job = scriptjobs.ScriptJob(
+        id=uuid.uuid4(), runbook_id=rb.id, title=script.title, host=host, runs_on=script.runs_on,
+        operator=who(request, body.operator),
+    )  # fmt: skip
+    running.add(slot)
+    job.task = asyncio.create_task(_run_job(request, job, snapshot, params, body, slot))
+    scriptjobs.remember(request.app.state, job)
+    return job_out(job)
+
+
+async def _run_job(request: Request, job: scriptjobs.ScriptJob, script, params: dict, body: RunbookRunIn, slot) -> None:
+    t0 = time.monotonic()
+    result: RunResult | None = None
+    stopped = False
+    try:
+        async with request.app.state.sessionmaker() as session:
+            result, job.simulated = await execute(script, params, request, session, False, sink=job.add)
+    except asyncio.CancelledError:
+        stopped = True
+    except HTTPException as e:
+        detail = e.detail if isinstance(e.detail, dict) else {}
+        job.error = str(detail.get("message") or e.detail)
+    except Exception as e:
+        log.exception("script job %s failed", job.id)
+        job.error = f"Сбой: {e!r}"
+    finally:
+        request.app.state.scripts_running.discard(slot)
+    if result is not None:
+        job.stdout, job.stderr, job.exit_code = result.stdout, result.stderr, result.exit_code
+    elif stopped:
+        job.exit_code = 130
+        job.error = "Остановлено оператором" + (
+            ": соединение закрыто, но на компьютере скрипт мог продолжить работу" if job.runs_on == "pc" else ""
+        )
+    else:
+        job.exit_code = 1
+    job.state = "stopped" if stopped else "done" if result is not None else "failed"
+    job.finished_at = datetime.now(UTC)
+    try:
+        async with request.app.state.sessionmaker() as session:
+            entry = ScriptAuditLog(
+                script_name=f"runbook:{job.runbook_id}",
+                triggered_by=job.operator[:100],
+                parameters={
+                    "params": params,
+                    "confirmed": body.confirm,
+                    "auth_method": body.auth_method,
+                    "simulated": job.simulated,
+                    "job": str(job.id),
+                    "stopped": stopped,
+                },  # fmt: skip
+                executed_at=job.started_at,
+                exit_code=job.exit_code,
+                output_log=job.stdout,
+                stderr_log=job.stderr or job.error,
+                duration_ms=int((time.monotonic() - t0) * 1000),
+            )
+            session.add(entry)
+            await session.commit()
+            job.audit_id = entry.id
+    except Exception:
+        log.exception("script job %s: journal entry not written", job.id)

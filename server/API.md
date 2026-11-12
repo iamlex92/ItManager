@@ -342,6 +342,22 @@ Errors: 415 `bad_svg`, 413 `svg_too_big`, 422 `bad_port` / `duplicate_port`.
 
 ## Config import
 
+`POST /api/v1/server-settings/rotate-token` `{confirm: true, operator?}` replaces `API_TOKEN` in the settings file
+(`NETADMIN_CONFIG`, default `/etc/netadmin/netadmin.env`) and in the running server; the old token stops working at once.
+Answer: `{token, link, qr_svg, addresses, config}` (`link` is the `netadmin://connect?...` payload the app scans). 400
+`confirmation_required` without confirm; 409 `config_missing` / `config_not_writable` when the file cannot be changed
+(then nothing changes). Journal: `token_rotate`, never the token.
+
+Custom scripts as background jobs (web console; the app keeps `POST /runbooks/{id}/run`):
+`POST /api/v1/scripts/{id}/jobs` `{params, confirm: true, operator?}` (202, same refusals as a run: 400
+`confirmation_required`, 409 `already_running`, 403 writes off is reported as a failed job) starts a script that runs for real
+(on a computer or the server; not an «emulator» one) and answers the job `{id, state: running|done|stopped|failed,
+exit_code, stdout, stderr, out_len, err_len, error, started_at, finished_at, audit_id}`.
+`GET /api/v1/scripts/jobs/{job}?out_from=&err_from=` returns the output after those offsets (the server's own scripts
+write as they go; a computer's output arrives at the end). `POST /api/v1/scripts/jobs/{job}/stop` kills a script on the
+server and, for a computer, closes the connection and stops waiting (what was started there may finish). `GET
+/api/v1/scripts/jobs` lists the latest jobs without output. One journal entry per job.
+
 `POST /api/v1/devices/{id}/config-import` `{text, apply}` reads a pasted running-config (Cisco IOS, Eltex MES) or
 `show vlan brief` into the inventory. Response: `{kind, hostname, applied, ports: [{port, matched, changes}],
 new_ports, new_vlans, changed_ports}`. `matched: false` is a port that will be (or was) added. On apply, VLANs the server does not have are added if a port in the text carries them (access, or an explicit
