@@ -2,17 +2,33 @@ package com.itmanager.app.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import com.itmanager.app.R
+
+/** IBM Plex Sans / Mono (SIL OFL, the same as the web console); cyrillic and latin are in the files. */
+val PlexSans = FontFamily(
+    Font(R.font.ibm_plex_sans_regular, FontWeight.Normal),
+    Font(R.font.ibm_plex_sans_medium, FontWeight.Medium),
+    Font(R.font.ibm_plex_sans_semibold, FontWeight.SemiBold),
+    // Bold has no file of its own: the semibold one stands in, so headings do not fall back to a system font.
+    Font(R.font.ibm_plex_sans_semibold, FontWeight.Bold),
+)
+val PlexMono = FontFamily(
+    Font(R.font.ibm_plex_mono_regular, FontWeight.Normal),
+    Font(R.font.ibm_plex_mono_medium, FontWeight.Medium),
+    Font(R.font.ibm_plex_mono_medium, FontWeight.SemiBold),
+)
 
 /**
- * System font (Google Sans / Roboto Flex on Pixel), with tracking and leading tuned per size:
+ * IBM Plex Sans, with tracking and leading tuned per size:
  * large text gets negative tracking and tight leading, small labels a touch of positive tracking.
  */
 private fun style(size: Int, line: Int, weight: FontWeight, tracking: Double) = TextStyle(
-    fontFamily = FontFamily.Default,
+    fontFamily = PlexSans,
     fontWeight = weight,
     fontSize = size.sp,
     lineHeight = line.sp,
@@ -38,4 +54,4 @@ val AppTypography = Typography(
 )
 
 /** Monospace for IPs, MACs and interface names, so columns of addresses line up. */
-val MonoStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp, letterSpacing = 0.em)
+val MonoStyle = TextStyle(fontFamily = PlexMono, fontSize = 13.sp, letterSpacing = 0.em)

@@ -73,7 +73,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -342,7 +341,7 @@ private fun PortSheet(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 StatusDot(port.status.color, size = 12.dp)
                 Spacer(Modifier.width(10.dp))
-                Text(port.name, style = MaterialTheme.typography.headlineSmall.copy(fontFamily = FontFamily.Monospace))
+                Text(port.name, style = MaterialTheme.typography.headlineSmall.copy(fontFamily = com.itmanager.app.ui.theme.PlexMono))
                 if (port.isUplink) {
                     Spacer(Modifier.width(10.dp))
                     Text(

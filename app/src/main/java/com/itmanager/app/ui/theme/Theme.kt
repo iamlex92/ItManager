@@ -40,7 +40,7 @@ private val DarkColors = darkColorScheme(
 )
 
 private val LightColors = lightColorScheme(
-    primary = Color(0xFF1F5FD0),
+    primary = Color(0xFF1F5FBF),
     onPrimary = Color.White,
     primaryContainer = Color(0xFFD9E5FF),
     onPrimaryContainer = Color(0xFF0B2A66),
@@ -49,7 +49,7 @@ private val LightColors = lightColorScheme(
     secondaryContainer = Color(0xFFE3E8F0),
     onSecondaryContainer = Color(0xFF0F1620),
     tertiary = Color(0xFF1B7F3A),
-    background = Color(0xFFF6F8FB),
+    background = Color(0xFFEDF1F5),
     onBackground = Color(0xFF0F1620),
     surface = Color(0xFFFFFFFF),
     onSurface = Color(0xFF0F1620),
@@ -69,11 +69,11 @@ private val LightColors = lightColorScheme(
 )
 
 private val AppShapes = Shapes(
-    extraSmall = RoundedCornerShape(6.dp),
-    small = RoundedCornerShape(10.dp),
-    medium = RoundedCornerShape(16.dp),
-    large = RoundedCornerShape(22.dp),
-    extraLarge = RoundedCornerShape(28.dp),
+    extraSmall = RoundedCornerShape(3.dp),
+    small = RoundedCornerShape(6.dp),
+    medium = RoundedCornerShape(8.dp),
+    large = RoundedCornerShape(12.dp),
+    extraLarge = RoundedCornerShape(16.dp),
 )
 
 /**

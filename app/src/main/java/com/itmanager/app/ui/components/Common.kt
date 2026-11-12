@@ -2,7 +2,9 @@ package com.itmanager.app.ui.components
 
 import androidx.compose.ui.res.stringResource
 import com.itmanager.app.R
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,7 +30,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
+import com.itmanager.app.ui.theme.PlexMono
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -106,6 +111,39 @@ fun EmptyView(text: String, modifier: Modifier = Modifier, action: String? = nul
 @Composable
 fun StatusDot(color: Color, modifier: Modifier = Modifier, size: Dp = 8.dp) {
     Box(modifier.size(size).background(color, CircleShape))
+}
+
+/**
+ * Status lamp of the "rack" look: a solid core with a soft halo, like an LED on a panel. [lit] is false for a lamp
+ * that is off (passive device, no data): it has no halo, so "off" differs from "red" by more than hue.
+ */
+@Composable
+fun Led(color: Color, modifier: Modifier = Modifier, size: Dp = 10.dp, lit: Boolean = true) {
+    Box(
+        modifier
+            .size(size)
+            .drawBehind {
+                if (lit) drawCircle(color.copy(alpha = 0.28f), radius = this.size.minDimension * 0.95f)
+                drawCircle(color, radius = this.size.minDimension / 2f)
+            },
+    )
+}
+
+/** Name plate: the device name in monospace on a lighter plate with a fine outline, as on a patch panel label. */
+@Composable
+fun NamePlate(text: String, modifier: Modifier = Modifier, maxLines: Int = 1) {
+    val scheme = MaterialTheme.colorScheme
+    Text(
+        text,
+        style = MaterialTheme.typography.titleSmall.copy(fontFamily = PlexMono),
+        color = scheme.onSurface,
+        maxLines = maxLines,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier
+            .background(scheme.surfaceContainerHigh, RoundedCornerShape(3.dp))
+            .border(BorderStroke(1.dp, scheme.outlineVariant), RoundedCornerShape(3.dp))
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+    )
 }
 
 /** Small uppercase-free section label; hierarchy comes from weight and color, not caps. */
