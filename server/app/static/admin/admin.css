@@ -1,41 +1,57 @@
-/* Design tokens: NetAdmin design system. Dark is the main theme; light follows the system or the header toggle.
-   The map, topology, port faceplate, rack and chart are drawn on canvas in dark colors, so those areas stay dark. */
+/* Design: «Шкаф и светодиоды». Dark is the main theme (steel of a rack); light is «чертёж» (a cool paper with blue ink).
+   Status is told by an LED: green answers, amber needs a look, red does not answer, grey is off or passive.
+   The map, topology, port faceplate, rack and chart are drawn on canvas in dark colors, so those areas stay dark.
+   Fonts: IBM Plex Sans and Mono (SIL OFL), served from /static/admin/fonts (the plant may have no internet). */
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 400; font-display: swap; src: url(/static/admin/fonts/ibm-plex-sans-cyrillic-400-normal.woff2) format("woff2"); unicode-range: U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116; }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 400; font-display: swap; src: url(/static/admin/fonts/ibm-plex-sans-latin-400-normal.woff2) format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 500; font-display: swap; src: url(/static/admin/fonts/ibm-plex-sans-cyrillic-500-normal.woff2) format("woff2"); unicode-range: U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116; }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 500; font-display: swap; src: url(/static/admin/fonts/ibm-plex-sans-latin-500-normal.woff2) format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 600; font-display: swap; src: url(/static/admin/fonts/ibm-plex-sans-cyrillic-600-normal.woff2) format("woff2"); unicode-range: U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116; }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 600; font-display: swap; src: url(/static/admin/fonts/ibm-plex-sans-latin-600-normal.woff2) format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(/static/admin/fonts/ibm-plex-mono-cyrillic-400-normal.woff2) format("woff2"); unicode-range: U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116; }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(/static/admin/fonts/ibm-plex-mono-latin-400-normal.woff2) format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url(/static/admin/fonts/ibm-plex-mono-cyrillic-500-normal.woff2) format("woff2"); unicode-range: U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116; }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url(/static/admin/fonts/ibm-plex-mono-latin-500-normal.woff2) format("woff2"); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+
 :root, .map-wrap, .chart, .plate-wrap, .rack-view {
-  --bg: #0b0e13; --surface: #11151c; --surface-low: #161b23; --card: #1c222c; --raised: #262e3a;
-  --line: #343d4b; --line-strong: #6b7686; --muted: #9aa5b5; --text: #e6edf5;
-  --accent: #4c9eff; --accent-ink: #06101f; --accent-container: #14325a; --on-accent-container: #d5e6ff;
-  --ok: #32d74b; --ok-container: #10351b; --danger: #ff453a; --on-danger: #2a0503; --danger-container: #3b1210;
-  --warn: #ff9f0a; --warn-bg: #3a2f12; --info: #64d2ff; --info-container: #0f2f3d; --poe: #ffd60a;
+  --bg: #0d1115; --surface: #12171d; --surface-low: #0f1419; --card: #161d24; --raised: #1e2730;
+  --line: #2a343e; --line-strong: #55616d; --muted: #8d99a6; --text: #e8edf2;
+  --accent: #3a8dff; --accent-ink: #04101f; --accent-container: #12335f; --on-accent-container: #d3e5ff;
+  --ok: #3ddc84; --ok-container: #0f3a24; --danger: #ff5a52; --on-danger: #2a0503; --danger-container: #3d1411;
+  --warn: #ffb020; --warn-bg: #3a2e10; --info: #5ac8fa; --info-container: #0f2f3d; --poe: #ffd60a;
+  --led-off: #56616c;
   --port-down: #3a4350; --port-off: #242a33;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --bg: #eef1f5; --surface: #f7f8fa; --surface-low: #f1f3f7; --card: #ffffff; --raised: #e3e8ef;
-    --line: #c5cdd8; --line-strong: #6b7686; --muted: #4a5565; --text: #0f1620;
-    --accent: #0b5bd3; --accent-ink: #ffffff; --accent-container: #d6e6ff; --on-accent-container: #0a2a5c;
-    --ok: #14793a; --ok-container: #d9f5e1; --danger: #c4271c; --on-danger: #ffffff; --danger-container: #ffdad6;
+    --bg: #edf1f5; --surface: #f6f8fa; --surface-low: #f1f4f7; --card: #ffffff; --raised: #e4e9ef;
+    --line: #c9d2dc; --line-strong: #6b7886; --muted: #4a5764; --text: #121a22;
+    --accent: #1f5fbf; --accent-ink: #ffffff; --accent-container: #d9e6f9; --on-accent-container: #0e2a55;
+    --ok: #14803f; --ok-container: #d8f3e2; --danger: #c4271c; --on-danger: #ffffff; --danger-container: #ffdad6;
     --warn: #8f5400; --warn-bg: #fff0cf; --info: #0a6a96; --info-container: #d4eefb; --poe: #7a6200;
+    --led-off: #8b97a3;
     --port-down: #b9c1cc; --port-off: #d5dae2;
     color-scheme: light;
   }
 }
 :root[data-theme="light"] {
-  --bg: #eef1f5; --surface: #f7f8fa; --surface-low: #f1f3f7; --card: #ffffff; --raised: #e3e8ef;
-  --line: #c5cdd8; --line-strong: #6b7686; --muted: #4a5565; --text: #0f1620;
-  --accent: #0b5bd3; --accent-ink: #ffffff; --accent-container: #d6e6ff; --on-accent-container: #0a2a5c;
-  --ok: #14793a; --ok-container: #d9f5e1; --danger: #c4271c; --on-danger: #ffffff; --danger-container: #ffdad6;
+  --bg: #edf1f5; --surface: #f6f8fa; --surface-low: #f1f4f7; --card: #ffffff; --raised: #e4e9ef;
+  --line: #c9d2dc; --line-strong: #6b7886; --muted: #4a5764; --text: #121a22;
+  --accent: #1f5fbf; --accent-ink: #ffffff; --accent-container: #d9e6f9; --on-accent-container: #0e2a55;
+  --ok: #14803f; --ok-container: #d8f3e2; --danger: #c4271c; --on-danger: #ffffff; --danger-container: #ffdad6;
   --warn: #8f5400; --warn-bg: #fff0cf; --info: #0a6a96; --info-container: #d4eefb; --poe: #7a6200;
+  --led-off: #8b97a3;
   --port-down: #b9c1cc; --port-off: #d5dae2;
   color-scheme: light;
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
-body { background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+body { background: var(--bg); color: var(--text); font: 14px/1.45 "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 [hidden] { display: none !important; }
 h1 { font-size: 24px; margin: 0 0 8px; }
 h2 { font-size: 16px; margin: 0; }
-code, .mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+code, .mono { font-family: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: .95em; }
 .muted { color: var(--muted); }
 .small { font-size: 12px; }
 .error { color: var(--danger); }
@@ -433,3 +449,73 @@ tr.skeleton td::after { content: ""; display: block; height: 12px; border-radius
 
 .token-qr svg { width: 220px; height: 220px; background: #fff; border-radius: 8px; }
 #token-value { word-break: break-all; padding: 6px 8px; background: var(--card-2, rgba(128,128,128,.15)); border-radius: 6px; }
+
+
+/* ================= «Шкаф и светодиоды»: shape, density, icons, LED and name plate ================= */
+.sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.ic { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Square-ish, not pills: pills are for status, not for every control. */
+button, .button { border-radius: 6px; padding: 6px 12px; font-weight: 500; transition: border-color .12s, background-color .12s; }
+button:hover:not(:disabled), .button:hover { background: color-mix(in srgb, var(--raised) 70%, var(--line)); }
+button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 88%, white); }
+button.ghost:hover:not(:disabled) { background: var(--raised); }
+input, select, textarea { border-radius: 6px; padding: 7px 10px; }
+.card, .bulk-bar, .edit-bar, .route-opts, .legend, .topo-card, .config-action, .pop { border-radius: 10px; }
+dialog { border-radius: 10px; }
+.seg { border-radius: 6px; }
+.badge { border-radius: 4px; padding: 2px 8px; }
+
+/* The list of sections: icons, not emoji. */
+.side { width: 216px; gap: 1px; }
+.side button { padding: 7px 10px; gap: 10px; font-weight: 500; color: var(--muted); }
+.side button .ic { color: var(--muted); }
+.side button:hover { color: var(--text); }
+.side button.active { background: var(--accent-container); color: var(--on-accent-container); }
+.side button.active .ic { color: var(--accent); }
+.side button[data-ic]::before { content: none; }
+.side-group { padding: 14px 10px 4px; letter-spacing: .02em; text-transform: none; font-size: 12px; font-weight: 600; }
+.side.collapsed { width: 52px; }
+.side.collapsed button[data-tab] { font-size: 0; padding: 9px 0; gap: 0; }
+.side.collapsed button[data-tab] .ic { width: 20px; height: 20px; }
+.side.collapsed .side-group { height: 10px; border-top: 1px solid var(--line); margin: 4px 6px 0; padding: 0; visibility: visible; font-size: 0; }
+.top { padding: 8px 16px; }
+.brand { font-weight: 600; letter-spacing: .01em; }
+.top .ghost { color: var(--muted); }
+.top .ghost:hover { color: var(--text); }
+
+/* LED: the status of a device, the same everywhere. */
+.led { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--led-off); box-shadow: inset 0 0 0 1px color-mix(in srgb, #000 28%, transparent); vertical-align: middle; }
+.led.up { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); }
+.led.warn { background: var(--warn); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 25%, transparent); }
+.led.down { background: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 25%, transparent); }
+.led.off { background: transparent; box-shadow: inset 0 0 0 1.5px var(--led-off); }
+@media (prefers-reduced-motion: no-preference) { .led.busy { animation: led-blink 1s steps(2, jump-none) infinite; } }
+@keyframes led-blink { 50% { opacity: .35; } }
+
+/* Name plate: a device name as printed on a label. */
+.plate { display: inline-block; font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; font-weight: 500; font-size: 13px; line-height: 20px;
+  padding: 0 7px; background: var(--raised); border: 1px solid var(--line); border-radius: 3px; color: var(--text); white-space: nowrap; }
+
+/* The device list: 36 px rows, status by LED, actions when the row is under the pointer. */
+.grid th, .grid td { padding: 5px 10px; }
+.grid th { font-weight: 500; font-size: 12px; }
+.grid tr.st-up td:first-child, .grid tr.st-down td:first-child, .grid tr.st-passive td:first-child { box-shadow: none; }
+.grid tr.st-down td { background: color-mix(in srgb, var(--danger) 7%, transparent); }
+.grid td.dev-name { white-space: nowrap; }
+.dev-name .led { margin-right: 10px; }
+.dev-name .plate { vertical-align: middle; }
+.grid td:nth-child(3) { white-space: nowrap; }
+.grid td code { font-size: 13px; }
+@media (hover: hover) {
+  .grid tr.clickable td.actions button { opacity: 0; }
+  .grid tr.clickable:hover td.actions button, .grid tr.clickable:focus-within td.actions button { opacity: 1; }
+}
+.os-tag { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; border-radius: 3px; }
+
+/* One line per device; long text is cut, not wrapped. */
+#device-table td { white-space: nowrap; }
+#device-table td:nth-child(10) { font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; font-size: 13px; }
+/* The kind glyph is drawn light for the dark theme: flip its lightness in the light one. */
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .glyph { filter: invert(1) hue-rotate(180deg); } }
+:root[data-theme="light"] .glyph { filter: invert(1) hue-rotate(180deg); }
