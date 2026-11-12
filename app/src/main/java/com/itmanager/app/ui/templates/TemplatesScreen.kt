@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.templates
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -84,7 +86,7 @@ fun TemplatesScreen(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
-                title = { Text("Шаблоны устройств", style = MaterialTheme.typography.titleLarge) },
+                title = { Text(stringResource(R.string.templates_screen_01), style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Назад") }
                 },
@@ -126,10 +128,10 @@ fun TemplatesScreen(
     deleting?.let { t ->
         AlertDialog(
             onDismissRequest = { deleting = null },
-            title = { Text("Удалить шаблон?") },
+            title = { Text(stringResource(R.string.templates_screen_02)) },
             text = { Text("«${t.name}» будет удалён. Устройства, созданные из него, останутся.") },
-            confirmButton = { TextButton(onClick = { viewModel.delete(t); deleting = null }) { Text("Удалить") } },
-            dismissButton = { TextButton(onClick = { deleting = null }) { Text("Отмена") } },
+            confirmButton = { TextButton(onClick = { viewModel.delete(t); deleting = null }) { Text(stringResource(R.string.form_sheet_01)) } },
+            dismissButton = { TextButton(onClick = { deleting = null }) { Text(stringResource(R.string.form_sheet_02)) } },
         )
     }
 }
@@ -152,7 +154,7 @@ private fun TemplateCard(t: DeviceTemplate, onUse: () -> Unit, onDelete: () -> U
             }
             IconButton(onClick = onDelete) { Icon(Icons.Outlined.Delete, contentDescription = "Удалить шаблон") }
         }
-        OutlinedButton(onClick = onUse, modifier = Modifier.padding(top = 8.dp)) { Text("Создать устройство") }
+        OutlinedButton(onClick = onUse, modifier = Modifier.padding(top = 8.dp)) { Text(stringResource(R.string.templates_screen_03)) }
     }
 }
 
@@ -168,10 +170,10 @@ private fun TemplateDialog(onDismiss: () -> Unit, onSave: (DeviceTemplateDraft) 
     var rackH by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Новый шаблон") },
+        title = { Text(stringResource(R.string.templates_screen_04)) },
         text = {
             androidx.compose.foundation.lazy.LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                item { OutlinedTextField(name, { name = it }, label = { Text("Название") }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
+                item { OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.credentials_screen_02)) }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
                 item {
                     androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         TemplateTypes.forEach { t ->
@@ -179,11 +181,11 @@ private fun TemplateDialog(onDismiss: () -> Unit, onSave: (DeviceTemplateDraft) 
                         }
                     }
                 }
-                item { OutlinedTextField(vendor, { vendor = it }, label = { Text("Производитель") }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
-                item { OutlinedTextField(model, { model = it }, label = { Text("Модель") }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
-                item { OutlinedTextField(ports, { ports = it.filter(Char::isDigit).take(2) }, label = { Text("Портов (0–96)") }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
-                item { OutlinedTextField(prefix, { prefix = it }, label = { Text("Имя порта: префикс") }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
-                item { OutlinedTextField(rackH, { rackH = it.filter(Char::isDigit).take(2) }, label = { Text("Высота в стойке, U (необязательно)") }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
+                item { OutlinedTextField(vendor, { vendor = it }, label = { Text(stringResource(R.string.bulk_edit_dialog_05)) }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
+                item { OutlinedTextField(model, { model = it }, label = { Text(stringResource(R.string.map_editor_20)) }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
+                item { OutlinedTextField(ports, { ports = it.filter(Char::isDigit).take(2) }, label = { Text(stringResource(R.string.templates_screen_05)) }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
+                item { OutlinedTextField(prefix, { prefix = it }, label = { Text(stringResource(R.string.templates_screen_06)) }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
+                item { OutlinedTextField(rackH, { rackH = it.filter(Char::isDigit).take(2) }, label = { Text(stringResource(R.string.templates_screen_07)) }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
             }
         },
         confirmButton = {
@@ -197,9 +199,9 @@ private fun TemplateDialog(onDismiss: () -> Unit, onSave: (DeviceTemplateDraft) 
                         ),
                     )
                 },
-            ) { Text("Сохранить") }
+            ) { Text(stringResource(R.string.action_save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.form_sheet_02)) } },
     )
 }
 
@@ -212,8 +214,8 @@ private fun UseDialog(t: DeviceTemplate, onDismiss: () -> Unit, onCreate: (Strin
         title = { Text("Из шаблона «${t.name}»") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(name, { name = it }, label = { Text("Имя устройства") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(ip, { ip = it }, label = { Text("IP-адрес (необязательно)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.template_place_ui_02)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(ip, { ip = it }, label = { Text(stringResource(R.string.templates_screen_08)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 Text(
                     "Устройство попадёт в учёт без места на карте; расставить его можно на плане этажа.",
                     style = MaterialTheme.typography.bodySmall,
@@ -221,7 +223,7 @@ private fun UseDialog(t: DeviceTemplate, onDismiss: () -> Unit, onCreate: (Strin
                 )
             }
         },
-        confirmButton = { TextButton(enabled = name.isNotBlank(), onClick = { onCreate(name, ip) }) { Text("Создать") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        confirmButton = { TextButton(enabled = name.isNotBlank(), onClick = { onCreate(name, ip) }) { Text(stringResource(R.string.gpo_screen_05)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.form_sheet_02)) } },
     )
 }

@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.map
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -61,14 +63,14 @@ fun ZoneDialog(edit: ZoneEdit, onSave: (Zone) -> Unit, onDelete: (String) -> Uni
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it.take(100) },
-                    label = { Text("Название") },
-                    placeholder = { Text("Например, Серверная") },
+                    label = { Text(stringResource(R.string.credentials_screen_02)) },
+                    placeholder = { Text(stringResource(R.string.zone_ui_01)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Это помещение", style = MaterialTheme.typography.bodyLarge)
+                        Text(stringResource(R.string.zone_ui_02), style = MaterialTheme.typography.bodyLarge)
                         Text(
                             "Устройства внутри зоны попадут в список помещения.",
                             style = MaterialTheme.typography.bodySmall,
@@ -94,7 +96,7 @@ fun ZoneDialog(edit: ZoneEdit, onSave: (Zone) -> Unit, onDelete: (String) -> Uni
                     TextButton(onClick = { onDelete(edit.zone.id) }) {
                         Icon(Icons.Outlined.DeleteOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                         Spacer(Modifier.width(8.dp))
-                        Text("Удалить зону", color = MaterialTheme.colorScheme.error)
+                        Text(stringResource(R.string.zone_ui_03), color = MaterialTheme.colorScheme.error)
                     }
                 }
             }
@@ -103,9 +105,9 @@ fun ZoneDialog(edit: ZoneEdit, onSave: (Zone) -> Unit, onDelete: (String) -> Uni
             TextButton(
                 onClick = { onSave(edit.zone.copy(name = name.trim(), isRoom = isRoom, colorArgb = color)) },
                 enabled = name.isNotBlank(),
-            ) { Text("Сохранить") }
+            ) { Text(stringResource(R.string.action_save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.form_sheet_02)) } },
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
     )
 }
@@ -117,7 +119,7 @@ fun RoomsDialog(zones: List<Zone>, devices: List<Device>, onPick: (Device) -> Un
     val byRoom = devices.groupBy { zones.roomAt(it.x, it.y)?.id }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Помещения этажа") },
+        title = { Text(stringResource(R.string.zone_ui_04)) },
         text = {
             LazyColumn(Modifier.heightIn(max = 460.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 rooms.forEach { room ->
@@ -142,7 +144,7 @@ fun RoomsDialog(zones: List<Zone>, devices: List<Device>, onPick: (Device) -> Un
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Закрыть") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.device_screen_09)) } },
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
     )
 }
@@ -190,7 +192,7 @@ fun CommentDialog(device: Device, busy: Boolean, error: String?, onSave: (String
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it.take(4000) },
-                    placeholder = { Text("Заметка об устройстве: куда включено, что менялось, кому звонить") },
+                    placeholder = { Text(stringResource(R.string.zone_ui_05)) },
                     minLines = 4,
                     maxLines = 8,
                     modifier = Modifier.fillMaxWidth(),
@@ -198,8 +200,8 @@ fun CommentDialog(device: Device, busy: Boolean, error: String?, onSave: (String
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             }
         },
-        confirmButton = { TextButton(onClick = { onSave(text) }, enabled = !busy) { Text("Сохранить") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        confirmButton = { TextButton(onClick = { onSave(text) }, enabled = !busy) { Text(stringResource(R.string.action_save)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.form_sheet_02)) } },
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
     )
 }

@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.map
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -92,7 +94,7 @@ fun FloorsDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Этажи") },
+        title = { Text(stringResource(R.string.floors_dialog_01)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 val top = floors.reversed()
@@ -149,11 +151,11 @@ fun FloorsDialog(
                 TextButton(onClick = { editing = NEW }, enabled = !busy) {
                     Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Добавить этаж")
+                    Text(stringResource(R.string.floors_dialog_02))
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Готово") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.runbook_sheet_05)) } },
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
     )
 }
@@ -175,23 +177,23 @@ private fun FloorEditDialog(floor: FloorInfo?, suggested: FloorDraft, onSave: (F
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it.take(100) },
-                    label = { Text("Название") },
-                    placeholder = { Text("Например, 2 этаж или Подвал") },
+                    label = { Text(stringResource(R.string.credentials_screen_02)) },
+                    placeholder = { Text(stringResource(R.string.floors_dialog_03)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
                     value = building,
                     onValueChange = { building = it.take(100) },
-                    label = { Text("Здание") },
+                    label = { Text(stringResource(R.string.floors_dialog_04)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
                     value = number,
                     onValueChange = { number = it.take(4) },
-                    label = { Text("Номер этажа") },
-                    supportingText = { Text("Задаёт порядок: подвал 0 или -1, первый этаж 1.") },
+                    label = { Text(stringResource(R.string.floors_dialog_05)) },
+                    supportingText = { Text(stringResource(R.string.floors_dialog_06)) },
                     isError = parsed == null,
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -203,9 +205,9 @@ private fun FloorEditDialog(floor: FloorInfo?, suggested: FloorDraft, onSave: (F
             TextButton(
                 onClick = { onSave(FloorDraft(building.trim(), parsed ?: 0, name.trim().ifEmpty { null })) },
                 enabled = parsed != null && building.isNotBlank(),
-            ) { Text("Сохранить") }
+            ) { Text(stringResource(R.string.action_save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.form_sheet_02)) } },
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
     )
 }

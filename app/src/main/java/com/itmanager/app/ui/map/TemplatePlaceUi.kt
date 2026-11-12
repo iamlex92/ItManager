@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.map
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -61,7 +63,7 @@ fun TemplatePlaceDialog(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        TextButton(onClick = onManageTemplates) { Text("Создать шаблон") }
+                        TextButton(onClick = onManageTemplates) { Text(stringResource(R.string.template_place_ui_01)) }
                     }
                     templates.forEach { t ->
                         Row(
@@ -91,17 +93,17 @@ fun TemplatePlaceDialog(
                     OutlinedTextField(
                         value = name,
                         onValueChange = { name = it.take(100); error = null },
-                        label = { Text("Имя устройства") },
+                        label = { Text(stringResource(R.string.template_place_ui_02)) },
                         placeholder = { Text("SW-2-01") },
                         singleLine = true,
                         isError = error != null && name.isBlank(),
-                        supportingText = if (name.isBlank() && error != null) ({ Text("Укажите имя") }) else null,
+                        supportingText = if (name.isBlank() && error != null) ({ Text(stringResource(R.string.map_editor_19)) }) else null,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     OutlinedTextField(
                         value = ip,
                         onValueChange = { ip = it.trim().take(45) },
-                        label = { Text("IP-адрес, если есть") },
+                        label = { Text(stringResource(R.string.map_editor_21)) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                         modifier = Modifier.fillMaxWidth(),
@@ -131,7 +133,7 @@ fun TemplatePlaceDialog(
                             if (e == null) onDismiss()
                         }
                     },
-                ) { Text("Добавить") }
+                ) { Text(stringResource(R.string.credentials_screen_01)) }
             }
         },
         dismissButton = {

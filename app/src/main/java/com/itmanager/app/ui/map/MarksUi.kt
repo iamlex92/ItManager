@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.map
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -78,7 +80,7 @@ fun MarkDialog(edit: MarkEdit, onSave: (Annotation) -> Unit, onDelete: (String) 
                     maxLines = 2,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Text("Цвет", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.map_editor_14), style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     MARK_COLORS.forEach { c ->
                         Box(
@@ -91,10 +93,10 @@ fun MarkDialog(edit: MarkEdit, onSave: (Annotation) -> Unit, onDelete: (String) 
                         )
                     }
                 }
-                Text("Размер", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.marks_ui_01), style = MaterialTheme.typography.labelLarge)
                 Slider(value = size, onValueChange = { size = it }, valueRange = 0.5f..3f)
                 if (!edit.isNew) {
-                    TextButton(onClick = { onDelete(a.id) }) { Text("Удалить метку", color = MaterialTheme.colorScheme.error) }
+                    TextButton(onClick = { onDelete(a.id) }) { Text(stringResource(R.string.marks_ui_02), color = MaterialTheme.colorScheme.error) }
                 }
             }
         },
@@ -102,9 +104,9 @@ fun MarkDialog(edit: MarkEdit, onSave: (Annotation) -> Unit, onDelete: (String) 
             TextButton(
                 onClick = { onSave(a.copy(kind = kind, text = text.trim(), colorArgb = color, size = (size * 10).toInt() / 10f)) },
                 enabled = !needsText || text.isNotBlank(),
-            ) { Text("Сохранить") }
+            ) { Text(stringResource(R.string.action_save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.form_sheet_02)) } },
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
     )
 }

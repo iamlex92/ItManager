@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.switchdetail
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -111,9 +113,9 @@ fun PortRecordDialog(
                 OutlinedTextField(
                     value = number,
                     onValueChange = { number = it.filter(Char::isDigit).take(4) },
-                    label = { Text("Номер") },
+                    label = { Text(stringResource(R.string.port_record_dialog_01)) },
                     isError = numberError,
-                    supportingText = if (numberError) ({ Text("От 1") }) else null,
+                    supportingText = if (numberError) ({ Text(stringResource(R.string.port_record_dialog_02)) }) else null,
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.weight(1f),
@@ -121,16 +123,16 @@ fun PortRecordDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it.take(50) },
-                    label = { Text("Имя") },
+                    label = { Text(stringResource(R.string.gpo_screen_04)) },
                     placeholder = { Text("Gi1/0/5") },
                     isError = nameError,
-                    supportingText = if (nameError) ({ Text("Укажите имя") }) else null,
+                    supportingText = if (nameError) ({ Text(stringResource(R.string.map_editor_19)) }) else null,
                     singleLine = true,
                     modifier = Modifier.weight(2f),
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Аплинк", Modifier.weight(1f))
+                Text(stringResource(R.string.port_record_dialog_03), Modifier.weight(1f))
                 Switch(checked = uplink, onCheckedChange = { uplink = it })
             }
         }
@@ -147,7 +149,7 @@ fun PortRecordDialog(
             }
             if (mode == PortMode.ACCESS) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilterChip(selected = access == null, onClick = { access = null }, label = { Text("Нет") })
+                    FilterChip(selected = access == null, onClick = { access = null }, label = { Text(stringResource(R.string.gpo_screen_02)) })
                     vlans.forEach { v ->
                         FilterChip(
                             selected = access == v.id,
@@ -161,7 +163,7 @@ fun PortRecordDialog(
                 OutlinedTextField(
                     value = tagged,
                     onValueChange = { tagged = it.filter { c -> c.isDigit() || c == ',' || c == ' ' }.take(200) },
-                    label = { Text("Tagged VLAN через запятую") },
+                    label = { Text(stringResource(R.string.port_record_dialog_04)) },
                     placeholder = { Text("10,20,99") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),

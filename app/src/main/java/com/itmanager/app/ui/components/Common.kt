@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.components
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -73,9 +75,9 @@ fun ErrorView(
                 TextButton(onClick = onOpenSettings) {
                     Icon(Icons.Outlined.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.size(6.dp))
-                    Text("Настройки")
+                    Text(stringResource(R.string.common_01))
                 }
-                FilledTonalButton(onClick = onRetry) { Text("Повторить") }
+                FilledTonalButton(onClick = onRetry) { Text(stringResource(R.string.common_02)) }
             }
         }
     }

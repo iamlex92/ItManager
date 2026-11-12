@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.components
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -137,9 +139,9 @@ fun FormSheet(
                 TextButton(onClick = {
                     confirmDelete = false
                     onDelete()
-                }) { Text("Удалить", color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.form_sheet_01), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Отмена") } },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.form_sheet_02)) } },
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         )
     }

@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.map
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -227,10 +229,10 @@ fun RackDialog(
             },
             confirmButton = {
                 TextButton(onClick = { picked = null; onRemove(device.id) }) {
-                    Text("Убрать из стойки", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.rack_view_01), color = MaterialTheme.colorScheme.error)
                 }
             },
-            dismissButton = { TextButton(onClick = { picked = null }) { Text("Закрыть") } },
+            dismissButton = { TextButton(onClick = { picked = null }) { Text(stringResource(R.string.device_screen_09)) } },
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         )
     }
@@ -329,14 +331,14 @@ private fun SlotDialog(
         title = { Text("Юнит $unit") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Высота устройства", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.rack_view_02), style = MaterialTheme.typography.labelLarge)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     (1..maxHeight).forEach { h -> FilterChip(selected = h == height, onClick = { height = h }, label = { Text("${h}U") }) }
                 }
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it.take(50) },
-                    label = { Text("Поиск устройства") },
+                    label = { Text(stringResource(R.string.rack_view_03)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -371,7 +373,7 @@ private fun SlotDialog(
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.form_sheet_02)) } },
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
     )
 }
@@ -403,26 +405,26 @@ private fun RackSettingsDialog(
     val tooLow = height != null && height < lowestFree
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Настройки стойки") },
+        title = { Text(stringResource(R.string.rack_view_04)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it.take(80) },
-                    label = { Text("Название") },
+                    label = { Text(stringResource(R.string.credentials_screen_02)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
                     value = units,
                     onValueChange = { units = it.filter(Char::isDigit).take(2) },
-                    label = { Text("Высота, U") },
+                    label = { Text(stringResource(R.string.rack_view_05)) },
                     supportingText = { if (tooLow) Text("Заняты юниты до $lowestFree: сначала уберите устройства") },
                     isError = tooLow,
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Text("Цвет рамки", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.rack_view_06), style = MaterialTheme.typography.labelLarge)
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     (listOf<String?>(null) + RACK_COLORS).forEach { c ->
                         val fill = c?.let { hexColor(it) } ?: MaterialTheme.colorScheme.outline
@@ -436,15 +438,15 @@ private fun RackSettingsDialog(
                         )
                     }
                 }
-                Text("Нумерация юнитов", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.rack_view_07), style = MaterialTheme.typography.labelLarge)
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     RackNumbering.entries.forEach { n -> FilterChip(selected = n == numbering, onClick = { numbering = n }, label = { Text(n.label) }) }
                 }
-                Text("Подписи на устройствах", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.rack_view_08), style = MaterialTheme.typography.labelLarge)
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     RackLabels.entries.forEach { l -> FilterChip(selected = l == labels, onClick = { labels = l }, label = { Text(l.label) }) }
                 }
-                Text("Ширина на экране", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.rack_view_09), style = MaterialTheme.typography.labelLarge)
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     RackWidth.entries.forEach { w -> FilterChip(selected = w == width, onClick = { width = w }, label = { Text(w.label) }) }
                 }
@@ -454,9 +456,9 @@ private fun RackSettingsDialog(
             TextButton(
                 enabled = height != null && height in 1..60 && !tooLow && name.isNotBlank(),
                 onClick = { onSave(name, height!!, RackStyle(color, numbering, labels, width)) },
-            ) { Text("Сохранить") }
+            ) { Text(stringResource(R.string.action_save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.form_sheet_02)) } },
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
     )
 }

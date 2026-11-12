@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.switchdetail
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -281,7 +283,7 @@ fun LoadLegend(ports: List<SwitchPort>, load: Map<String, PortLoad>, onPortClick
             .take(5)
         if (busiest.isNotEmpty()) {
             Spacer(Modifier.size(4.dp))
-            Text("Самые загруженные", style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.port_panel_01), style = MaterialTheme.typography.titleSmall)
             busiest.forEach { (port, l) ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,

@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.switchdetail
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -73,7 +75,7 @@ fun DiagnosticSheet(
             OutlinedTextField(
                 value = target,
                 onValueChange = { target = it },
-                label = { Text("IP-адрес") },
+                label = { Text(stringResource(R.string.ipam_screen_05)) },
                 singleLine = true,
                 textStyle = MonoStyle,
                 isError = run.error != null && run.result == null && !run.running,
@@ -103,9 +105,9 @@ fun DiagnosticSheet(
                 if (run.running) {
                     CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(10.dp))
-                    Text("Выполняется…")
+                    Text(stringResource(R.string.runbook_sheet_01))
                 } else {
-                    Text("Запустить")
+                    Text(stringResource(R.string.runbook_sheet_03))
                 }
             }
 

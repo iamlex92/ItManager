@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.tools
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -242,7 +244,7 @@ private fun ToolInput(
 @Composable
 private fun RunButton(running: Boolean, label: String, enabled: Boolean, onStart: () -> Unit, onStop: () -> Unit) {
     if (running) {
-        FilledTonalButton(onClick = onStop, modifier = Modifier.fillMaxWidth()) { Text("Остановить") }
+        FilledTonalButton(onClick = onStop, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.tools_screens_01)) }
     } else {
         Button(onClick = onStart, enabled = enabled, modifier = Modifier.fillMaxWidth()) { Text(label) }
     }
@@ -471,7 +473,7 @@ private fun PortsScreen(initialHost: String, onBack: () -> Unit) {
     ToolScaffold("Проверка портов", onBack) {
         ToolInput(host, { host = it }, "Адрес или имя", "hosts", !job.running, ::start, "10.0.0.1")
         OutlinedTextField(
-            spec, { spec = it }, label = { Text("Порты") }, singleLine = true, enabled = !job.running,
+            spec, { spec = it }, label = { Text(stringResource(R.string.tools_screens_02)) }, singleLine = true, enabled = !job.running,
             shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth(), textStyle = MaterialTheme.typography.bodyLarge.merge(MonoStyle),
         )
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -628,8 +630,8 @@ private fun IperfScreen(initialHost: String, onBack: () -> Unit) {
         Note("Нужен запущенный `iperf3 -s` на другой стороне. Адрес можно с портом: 10.0.0.5:5201.")
         ToolInput(host, { host = it }, "Сервер iperf3", "hosts", !job.running, ::start, "10.0.0.5")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = !reverse, onClick = { reverse = false }, label = { Text("Отдача (вверх)") })
-            FilterChip(selected = reverse, onClick = { reverse = true }, label = { Text("Загрузка (вниз)") })
+            FilterChip(selected = !reverse, onClick = { reverse = false }, label = { Text(stringResource(R.string.tools_screens_03)) })
+            FilterChip(selected = reverse, onClick = { reverse = true }, label = { Text(stringResource(R.string.tools_screens_04)) })
         }
         RunButton(job.running, "Измерить", host.isNotBlank(), ::start) { client?.abort(); job.stop() }
         if (job.running) {
@@ -707,10 +709,10 @@ private fun WolScreen(onBack: () -> Unit) {
     ToolScaffold("Wake-on-LAN", onBack) {
         ToolInput(mac, { mac = it }, "MAC-адрес", "macs", true, ::send, "00:1A:2B:3C:4D:5E", KeyboardType.Ascii)
         OutlinedTextField(
-            broadcast, { broadcast = it }, label = { Text("Широковещательный адрес") }, singleLine = true,
+            broadcast, { broadcast = it }, label = { Text(stringResource(R.string.tools_screens_05)) }, singleLine = true,
             shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth(), textStyle = MaterialTheme.typography.bodyLarge.merge(MonoStyle),
         )
-        Button(onClick = ::send, enabled = mac.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Отправить пакет") }
+        Button(onClick = ::send, enabled = mac.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.tools_screens_06)) }
         message?.let { Note(it, error = bad) }
     }
 }
@@ -725,9 +727,9 @@ private fun SubnetScreen(onBack: () -> Unit) {
 
     ToolScaffold("Калькулятор подсетей", onBack) {
         OutlinedTextField(
-            input, { input = it.trim() }, singleLine = true, label = { Text("Адрес с префиксом или маской") },
+            input, { input = it.trim() }, singleLine = true, label = { Text(stringResource(R.string.tools_screens_07)) },
             textStyle = MaterialTheme.typography.titleMedium.merge(MonoStyle), isError = c == null,
-            supportingText = { if (c == null) Text("Например 10.0.0.0/24 или 10.0.0.0 255.255.255.0") },
+            supportingText = { if (c == null) Text(stringResource(R.string.tools_screens_08)) },
             shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth(),
         )
         if (c != null) {

@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.device
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -189,7 +191,7 @@ fun DeviceScreen(
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                             // The same device entered twice (each address found as its own host): fold the other one in.
                             DropdownMenuItem(
-                                text = { Text("Объединить с…") },
+                                text = { Text(stringResource(R.string.device_screen_01)) },
                                 enabled = !busy,
                                 onClick = {
                                     menu = false
@@ -330,10 +332,10 @@ fun DeviceScreen(
             },
             confirmButton = {
                 TextButton(onClick = viewModel::confirmMerge, enabled = ask.preview != null) {
-                    Text("Объединить", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.device_screen_02), color = MaterialTheme.colorScheme.error)
                 }
             },
-            dismissButton = { TextButton(onClick = viewModel::cancelMerge) { Text("Отмена") } },
+            dismissButton = { TextButton(onClick = viewModel::cancelMerge) { Text(stringResource(R.string.form_sheet_02)) } },
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         )
     }
@@ -415,7 +417,7 @@ private fun StatusHeader(
                             color = if (device.isOnline) StatusColors.Online else StatusColors.Offline,
                         )
                     } else {
-                        Text("Пассивное оборудование", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.device_screen_03), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 val address = (device.allIps + listOfNotNull(device.mac)).joinToString("  ·  ")
@@ -534,7 +536,7 @@ private fun OverviewTab(
 
         if (onOpenRack != null) {
             FilledTonalButton(onClick = onOpenRack, modifier = Modifier.fillMaxWidth()) {
-                Text("Вид стойки: поставить или убрать устройства")
+                Text(stringResource(R.string.device_screen_04))
             }
         }
         if (details.rackMembers.isNotEmpty()) {
@@ -553,7 +555,7 @@ private fun OverviewTab(
         TextButton(onClick = onRefresh, modifier = Modifier.align(Alignment.CenterHorizontally)) {
             Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
-            Text("Обновить")
+            Text(stringResource(R.string.device_screen_05))
         }
     }
 }
@@ -791,11 +793,11 @@ private fun VlanPickerDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("VLAN порта") },
+        title = { Text(stringResource(R.string.device_screen_06)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 if (vlans.isEmpty()) {
-                    Text("В справочнике нет VLAN.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.device_screen_07), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 vlans.forEach { vlan ->
                     Row(
@@ -819,7 +821,7 @@ private fun VlanPickerDialog(
                 TextButton(onClick = onManage) {
                     Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Добавить или изменить VLAN…")
+                    Text(stringResource(R.string.device_screen_08))
                 }
                 Text(
                     "Меняется запись в учёте; на сам коммутатор команда не отправляется.",
@@ -828,7 +830,7 @@ private fun VlanPickerDialog(
                 )
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Закрыть") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.device_screen_09)) } },
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
     )
 }
@@ -840,7 +842,7 @@ private fun MergeDialog(keep: Device, candidates: List<Device>, onPick: (Device)
     val shown = candidates.filter { it.matches(query) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Объединить устройства") },
+        title = { Text(stringResource(R.string.device_screen_10)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
@@ -850,7 +852,7 @@ private fun MergeDialog(keep: Device, candidates: List<Device>, onPick: (Device)
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
-                    label = { Text("Имя, IP или MAC") },
+                    label = { Text(stringResource(R.string.device_screen_11)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -872,11 +874,11 @@ private fun MergeDialog(keep: Device, candidates: List<Device>, onPick: (Device)
                     }
                 }
                 if (shown.isEmpty()) {
-                    Text("Ничего не найдено.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.device_screen_12), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.form_sheet_02)) } },
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
     )
 }
@@ -926,7 +928,7 @@ private fun PortPathSheet(
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     others.forEach { end -> PathEndCard(end) { onOpenDevice(end.deviceId) } }
-                    Text("Весь путь", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
+                    Text(stringResource(R.string.device_screen_13), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
                     path.hops.forEachIndexed { i, hop ->
                         PathHopRow(hop) { onOpenDevice(hop.deviceId) }
                         if (i < path.hops.lastIndex) {
@@ -946,13 +948,13 @@ private fun PortPathSheet(
                     val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                     clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Путь", text))
                     Toast.makeText(context, "Путь скопирован", Toast.LENGTH_SHORT).show()
-                }) { Text("Скопировать путь текстом") }
+                }) { Text(stringResource(R.string.device_screen_14)) }
             }
             path?.mapTarget(device?.id.orEmpty())?.let { target ->
-                TextButton(onClick = { onShowOnMap(target.deviceId) }) { Text("Показать линию на карте") }
+                TextButton(onClick = { onShowOnMap(target.deviceId) }) { Text(stringResource(R.string.device_screen_15)) }
             }
             if (onOpenPorts != null) {
-                TextButton(onClick = onOpenPorts) { Text("Настроить порт на панели коммутатора…") }
+                TextButton(onClick = onOpenPorts) { Text(stringResource(R.string.device_screen_16)) }
             }
         }
     }

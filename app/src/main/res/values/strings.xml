@@ -38,4 +38,361 @@
     <string name="action_save">Сохранить</string>
     <string name="check_running">Проверяю…</string>
     <string name="check_server_ok">Сервер отвечает</string>
+
+    <!-- AlertsScreen.kt -->
+    <string name="alerts_screen_01">Все</string>
+    <string name="alerts_screen_02">Открыть устройство</string>
+    <string name="alerts_screen_03">Решено</string>
+
+    <!-- AuditScreen.kt -->
+    <string name="audit_screen_01">Журнал аудита</string>
+
+    <!-- RunbookSheet.kt -->
+    <string name="runbook_sheet_01">Выполняется…</string>
+    <string name="runbook_sheet_02">Подтвердить и запустить</string>
+    <string name="runbook_sheet_03">Запустить</string>
+    <string name="runbook_sheet_04">Ещё раз</string>
+    <string name="runbook_sheet_05">Готово</string>
+    <string name="runbook_sheet_06">Временный пароль</string>
+
+    <!-- Terminal.kt -->
+    <string name="terminal_01">Вывода нет</string>
+
+    <!-- Common.kt -->
+    <string name="common_01">Настройки</string>
+    <string name="common_02">Повторить</string>
+
+    <!-- FormSheet.kt -->
+    <string name="form_sheet_01">Удалить</string>
+    <string name="form_sheet_02">Отмена</string>
+
+    <!-- ConfigDiffScreen.kt -->
+    <string name="config_diff_screen_01">Сравнение конфигурации</string>
+    <string name="config_diff_screen_02">Сделать резервную копию сейчас</string>
+    <string name="config_diff_screen_03">Сохранить текущую как новую копию</string>
+    <string name="config_diff_screen_04">Снять копию и обновить учёт портов</string>
+
+    <!-- ConfigImportScreen.kt -->
+    <string name="config_import_screen_01">Импорт конфигурации</string>
+    <string name="config_import_screen_02">Снять копию с коммутатора и показать изменения</string>
+    <string name="config_import_screen_03">Текст конфигурации</string>
+    <string name="config_import_screen_04">Показать изменения</string>
+    <string name="config_import_screen_05">Применить в учёт</string>
+    <string name="config_import_screen_06">VLAN, которых нет в учёте (не созданы):</string>
+    <string name="config_import_screen_07">Интерфейсы без порта в учёте:</string>
+
+    <!-- CredentialsScreen.kt -->
+    <string name="credentials_screen_01">Добавить</string>
+    <string name="credentials_screen_02">Название</string>
+    <string name="credentials_screen_03">Коммутаторы: SSH только чтение</string>
+    <string name="credentials_screen_04">Логин</string>
+    <string name="credentials_screen_05">Заметка</string>
+
+    <!-- DeviceScreen.kt -->
+    <string name="device_screen_01">Объединить с…</string>
+    <string name="device_screen_02">Объединить</string>
+    <string name="device_screen_03">Пассивное оборудование</string>
+    <string name="device_screen_04">Вид стойки: поставить или убрать устройства</string>
+    <string name="device_screen_05">Обновить</string>
+    <string name="device_screen_06">VLAN порта</string>
+    <string name="device_screen_07">В справочнике нет VLAN.</string>
+    <string name="device_screen_08">Добавить или изменить VLAN…</string>
+    <string name="device_screen_09">Закрыть</string>
+    <string name="device_screen_10">Объединить устройства</string>
+    <string name="device_screen_11">Имя, IP или MAC</string>
+    <string name="device_screen_12">Ничего не найдено.</string>
+    <string name="device_screen_13">Весь путь</string>
+    <string name="device_screen_14">Скопировать путь текстом</string>
+    <string name="device_screen_15">Показать линию на карте</string>
+    <string name="device_screen_16">Настроить порт на панели коммутатора…</string>
+
+    <!-- BulkEditDialog.kt -->
+    <string name="bulk_edit_dialog_01">Категория</string>
+    <string name="bulk_edit_dialog_02">Не менять</string>
+    <string name="bulk_edit_dialog_03">Хост виртуализации</string>
+    <string name="bulk_edit_dialog_04">Этаж</string>
+    <string name="bulk_edit_dialog_05">Производитель</string>
+    <string name="bulk_edit_dialog_06">Пусто: не менять</string>
+    <string name="bulk_edit_dialog_07">Применить</string>
+
+    <!-- DevicesScreen.kt -->
+    <string name="devices_screen_01">Они пропадут из учёта и с карты вместе со своими портами и кабелями. Само оборудование это не затрагивает.</string>
+    <string name="devices_screen_02">Тонер, барабаны и счётчики страниц</string>
+    <string name="devices_screen_03">Открыть</string>
+    <string name="devices_screen_04">Копировать IP</string>
+    <string name="devices_screen_05">Копировать MAC</string>
+    <string name="devices_screen_06">На карте</string>
+
+    <!-- GpoScreen.kt -->
+    <string name="gpo_screen_01">Да</string>
+    <string name="gpo_screen_02">Нет</string>
+    <string name="gpo_screen_03">Новая групповая политика</string>
+    <string name="gpo_screen_04">Имя</string>
+    <string name="gpo_screen_05">Создать</string>
+    <string name="gpo_screen_06">Найти политику</string>
+    <string name="gpo_screen_07">Ничего не найдено</string>
+    <string name="gpo_screen_08">Ни с чем не связана — не действует.</string>
+    <string name="gpo_screen_09">Принудительно</string>
+    <string name="gpo_screen_10">Убрать</string>
+    <string name="gpo_screen_11">Связать с подразделением</string>
+    <string name="gpo_screen_12">Параметров реестра нет. Другие разделы (сценарии, безопасность) видны в отчёте в веб-консоли.</string>
+    <string name="gpo_screen_13">Добавить параметр</string>
+    <string name="gpo_screen_14">Показать компьютеры</string>
+    <string name="gpo_screen_15">Применить сейчас</string>
+    <string name="gpo_screen_16">Свободных подразделений нет.</string>
+    <string name="gpo_screen_17">Параметр</string>
+    <string name="gpo_screen_18">Удалить параметр</string>
+    <string name="gpo_screen_19">Записать</string>
+
+    <!-- HistoryScreen.kt -->
+    <string name="history_screen_01">История изменений</string>
+
+    <!-- IpamScreen.kt -->
+    <string name="ipam_screen_01">IP-адреса</string>
+    <string name="ipam_screen_02">Конфликтов адресов нет.</string>
+    <string name="ipam_screen_03">Подсети</string>
+    <string name="ipam_screen_04">Проверить адрес</string>
+    <string name="ipam_screen_05">IP-адрес</string>
+    <string name="ipam_screen_06">Проверить</string>
+
+    <!-- FaceplateUi.kt -->
+    <string name="faceplate_ui_01">Схема панели</string>
+    <string name="faceplate_ui_02">Масштаб</string>
+    <string name="faceplate_ui_03">Порядок</string>
+    <string name="faceplate_ui_04">Подряд</string>
+    <string name="faceplate_ui_05">Через один</string>
+    <string name="faceplate_ui_06">Продолжить ряд</string>
+    <string name="faceplate_ui_07">Убрать метку</string>
+    <string name="faceplate_ui_08">Снять все</string>
+    <string name="faceplate_ui_09">Заменить SVG</string>
+    <string name="faceplate_ui_10">Удалить схему панели?</string>
+    <string name="faceplate_ui_11">Метки не сохранены</string>
+    <string name="faceplate_ui_12">Закрыть без сохранения? Расставленные метки пропадут.</string>
+    <string name="faceplate_ui_13">Остаться</string>
+    <string name="faceplate_ui_14">Загрузить SVG</string>
+    <string name="faceplate_ui_15">Скопировать с такого же устройства</string>
+    <string name="faceplate_ui_16">Скопировать схему с…</string>
+
+    <!-- FloorsDialog.kt -->
+    <string name="floors_dialog_01">Этажи</string>
+    <string name="floors_dialog_02">Добавить этаж</string>
+    <string name="floors_dialog_03">Например, 2 этаж или Подвал</string>
+    <string name="floors_dialog_04">Здание</string>
+    <string name="floors_dialog_05">Номер этажа</string>
+    <string name="floors_dialog_06">Задаёт порядок: подвал 0 или -1, первый этаж 1.</string>
+
+    <!-- MapEditor.kt -->
+    <string name="map_editor_01">Добавить в центр экрана</string>
+    <string name="map_editor_02">Устройство</string>
+    <string name="map_editor_03">Из шаблона…</string>
+    <string name="map_editor_04">Стойка</string>
+    <string name="map_editor_05">Метка: номер кабинета</string>
+    <string name="map_editor_06">Выпрямить</string>
+    <string name="map_editor_07">Медь Cat6</string>
+    <string name="map_editor_08">Оптика OM3</string>
+    <string name="map_editor_09">Изменить</string>
+    <string name="map_editor_10">Касайтесь углов по очереди, затем «Готово»</string>
+    <string name="map_editor_11">Коснитесь, куда указывает стрелка</string>
+    <string name="map_editor_12">Загрузить план (PDF, PNG, JPEG, SVG)</string>
+    <string name="map_editor_13">Заменить</string>
+    <string name="map_editor_14">Цвет</string>
+    <string name="map_editor_15">Авто</string>
+    <string name="map_editor_16">Логин SSH</string>
+    <string name="map_editor_17">По умолчанию сервера</string>
+    <string name="map_editor_18">Например, SW-ACC-04</string>
+    <string name="map_editor_19">Укажите имя</string>
+    <string name="map_editor_20">Модель</string>
+    <string name="map_editor_21">IP-адрес, если есть</string>
+    <string name="map_editor_22">Нужен адрес вида 10.0.0.1 или fd00::1</string>
+    <string name="map_editor_23">Другие IP-адреса</string>
+    <string name="map_editor_24">MAC-адрес, если есть</string>
+    <string name="map_editor_25">Нужен адрес вида aa:bb:cc:dd:ee:ff</string>
+    <string name="map_editor_26">SNMP community (только чтение)</string>
+    <string name="map_editor_27">Линк и загрузка портов, тонер и счётчики МФУ.</string>
+    <string name="map_editor_28">Высота стойки, U</string>
+    <string name="map_editor_29">Коммутаторы и серверы ставятся в стойку в её виде.</string>
+    <string name="map_editor_30">Открыть вид стойки и расставить устройства</string>
+    <string name="map_editor_31">В учёте нет серверов.</string>
+    <string name="map_editor_32">Не указан</string>
+    <string name="map_editor_33">Комментарий</string>
+    <string name="map_editor_34">Удалить кабель?</string>
+
+    <!-- MapLegend.kt -->
+    <string name="map_legend_01">Показать всё</string>
+
+    <!-- MapScreen.kt -->
+    <string name="map_screen_01">Настроить этажи…</string>
+    <string name="map_screen_02">Все VLAN</string>
+    <string name="map_screen_03">Имя, IP, MAC или розетка</string>
+    <string name="map_screen_04">Вид стойки</string>
+    <string name="map_screen_05">На сервере пока нет устройств</string>
+    <string name="map_screen_06">Сканер сети</string>
+    <string name="map_screen_07">Нарисовать вручную</string>
+
+    <!-- MarksUi.kt -->
+    <string name="marks_ui_01">Размер</string>
+    <string name="marks_ui_02">Удалить метку</string>
+
+    <!-- RackView.kt -->
+    <string name="rack_view_01">Убрать из стойки</string>
+    <string name="rack_view_02">Высота устройства</string>
+    <string name="rack_view_03">Поиск устройства</string>
+    <string name="rack_view_04">Настройки стойки</string>
+    <string name="rack_view_05">Высота, U</string>
+    <string name="rack_view_06">Цвет рамки</string>
+    <string name="rack_view_07">Нумерация юнитов</string>
+    <string name="rack_view_08">Подписи на устройствах</string>
+    <string name="rack_view_09">Ширина на экране</string>
+
+    <!-- TemplatePlaceUi.kt -->
+    <string name="template_place_ui_01">Создать шаблон</string>
+    <string name="template_place_ui_02">Имя устройства</string>
+
+    <!-- ZoneUi.kt -->
+    <string name="zone_ui_01">Например, Серверная</string>
+    <string name="zone_ui_02">Это помещение</string>
+    <string name="zone_ui_03">Удалить зону</string>
+    <string name="zone_ui_04">Помещения этажа</string>
+    <string name="zone_ui_05">Заметка об устройстве: куда включено, что менялось, кому звонить</string>
+
+    <!-- AppRoot.kt -->
+    <string name="app_root_01">Вы на резервном сервере</string>
+
+    <!-- BindTagSheet.kt -->
+    <string name="bind_tag_sheet_01">Открыть настройки NFC</string>
+    <string name="bind_tag_sheet_02">Перенести</string>
+
+    <!-- PcsScreen.kt -->
+    <string name="pcs_screen_01">Имя или IP-адрес</string>
+    <string name="pcs_screen_02">Подсеть</string>
+    <string name="pcs_screen_03">Сканировать</string>
+    <string name="pcs_screen_04">Активных узлов не найдено.</string>
+    <string name="pcs_screen_05">Все ПК из AD</string>
+    <string name="pcs_screen_06">Собрать</string>
+    <string name="pcs_screen_07">Отправить CSV</string>
+    <string name="pcs_screen_08">Политики не применены</string>
+    <string name="pcs_screen_09">Эмуляция: данные ненастоящие.</string>
+    <string name="pcs_screen_10">Папок больше 0,1 ГБ нет</string>
+    <string name="pcs_screen_11">Завершить</string>
+    <string name="pcs_screen_12">Команда</string>
+    <string name="pcs_screen_13">Выполнить</string>
+    <string name="pcs_screen_14">Очистить</string>
+    <string name="pcs_screen_15">Через консоль никому не выдавалось; группа astra-admin пуста</string>
+    <string name="pcs_screen_16">Снять</string>
+    <string name="pcs_screen_17">Пользователь</string>
+    <string name="pcs_screen_18">Выдать sudo</string>
+    <string name="pcs_screen_19">Запустите на своём компьютере с Windows (вы — в списке помощников политики):</string>
+    <string name="pcs_screen_20">Копировать</string>
+    <string name="pcs_screen_21">Отправить на ПК</string>
+    <string name="pcs_screen_22">Открыть в VNC-клиенте</string>
+    <string name="pcs_screen_23">Только просмотр</string>
+    <string name="pcs_screen_24">Только наблюдать, без управления</string>
+
+    <!-- PeripheralsScreen.kt -->
+    <string name="peripherals_screen_01">Периферия</string>
+    <string name="peripherals_screen_02">Модель, S/N, инв. номер, компьютер</string>
+
+    <!-- PeripheralsUi.kt -->
+    <string name="peripherals_ui_01">Со склада</string>
+    <string name="peripherals_ui_02">Поиск: модель, S/N, инв. номер</string>
+    <string name="peripherals_ui_03">Куда подключено</string>
+    <string name="peripherals_ui_04">Имя, IP или модель</string>
+    <string name="peripherals_ui_05">Подключено к</string>
+
+    <!-- ScannerScreen.kt -->
+    <string name="scanner_screen_01">Только внутренние адреса, до /22 каждая, не больше 8 подсетей</string>
+    <string name="scanner_screen_02">Используется только для этого сканирования и нигде не сохраняется</string>
+    <string name="scanner_screen_03">Идёт сканирование</string>
+    <string name="scanner_screen_04">Со связями</string>
+    <string name="scanner_screen_05">Скрыть</string>
+    <string name="scanner_screen_06">Открыть карту</string>
+
+    <!-- LockScreen.kt -->
+    <string name="lock_screen_01">NetAdmin заблокирован</string>
+
+    <!-- ServerConfigScreen.kt -->
+    <string name="server_config_screen_01">Перезапустить сервер</string>
+    <string name="server_config_screen_02">Сертификат контроллера</string>
+    <string name="server_config_screen_03">Доверять</string>
+    <string name="server_config_screen_04">Перезапустить сервер?</string>
+    <string name="server_config_screen_05">Он будет недоступен 10–30 секунд, затем начнут действовать сохранённые настройки.</string>
+    <string name="server_config_screen_06">Перезапустить</string>
+    <string name="server_config_screen_07">Не выбрана</string>
+    <string name="server_config_screen_08">Получить с контроллера</string>
+    <string name="server_config_screen_09">Вернуть из netadmin.env</string>
+
+    <!-- VpnSection.kt -->
+    <string name="vpn_section_01">Подключать автоматически</string>
+    <string name="vpn_section_02">Отключать при выходе</string>
+    <string name="vpn_section_03">Подключение в AnyConnect</string>
+    <string name="vpn_section_04">Завод</string>
+    <string name="vpn_section_05">Адрес ASA</string>
+    <string name="vpn_section_06">Логин (подставится в форму входа)</string>
+    <string name="vpn_section_07">Подключить</string>
+    <string name="vpn_section_08">Отключить VPN завода</string>
+
+    <!-- PortPanel.kt -->
+    <string name="port_panel_01">Самые загруженные</string>
+
+    <!-- PortRecordDialog.kt -->
+    <string name="port_record_dialog_01">Номер</string>
+    <string name="port_record_dialog_02">От 1</string>
+    <string name="port_record_dialog_03">Аплинк</string>
+    <string name="port_record_dialog_04">Tagged VLAN через запятую</string>
+
+    <!-- SwitchScreen.kt -->
+    <string name="switch_screen_01">Быстрые действия</string>
+    <string name="switch_screen_02">Панель портов</string>
+    <string name="switch_screen_03">Изменить запись о порте (только база)</string>
+    <string name="switch_screen_04">Настройка порта</string>
+    <string name="switch_screen_05">Список VLAN не загрузился</string>
+    <string name="switch_screen_06">Порт включён</string>
+    <string name="switch_screen_07">Показать команды и применить</string>
+    <string name="switch_screen_08">Перезапустить порт</string>
+
+    <!-- TrafficChart.kt -->
+    <string name="traffic_chart_01">Загрузка за 24 часа</string>
+    <string name="traffic_chart_02">Загружаю…</string>
+
+    <!-- TemplatesScreen.kt -->
+    <string name="templates_screen_01">Шаблоны устройств</string>
+    <string name="templates_screen_02">Удалить шаблон?</string>
+    <string name="templates_screen_03">Создать устройство</string>
+    <string name="templates_screen_04">Новый шаблон</string>
+    <string name="templates_screen_05">Портов (0–96)</string>
+    <string name="templates_screen_06">Имя порта: префикс</string>
+    <string name="templates_screen_07">Высота в стойке, U (необязательно)</string>
+    <string name="templates_screen_08">IP-адрес (необязательно)</string>
+
+    <!-- ToolsScreens.kt -->
+    <string name="tools_screens_01">Остановить</string>
+    <string name="tools_screens_02">Порты</string>
+    <string name="tools_screens_03">Отдача (вверх)</string>
+    <string name="tools_screens_04">Загрузка (вниз)</string>
+    <string name="tools_screens_05">Широковещательный адрес</string>
+    <string name="tools_screens_06">Отправить пакет</string>
+    <string name="tools_screens_07">Адрес с префиксом или маской</string>
+    <string name="tools_screens_08">Например 10.0.0.0/24 или 10.0.0.0 255.255.255.0</string>
+
+    <!-- TopologyScreen.kt -->
+    <string name="topology_screen_01">Новое устройство</string>
+    <string name="topology_screen_02">Новая связь (кабель)</string>
+    <string name="topology_screen_03">Найти: имя или IP</string>
+    <string name="topology_screen_04">Все устройства</string>
+    <string name="topology_screen_05">Отключить</string>
+    <string name="topology_screen_06">Кабелем ни с чем не соединено</string>
+    <string name="topology_screen_07">Карточка</string>
+    <string name="topology_screen_08">Соединить…</string>
+    <string name="topology_screen_09">Имя или IP</string>
+    <string name="topology_screen_10">Соединить</string>
+    <string name="topology_screen_11">Загружаю порты…</string>
+    <string name="topology_screen_12">Портов в учёте нет: сервер добавит порт сам.</string>
+    <string name="topology_screen_13">Любой свободный</string>
+
+    <!-- VlansScreen.kt -->
+    <string name="vlans_screen_01">VLAN и подсети</string>
+    <string name="vlans_screen_02">Номер VLAN (1–4094)</string>
+    <string name="vlans_screen_03">Офис, АСУ ТП, Камеры</string>
+    <string name="vlans_screen_04">Подсеть, если есть</string>
+    <string name="vlans_screen_05">Описание</string>
 </resources>

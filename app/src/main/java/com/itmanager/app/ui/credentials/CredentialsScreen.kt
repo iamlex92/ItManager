@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.credentials
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -124,7 +126,7 @@ fun CredentialsScreen(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
-                title = { Text("Учётные данные") },
+                title = { Text(stringResource(R.string.settings_credentials)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Назад") }
                 },
@@ -139,7 +141,7 @@ fun CredentialsScreen(
                 ExtendedFloatingActionButton(
                     onClick = viewModel::openNew,
                     icon = { Icon(Icons.Outlined.Add, contentDescription = null) },
-                    text = { Text("Добавить") },
+                    text = { Text(stringResource(R.string.credentials_screen_01)) },
                 )
             }
         },
@@ -209,9 +211,9 @@ fun CredentialsScreen(
                 TextButton(onClick = {
                     toDelete = null
                     confirmThen("Удалить учётные данные") { viewModel.delete(c) }
-                }) { Text("Удалить", color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.form_sheet_01), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { toDelete = null }) { Text("Отмена") } },
+            dismissButton = { TextButton(onClick = { toDelete = null }) { Text(stringResource(R.string.form_sheet_02)) } },
         )
     }
 }
@@ -293,8 +295,8 @@ private fun CredentialSheet(
             OutlinedTextField(
                 value = draft.name,
                 onValueChange = { v -> onChange { it.copy(name = v) } },
-                label = { Text("Название") },
-                placeholder = { Text("Коммутаторы: SSH только чтение") },
+                label = { Text(stringResource(R.string.credentials_screen_02)) },
+                placeholder = { Text(stringResource(R.string.credentials_screen_03)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                 modifier = Modifier.fillMaxWidth(),
@@ -303,7 +305,7 @@ private fun CredentialSheet(
             OutlinedTextField(
                 value = draft.username,
                 onValueChange = { v -> onChange { it.copy(username = v) } },
-                label = { Text("Логин") },
+                label = { Text(stringResource(R.string.credentials_screen_04)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, imeAction = ImeAction.Next),
                 modifier = Modifier.fillMaxWidth(),
@@ -339,7 +341,7 @@ private fun CredentialSheet(
             OutlinedTextField(
                 value = draft.notes,
                 onValueChange = { v -> onChange { it.copy(notes = v) } },
-                label = { Text("Заметка") },
+                label = { Text(stringResource(R.string.credentials_screen_05)) },
                 minLines = 2,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -356,7 +358,7 @@ private fun CredentialSheet(
                 if (editor.saving) {
                     CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                 } else {
-                    Text("Сохранить")
+                    Text(stringResource(R.string.action_save))
                 }
             }
         }

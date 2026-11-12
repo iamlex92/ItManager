@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.history
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -81,7 +83,7 @@ fun HistoryScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("История изменений", style = MaterialTheme.typography.titleLarge)
+                        Text(stringResource(R.string.history_screen_01), style = MaterialTheme.typography.titleLarge)
                         Text(viewModel.switchName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 },

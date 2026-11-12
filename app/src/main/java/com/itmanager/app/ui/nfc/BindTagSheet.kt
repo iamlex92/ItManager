@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.nfc
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.animation.core.RepeatMode
@@ -108,7 +110,7 @@ fun BindTagSheet(
                     Message("NFC выключен. Включите его в настройках телефона.")
                     Spacer(Modifier.height(16.dp))
                     Button(onClick = { context.startActivity(Intent(Settings.ACTION_NFC_SETTINGS)) }) {
-                        Text("Открыть настройки NFC")
+                        Text(stringResource(R.string.bind_tag_sheet_01))
                     }
                 }
                 else -> when (val step = state.step) {
@@ -138,11 +140,11 @@ fun BindTagSheet(
                         Message("Эта метка уже привязана к ${step.otherDevice ?: "другому устройству"}. Перенести её на ${state.device.name}?")
                         Spacer(Modifier.height(16.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            OutlinedButton(onClick = onClose) { Text("Отмена") }
+                            OutlinedButton(onClick = onClose) { Text(stringResource(R.string.form_sheet_02)) }
                             Button(
                                 onClick = onConfirmMove,
                                 colors = ButtonDefaults.buttonColors(containerColor = StatusColors.Warning),
-                            ) { Text("Перенести") }
+                            ) { Text(stringResource(R.string.bind_tag_sheet_02)) }
                         }
                     }
                     BindStep.Done -> {
@@ -154,7 +156,7 @@ fun BindTagSheet(
             }
             if (state.step !is BindStep.Conflict && state.step != BindStep.Done) {
                 Spacer(Modifier.height(12.dp))
-                TextButton(onClick = onClose) { Text("Отмена") }
+                TextButton(onClick = onClose) { Text(stringResource(R.string.form_sheet_02)) }
             }
         }
     }

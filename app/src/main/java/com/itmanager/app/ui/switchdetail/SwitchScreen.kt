@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.switchdetail
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -174,7 +176,7 @@ fun SwitchScreen(
                     PortSummary(ports)
 
                     Spacer(Modifier.height(20.dp))
-                    SectionLabel("Быстрые действия")
+                    SectionLabel(stringResource(R.string.switch_screen_01))
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         QuickAction("Ping", Icons.Outlined.NetworkCheck) { viewModel.openDiagnostic(DiagnosticKind.PING) }
                         QuickAction("Traceroute", Icons.Outlined.Timeline) { viewModel.openDiagnostic(DiagnosticKind.TRACEROUTE) }
@@ -189,7 +191,7 @@ fun SwitchScreen(
                     }
 
                     Spacer(Modifier.height(20.dp))
-                    SectionLabel("Панель портов")
+                    SectionLabel(stringResource(R.string.switch_screen_02))
                     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                         PortView.entries.forEachIndexed { i, v ->
                             SegmentedButton(
@@ -372,7 +374,7 @@ private fun PortSheet(
             OutlinedButton(onClick = onEditRecord, modifier = Modifier.fillMaxWidth().height(50.dp)) {
                 Icon(Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Изменить запись о порте (только база)")
+                Text(stringResource(R.string.switch_screen_03))
             }
             Text(
                 "Имя, номер, режим, VLAN, скорость, PoE и аплинк как они записаны в учёте. Коммутатор не затрагивается.",
@@ -404,7 +406,7 @@ private fun PortEditor(
     var adminUp by remember(port) { mutableStateOf(port.isAdminUp) }
     val change = PortChange.between(port, mode, accessVlan, tagged.toList(), adminUp)
 
-    SectionLabel("Настройка порта")
+    SectionLabel(stringResource(R.string.switch_screen_04))
     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
         PortMode.entries.forEachIndexed { i, m ->
             SegmentedButton(
@@ -423,7 +425,7 @@ private fun PortEditor(
     )
     Spacer(Modifier.height(6.dp))
     if (vlans.isEmpty()) {
-        Text("Список VLAN не загрузился", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.switch_screen_05), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         vlans.forEach { vlan ->
@@ -442,7 +444,7 @@ private fun PortEditor(
     Spacer(Modifier.height(8.dp))
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.weight(1f)) {
-            Text("Порт включён", style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.switch_screen_06), style = MaterialTheme.typography.titleSmall)
             Text(
                 if (adminUp) "no shutdown" else "shutdown: устройство за портом потеряет связь",
                 style = MaterialTheme.typography.bodySmall,
@@ -461,7 +463,7 @@ private fun PortEditor(
         if (busy) {
             CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
         } else {
-            Text("Показать команды и применить")
+            Text(stringResource(R.string.switch_screen_07))
         }
     }
     Spacer(Modifier.height(8.dp))
@@ -472,7 +474,7 @@ private fun PortEditor(
     ) {
         Icon(Icons.Outlined.RestartAlt, contentDescription = null, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
-        Text("Перезапустить порт")
+        Text(stringResource(R.string.switch_screen_08))
     }
     Text(
         "Перезапуск: shutdown, пауза 2 секунды, no shutdown. Помогает зависшим камерам и телефонам на PoE.",
@@ -559,7 +561,7 @@ private fun ConfirmWriteDialog(
                 )
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.form_sheet_02)) } },
     )
 }
 

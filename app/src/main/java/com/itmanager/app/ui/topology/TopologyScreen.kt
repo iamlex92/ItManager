@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.topology
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import com.itmanager.app.ui.map.DeviceFormDialog
@@ -180,7 +182,7 @@ fun TopologyScreen(
                     IconButton(onClick = { addMenu = true }) { Icon(Icons.Outlined.Add, contentDescription = "Добавить") }
                     DropdownMenu(expanded = addMenu, onDismissRequest = { addMenu = false }) {
                         DropdownMenuItem(
-                            text = { Text("Новое устройство") },
+                            text = { Text(stringResource(R.string.topology_screen_01)) },
                             leadingIcon = { Icon(DeviceType.SWITCH.icon, contentDescription = null) },
                             onClick = {
                                 addMenu = false
@@ -188,7 +190,7 @@ fun TopologyScreen(
                             },
                         )
                         DropdownMenuItem(
-                            text = { Text("Новая связь (кабель)") },
+                            text = { Text(stringResource(R.string.topology_screen_02)) },
                             leadingIcon = { Icon(Icons.Outlined.Cable, contentDescription = null) },
                             onClick = {
                                 addMenu = false
@@ -210,7 +212,7 @@ fun TopologyScreen(
                 },
                 singleLine = true,
                 isError = searchMiss,
-                placeholder = { Text("Найти: имя или IP") },
+                placeholder = { Text(stringResource(R.string.topology_screen_03)) },
                 leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = search@{
@@ -232,7 +234,7 @@ fun TopologyScreen(
             FilterChip(
                 selected = state.showEndDevices,
                 onClick = { viewModel.setShowEndDevices(!state.showEndDevices) },
-                label = { Text("Все устройства") },
+                label = { Text(stringResource(R.string.topology_screen_04)) },
             )
         }
         when (val t = state.topology) {
@@ -319,9 +321,9 @@ fun TopologyScreen(
                 TextButton(onClick = {
                     disconnect = null
                     viewModel.disconnect(link, selfId)
-                }) { Text("Отключить", color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.topology_screen_05), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { disconnect = null }) { Text("Отмена") } },
+            dismissButton = { TextButton(onClick = { disconnect = null }) { Text(stringResource(R.string.form_sheet_02)) } },
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         )
     }
@@ -502,19 +504,19 @@ private fun NodeCard(
             }
             Column(Modifier.heightIn(max = 180.dp).verticalScroll(rememberScrollState()).padding(top = 8.dp, end = 12.dp)) {
                 if (links.isEmpty()) {
-                    Text("Кабелем ни с чем не соединено", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.topology_screen_06), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 links.forEach { link -> LinkLine(node.id, link, names, onPick, onDisconnect) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp, end = 12.dp)) {
                 FilledTonalButton(onClick = onOpenSwitch) {
-                    Text("Карточка")
+                    Text(stringResource(R.string.topology_screen_07))
                     Spacer(Modifier.width(6.dp))
                     Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
                 }
                 if (node.type != DeviceType.VIRTUAL) {
-                    TextButton(onClick = onConnect) { Text("Соединить…") }
-                    TextButton(onClick = onShowOnMap) { Text("На карте") }
+                    TextButton(onClick = onConnect) { Text(stringResource(R.string.topology_screen_08)) }
+                    TextButton(onClick = onShowOnMap) { Text(stringResource(R.string.devices_screen_06)) }
                 }
             }
         }
@@ -611,7 +613,7 @@ private fun LinkDialog(
                         value = query,
                         onValueChange = { query = it.take(60) },
                         singleLine = true,
-                        placeholder = { Text("Имя или IP") },
+                        placeholder = { Text(stringResource(R.string.topology_screen_09)) },
                         leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -639,8 +641,8 @@ private fun LinkDialog(
                 } else {
                     Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(selected = cable == "Cat6", onClick = { cable = "Cat6" }, label = { Text("Медь Cat6") })
-                            FilterChip(selected = cable == "OM3", onClick = { cable = "OM3" }, label = { Text("Оптика OM3") })
+                            FilterChip(selected = cable == "Cat6", onClick = { cable = "Cat6" }, label = { Text(stringResource(R.string.map_editor_07)) })
+                            FilterChip(selected = cable == "OM3", onClick = { cable = "OM3" }, label = { Text(stringResource(R.string.map_editor_08)) })
                         }
                         PortPicker(a!!.name, ports[a!!.id], portA) { portA = it }
                         PortPicker(b!!.name, ports[b!!.id], portB) { portB = it }
@@ -657,7 +659,7 @@ private fun LinkDialog(
             val from = a
             val to = b
             if (from != null && to != null) {
-                TextButton(onClick = { onConnect(from.id, to.id, cable, portA, portB) }) { Text("Соединить") }
+                TextButton(onClick = { onConnect(from.id, to.id, cable, portA, portB) }) { Text(stringResource(R.string.topology_screen_10)) }
             }
         },
         dismissButton = {
@@ -679,10 +681,10 @@ private fun LinkDialog(
 private fun PortPicker(deviceName: String, ports: List<SwitchPort>?, picked: String?, onPick: (String?) -> Unit) {
     Text("Порт $deviceName", style = MaterialTheme.typography.labelLarge)
     when {
-        ports == null -> Text("Загружаю порты…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        ports.isEmpty() -> Text("Портов в учёте нет: сервер добавит порт сам.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        ports == null -> Text(stringResource(R.string.topology_screen_11), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        ports.isEmpty() -> Text(stringResource(R.string.topology_screen_12), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         else -> FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            FilterChip(selected = picked == null, onClick = { onPick(null) }, label = { Text("Любой свободный") })
+            FilterChip(selected = picked == null, onClick = { onPick(null) }, label = { Text(stringResource(R.string.topology_screen_13)) })
             ports.forEach { p ->
                 val taken = p.connectedDeviceName != null
                 FilterChip(

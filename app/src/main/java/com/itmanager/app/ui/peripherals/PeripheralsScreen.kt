@@ -1,5 +1,7 @@
 package com.itmanager.app.ui.peripherals
 
+import androidx.compose.ui.res.stringResource
+import com.itmanager.app.R
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -79,7 +81,7 @@ fun PeripheralsScreen(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text("Периферия") },
+                title = { Text(stringResource(R.string.peripherals_screen_01)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Назад") }
                 },
@@ -90,7 +92,7 @@ fun PeripheralsScreen(
             ExtendedFloatingActionButton(
                 onClick = { viewModel.openNew(PeripheralDraft(kind ?: PeripheralKind.MONITOR)) },
                 icon = { Icon(Icons.Outlined.Add, contentDescription = null) },
-                text = { Text("Добавить") },
+                text = { Text(stringResource(R.string.credentials_screen_01)) },
                 modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars),
             )
         },
@@ -100,7 +102,7 @@ fun PeripheralsScreen(
                 value = query,
                 onValueChange = { query = it.take(60) },
                 singleLine = true,
-                placeholder = { Text("Модель, S/N, инв. номер, компьютер") },
+                placeholder = { Text(stringResource(R.string.peripherals_screen_02)) },
                 leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
                 shape = RoundedCornerShape(14.dp),
                 colors = TextFieldDefaults.colors(focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent),
