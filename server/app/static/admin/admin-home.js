@@ -47,7 +47,7 @@
   }
 
   async function load() {
-    const s = await api("GET", "summary");
+    const [s, soon] = await Promise.all([api("GET", "summary"), api("GET", "lifecycle/expirations?within_days=60").catch(() => [])]);
     const { devices: d, alerts: a } = s;
     const downCount = d.total - d.online;
     $("home-tiles").replaceChildren(
@@ -59,6 +59,12 @@
       "Все устройства отвечают");
     fill($("home-alerts"), a.items.map((x) => row(LED[x.severity] || "warn", x.device, x.message, ago(x.created_at), () => openCard(x.device_id))),
       "Открытых событий нет");
+    const LV = { expired: "down", week: "down", month: "warn", soon: "warn", ok: "up" };
+    fill($("home-expiring"), soon.slice(0, 8).map((x) => row(LV[x.level] || "warn", x.title, x.days_left < 0 ? `просрочено на ${-x.days_left} дн.` : x.days_left === 0 ? "сегодня" : `через ${x.days_left} дн.`,
+      new Date(`${x.due}T00:00:00`).toLocaleDateString("ru-RU"), () => (x.device_id ? openCard(x.device_id) : openTab("lifecycle")))), "В ближайшие 60 дней ничего не истекает");
+    const urgent = soon.filter((x) => x.level === "expired" || x.level === "week").length;
+    $("lc-count").textContent = String(urgent);
+    $("lc-count").hidden = !urgent;
     fill($("home-recent"), s.recent.map((x) => row(x.exit_code ? "down" : "up", x.title, x.by, ago(x.at), () => openTab("audit"))),
       "Действий пока не было");
     $("home-updated").textContent = `обновлено ${new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`;

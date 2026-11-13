@@ -216,6 +216,9 @@ def _search_clause(q: str):
         func.array_to_string(Device.extra_ips, " ").ilike(like),
         cast(Device.mac_address, String).ilike(like.replace("-", ":")),
         Device.nfc_tag_uid.ilike(like),
+        Device.serial_number.ilike(like),
+        Device.inventory_number.ilike(like),
+        Device.assigned_to.ilike(like),
         # The number printed under the QR on a label.
         cast(Device.id, String).ilike(like),
     )

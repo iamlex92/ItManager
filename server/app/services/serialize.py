@@ -37,6 +37,12 @@ def device_out(d: Device, graph: Graph | None = None) -> DeviceOut:
         switch_port_name=sp.port_name if sp else None,
         alarm=is_watched(d.device_type, d.metadata_),
         snoozed_until=snoozed_until(d.metadata_),
+        serial_number=d.serial_number,
+        inventory_number=d.inventory_number,
+        purchase_date=d.purchase_date,
+        warranty_until=d.warranty_until,
+        supplier=d.supplier,
+        assigned_to=d.assigned_to,
     )
 
 

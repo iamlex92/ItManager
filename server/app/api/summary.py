@@ -7,6 +7,7 @@ from sqlalchemy import String, cast, func, or_, select
 
 from ..models import Device, DeviceAlert, Peripheral, Port, ScriptAuditLog, Vlan
 from ..services.watch import is_watched
+from .audit import audit_out
 from .deps import SessionDep
 from .devices import _search_clause
 
@@ -87,7 +88,7 @@ async def summary(session: SessionDep):
         },
         "recent": [
             {
-                "title": r.script_name,
+                "title": audit_out(r).title,
                 "by": r.triggered_by,
                 "at": r.executed_at.isoformat(timespec="seconds"),
                 "exit_code": r.exit_code,
