@@ -203,8 +203,10 @@ fun PortDraft.toPatch(deviceId: String? = null): JsonObject = buildJsonObject {
     put("mode", mode.name)
     put("access_vlan", accessVlan?.let { JsonPrimitive(it) } ?: JsonNull)
     put("tagged_vlans", kotlinx.serialization.json.JsonArray(taggedVlans.map { JsonPrimitive(it) }))
-    put("speed_mbps", speedMbps)
+    // A patch panel port has no speed (0): the server would refuse it, and the recorded one stays.
+    if (speedMbps >= 10) put("speed_mbps", speedMbps)
     put("poe_enabled", poeEnabled)
+    label?.let { put("label", it) }
 }
 
 /** The cable colour as the server stores it; null clears it. */

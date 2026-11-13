@@ -45,6 +45,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -60,6 +61,14 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.unit.sp
+import com.itmanager.app.data.model.PortStatus
+import com.itmanager.app.data.model.SwitchPort
+import com.itmanager.app.ui.components.Led
+import com.itmanager.app.ui.components.NamePlate
 import com.itmanager.app.data.model.DEFAULT_RACK_UNITS
 import com.itmanager.app.data.model.Device
 import com.itmanager.app.data.model.DeviceType
@@ -72,6 +81,7 @@ import com.itmanager.app.data.model.RackWidth
 import com.itmanager.app.ui.components.StatusDot
 import com.itmanager.app.ui.components.icon
 import com.itmanager.app.ui.components.tint
+import com.itmanager.app.ui.theme.Accent
 import com.itmanager.app.ui.theme.StatusColors
 
 private val UNIT_HEIGHT = 30.dp
@@ -104,6 +114,14 @@ fun RackDialog(
     members.forEach { m -> for (u in m.rackU!!..m.rackTop!!) occupied += u }
     var slot by remember { mutableStateOf<Int?>(null) }
     var picked by remember { mutableStateOf<Device?>(null) }
+    // The back of the rack: patch panels show a cell per port, and a tap opens the labels («куда идёт кабель»).
+    var rear by rememberSaveable { mutableStateOf(false) }
+    var labelsFor by remember { mutableStateOf<Device?>(null) }
+    val portsVm: RackPortsViewModel = hiltViewModel()
+    val ports by portsVm.ports.collectAsStateWithLifecycle()
+    val portsError by portsVm.error.collectAsStateWithLifecycle()
+    val portIds = members.filter { it.type in PORT_KINDS }.map { it.id }.toSet()
+    LaunchedEffect(portIds) { portsVm.load(portIds) }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -121,11 +139,16 @@ fun RackDialog(
                     IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, contentDescription = "Закрыть") }
                 }
                 Box(Modifier.fillMaxWidth().height(2.dp)) { if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth()) }
-                state.error?.let {
+                Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = !rear, onClick = { rear = false }, label = { Text("Спереди") })
+                    FilterChip(selected = rear, onClick = { rear = true }, label = { Text("Сзади") })
+                }
+                (state.error ?: portsError)?.let {
                     Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
                 }
                 Text(
-                    "Коснитесь свободного юнита, чтобы поставить устройство, или устройства, чтобы убрать его из стойки.",
+                    if (rear) "Вид сзади. Коснитесь патч-панели, чтобы подписать порты: куда идёт каждый кабель."
+                    else "Коснитесь свободного юнита, чтобы поставить устройство, или устройства, чтобы убрать его из стойки.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
@@ -149,7 +172,9 @@ fun RackDialog(
                             val top = device.rackTop ?: return@forEach
                             // Rows run from the top of the box: from the highest unit, or from unit 1 when numbered downwards.
                             val row = if (style.numbering == RackNumbering.TOP) device.rackU!! - 1 else units - top
-                            DeviceBlock(device, UNIT_HEIGHT * row, style.labels, plates[device.id]) { picked = device }
+                            DeviceBlock(device, UNIT_HEIGHT * row, style.labels, plates[device.id], rear, ports[device.id].orEmpty()) {
+                                if (rear && device.type == DeviceType.PATCH_PANEL) labelsFor = device else picked = device
+                            }
                         }
                     }
                 }
@@ -180,6 +205,14 @@ fun RackDialog(
                 onMount(device.id, u, h)
             },
             onDismiss = { slot = null },
+        )
+    }
+    labelsFor?.let { device ->
+        PatchLabelsDialog(
+            device = device,
+            ports = ports[device.id].orEmpty(),
+            onSave = { port, text -> portsVm.label(device.id, port, text) },
+            onDismiss = { labelsFor = null; portsVm.clearError() },
         )
     }
     picked?.let { device ->
@@ -222,6 +255,9 @@ fun RackDialog(
                     TextButton(onClick = { picked = null; onOpenSwitch(device.id) }) {
                         Text(if (device.type == DeviceType.SWITCH) "Открыть панель портов" else "Открыть карточку")
                     }
+                    if (device.type == DeviceType.PATCH_PANEL) {
+                        TextButton(onClick = { picked = null; labelsFor = device }) { Text("Подписи портов…") }
+                    }
                     TextButton(onClick = { picked = null; onEditFaceplate(device) }) {
                         Text(if (plate == null) "Добавить схему панели (SVG)" else "Схема панели и порты…")
                     }
@@ -256,13 +292,21 @@ private fun UnitRow(unit: Int, free: Boolean, rail: Color, onClick: () -> Unit) 
 
 /** One device over its units, [offset] down from the top of the rack box. With [plate], its panel drawing. */
 @Composable
-private fun DeviceBlock(device: Device, offset: Dp, labels: RackLabels, plate: FaceplateView?, onClick: () -> Unit) {
+private fun DeviceBlock(
+    device: Device,
+    offset: Dp,
+    labels: RackLabels,
+    plate: FaceplateView?,
+    rear: Boolean,
+    ports: List<SwitchPort>,
+    onClick: () -> Unit,
+) {
     val height = device.rackH ?: 1
-    val tint = device.type.tint
+    val passive = device.type == DeviceType.PATCH_PANEL || device.type == DeviceType.SOCKET
     Surface(
-        shape = RoundedCornerShape(4.dp),
+        shape = RoundedCornerShape(3.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
-        border = BorderStroke(1.dp, tint.copy(alpha = 0.7f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier
             .padding(start = RAIL_WIDTH, end = 3.dp, top = 2.dp, bottom = 2.dp)
             .offset(y = offset)
@@ -271,35 +315,156 @@ private fun DeviceBlock(device: Device, offset: Dp, labels: RackLabels, plate: F
             .clickable(onClick = onClick),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp)) {
-            Icon(device.type.icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Column(Modifier.weight(1f)) {
-                if (labels != RackLabels.NONE) {
-                    Text(device.name, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
+            // The signature of the app: a status lamp and the name on a plate.
+            Led(
+                color = when {
+                    passive -> StatusColors.LedOff
+                    device.isOnline -> StatusColors.Online
+                    else -> StatusColors.Offline
+                },
+                lit = !passive,
+                size = 8.dp,
+            )
+            Spacer(Modifier.width(10.dp))
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                if (labels != RackLabels.NONE) NamePlate(device.name, Modifier.weight(1f, fill = false))
                 if (height > 1 && labels == RackLabels.NAME_MODEL) {
+                    Spacer(Modifier.width(6.dp))
                     Text(
                         listOfNotNull(device.vendor, device.model).joinToString(" "),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
                     )
                 }
             }
-            if (plate != null) {
+            if (!rear && plate != null) {
                 FaceplateImage(plate, Modifier.weight(2.2f).fillMaxHeight().padding(vertical = 2.dp))
-                Spacer(Modifier.width(6.dp))
-            } else if (device.type == DeviceType.SWITCH || device.type == DeviceType.PATCH_PANEL) {
-                PortStrip(if (device.isOnline) StatusColors.Online.copy(alpha = 0.85f) else Color.Gray.copy(alpha = 0.6f))
-                Spacer(Modifier.width(8.dp))
+            } else if (rear) {
+                RearBody(device, ports, height)
+            } else {
+                FrontBody(device, ports, height)
             }
-            StatusDot(if (device.isOnline) StatusColors.Online else StatusColors.Offline)
         }
     }
 }
 
-/** A front panel's two rows of twelve ports. */
+private val PORT_KINDS = setOf(DeviceType.SWITCH, DeviceType.ROUTER, DeviceType.FIREWALL, DeviceType.ACCESS_POINT, DeviceType.PATCH_PANEL)
+
+private val PatchGrey = Color(0xFF8AA0B4)
+private val BayDark = Color(0xFF10161B)
+private val BayRim = Color(0xFF3A4651)
+
+/** The front of a device drawn like what it is: ports of a switch or patch panel, drive bays of a server, the display of a UPS. */
+@Composable
+private fun FrontBody(device: Device, ports: List<SwitchPort>, height: Int) {
+    when (device.type) {
+        in PORT_KINDS -> {
+            if (ports.isEmpty()) {
+                PortStrip(if (device.isOnline) StatusColors.Online.copy(alpha = 0.85f) else Color.Gray.copy(alpha = 0.6f))
+            } else {
+                PortCells(ports, patch = device.type == DeviceType.PATCH_PANEL)
+            }
+        }
+        DeviceType.SERVER -> Canvas(Modifier.size(width = 92.dp, height = (UNIT_HEIGHT * height - 14.dp).coerceAtMost(40.dp))) {
+            val rows = height.coerceAtMost(3)
+            val gap = 3.dp.toPx()
+            val cw = (size.width - gap * 3) / 4
+            val ch = (size.height - gap * (rows - 1)) / rows
+            for (r in 0 until rows) {
+                for (c in 0 until 4) {
+                    val tl = Offset(c * (cw + gap), r * (ch + gap))
+                    drawRoundRect(BayDark, tl, Size(cw, ch), CornerRadius(1.5.dp.toPx()))
+                    drawRoundRect(BayRim, tl, Size(cw, ch), CornerRadius(1.5.dp.toPx()), style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
+                    drawCircle(StatusColors.Online, 1.5.dp.toPx(), Offset(tl.x + cw - 4.dp.toPx(), tl.y + 4.dp.toPx()))
+                }
+            }
+        }
+        DeviceType.UPS -> Text(
+            "100%",
+            style = MaterialTheme.typography.labelMedium.copy(fontFamily = com.itmanager.app.ui.theme.PlexMono, fontSize = 12.sp),
+            color = Color(0xFF4EF0A0),
+            modifier = Modifier
+                .background(Color(0xFF0C2A1F), RoundedCornerShape(2.dp))
+                .border(1.dp, Color(0xFF1C5A40), RoundedCornerShape(2.dp))
+                .padding(horizontal = 10.dp, vertical = 3.dp),
+        )
+        else -> {}
+    }
+}
+
+/** The back of a device: a cell per port with its label on a patch panel, outlets on a UPS, power supplies on a server. */
+@Composable
+private fun RearBody(device: Device, ports: List<SwitchPort>, height: Int) {
+    when {
+        device.type == DeviceType.PATCH_PANEL && ports.isNotEmpty() -> Canvas(Modifier.size(width = ((ports.size + 1) / 2 * 9).coerceIn(40, 190).dp, height = 20.dp)) {
+            // Two rows; a labelled port is filled with the accent, one with a cable but no label is grey.
+            val rows = if (ports.size > 12) 2 else 1
+            val cols = (ports.size + rows - 1) / rows
+            val gap = 2.dp.toPx()
+            val cw = (size.width - gap * (cols - 1)) / cols
+            val ch = (size.height - gap * (rows - 1)) / rows
+            ports.forEachIndexed { i, p ->
+                val col = i / rows
+                val row = i % rows
+                val color = when {
+                    !p.label.isNullOrBlank() -> Accent
+                    p.connectedDeviceName != null -> Color(0xFF5D6B78)
+                    else -> Color(0xFF34414C)
+                }
+                drawRoundRect(color, Offset(col * (cw + gap), row * (ch + gap)), Size(cw, ch), CornerRadius(1.dp.toPx()))
+            }
+        }
+        device.type == DeviceType.UPS -> Canvas(Modifier.size(width = 110.dp, height = 18.dp)) {
+            val gap = 5.dp.toPx()
+            val w = (size.width - gap * 5) / 6
+            for (i in 0 until 6) {
+                drawRoundRect(BayDark, Offset(i * (w + gap), 0f), Size(w, size.height), CornerRadius(3.dp.toPx()))
+                drawRoundRect(BayRim, Offset(i * (w + gap), 0f), Size(w, size.height), CornerRadius(3.dp.toPx()), style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
+            }
+        }
+        device.type == DeviceType.SERVER -> Canvas(Modifier.size(width = 100.dp, height = 18.dp)) {
+            val psu = Size(36.dp.toPx(), size.height)
+            drawRoundRect(BayDark, Offset(0f, 0f), psu, CornerRadius(2.dp.toPx()))
+            drawRoundRect(BayDark, Offset(42.dp.toPx(), 0f), psu, CornerRadius(2.dp.toPx()))
+            drawRect(Color(0xFF2A3A48), Offset(84.dp.toPx(), 4.dp.toPx()), Size(8.dp.toPx(), 8.dp.toPx()))
+        }
+        else -> Canvas(Modifier.size(width = 70.dp, height = 16.dp)) {
+            for (i in 0 until 6) drawRect(BayDark, Offset(i * 7.dp.toPx(), 2.dp.toPx()), Size(3.dp.toPx(), size.height - 4.dp.toPx()))
+            drawRect(Color(0xFF0C0F12), Offset(50.dp.toPx(), 2.dp.toPx()), Size(16.dp.toPx(), size.height - 4.dp.toPx()))
+        }
+    }
+}
+
+/** The ports of a switch or patch panel as they are: colour by link, two rows from twelve ports up. */
+@Composable
+private fun PortCells(ports: List<SwitchPort>, patch: Boolean) {
+    val rows = if (ports.size > 12) 2 else 1
+    val cols = (ports.size + rows - 1) / rows
+    Canvas(Modifier.size(width = (cols * 7).coerceAtMost(180).dp, height = (rows * 7).dp)) {
+        val side = (size.width / cols - 2.dp.toPx()).coerceIn(3.dp.toPx(), 5.dp.toPx())
+        val step = side + 2.dp.toPx()
+        ports.forEachIndexed { i, p ->
+            val col = i / rows
+            val row = i % rows
+            val color = if (patch) {
+                if (p.connectedDeviceName != null) PatchGrey else Color(0xFF47525D)
+            } else {
+                when (p.status) {
+                    PortStatus.GIGABIT -> StatusColors.Online
+                    PortStatus.FAST -> StatusColors.LinkFast
+                    PortStatus.DOWN -> Color(0xFF34414C)
+                    PortStatus.DISABLED -> Color(0xFF1A2026)
+                }
+            }
+            drawRect(color, Offset(col * step, row * step), Size(side, side))
+        }
+    }
+}
+
+/** A front panel's two rows of twelve ports, when the ports themselves are not known yet. */
 @Composable
 private fun PortStrip(color: Color) {
     Canvas(Modifier.size(width = 96.dp, height = 14.dp)) {
@@ -309,6 +474,52 @@ private fun PortStrip(color: Color) {
             for (col in 0 until 12) drawRect(color, Offset(col * (side + gap), row * (side + gap)), Size(side, side))
         }
     }
+}
+
+/** The labels of a patch panel's ports: where each cable goes. Saved port by port; inventory only. */
+@Composable
+private fun PatchLabelsDialog(
+    device: Device,
+    ports: List<SwitchPort>,
+    onSave: (SwitchPort, String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("${device.name}: куда идёт кабель") },
+        text = {
+            if (ports.isEmpty()) {
+                Text(
+                    "У патч-панели нет портов в учёте. Добавьте их в карточке устройства: «Порты» → «Изменить порты».",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            } else {
+                LazyColumn(Modifier.heightIn(max = 420.dp)) {
+                    items(ports, key = { it.id }) { port ->
+                        var text by remember(port.id, port.label) { mutableStateOf(port.label.orEmpty()) }
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 3.dp)) {
+                            Text("${port.number}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(28.dp))
+                            Column(Modifier.weight(1f)) {
+                                OutlinedTextField(
+                                    value = text,
+                                    onValueChange = { text = it.take(120) },
+                                    placeholder = { Text("куда идёт") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                                port.connectedDeviceName?.let {
+                                    Text("кабель: $it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            TextButton(enabled = text.trim() != port.label.orEmpty(), onClick = { onSave(port, text) }) { Text("OK") }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Готово") } },
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+    )
 }
 
 /** Which device goes to [unit], and how many units it takes (up to the next occupied unit). */

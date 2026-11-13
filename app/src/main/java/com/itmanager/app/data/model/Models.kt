@@ -182,6 +182,8 @@ data class SwitchPort(
     val speedMbps: Int,
     val poeEnabled: Boolean,
     val connectedDeviceName: String?,
+    /** Where the cable goes, as written by hand («каб. 214»); mainly for the rear of a patch panel. */
+    val label: String? = null,
 ) {
     val status: PortStatus
         get() = when {
