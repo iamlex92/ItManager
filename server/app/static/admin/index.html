@@ -17,6 +17,7 @@
 <script src="/static/admin/admin-racks.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-lifecycle.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-ipam.js?v={{asset}}" defer></script>
+<script src="/static/admin/admin-poe.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-work.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-home.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-nav.js?v={{asset}}" defer></script>
@@ -35,6 +36,7 @@
 <symbol id="i-bell" viewBox="0 0 24 24"><path d="M10.268 21a2 2 0 0 0 3.464 0" /> <path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" /></symbol>
 <symbol id="i-network" viewBox="0 0 24 24"><rect x="16" y="16" width="6" height="6" rx="1" /> <rect x="2" y="16" width="6" height="6" rx="1" /> <rect x="9" y="2" width="6" height="6" rx="1" /> <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" /> <path d="M12 12V8" /></symbol>
 <symbol id="i-tag" viewBox="0 0 24 24"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" /> <circle cx="7.5" cy="7.5" r=".5" fill="currentColor" /></symbol>
+<symbol id="i-zap" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></symbol>
 <symbol id="i-hash" viewBox="0 0 24 24"><line x1="4" x2="20" y1="9" y2="9" /> <line x1="4" x2="20" y1="15" y2="15" /> <line x1="10" x2="8" y1="3" y2="21" /> <line x1="16" x2="14" y1="3" y2="21" /></symbol>
 <symbol id="i-file-text" viewBox="0 0 24 24"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" /> <path d="M14 2v5a1 1 0 0 0 1 1h5" /> <path d="M10 9H8" /> <path d="M16 13H8" /> <path d="M16 17H8" /></symbol>
 <symbol id="i-keyboard" viewBox="0 0 24 24"><path d="M10 8h.01" /> <path d="M12 12h.01" /> <path d="M14 8h.01" /> <path d="M16 12h.01" /> <path d="M18 8h.01" /> <path d="M6 8h.01" /> <path d="M7 16h10" /> <path d="M8 12h.01" /> <rect width="20" height="16" x="2" y="4" rx="2" /></symbol>
@@ -105,6 +107,7 @@
     <button data-tab="topology"><svg class="ic" aria-hidden="true"><use href="#i-network"/></svg>Схема сети</button>
     <button data-tab="vlans"><svg class="ic" aria-hidden="true"><use href="#i-tag"/></svg>VLAN и подсети</button>
     <button data-tab="ipam"><svg class="ic" aria-hidden="true"><use href="#i-hash"/></svg>IP-адреса</button>
+    <button data-tab="poe"><svg class="ic" aria-hidden="true"><use href="#i-zap"/></svg>PoE</button>
     <button data-tab="scan"><svg class="ic" aria-hidden="true"><use href="#i-radar"/></svg>Сканер сети</button>
     <div class="side-group">Политики</div>
     <button data-tab="gpo"><svg class="ic" aria-hidden="true"><use href="#i-scroll-text"/></svg>Групповые политики</button>
@@ -617,6 +620,17 @@
         </aside>
         <article id="doc-view" class="doc-view"></article>
       </div>
+    </section>
+
+    <section id="tab-poe" class="tab" hidden>
+      <div class="toolbar">
+        <h2>PoE: питание по Ethernet</h2>
+        <div class="spacer"></div>
+        <button type="button" id="poe-refresh">Обновить</button>
+      </div>
+      <p class="muted small">Сколько мощности у коммутатора и сколько забирают порты: камеры, точки доступа, телефоны. Данные читаются с коммутатора командой show power inline (Cisco IOS, Eltex MES), ничего не меняется.</p>
+      <div id="poe-list" class="stack"></div>
+      <p id="poe-note" class="muted small"></p>
     </section>
 
     <section id="tab-lifecycle" class="tab" hidden>

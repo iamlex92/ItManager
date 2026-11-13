@@ -4197,6 +4197,12 @@
         if (card && info && $("card-name").textContent === d.name) info.prepend(card);
       }).catch(() => {});
     }
+    if (window.NetAdmin.poeBlock && d.type === "SWITCH") {
+      window.NetAdmin.poeBlock(d).then((card) => {
+        const info = $("card-overview").firstChild;
+        if (card && info && $("card-name").textContent === d.name) info.append(card);
+      }).catch(() => {});
+    }
     if (window.NetAdmin.linkedWork) {
       window.NetAdmin.linkedWork(d.id).then((card) => {
         const info = $("card-overview").firstChild;
