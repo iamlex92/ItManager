@@ -159,3 +159,27 @@ def test_unreachable_computer_says_why():
             assert all(part in str(e) for part in expected), str(e)
         else:
             raise AssertionError("a computer that answers nowhere must be reported")
+
+
+def test_ad_search_failure_is_an_answer_not_a_500(seeded, monkeypatch):
+    """Whatever the LDAP side throws while listing the domain's computers, the person gets a message, not «500»."""
+    from app.api import pcs as pcs_api
+
+    class Broken:
+        def __init__(self, settings, login):
+            pass
+
+        def windows_computers(self):
+            raise TimeoutError("receive timed out")
+
+    monkeypatch.setattr(pcs_api, "LdapDirectory", Broken)
+    settings = make_settings(
+        runbook_mode=RunbookMode.REAL, runbook_credential="domain-admin", ad_ldap_url="ldaps://dc.example.local"
+    )
+    with TestClient(create_app(settings), headers=AUTH) as c:
+        c.post(
+            "/api/v1/credentials", json={"name": "domain-admin", "kind": "winrm", "username": "F\\adm", "secret": "x"}
+        )
+        r = c.post("/api/v1/pcs/keys", json={"source": "ad"})
+        assert r.status_code == 502, r.text
+        assert r.json()["detail"]["code"] == "ad_failed" and "TimeoutError" in r.json()["detail"]["message"]
