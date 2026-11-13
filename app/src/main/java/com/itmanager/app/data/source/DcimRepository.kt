@@ -166,6 +166,9 @@ class DcimRepository @Inject constructor(
     suspend fun ipam() = load { ipam() }
     suspend fun lifecycle(): Result<LifecycleOverview> = load { lifecycle() }
 
+    suspend fun createPatchPanel(rackId: String, name: String, ports: Int, u: Int, h: Int): Result<Unit> =
+        edit { createPatchPanel(rackId, name, ports, u, h) }
+
     suspend fun tasks(includeDone: Boolean): Result<List<TaskItem>> = load { tasks(includeDone) }
     suspend fun saveTask(id: String?, draft: TaskDraft): Result<TaskItem> = load { saveTask(id, draft) }
     suspend fun completeTask(id: String): Result<Unit> = load { completeTask(id) }

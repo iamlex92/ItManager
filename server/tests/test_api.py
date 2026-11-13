@@ -287,3 +287,16 @@ def test_summary_counts_only_alarming_devices_as_down(client):
     assert "quiet_offline" in body
     assert all(d["type"] not in ("WORKSTATION", "PHONE") for d in body["down"])
     assert pc["alarm"] is False
+
+
+def test_patch_panel_is_made_in_a_free_rack_unit(client):
+    rack = client.post("/api/v1/devices", json={"name": "R-PP", "type": "RACK", "rack_units": 12}).json()
+    body = {"name": "PP-1", "ports": 24, "rack_id": rack["id"], "rack_u": 3, "rack_h": 1}
+    made = client.post("/api/v1/devices/patch-panel", json=body)
+    assert made.status_code == 201
+    pp = made.json()
+    assert pp["type"] == "PATCH_PANEL" and pp["rack_id"] == rack["id"] and pp["rack_u"] == 3
+    ports = client.get(f"/api/v1/devices/{pp['id']}/ports").json()
+    assert [p["number"] for p in ports] == list(range(1, 25))
+    # The unit is taken now.
+    assert client.post("/api/v1/devices/patch-panel", json={**body, "name": "PP-2"}).status_code in (409, 422)

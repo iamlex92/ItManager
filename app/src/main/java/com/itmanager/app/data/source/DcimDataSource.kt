@@ -122,6 +122,9 @@ interface DcimDataSource {
     /** What is about to run out and the licenses (no keys); reads only. */
     suspend fun lifecycle(): LifecycleOverview
 
+    /** A patch panel with [ports] ports in rack [rackId] from unit [u], [h] units high. */
+    suspend fun createPatchPanel(rackId: String, name: String, ports: Int, u: Int, h: Int)
+
     // Tasks and documentation of the service.
     suspend fun tasks(includeDone: Boolean): List<TaskItem>
     /** Creates a task when [id] is null; otherwise changes the fields the draft holds. */

@@ -47,6 +47,11 @@ class RackViewModel @Inject constructor(private val repository: DcimRepository) 
         write { repository.updateDevice(deviceId, device.toDraft().copy(rackId = rackId, rackU = u, rackH = h)) }
     }
 
+    /** A new patch panel with [ports] ports from unit [u], [h] units high. */
+    fun createPatchPanel(rackId: String, name: String, ports: Int, u: Int, h: Int) {
+        write { repository.createPatchPanel(rackId, name, ports, u, h) }
+    }
+
     /** The rack's own settings: name, height in units and how it is drawn. */
     fun saveRack(rack: Device, name: String, units: Int, style: RackStyle) {
         val draft = rack.toDraft().copy(
@@ -102,6 +107,7 @@ fun RackHost(
                     onOpenDevice(id)
                 },
                 onSaveRack = { name, units, style -> rackViewModel.saveRack(rack, name, units, style) },
+                onCreatePanel = { name, ports, u, h -> rackViewModel.createPatchPanel(rack.id, name, ports, u, h) },
                 onDismiss = rackViewModel::close,
             )
         }

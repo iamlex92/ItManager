@@ -36,11 +36,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -105,6 +107,8 @@ fun RackDialog(
     plates: Map<String, FaceplateView> = emptyMap(),
     onEditFaceplate: (Device) -> Unit = {},
     onSaveRack: (name: String, units: Int, style: RackStyle) -> Unit = { _, _, _ -> },
+    /** A new patch panel from unit [u], [h] units high, with [ports] ports. */
+    onCreatePanel: (name: String, ports: Int, u: Int, h: Int) -> Unit = { _, _, _, _ -> },
 ) {
     val units = rack.rackUnits ?: DEFAULT_RACK_UNITS
     val style = remember(rack.metadata) { RackStyle.from(rack.metadata) }
@@ -208,6 +212,11 @@ fun RackDialog(
             onPick = { device, h ->
                 slot = null
                 onMount(device.id, u, h)
+            },
+            nextPanelName = "PP-${state.devices.count { it.type == DeviceType.PATCH_PANEL } + 1}",
+            onCreatePanel = { name, ports, h ->
+                slot = null
+                onCreatePanel(name, ports, u, h)
             },
             onDismiss = { slot = null },
         )
@@ -534,12 +543,17 @@ private fun SlotDialog(
     occupied: Set<Int>,
     candidates: List<Device>,
     onPick: (Device, Int) -> Unit,
+    nextPanelName: String,
+    onCreatePanel: (name: String, ports: Int, height: Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val maxHeight = (1..MAX_DEVICE_UNITS).takeWhile { h -> unit + h - 1 <= units && (unit until unit + h).none { it in occupied } }.size
         .coerceAtLeast(1)
     var height by remember(unit) { mutableStateOf(1) }
     var query by remember { mutableStateOf("") }
+    var newPanel by remember { mutableStateOf(false) }
+    var panelName by remember(nextPanelName) { mutableStateOf(nextPanelName) }
+    var panelPorts by remember { mutableStateOf(24) }
     val shown = candidates.filter { it.matches(query) }.sortedWith(compareBy({ it.type.ordinal }, { it.name })).take(MAX_CANDIDATES)
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -557,6 +571,26 @@ private fun SlotDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                if (newPanel) {
+                    Text("Новая патч-панель", style = MaterialTheme.typography.labelLarge)
+                    OutlinedTextField(
+                        value = panelName,
+                        onValueChange = { panelName = it.take(100) },
+                        label = { Text("Название") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(12, 24, 48).forEach { n ->
+                            FilterChip(selected = n == panelPorts, onClick = { panelPorts = n }, label = { Text("$n портов") })
+                        }
+                    }
+                    Button(enabled = panelName.isNotBlank(), onClick = { onCreatePanel(panelName.trim(), panelPorts, height) }) {
+                        Text("Создать патч-панель (${height}U)")
+                    }
+                } else {
+                    OutlinedButton(onClick = { newPanel = true }) { Text("Создать патч-панель") }
+                }
                 if (shown.isEmpty()) {
                     Text(
                         "Нет устройств без стойки. Добавьте устройство на карте или найдите его сканером.",

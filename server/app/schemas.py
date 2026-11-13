@@ -1279,6 +1279,16 @@ class DeviceTemplateOut(ORM, DeviceTemplateBase):
     id: uuid.UUID
 
 
+class PatchPanelCreate(BaseModel):
+    """A patch panel made straight in a rack unit: its ports are numbered 1..ports."""
+
+    name: str = Field(min_length=1, max_length=100)
+    ports: int = Field(default=24, ge=1, le=96)
+    rack_id: uuid.UUID
+    rack_u: int = Field(ge=1, le=60)
+    rack_h: int = Field(default=1, ge=1, le=4)
+
+
 class DeviceFromTemplate(BaseModel):
     """Overrides for the device made from a template: the template fills the rest."""
 

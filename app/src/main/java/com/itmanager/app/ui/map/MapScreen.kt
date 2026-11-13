@@ -606,6 +606,7 @@ fun MapScreen(
                         onOpenSwitch(id)
                     },
                     onSaveRack = { name, units, style -> viewModel.saveRack(rack, name, units, style) },
+                    onCreatePanel = { name, ports, u, h -> viewModel.createPatchPanel(rack.id, name, ports, u, h) },
                     onDismiss = viewModel::closeRack,
                 )
             }

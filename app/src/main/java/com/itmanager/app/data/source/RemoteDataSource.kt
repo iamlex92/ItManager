@@ -469,6 +469,19 @@ class RemoteDataSource(
 
     override suspend fun deletePeripheral(id: String) = api.deletePeripheral(settings, id)
 
+    override suspend fun createPatchPanel(rackId: String, name: String, ports: Int, u: Int, h: Int) {
+        api.createPatchPanel(
+            settings,
+            buildJsonObject {
+                put("name", name.trim())
+                put("ports", ports)
+                put("rack_id", rackId)
+                put("rack_u", u)
+                put("rack_h", h)
+            },
+        )
+    }
+
     override suspend fun tasks(includeDone: Boolean): List<TaskItem> = api.tasks(settings, includeDone).map { it.toDomain() }
 
     override suspend fun saveTask(id: String?, draft: TaskDraft): TaskItem {

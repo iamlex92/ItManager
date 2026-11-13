@@ -216,6 +216,10 @@ class NetAdminApi @Inject constructor(
 
     suspend fun licenses(s: ServerSettings): List<LicenseDto> = fetch(s, "licenses")
 
+    /** A patch panel with its ports, made straight in a free rack unit. */
+    suspend fun createPatchPanel(s: ServerSettings, body: JsonObject): DeviceDto =
+        newerFeature("создавать патч-панели") { post(s, "devices/patch-panel", body) }
+
     // Tasks and documentation of the service.
 
     suspend fun tasks(s: ServerSettings, includeDone: Boolean): List<TaskDto> =

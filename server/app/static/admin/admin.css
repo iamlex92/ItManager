@@ -714,3 +714,9 @@ textarea.mono { font-family: "IBM Plex Mono", monospace; font-size: 13px; }
 }
 .racks-layout.has-card { grid-template-columns: 210px minmax(0, 1fr); }
 .racks-layout.has-card .racks-panel { display: none; }
+.pool .chip.off { opacity: .45; cursor: not-allowed; }
+dialog .pool { max-height: 260px; overflow-y: auto; }
+dialog .pool .chip { cursor: pointer; }
+dialog .pool .chip.off { cursor: not-allowed; }
+dialog .row input[type="text"] { flex: 1; min-width: 120px; }
+dialog .row select { min-width: 110px; }
