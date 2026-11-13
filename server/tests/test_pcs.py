@@ -183,3 +183,33 @@ def test_ad_search_failure_is_an_answer_not_a_500(seeded, monkeypatch):
         r = c.post("/api/v1/pcs/keys", json={"source": "ad"})
         assert r.status_code == 502, r.text
         assert r.json()["detail"]["code"] == "ad_failed" and "TimeoutError" in r.json()["detail"]["message"]
+
+
+def test_ldap_directory_lists_windows_computers_and_checks_names():
+    """The real directory has the two computer lookups the domain-PC code calls (they once lived in the Protocol)."""
+    from types import SimpleNamespace
+
+    from app.runbooks.real import LdapDirectory, Login
+
+    class Standard:
+        def paged_search(self, base, flt, attributes, paged_size, generator):
+            assert base == "DC=f,DC=local" and "operatingSystem=*Windows*" in flt
+            yield {"type": "searchResRef"}
+            yield {"type": "searchResEntry", "attributes": {"name": "PC-1", "dNSHostName": "pc-1.f.local"}}
+            yield {"type": "searchResEntry", "attributes": {"name": ["PC-2"], "dNSHostName": None}}
+            yield {"type": "searchResEntry", "attributes": {"name": "PC-3"}}
+
+    class Conn:
+        extend = SimpleNamespace(standard=Standard())
+        response: list = []
+
+        def search(self, base, flt, search_scope, attributes, size_limit):
+            self.last = flt
+            self.response = [{"type": "searchResEntry", "dn": "CN=PC-1,DC=f"}] if "pc-1" in flt.lower() else []
+
+    settings = make_settings(ad_base_dn="DC=f,DC=local")
+    d = LdapDirectory(settings, Login("u", "p"), connection=Conn())
+    assert d.windows_computers() == ["pc-1.f.local", "PC-2", "PC-3"]
+    assert d.windows_computers(limit=2) == ["pc-1.f.local", "PC-2"]
+    assert d.computer_exists("pc-1.f.local") is True
+    assert d.computer_exists("nobody") is False
