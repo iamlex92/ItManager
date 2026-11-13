@@ -104,6 +104,10 @@ async def heartbeat_once(
                 d.is_online = up
                 flipped.append(d)
                 touched += await alerts.reachability_changed(session, d, up, now)
+            elif not up:
+                # Still silent: a pause may have run out, so the alarm that was held back is due now (a no-op when
+                # the device is not watched or the alarm is already open).
+                touched += await alerts.apply_policy(session, d, now)
         await session.commit()
         for d in flipped:
             alerts.publish_device_status(hub, d)

@@ -3,7 +3,7 @@
 // like what they are (a switch shows its ports, a server its drive bays, a UPS its display), are dragged onto free units,
 // and the rear of a patch panel carries a label for each port: where the cable goes.
 (() => {
-  const { $, api, toast, fail, askText, typeOf, openCard, openTab, tabs } = window.NetAdmin;
+  const { $, api, toast, fail, askText, typeOf, openCard, openTab, tabs, isAlarm, offLabel } = window.NetAdmin;
 
   const U = 24; // height of one unit, px
   const DEFAULT_H = { SWITCH: 1, ROUTER: 1, FIREWALL: 1, PATCH_PANEL: 1, ACCESS_POINT: 1, SERVER: 2, UPS: 3 };
@@ -73,7 +73,7 @@
 
   // ------------------------------------------------------------------ the pieces of a device's face
 
-  const led = (d) => el("span", `led${passive(d) ? " off" : d.is_online ? "" : " down"}`);
+  const led = (d) => el("span", `led${passive(d) || (!d.is_online && !isAlarm(d)) ? " off" : d.is_online ? "" : " down"}`);
   const plate = (d) => el("span", "plate", d.name);
 
   function portCells(list, extra) {
@@ -185,7 +185,7 @@
     const units = rack.rack_units || 42, st = rackStyle(rack);
     const members = devices.filter((d) => d.rack_id === rack.id && d.rack_u != null);
     const used = members.reduce((n, d) => n + heightOf(d), 0);
-    const down = members.filter((d) => !passive(d) && !d.is_online).length;
+    const down = members.filter(isAlarm).length;
     const box = el("section", `rack${rack.id === focusRack ? " focus" : ""}`);
     box.dataset.id = rack.id;
 
@@ -295,7 +295,7 @@
     const h = heightOf(d);
     const card = el("div", "card");
     const top = el("div", "sel-head");
-    top.append(led(d), plate(d), el("span", "tag", passive(d) ? "пассивное" : d.is_online ? "в сети" : "не отвечает"));
+    top.append(led(d), plate(d), el("span", "tag", passive(d) ? "пассивное" : d.is_online ? "в сети" : offLabel(d)));
     const kv = el("div", "kv");
     const row = (k, v) => { kv.append(el("span", null, k), v instanceof Node ? v : el("span", null, v)); };
     row("Тип", typeOf(d).label);
@@ -379,7 +379,7 @@
     $("racks-row").classList.toggle("rear", side === "rear");
     $("racks-empty").hidden = racks.length > 0;
     for (const b of document.querySelectorAll("#racks-side-seg button")) b.classList.toggle("active", b.dataset.side === side);
-    const downCount = devices.filter((d) => d.rack_id && !passive(d) && !d.is_online).length;
+    const downCount = devices.filter((d) => d.rack_id && isAlarm(d)).length;
     $("racks-summary").textContent = `${racks.length} ${racks.length === 1 ? "стойка" : "стоек"}${downCount ? ` · не отвечает ${downCount}` : ""}`;
     renderPool();
     renderRackList();

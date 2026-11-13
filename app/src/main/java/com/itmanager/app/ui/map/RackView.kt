@@ -320,9 +320,10 @@ private fun DeviceBlock(
                 color = when {
                     passive -> StatusColors.LedOff
                     device.isOnline -> StatusColors.Online
-                    else -> StatusColors.Offline
+                    device.alarm -> StatusColors.Offline
+                    else -> StatusColors.LedOff
                 },
-                lit = !passive,
+                lit = !passive && (device.isOnline || device.alarm),
                 size = 8.dp,
             )
             Spacer(Modifier.width(10.dp))

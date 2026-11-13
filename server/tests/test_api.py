@@ -249,3 +249,41 @@ def test_port_label_is_saved_cleared_and_returned(client):
         == "каб. 214, бухгалтерия"
     )
     assert client.patch(f"/api/v1/ports/{port['id']}", json={"label": ""}).json()["label"] is None
+
+
+def test_switched_off_computer_is_not_an_alarm_but_a_server_is(client):
+    from datetime import date, timedelta
+
+    from app.services.watch import is_watched, snoozed_until
+
+    today = date(2026, 11, 13)
+    assert is_watched("SWITCH", {}) and is_watched("SERVER", None) and is_watched("PRINTER", {})
+    assert not is_watched("WORKSTATION", {}) and not is_watched("PHONE", {})
+    # A choice wins over the type, both ways.
+    assert is_watched("WORKSTATION", {"watch": "always"}) and not is_watched("SERVER", {"watch": "quiet"})
+    # A pause holds the alarm back until its last day, and only a real date counts.
+    until = (today + timedelta(days=3)).isoformat()
+    assert not is_watched("SERVER", {"snooze_until": until}, today)
+    assert is_watched("SERVER", {"snooze_until": (today - timedelta(days=1)).isoformat()}, today)
+    assert snoozed_until({"snooze_until": "never"}, today) is None
+
+
+def test_device_answer_says_whether_its_silence_is_an_alarm(client):
+    pc = find(client, "PC-BUH-01")
+    sw = find(client, "SW-ACC-01")
+    assert pc["alarm"] is False and sw["alarm"] is True
+    r = client.patch(f"/api/v1/devices/{pc['id']}", json={"metadata": {**pc["metadata"], "watch": "always"}})
+    assert r.status_code == 200 and r.json()["alarm"] is True
+    r = client.patch(f"/api/v1/devices/{sw['id']}", json={"metadata": {**sw["metadata"], "snooze_until": "2999-01-01"}})
+    assert r.json()["alarm"] is False and r.json()["snoozed_until"] == "2999-01-01"
+    # Back to the defaults, so the other tests see the seed unchanged.
+    client.patch(f"/api/v1/devices/{pc['id']}", json={"metadata": pc["metadata"]})
+    client.patch(f"/api/v1/devices/{sw['id']}", json={"metadata": sw["metadata"]})
+
+
+def test_summary_counts_only_alarming_devices_as_down(client):
+    pc = find(client, "PC-BUH-01")
+    body = client.get("/api/v1/summary").json()["devices"]
+    assert "quiet_offline" in body
+    assert all(d["type"] not in ("WORKSTATION", "PHONE") for d in body["down"])
+    assert pc["alarm"] is False

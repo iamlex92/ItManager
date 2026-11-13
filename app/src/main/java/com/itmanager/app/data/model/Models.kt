@@ -67,6 +67,10 @@ data class Device(
     val metadata: Map<String, JsonElement> = emptyMap(),
     /** The device's other addresses (other interfaces, or a merged duplicate): pinged and searched like [ip]. */
     val extraIps: List<String> = emptyList(),
+    /** Whether its silence is an alarm now: watched by its type or choice and not paused. The server decides. */
+    val alarm: Boolean = true,
+    /** Until this day (ISO date) the alarm is paused («не тревожить»); null when it is not. */
+    val snoozedUntil: String? = null,
 ) {
     /** Every address, the main one first. */
     val allIps: List<String> get() = listOfNotNull(ip) + extraIps

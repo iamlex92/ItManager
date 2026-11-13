@@ -14,8 +14,11 @@ data class DeviceGroup(val key: String, val title: String, val devices: List<Dev
 val Device.isPassive: Boolean
     get() = type == DeviceType.SOCKET || type == DeviceType.PATCH_PANEL || type == DeviceType.RACK
 
-/** Active equipment that does not answer right now. */
-val Device.isDown: Boolean get() = !isOnline && !isPassive
+/** Active equipment that does not answer right now and is expected to (see [Device.alarm]). */
+val Device.isDown: Boolean get() = !isOnline && !isPassive && alarm
+
+/** Does not answer, and that is no alarm: a computer switched off for the night, or a device on pause. */
+val Device.isSwitchedOff: Boolean get() = !isOnline && !isPassive && !alarm
 
 /**
  * Splits [devices] into sections. [floors] orders the floor sections bottom to top; [zones] (by floor id) names

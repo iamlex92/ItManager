@@ -1,6 +1,6 @@
 import ipaddress
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 
 from pydantic import (
@@ -356,6 +356,9 @@ class DeviceOut(BaseModel):
     switch_id: uuid.UUID | None = None
     switch_port_id: uuid.UUID | None = None
     switch_port_name: str | None = None
+    # Whether its silence is an alarm now (by type or choice, and not paused): a switched-off computer is not.
+    alarm: bool = True
+    snoozed_until: date | None = None
 
 
 class DeviceMerge(BaseModel):

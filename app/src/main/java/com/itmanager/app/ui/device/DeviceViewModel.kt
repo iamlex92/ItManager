@@ -25,6 +25,8 @@ import com.itmanager.app.ui.map.DeviceForm
 import com.itmanager.app.ui.navigation.DeviceRoute
 import com.itmanager.app.ui.navigation.MapFocus
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.serialization.json.JsonPrimitive
+import java.time.LocalDate
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -247,6 +249,22 @@ class DeviceViewModel @Inject constructor(
         val ask = _mergeAsk.value ?: return
         _mergeAsk.value = null
         merge(ask.source)
+    }
+
+    /**
+     * What counts as an alarm for this device. [watch]: "always", "quiet" (switching it off is normal) or null (by its
+     * type). [snoozeDays]: a pause in days from today, or null for none.
+     */
+    fun setWatch(watch: String?, snoozeDays: Int?) {
+        val device = details?.device ?: return
+        val meta = device.metadata.toMutableMap()
+        if (watch != null) meta["watch"] = JsonPrimitive(watch) else meta.remove("watch")
+        if (snoozeDays != null) meta["snooze_until"] = JsonPrimitive(LocalDate.now().plusDays(snoozeDays.toLong()).toString()) else meta.remove("snooze_until")
+        write {
+            repository.updateDevice(deviceId, device.toDraft().copy(metadata = meta))
+                .onSuccess { load() }
+                .onFailure { _messages.emit(it.toUserMessage()) }
+        }
     }
 
     /** [source] is this same device entered twice: its ports, cables, history and addresses move here, it is removed. */
