@@ -23,6 +23,7 @@ Clients should ignore unknown fields.
 | GET | `/api/v1/devices/{id}/ports` | `[{id, device_id, number, name, is_uplink, mode, access_vlan, tagged_vlans, is_admin_up, is_oper_up, speed_mbps, poe_enabled, connected_mac, connected_device_name}]` |
 | GET | `/api/v1/ports/{id}/trace` | `{hops: [{device_id, device_name, device_type, port_id, port_name}]}`, e.g. PC → socket → patch panel → switch |
 | GET | `/api/v1/ports/{id}/path` | The whole line through a port, both ways: for a patch panel or socket port the computer on one side and the switch on the other. `{hops: [{device_id, device_name, device_type, port_id, port_name, ip, is_online, cable_type, cable_label, is_here}], ends: [...]}`; `hops` run from the far end to the switch, `cable_type` is the cable to the next hop, `ends` are the active devices at the ends. |
+| PATCH | `/api/v1/ports/{id}` | also `label` (up to 120 chars): where the cable goes, e.g. the rear of a patch panel; an empty string clears it. `label` is in every port answer. |
 | GET | `/api/v1/vlans` | `[{vlan_id, name, subnet_cidr, color_hex, description}]` |
 | POST | `/api/v1/vlans/cleanup?dry_run=true` | VLANs no port carries (access or tagged) and that have no subnet or description, VLAN 1 excepted: `{dry_run, count, vlans: [{vlan_id, name}]}`. `dry_run=false` deletes them (one journal entry `vlan_cleanup`). |
 | GET | `/api/v1/connections?device_id=` | `[{id, port_a_id, port_b_id, device_a_id, device_b_id, cable_type, length_meters, label, notes, waypoints}]` |

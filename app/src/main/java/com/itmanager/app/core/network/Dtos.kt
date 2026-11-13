@@ -219,6 +219,7 @@ data class PortDto(
     @SerialName("speed_mbps") val speedMbps: Int? = null,
     @SerialName("poe_enabled") val poeEnabled: Boolean = false,
     @SerialName("connected_device_name") val connectedDeviceName: String? = null,
+    val label: String? = null,
 ) {
     fun toDomain() = SwitchPort(
         id = id,
@@ -233,6 +234,7 @@ data class PortDto(
         speedMbps = speedMbps ?: 0,
         poeEnabled = poeEnabled,
         connectedDeviceName = connectedDeviceName,
+        label = label,
     )
 }
 

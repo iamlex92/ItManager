@@ -2969,7 +2969,7 @@
   $("device-rack-open").addEventListener("click", () => {
     const d = dialogDevice;
     $("device-dialog").close();
-    openRack(d).catch(fail);
+    window.NetAdmin.openRacks(d.id);
   });
 
   async function refreshTab() {
@@ -4105,7 +4105,7 @@
       ["Отвечает на адрес", (d.metadata || {}).answered_ip || null],
     ] : [];
     const where = node("div", { className: "card" }, node("h3", { textContent: "Расположение" }), kv([...system, ...place, ...seen]));
-    if (d.type === "RACK") where.append(node("div", { className: "row" }, node("button", { textContent: "Вид стойки…", onclick: () => openRack(d) })));
+    if (d.type === "RACK") where.append(node("div", { className: "row" }, node("button", { textContent: "Вид стойки…", onclick: () => { $("card-dialog").close(); window.NetAdmin.openRacks(d.id); } })));
     out.push(where);
 
     if (!["VIRTUAL", "RACK", "SWITCH"].includes(d.type)) {
@@ -4166,8 +4166,71 @@
     await openCard(d.id);
   }
 
+  // The faceplate: ports where they are on the switch. Odd numbers on the top row, even below, a gap every twelve, the
+  // uplinks (SFP) in a block of their own. A small panel of up to eight ports is a single row.
+  const UPLINK_NAME = /^(te|tengig|xg|sfp|fo|fortygig|hu)/i;
+  function portPanel(d, ports, vlanById, vlanView, onPick) {
+    const passive = PASSIVE.has(d.type);
+    const isUp = (p) => (p.is_uplink || UPLINK_NAME.test(p.name)) && ports.length > 8;
+    const main = ports.filter((p) => !isUp(p)), up = ports.filter(isUp);
+    const cell = (p) => {
+      const linked = passive ? !!p.connected_device_name : p.is_admin_up && p.is_oper_up;
+      const state = passive ? (linked ? "up" : "off") : !p.is_admin_up ? "off" : !p.is_oper_up ? "down" : p.speed_mbps >= 1000 ? "up" : "fast";
+      const vlan = p.mode === "TRUNK" ? "trunk" : p.access_vlan != null ? `VLAN ${p.access_vlan} ${(vlanById.get(p.access_vlan) || {}).name || ""}`.trim() : "без VLAN";
+      const b = node("button", { type: "button", className: `port ${state}${p.mode === "TRUNK" ? " trunk" : ""}`, textContent: String(p.number) });
+      if (vlanView && !passive && p.mode !== "TRUNK" && p.access_vlan != null) {
+        b.classList.add("by-vlan");
+        b.style.setProperty("--c", (vlanById.get(p.access_vlan) || {}).color_hex || "#6b7686");
+      }
+      b.title = [`${p.name}${p.is_uplink ? " · uplink" : ""}`, passive ? (linked ? "кабель есть" : "свободен")
+        : !p.is_admin_up ? "выключен" : !p.is_oper_up ? "нет линка" : `${p.speed_mbps >= 1000 ? `${p.speed_mbps / 1000} Гбит/с` : `${p.speed_mbps} Мбит/с`}`,
+      passive ? "" : vlan, p.connected_device_name ? `→ ${p.connected_device_name}` : ""].filter(Boolean).join(" · ");
+      b.addEventListener("click", () => onPick(p));
+      return b;
+    };
+    const block = (list, rows) => {
+      const el = node("div", { className: "port-block" });
+      if (rows === 1) { el.append(...list.map(cell)); return el; }
+      // Two rows: odd on top, even below; the gap every six columns.
+      const cols = Math.ceil(list.length / 2);
+      for (let i = 0; i < cols; i++) {
+        const col = node("div", { className: `port-col${i > 0 && i % 6 === 0 ? " gap" : ""}` });
+        const top = list[i * 2], bottom = list[i * 2 + 1];
+        col.append(top ? cell(top) : node("span", { className: "port empty" }), bottom ? cell(bottom) : node("span", { className: "port empty" }));
+        el.append(col);
+      }
+      return el;
+    };
+    const panel = node("div", { className: "faceplate", role: "group", "aria-label": `Порты ${d.name}` });
+    panel.append(block(main, main.length <= 8 ? 1 : 2));
+    if (up.length) panel.append(node("div", { className: "port-sep" }), block(up, 2));
+    return panel;
+  }
+
   function renderCardPorts(c) {
     const { d, ports, vlanById } = c;
+    const passive = PASSIVE.has(d.type);
+    const faceHost = node("div", { className: "face-host" });
+    const legend = node("span", { className: "muted small face-legend" });
+    let vlanView = false;
+    const drawFace = () => {
+      legend.textContent = passive ? "Подсвечены порты с кабелем. Щелчок — куда идёт кабель."
+        : vlanView ? "Цвет порта — его VLAN (цвета из справочника); подчёркнутый — trunk. Щелчок — куда идёт кабель."
+          : "Зелёный — линк 1 Гбит/с и выше, жёлтый — 100 Мбит/с, серый — нет линка, пунктир — порт выключен; подчёркнутый — trunk. Щелчок — куда идёт кабель.";
+      if (!ports.length) { faceHost.replaceChildren(); return; }
+      faceHost.replaceChildren(portPanel(d, ports, vlanById, vlanView, (p) => openPortPath(d, p).catch(fail)));
+    };
+    const view = node("div", { className: "seg", title: "Чем раскрасить порты" });
+    for (const [key, label] of [["state", "Состояние"], ["vlan", "VLAN"]]) {
+      const b = node("button", { type: "button", textContent: label, className: key === "state" ? "active" : "" });
+      b.addEventListener("click", () => {
+        vlanView = key === "vlan";
+        for (const x of view.children) x.classList.toggle("active", x === b);
+        drawFace();
+      });
+      view.append(b);
+    }
+    drawFace();
     const table = node("table", { className: "grid" });
     table.append(node("thead", {}, node("tr", {}, ...["№", "Порт", "Статус", "Режим и VLAN", "Подключено"].map((t) => node("th", { textContent: t })))));
     const body = node("tbody");
@@ -4185,6 +4248,7 @@
     if (!ports.length) body.append(emptyRow(5, "Портов в учёте пока нет.", "Добавить порты", () => openPorts(d).catch(fail)));
     table.append(body);
     $("card-ports").replaceChildren(
+      ...(ports.length ? [...(passive ? [] : [node("div", { className: "row" }, view)]), faceHost, legend] : []),
       node("div", { className: "row" }, node("button", { className: "primary", textContent: "Изменить порты…", onclick: () => openPorts(d).catch(fail) }),
         node("span", { className: "muted small", textContent: "Щелчок по порту: куда идёт его кабель. Записи учёта; на оборудование ничего не отправляется." })),
       node("div", { className: "table-wrap" }, table));

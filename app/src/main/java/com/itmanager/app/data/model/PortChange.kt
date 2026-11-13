@@ -40,6 +40,8 @@ data class PortDraft(
     val taggedVlans: List<Int>,
     val speedMbps: Int,
     val poeEnabled: Boolean,
+    /** Null leaves the label as it is; an empty text clears it. */
+    val label: String? = null,
 )
 
 data class PortChangeResult(val port: SwitchPort, val commands: List<String>)

@@ -54,6 +54,7 @@ def port_out(p: Port, graph: Graph | None = None) -> PortOut:
         connected_mac=str(p.connected_mac) if p.connected_mac else None,
         if_index=p.if_index,
         connected_device_name=graph.connected_device_name(p.id) if graph else None,
+        label=p.label,
     )
 
 

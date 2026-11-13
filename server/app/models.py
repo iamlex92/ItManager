@@ -149,6 +149,8 @@ class Port(Base):
     connected_mac: Mapped[str | None] = mapped_column(MACADDR)
     # Not in the original spec: IF-MIB ifIndex, to map SNMP traps to ports.
     if_index: Mapped[int | None] = mapped_column(Integer)
+    # Free text: where the cable goes («каб. 214, бухгалтерия»). Mainly for the rear of a patch panel.
+    label: Mapped[str | None] = mapped_column(String(120))
 
     device: Mapped[Device] = relationship(back_populates="ports")
 

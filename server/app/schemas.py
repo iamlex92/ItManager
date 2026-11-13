@@ -416,6 +416,7 @@ class PortCreate(BaseModel):
     poe_enabled: bool = False
     connected_mac: str | None = Field(default=None, pattern=_MAC_RE)
     if_index: int | None = Field(default=None, ge=1)
+    label: str | None = Field(default=None, max_length=120)
 
     @field_validator("connected_mac")
     @classmethod
@@ -434,6 +435,7 @@ class PortUpdate(BaseModel):
     tagged_vlans: list[int] | None = None
     speed_mbps: int | None = Field(default=None, ge=10, le=400_000)
     poe_enabled: bool | None = None
+    label: str | None = Field(default=None, max_length=120)
 
 
 class PortOut(BaseModel):
@@ -452,6 +454,7 @@ class PortOut(BaseModel):
     connected_mac: str | None
     if_index: int | None = None
     connected_device_name: str | None = None
+    label: str | None = None
 
 
 class TraceHop(BaseModel):
