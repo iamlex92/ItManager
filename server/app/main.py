@@ -38,6 +38,7 @@ from .api import (
     poe,
     ports,
     printers,
+    report,
     runbooks,
     scripts,
     summary,
@@ -318,6 +319,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         netsrv,
         poe,
         ports,
+        report,
         connections,
         alerts,
         misc,
@@ -343,6 +345,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         api.include_router(module.router)
 
     app.include_router(public)
+    app.include_router(report.public_router)
     app.include_router(api)
     # WebSocket checks the token itself (query param or header).
     app.include_router(ws.router, prefix="/api/v1")
