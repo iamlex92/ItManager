@@ -18,6 +18,7 @@
 <script src="/static/admin/admin-lifecycle.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-ipam.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-poe.js?v={{asset}}" defer></script>
+<script src="/static/admin/admin-netsrv.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-work.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-home.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-nav.js?v={{asset}}" defer></script>
@@ -107,6 +108,7 @@
     <button data-tab="topology"><svg class="ic" aria-hidden="true"><use href="#i-network"/></svg>Схема сети</button>
     <button data-tab="vlans"><svg class="ic" aria-hidden="true"><use href="#i-tag"/></svg>VLAN и подсети</button>
     <button data-tab="ipam"><svg class="ic" aria-hidden="true"><use href="#i-hash"/></svg>IP-адреса</button>
+    <button data-tab="netsrv"><svg class="ic" aria-hidden="true"><use href="#i-server"/></svg>DHCP и DNS</button>
     <button data-tab="poe"><svg class="ic" aria-hidden="true"><use href="#i-zap"/></svg>PoE</button>
     <button data-tab="scan"><svg class="ic" aria-hidden="true"><use href="#i-radar"/></svg>Сканер сети</button>
     <div class="side-group">Политики</div>
@@ -619,6 +621,20 @@
           <ul id="doc-list" class="doc-list"></ul>
         </aside>
         <article id="doc-view" class="doc-view"></article>
+      </div>
+    </section>
+
+    <section id="tab-netsrv" class="tab" hidden>
+      <div class="toolbar"><h2>DHCP и DNS</h2></div>
+      <p class="muted small">Данные читаются прямо с серверов (ISC dhcpd, зоны Samba AD или BIND) и сверяются с учётом. На серверах ничего не меняется.</p>
+      <p id="netsrv-status" class="muted"></p>
+      <div class="card">
+        <div class="row"><h3>DHCP</h3><div class="spacer"></div><button type="button" id="dhcp-run" class="primary">Прочитать DHCP</button></div>
+        <div id="dhcp-result" class="stack"></div>
+      </div>
+      <div class="card">
+        <div class="row"><h3>DNS</h3><div class="spacer"></div><button type="button" id="dns-srv-run" class="primary">Сверить DNS</button></div>
+        <div id="dns-srv-result" class="stack"></div>
       </div>
     </section>
 

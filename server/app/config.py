@@ -133,6 +133,18 @@ class Settings(BaseSettings):
     gpo_host: str = ""
     # A folder on that host: Backup-GPO before every change, so the previous state can be restored in GPMC.
     gpo_backup_path: str = ""
+    # DHCP and DNS servers the inventory is compared with (read only, over SSH or a zone transfer).
+    # ISC dhcpd: the host, and where it keeps its configuration and its leases.
+    dhcp_host: str = ""
+    dhcp_conf_path: str = "/etc/dhcp/dhcpd.conf"
+    dhcp_leases_path: str = "/var/lib/dhcp/dhcpd.leases"
+    # DNS: «samba» runs samba-tool over SSH on the domain controller, «axfr» asks BIND for a zone transfer.
+    dns_host: str = ""
+    dns_method: str = "samba"
+    # Zones to read, comma-separated: factory.local
+    dns_zones: str = ""
+    # SSH login of these servers (a stored credential); empty: the Linux one, then the domain one.
+    netsrv_credential: str = ""
     winrm_https: bool = False
     # 0: 5985 (HTTP, NTLM-encrypted) or 5986 (HTTPS).
     winrm_port: int = 0
