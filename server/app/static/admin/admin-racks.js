@@ -9,6 +9,8 @@
   const DEFAULT_H = { SWITCH: 1, ROUTER: 1, FIREWALL: 1, PATCH_PANEL: 1, ACCESS_POINT: 1, SERVER: 2, UPS: 3 };
   const NOT_RACKABLE = new Set(["RACK", "VIRTUAL", "SOCKET"]);
   const PORT_KINDS = new Set(["SWITCH", "ROUTER", "FIREWALL", "ACCESS_POINT", "PATCH_PANEL"]);
+  // Offered first when a free unit is clicked: what usually stands in a rack.
+  const RACK_FIRST = new Set(["SWITCH", "ROUTER", "FIREWALL", "PATCH_PANEL", "SERVER", "UPS", "ACCESS_POINT"]);
   const HEX = /^#[0-9a-fA-F]{6}$/;
 
   let devices = [], ports = new Map();
@@ -77,6 +79,65 @@
     if (!fits(rack, start, h, d.id)) { toast("Не помещается: нужные юниты заняты или стойка закончилась", true); return; }
     pick = null;
     await patchDevice(d, { rack_id: rack.id, rack_u: start, rack_h: h });
+  }
+
+  /** A click on a free unit: put a device that already exists there, or make a patch panel on the spot. */
+  function freeUnitDialog(rack, u) {
+    const dlg = el("dialog");
+    const form = el("div", "dialog");
+    const close = () => dlg.close();
+    const head = el("div", "dialog-head");
+    head.append(el("h2", null, `Юнит ${u} · ${rack.name}`), el("div", "spacer"));
+    const x = el("button", null, "Закрыть"); x.type = "button"; x.addEventListener("click", close);
+    head.append(x);
+
+    const list = el("div", "pool");
+    const search = el("input"); search.type = "search"; search.placeholder = "Найти устройство по имени";
+    const fill = () => {
+      const q = search.value.trim().toLowerCase();
+      const free = devices.filter((d) => !d.rack_id && !NOT_RACKABLE.has(d.type) && (!q || d.name.toLowerCase().includes(q)))
+        .sort((a, b) => (RACK_FIRST.has(a.type) ? 0 : 1) - (RACK_FIRST.has(b.type) ? 0 : 1) || a.name.localeCompare(b.name));
+      list.replaceChildren(...(free.length ? free.map((d) => {
+        const ok = fits(rack, startFor(rack, u, heightOf(d)), heightOf(d), d.id);
+        const c = el("div", `chip${ok ? "" : " off"}`);
+        c.append(led(d), plate(d), el("small", null, ok ? `${heightOf(d)}U` : `${heightOf(d)}U · не помещается`));
+        if (ok) c.addEventListener("click", () => { close(); mount(rack, d, startFor(rack, u, heightOf(d))).catch(fail); });
+        return c;
+      }) : [el("p", "muted small", "Нет подходящих устройств вне стоек. Создайте патч-панель ниже или добавьте устройство в «Устройства и ПК».")]));
+    };
+    search.addEventListener("input", fill);
+    fill();
+
+    const name = el("input"); name.type = "text"; name.maxLength = 100;
+    const nextNo = devices.filter((d) => d.type === "PATCH_PANEL").length + 1;
+    name.value = `PP-${nextNo}`;
+    const count = el("select");
+    for (const n of [12, 16, 24, 32, 48]) count.append(new Option(`${n} портов`, String(n), false, n === 24));
+    const height = el("select");
+    for (const n of [1, 2]) height.append(new Option(`${n}U`, String(n)));
+    const make = el("button", "primary", "Создать патч-панель"); make.type = "button";
+    const err = el("p", "error"); err.hidden = true;
+    make.addEventListener("click", async () => {
+      const h = Number(height.value), start = startFor(rack, u, h);
+      if (!name.value.trim()) { err.textContent = "Введите название"; err.hidden = false; return; }
+      if (!fits(rack, start, h)) { err.textContent = "Не помещается: нужные юниты заняты или стойка закончилась"; err.hidden = false; return; }
+      make.disabled = true;
+      try {
+        await api("POST", "devices/patch-panel", { name: name.value.trim(), ports: Number(count.value), rack_id: rack.id, rack_u: start, rack_h: h });
+        close();
+        await load();
+        toast("Патч-панель добавлена: подпишите порты на виде сзади");
+      } catch (e) { err.textContent = e.message || String(e); err.hidden = false; make.disabled = false; }
+    });
+    const row = el("div", "row");
+    row.append(name, count, height, make);
+
+    form.append(head, el("h3", null, "Добавить существующее устройство"), search, list,
+      el("h3", null, "Новая патч-панель"), row, err);
+    dlg.append(form);
+    dlg.addEventListener("close", () => dlg.remove());
+    document.body.append(dlg);
+    dlg.showModal();
   }
 
   // ------------------------------------------------------------------ the pieces of a device's face
@@ -244,7 +305,7 @@
       });
       row.addEventListener("click", () => {
         if (pick && free) mount(rack, pick, startFor(rack, u, heightOf(pick))).catch(fail);
-        else if (!pick && free) toast("Выберите устройство в списке слева, затем щёлкните свободное место — или перетащите его сюда");
+        else if (!pick && free) freeUnitDialog(rack, u);
       });
       frame.append(row);
     }

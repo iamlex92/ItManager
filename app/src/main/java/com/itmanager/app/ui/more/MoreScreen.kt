@@ -27,7 +27,9 @@ import androidx.compose.material.icons.outlined.Lan
 import androidx.compose.material.icons.outlined.Policy
 import androidx.compose.material.icons.outlined.Print
 import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material.icons.outlined.Tune
@@ -71,6 +73,8 @@ enum class MoreItem(val title: String, val subtitle: String, val icon: ImageVect
     IPAM("IP-адреса", "Заполнение подсетей, свободные адреса, конфликты", Icons.Outlined.Dns),
     TEMPLATES("Шаблоны устройств", "Типовые коммутаторы и патч-панели с портами", Icons.Outlined.Dashboard),
     LIFECYCLE("Сроки и лицензии", "Что истекает: гарантии, лицензии, сертификат; лицензии и места", Icons.Outlined.Schedule),
+    TASKS("Задачи", "Что сделать и когда; повторяющиеся: проверить ИБП, обновить прошивки", Icons.Outlined.TaskAlt),
+    DOCS("Документы", "Инструкции, паспорта, схемы и заметки; поиск по тексту", Icons.Outlined.Description),
     PERIPHERALS("Периферия и склад", "Мониторы, клавиатуры, док-станции: где что стоит", Icons.Outlined.Inventory2),
     SCANNER("Сканер сети", "Найти устройства в подсетях и добавить в учёт", Icons.Outlined.TravelExplore),
     TOOLS("Сетевые утилиты", "Ping, трассировка, порты, SNMP, iperf3, Wake-on-LAN", Icons.Outlined.Construction),
@@ -85,7 +89,7 @@ private val GROUPS = listOf(
     "Оборудование" to listOf(MoreItem.LIFECYCLE, MoreItem.PERIPHERALS, MoreItem.TEMPLATES, MoreItem.PCS),
     "Сеть" to listOf(MoreItem.TOPOLOGY, MoreItem.VLANS, MoreItem.IPAM, MoreItem.SCANNER, MoreItem.TOOLS),
     "Политики" to listOf(MoreItem.GPO),
-    "Обслуживание" to listOf(MoreItem.RUNBOOKS, MoreItem.AUDIT),
+    "Обслуживание" to listOf(MoreItem.TASKS, MoreItem.DOCS, MoreItem.RUNBOOKS, MoreItem.AUDIT),
     "Настройки" to listOf(MoreItem.ACCESS),
 )
 

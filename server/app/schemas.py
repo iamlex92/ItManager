@@ -1279,6 +1279,16 @@ class DeviceTemplateOut(ORM, DeviceTemplateBase):
     id: uuid.UUID
 
 
+class PatchPanelCreate(BaseModel):
+    """A patch panel made straight in a rack unit: its ports are numbered 1..ports."""
+
+    name: str = Field(min_length=1, max_length=100)
+    ports: int = Field(default=24, ge=1, le=96)
+    rack_id: uuid.UUID
+    rack_u: int = Field(ge=1, le=60)
+    rack_h: int = Field(default=1, ge=1, le=4)
+
+
 class DeviceFromTemplate(BaseModel):
     """Overrides for the device made from a template: the template fills the rest."""
 
@@ -1368,6 +1378,44 @@ class PcKeyJobOut(BaseModel):
     started_at: datetime
     finished_at: datetime | None = None
     rows: list[PcKeyRowOut] = Field(default_factory=list)
+
+
+class ReconcileLicenseOut(BaseModel):
+    id: uuid.UUID
+    software: str
+    seats: int | None
+    # False: the register holds no key and the program is not 1С, so a scan cannot tell it from the rest.
+    checkable: bool
+    registered: int
+    found: int
+    to_link: list[str]
+    missing: list[str]
+    over: bool
+
+
+class ReconcileFoundOut(BaseModel):
+    product: Literal["windows", "office", "one_c"]
+    ref: str
+    label: str
+    hint: str
+    hosts: list[str]
+    adoptable: bool
+
+
+class ReconcileOut(BaseModel):
+    licenses: list[ReconcileLicenseOut]
+    unmatched: list[ReconcileFoundOut]
+    scanned: int
+
+
+class ReconcileApplyIn(BaseModel):
+    # Link the found computers to the licenses the scan matched (no id: all of them).
+    license_id: uuid.UUID | None = None
+
+
+class ReconcileAdoptIn(BaseModel):
+    product: Literal["windows", "office", "one_c"]
+    ref: str = Field(min_length=1, max_length=100)
 
 
 # --- server settings («Настройки сервера») ---

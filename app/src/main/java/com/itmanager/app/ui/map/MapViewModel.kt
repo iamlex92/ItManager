@@ -673,6 +673,16 @@ class MapViewModel @Inject constructor(
         }
     }
 
+    /** A new patch panel with [ports] ports from unit [u], [h] units high. */
+    fun createPatchPanel(rackId: String, name: String, ports: Int, u: Int, h: Int) {
+        _state.update { s -> s.copy(rack = s.rack?.copy(busy = true, error = null)) }
+        viewModelScope.launch {
+            repository.createPatchPanel(rackId, name, ports, u, h)
+                .onFailure { e -> _state.update { s -> s.copy(rack = s.rack?.copy(busy = false, error = e.toUserMessage())) } }
+                .onSuccess { refreshRack() }
+        }
+    }
+
     /** The rack's own settings: name, height in units and how it is drawn. */
     fun saveRack(rack: Device, name: String, units: Int, style: RackStyle) {
         val draft = rack.toDraft().copy(

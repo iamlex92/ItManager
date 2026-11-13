@@ -75,6 +75,8 @@ import com.itmanager.app.ui.configdiff.ConfigDiffScreen
 import com.itmanager.app.ui.configimport.ConfigImportScreen
 import com.itmanager.app.ui.ipam.IpamScreen
 import com.itmanager.app.ui.lifecycle.LifecycleScreen
+import com.itmanager.app.ui.work.DocsScreen
+import com.itmanager.app.ui.work.TasksScreen
 import com.itmanager.app.ui.templates.TemplatesScreen
 import com.itmanager.app.ui.credentials.CredentialsScreen
 import com.itmanager.app.ui.devices.DevicesScreen
@@ -396,6 +398,8 @@ private fun AppNavHost(
                         MoreItem.VLANS -> VlansRoute
                         MoreItem.IPAM -> IpamRoute
                         MoreItem.LIFECYCLE -> LifecycleRoute
+                        MoreItem.TASKS -> TasksRoute
+                        MoreItem.DOCS -> DocsRoute
                         MoreItem.TEMPLATES -> TemplatesRoute
                         MoreItem.PERIPHERALS -> PeripheralsRoute
                         MoreItem.SCANNER -> ScannerRoute
@@ -579,6 +583,22 @@ private fun AppNavHost(
             popExitTransition = { slideOutHorizontally(push) { it } },
         ) {
             LifecycleScreen(onBack = back, onOpenSettings = openSettings, onOpenDevice = openDevice)
+        }
+        composable<TasksRoute>(
+            enterTransition = { slideInHorizontally(push) { it } },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { slideOutHorizontally(push) { it } },
+        ) {
+            TasksScreen(onBack = back, onOpenSettings = openSettings)
+        }
+        composable<DocsRoute>(
+            enterTransition = { slideInHorizontally(push) { it } },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { slideOutHorizontally(push) { it } },
+        ) {
+            DocsScreen(onBack = back, onOpenSettings = openSettings)
         }
         composable<TemplatesRoute>(
             enterTransition = { slideInHorizontally(push) { it } },

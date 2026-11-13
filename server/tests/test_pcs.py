@@ -213,3 +213,66 @@ def test_ldap_directory_lists_windows_computers_and_checks_names():
     assert d.windows_computers(limit=2) == ["pc-1.f.local", "PC-2"]
     assert d.computer_exists("pc-1.f.local") is True
     assert d.computer_exists("nobody") is False
+
+
+def _run_keys(client):
+    job = client.post("/api/v1/pcs/keys", json={"source": "subnet", "prefix": "10.10.10"}).json()
+    for _ in range(100):
+        job = client.get(f"/api/v1/pcs/keys/{job['id']}").json()
+        if job["status"] != "running":
+            break
+        time.sleep(0.05)
+    return job
+
+
+def test_key_inventory_reconciled_with_the_license_register(client):
+    job = _run_keys(client)
+    base = f"/api/v1/pcs/keys/{job['id']}/reconcile"
+    r = client.get(base).json()
+    # Nothing in the register yet: every finding is unmatched and can be entered.
+    assert r["licenses"] == [] and r["unmatched"] and all(u["adoptable"] for u in r["unmatched"])
+    win = next(u for u in r["unmatched"] if u["product"] == "windows")
+    assert win["hint"].startswith("••••")
+
+    # Enter a Windows key found on a computer: it is linked to the computers that have it.
+    done = client.post(f"{base}/adopt", json={"product": "windows", "ref": win["ref"]}).json()
+    lic = next(x for x in done["licenses"] if x["software"] == "Windows")
+    assert lic["registered"] == lic["found"] == len(win["hosts"]) and not lic["to_link"] and not lic["missing"]
+    assert all(u["ref"] != win["ref"] for u in done["unmatched"])
+    again = client.post(f"{base}/adopt", json={"product": "windows", "ref": win["ref"]})
+    assert again.status_code == 409
+    assert client.post(f"{base}/adopt", json={"product": "windows", "ref": "NOSUCH"}).status_code == 404
+
+    # A license typed in by hand is found by its key; the computers are not yet linked until «apply».
+    other = next(u for u in done["unmatched"] if u["product"] == "windows")
+    typed = other["ref"]
+    made = client.post(
+        "/api/v1/licenses",
+        json={
+            "software": "Windows 10 Pro",
+            "kind": "per_device",
+            "key": "-".join([typed[i : i + 5] for i in range(0, 25, 5)]),
+        },
+    ).json()
+    r2 = client.get(base).json()
+    item = next(x for x in r2["licenses"] if x["id"] == made["id"])
+    assert item["found"] == len(other["hosts"]) and item["registered"] == 0 and item["to_link"]
+    applied = client.post(f"{base}/apply", json={}).json()
+    item = next(x for x in applied["licenses"] if x["id"] == made["id"])
+    assert item["registered"] == item["found"] and not item["to_link"]
+    assert client.get("/api/v1/licenses").json()  # the register itself sees the links
+
+    # A computer scanned without the license, but listed for it in the register, is reported as missing.
+    dev = client.get("/api/v1/devices").json()
+    pc = next(d for d in dev if d["name"] == "PC-BUH-01")
+    lone = client.post(
+        "/api/v1/licenses",
+        json={"software": "Windows", "key": "AAAAA-BBBBB-CCCCC-DDDDD-EEEEE", "device_ids": [pc["id"]]},
+    ).json()
+    item = next(x for x in client.get(base).json()["licenses"] if x["id"] == lone["id"])
+    assert item["found"] == 0 and "PC-BUH-01" in item["missing"]
+
+    # 1С, by the program's name; the journal records the reconcile but never a key.
+    one = client.post("/api/v1/licenses", json={"software": "1С:Предприятие 8.3", "seats": 1}).json()
+    item = next(x for x in client.get(base).json()["licenses"] if x["id"] == one["id"])
+    assert item["checkable"] and item["found"] >= 1 and item["over"] is (item["found"] > 1)

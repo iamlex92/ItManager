@@ -28,6 +28,7 @@ from ..schemas import (
     DeviceUpdate,
     DiagOut,
     MergePreviewOut,
+    PatchPanelCreate,
     PingRequest,
     PortOut,
     StatusRefreshOut,
@@ -222,6 +223,20 @@ def _search_clause(q: str):
         # The number printed under the QR on a label.
         cast(Device.id, String).ilike(like),
     )
+
+
+@router.post("/patch-panel", response_model=DeviceOut, status_code=status.HTTP_201_CREATED)
+async def create_patch_panel(body: PatchPanelCreate, session: SessionDep):
+    """A patch panel with its ports, placed in a free rack unit (used by a click on an empty unit)."""
+    device = await create_device(
+        DeviceCreate(name=body.name, type="PATCH_PANEL", rack_id=body.rack_id, rack_u=body.rack_u, rack_h=body.rack_h),
+        session,
+    )
+    session.add_all(
+        Port(device_id=device.id, port_number=n, port_name=str(n), speed_mbps=1000) for n in range(1, body.ports + 1)
+    )
+    await session.commit()
+    return device
 
 
 @router.post("", response_model=DeviceOut, status_code=status.HTTP_201_CREATED)

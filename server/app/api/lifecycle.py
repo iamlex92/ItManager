@@ -27,6 +27,7 @@ ACTIONS = {
     "license_update": "Лицензия: изменение",
     "license_delete": "Лицензия: удаление",
     "license_reveal": "Лицензия: просмотр ключа",
+    "license_reconcile": "Лицензии: сверка с найденными ключами",
 }
 
 
