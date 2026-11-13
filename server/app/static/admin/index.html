@@ -16,6 +16,7 @@
 <script src="/static/admin/admin-tables.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-racks.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-lifecycle.js?v={{asset}}" defer></script>
+<script src="/static/admin/admin-ipam.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-work.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-home.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-nav.js?v={{asset}}" defer></script>
@@ -322,6 +323,23 @@
         <div id="ipam-check-result"></div>
         <div id="ipam-conflicts"></div>
         <div id="ipam-subnets" class="stack"></div>
+      </div>
+      <div class="card">
+        <div class="row wrap"><h3 class="grow">Резервы адресов</h3><button id="ipam-res-new" type="button">+ Резерв</button></div>
+        <p class="muted small">Адрес, удержанный за кем-то: техникой, которую ещё не купили, или принтером, который должен получать именно его. Не предлагается как свободный; если его занимает другое устройство, это конфликт.</p>
+        <div id="ipam-reservations"></div>
+      </div>
+      <div class="card">
+        <div class="row wrap"><h3 class="grow">Диапазоны</h3><button id="ipam-range-new" type="button">+ Диапазон</button></div>
+        <p class="muted small">Пулы DHCP и другие отрезки адресов. Адрес из пула не предлагается как свободный, а устройство, настроенное вручную внутри пула, попадает в конфликты. Программа не читает DHCP-сервер: диапазоны вы вносите сами.</p>
+        <div id="ipam-ranges"></div>
+      </div>
+      <div class="card">
+        <div class="row wrap"><h3 class="grow">Проверка DNS</h3>
+          <input id="dns-suffix" placeholder="Суффикс домена, например factory.local" autocomplete="off" title="Добавляется к именам без точки">
+          <button id="dns-run" type="button" class="primary">Проверить DNS</button></div>
+        <p class="muted small">Для каждого устройства с адресом: находит ли DNS его имя и тот ли это адрес, и возвращает ли обратный запрос это имя. Спрашивает сервер NetAdmin, поэтому ответ — то, что DNS завода говорит этому серверу. Только чтение.</p>
+        <div id="dns-result"></div>
       </div>
     </section>
 

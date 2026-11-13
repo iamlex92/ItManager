@@ -1789,3 +1789,76 @@ class DocumentBrief(BaseModel):
     device_name: str | None = None
     pinned: bool
     updated_at: datetime
+
+
+# --- IP reservations, ranges, DNS check ------------------------------------------------------------------------------
+
+RangeKind = Literal["dhcp", "static", "reserved"]
+
+
+class IpReservationCreate(BaseModel):
+    ip: ipaddress.IPv4Address | ipaddress.IPv6Address
+    name: str = Field(min_length=1, max_length=100)
+    mac: str | None = Field(default=None, pattern=_MAC_RE)
+    device_id: uuid.UUID | None = None
+    note: str | None = Field(default=None, max_length=4000)
+
+    @field_validator("mac")
+    @classmethod
+    def _mac(cls, v: str | None) -> str | None:
+        return _norm_mac(v)
+
+
+class IpReservationUpdate(BaseModel):
+    ip: ipaddress.IPv4Address | ipaddress.IPv6Address | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    mac: str | None = Field(default=None, pattern=_MAC_RE)
+    device_id: uuid.UUID | None = None
+    note: str | None = Field(default=None, max_length=4000)
+
+    @field_validator("mac")
+    @classmethod
+    def _mac(cls, v: str | None) -> str | None:
+        return _norm_mac(v)
+
+
+class IpReservationOut(BaseModel):
+    id: uuid.UUID
+    ip: str
+    name: str
+    mac: str | None
+    device_id: uuid.UUID | None
+    device_name: str | None = None
+    note: str | None
+
+
+class IpRangeCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    kind: RangeKind = "dhcp"
+    start_ip: ipaddress.IPv4Address | ipaddress.IPv6Address
+    end_ip: ipaddress.IPv4Address | ipaddress.IPv6Address
+    note: str | None = Field(default=None, max_length=4000)
+
+
+class IpRangeUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    kind: RangeKind | None = None
+    start_ip: ipaddress.IPv4Address | ipaddress.IPv6Address | None = None
+    end_ip: ipaddress.IPv4Address | ipaddress.IPv6Address | None = None
+    note: str | None = Field(default=None, max_length=4000)
+
+
+class IpRangeOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    kind: str
+    start_ip: str
+    end_ip: str
+    size: int
+    note: str | None
+
+
+class DnsCheckIn(BaseModel):
+    # Added to a name that has no dot («factory.local»); empty: the names as they are.
+    suffix: str = Field(default="", max_length=100)
+    device_ids: list[uuid.UUID] | None = Field(default=None, max_length=5000)

@@ -428,3 +428,32 @@ class Document(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class IpReservation(Base):
+    """An address held for someone: a device not bought yet, a printer that must always get this one."""
+
+    __tablename__ = "ip_reservations"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    ip: Mapped[Any] = mapped_column(INET, unique=True)
+    name: Mapped[str] = mapped_column(String(100))
+    mac: Mapped[str | None] = mapped_column(MACADDR)
+    device_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("devices.id", ondelete="SET NULL"))
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class IpRange(Base):
+    """A stretch of addresses with a purpose: a DHCP pool (set by nobody by hand), a static range, a reserved one."""
+
+    __tablename__ = "ip_ranges"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    name: Mapped[str] = mapped_column(String(100))
+    # dhcp, static, reserved.
+    kind: Mapped[str] = mapped_column(String(10), server_default=text("'dhcp'"))
+    start_ip: Mapped[Any] = mapped_column(INET)
+    end_ip: Mapped[Any] = mapped_column(INET)
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

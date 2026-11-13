@@ -28,6 +28,8 @@
     outside_subnets: "Адрес вне известных подсетей",
     network_address: "Адрес сети вместо адреса узла",
     broadcast_address: "Широковещательный адрес",
+    reserved_by_other: "Адрес зарезервирован для другого",
+    in_pool: "Адрес внутри диапазона DHCP",
   };
 
   async function loadIpam() {
@@ -52,6 +54,7 @@
             el("span", { className: "mono", textContent: s.cidr })),
           el("div", { className: `ipam-bar${pct >= 90 ? " full" : ""}` }, el("span", { style: `width:${pct}%` })),
           el("div", { className: "muted small", textContent: `Занято ${s.used} из ${s.total} (${pct} %), свободно ${s.free}` +
+            (s.reserved ? ` · резервов ${s.reserved}` : "") + (s.dhcp ? ` · в диапазонах DHCP ${s.dhcp}` : "") +
             (s.next_free.length ? ` · ближайшие свободные: ${s.next_free.slice(0, 5).join(", ")}${s.next_free.length > 5 ? "…" : ""}` : "") })),
         s.hosts.length ? el("div", { className: "table-wrap" }, el("table", { className: "grid" },
           el("thead", {}, el("tr", {}, el("th", { textContent: "Адрес" }), el("th", { textContent: "Устройство" }))),

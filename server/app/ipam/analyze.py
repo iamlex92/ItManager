@@ -16,6 +16,25 @@ class Host:
 
 
 @dataclass
+class Reservation:
+    ip: str
+    name: str
+    device_id: str | None = None
+
+
+@dataclass
+class IpRange:
+    name: str
+    kind: str  # dhcp | static | reserved
+    start: str
+    end: str
+
+    def contains(self, ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+        a, b = parse_ip(self.start), parse_ip(self.end)
+        return a is not None and b is not None and a.version == ip.version == b.version and a <= ip <= b
+
+
+@dataclass
 class SubnetUsage:
     vlan_id: int
     name: str
@@ -24,6 +43,9 @@ class SubnetUsage:
     used: int
     free: int
     next_free: list[str] = field(default_factory=list)
+    # Addresses held for someone, and addresses inside a DHCP range: neither is offered as free.
+    reserved: int = 0
+    dhcp: int = 0
     hosts: list[Host] = field(default_factory=list)
 
 
@@ -48,8 +70,27 @@ def parse_ip(text: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
         return None
 
 
-def analyze(vlans: list[tuple[int, str, str | None]], hosts: list[Host]) -> tuple[list[SubnetUsage], list[Conflict]]:
-    """vlans: (vlan_id, name, cidr or None); hosts: devices that have an IP address."""
+def _range_size(r: IpRange, net: ipaddress.IPv4Network | ipaddress.IPv6Network) -> int:
+    """How many addresses of the range lie inside the subnet."""
+    a, b = parse_ip(r.start), parse_ip(r.end)
+    if a is None or b is None or a.version != net.version or b < a:
+        return 0
+    lo, hi = max(int(a), int(net.network_address)), min(int(b), int(net.broadcast_address))
+    return max(hi - lo + 1, 0)
+
+
+def analyze(
+    vlans: list[tuple[int, str, str | None]],
+    hosts: list[Host],
+    reservations: list[Reservation] | None = None,
+    ranges: list[IpRange] | None = None,
+) -> tuple[list[SubnetUsage], list[Conflict]]:
+    """vlans: (vlan_id, name, cidr or None); hosts: devices that have an IP address; [reservations] hold addresses for
+    someone; [ranges] mark DHCP pools and the like (a device set by hand inside a DHCP pool is a conflict)."""
+    reservations = reservations or []
+    ranges = ranges or []
+    held = {ip: r for r in reservations if (ip := parse_ip(r.ip)) is not None}
+    pools = [r for r in ranges if r.kind in ("dhcp", "reserved")]
     parsed = [(h, parse_ip(h.ip)) for h in hosts]
     parsed = [(h, ip) for h, ip in parsed if ip is not None]
 
@@ -66,20 +107,27 @@ def analyze(vlans: list[tuple[int, str, str | None]], hosts: list[Host]) -> tupl
     for vlan_id, name, net in nets:
         inside = [(h, ip) for h, ip in parsed if ip.version == net.version and ip in net]
         taken = {ip for _, ip in inside}
+        held_here = {
+            ip for ip in held if ip.version == net.version and ip in net and ip not in taken and _is_host(ip, net)
+        }
+        pool_size = 0
+        if net.version == 4 and net.num_addresses <= 2**24:
+            pool_size = sum(_range_size(r, net) for r in pools)
         total = usable_hosts(net)
         free_ips: list[str] = []
         if net.num_addresses <= 2**24:
             candidates = net.hosts() if not (net.version == 4 and net.prefixlen >= 31) else iter(net)
             for cand in candidates:
-                if cand not in taken:
+                if cand not in taken and cand not in held and not any(r.contains(cand) for r in pools):
                     free_ips.append(str(cand))
                     if len(free_ips) >= MAX_FREE_LISTED:
                         break
         used = len({ip for ip in taken if _is_host(ip, net)})
         usage.append(
             SubnetUsage(
-                vlan_id, name, str(net), total, used, max(total - used, 0), free_ips,
-                [Host(h.device_id, h.name, str(ip)) for h, ip in sorted(inside, key=lambda x: x[1])],
+                vlan_id, name, str(net), total, used, max(total - used - len(held_here) - pool_size, 0), free_ips,
+                reserved=len(held_here), dhcp=pool_size,
+                hosts=[Host(h.device_id, h.name, str(ip)) for h, ip in sorted(inside, key=lambda x: x[1])],
             )
         )  # fmt: skip
 
@@ -102,6 +150,16 @@ def analyze(vlans: list[tuple[int, str, str | None]], hosts: list[Host]) -> tupl
                     conflicts.append(Conflict("network_address", str(ip), [h.name], f"адрес сети {n}"))
                 elif ip == n.broadcast_address:
                     conflicts.append(Conflict("broadcast_address", str(ip), [h.name], f"широковещательный адрес {n}"))
+    for h, ip in parsed:
+        r = held.get(ip)
+        if r is not None and (r.device_id is None or r.device_id != h.device_id) and r.name != h.name:
+            conflicts.append(Conflict("reserved_by_other", str(ip), [h.name], f"адрес зарезервирован для «{r.name}»"))
+        for rng in pools:
+            if rng.contains(ip):
+                conflicts.append(
+                    Conflict("in_pool", str(ip), [h.name], f"адрес внутри диапазона «{rng.name}» ({rng.kind.upper()})")
+                )
+                break
     return usage, conflicts
 
 
@@ -113,7 +171,13 @@ def _is_host(
     return True
 
 
-def check_address(ip_text: str, vlans: list[tuple[int, str, str | None]], hosts: list[Host]) -> dict:
+def check_address(
+    ip_text: str,
+    vlans: list[tuple[int, str, str | None]],
+    hosts: list[Host],
+    reservations: list[Reservation] | None = None,
+    ranges: list[IpRange] | None = None,
+) -> dict:
     """Would assigning this address clash? Used before typing an IP into a device."""
     ip = parse_ip(ip_text)
     if ip is None:
@@ -134,4 +198,16 @@ def check_address(ip_text: str, vlans: list[tuple[int, str, str | None]], hosts:
         problems.append("адрес не входит ни в одну подсеть VLAN")
     if owners:
         problems.append("адрес уже занят")
-    return {"valid": True, "free": not owners, "owners": owners, "vlan_id": vlan_id, "problems": problems}
+    held = next((r for r in reservations or [] if (p := parse_ip(r.ip)) is not None and p == ip), None)
+    if held is not None:
+        problems.append(f"адрес зарезервирован для «{held.name}»")
+    pool = next((r for r in ranges or [] if r.kind in ("dhcp", "reserved") and r.contains(ip)), None)
+    if pool is not None:
+        problems.append(f"адрес внутри диапазона «{pool.name}» ({pool.kind.upper()})")
+    return {
+        "valid": True,
+        "free": not owners and held is None and pool is None,
+        "owners": owners,
+        "vlan_id": vlan_id,
+        "problems": problems,
+    }
