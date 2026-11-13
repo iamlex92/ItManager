@@ -109,6 +109,12 @@ data class DeviceDto(
     @SerialName("extra_ips") val extraIps: List<String> = emptyList(),
     val alarm: Boolean = true,
     @SerialName("snoozed_until") val snoozedUntil: String? = null,
+    @SerialName("serial_number") val serialNumber: String? = null,
+    @SerialName("inventory_number") val inventoryNumber: String? = null,
+    @SerialName("purchase_date") val purchaseDate: String? = null,
+    @SerialName("warranty_until") val warrantyUntil: String? = null,
+    val supplier: String? = null,
+    @SerialName("assigned_to") val assignedTo: String? = null,
 ) {
     fun toDomain() = Device(
         id = id,
@@ -138,6 +144,12 @@ data class DeviceDto(
         extraIps = extraIps,
         alarm = alarm,
         snoozedUntil = snoozedUntil,
+        serialNumber = serialNumber,
+        inventoryNumber = inventoryNumber,
+        purchaseDate = purchaseDate,
+        warrantyUntil = warrantyUntil,
+        supplier = supplier,
+        assignedTo = assignedTo,
     )
 }
 

@@ -211,6 +211,11 @@ class NetAdminApi @Inject constructor(
 
     suspend fun vlans(s: ServerSettings): List<VlanDto> = fetch(s, "vlans")
 
+    /** Warranties, licenses, certificates and other deadlines, soonest first. Reads only. */
+    suspend fun expirations(s: ServerSettings): List<ExpirationDto> = fetch(s, "lifecycle/expirations?within_days=365")
+
+    suspend fun licenses(s: ServerSettings): List<LicenseDto> = fetch(s, "licenses")
+
     // The VLAN list is the server's own dictionary: names, subnets, colours. Nothing reaches a switch.
 
     suspend fun createVlan(s: ServerSettings, body: JsonObject): VlanDto = vlanCall { post(s, "vlans", body) }

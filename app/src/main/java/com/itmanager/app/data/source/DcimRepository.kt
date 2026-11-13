@@ -36,6 +36,7 @@ import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.LifecycleOverview
 import com.itmanager.app.data.model.MergePreview
 import com.itmanager.app.data.model.PortPath
 import com.itmanager.app.data.model.ServerHealth
@@ -158,6 +159,7 @@ class DcimRepository @Inject constructor(
     suspend fun backupConfig(switchId: String): Result<String> = load { backupConfig(switchId) }
     suspend fun configDiff(switchId: String) = load { configDiff(switchId) }
     suspend fun ipam() = load { ipam() }
+    suspend fun lifecycle(): Result<LifecycleOverview> = load { lifecycle() }
     suspend fun ipamCheck(ip: String) = load { ipamCheck(ip) }
     suspend fun deviceTemplates() = load { deviceTemplates() }
     suspend fun saveDeviceTemplate(draft: DeviceTemplateDraft) = load { saveDeviceTemplate(draft) }

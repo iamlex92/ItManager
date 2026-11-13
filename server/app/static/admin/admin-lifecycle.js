@@ -274,4 +274,6 @@
   $("lc-license-new").addEventListener("click", async () => { devices = devices.length ? devices : await api("GET", "devices"); editLicense(null); });
   $("lc-deadline-new").addEventListener("click", async () => { devices = devices.length ? devices : await api("GET", "devices"); editDeadline(null); });
   tabs.lifecycle = () => show(part);
+  // Small helpers other modules build their forms from.
+  Object.assign(window.NetAdmin, { formDialog, field, input, select, el });
 })();

@@ -95,6 +95,9 @@ import com.itmanager.app.ui.components.UiState
 import com.itmanager.app.ui.components.icon
 import com.itmanager.app.ui.components.StatusDot
 import com.itmanager.app.ui.map.RackHost
+import com.itmanager.app.data.model.daysLeftText
+import com.itmanager.app.data.model.daysUntil
+import com.itmanager.app.data.model.shortDate
 import com.itmanager.app.ui.map.RackViewModel
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -582,6 +585,27 @@ private fun OverviewTab(
                         action = "Сменить",
                     )
                     vlan?.subnet?.takeIf { it.isNotBlank() }?.let { InfoRow("Подсеть", it, mono = true) }
+                }
+            }
+        }
+
+        val accounting = listOfNotNull(
+            device.assignedTo?.let { "Пользователь" to it },
+            device.serialNumber?.let { "Серийный №" to it },
+            device.inventoryNumber?.let { "Инвентарный №" to it },
+            shortDate(device.purchaseDate)?.let { "Куплено" to it },
+            device.supplier?.let { "Поставщик" to it },
+            device.warrantyUntil?.let { iso ->
+                "Гарантия до" to (shortDate(iso).orEmpty() + (daysUntil(iso)?.let { " · ${daysLeftText(it)}" } ?: ""))
+            },
+        )
+        if (accounting.isNotEmpty()) {
+            Section("Учёт") {
+                accounting.forEach { (name, value) ->
+                    Row(Modifier.padding(vertical = 2.dp)) {
+                        Text(name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(120.dp))
+                        Text(value, style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
             }
         }

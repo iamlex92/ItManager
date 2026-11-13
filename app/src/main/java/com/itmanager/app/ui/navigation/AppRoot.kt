@@ -74,6 +74,7 @@ import com.itmanager.app.ui.automation.AutomationScreen
 import com.itmanager.app.ui.configdiff.ConfigDiffScreen
 import com.itmanager.app.ui.configimport.ConfigImportScreen
 import com.itmanager.app.ui.ipam.IpamScreen
+import com.itmanager.app.ui.lifecycle.LifecycleScreen
 import com.itmanager.app.ui.templates.TemplatesScreen
 import com.itmanager.app.ui.credentials.CredentialsScreen
 import com.itmanager.app.ui.devices.DevicesScreen
@@ -394,6 +395,7 @@ private fun AppNavHost(
                         MoreItem.TOPOLOGY -> TopologyRoute
                         MoreItem.VLANS -> VlansRoute
                         MoreItem.IPAM -> IpamRoute
+                        MoreItem.LIFECYCLE -> LifecycleRoute
                         MoreItem.TEMPLATES -> TemplatesRoute
                         MoreItem.PERIPHERALS -> PeripheralsRoute
                         MoreItem.SCANNER -> ScannerRoute
@@ -569,6 +571,14 @@ private fun AppNavHost(
             popExitTransition = { slideOutHorizontally(push) { it } },
         ) {
             IpamScreen(onBack = back, onOpenSettings = openSettings)
+        }
+        composable<LifecycleRoute>(
+            enterTransition = { slideInHorizontally(push) { it } },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { slideOutHorizontally(push) { it } },
+        ) {
+            LifecycleScreen(onBack = back, onOpenSettings = openSettings, onOpenDevice = openDevice)
         }
         composable<TemplatesRoute>(
             enterTransition = { slideInHorizontally(push) { it } },

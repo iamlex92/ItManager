@@ -4189,6 +4189,20 @@
         ...guests.map((m) => node("div", {}, linkTo(m.name, () => openCard(m.id).catch(fail)), node("span", { className: "muted", textContent: m.ip ? `  ${m.ip}` : "" })))));
     }
     $("card-overview").replaceChildren(node("div", { className: "info" }, ...out), node("pre", { id: "card-ping-out", className: "output", hidden: true }));
+    // Tasks and documents that point at this device (the rest of the card is already on the screen).
+    // In a rack: its controls (side, height, take out, neighbours, patch-panel labels) at the top of the card.
+    if (window.NetAdmin.rackBlock && d.rack_id && d.type !== "RACK") {
+      window.NetAdmin.rackBlock(d).then((card) => {
+        const info = $("card-overview").firstChild;
+        if (card && info && $("card-name").textContent === d.name) info.prepend(card);
+      }).catch(() => {});
+    }
+    if (window.NetAdmin.linkedWork) {
+      window.NetAdmin.linkedWork(d.id).then((card) => {
+        const info = $("card-overview").firstChild;
+        if (card && info && $("card-name").textContent === d.name) info.append(card);
+      }).catch(() => {});
+    }
   }
 
   /** The port the device is cabled to moves to access [vlanId]: the inventory record only. */

@@ -7,6 +7,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -147,8 +148,8 @@ fun RackDialog(
                     Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
                 }
                 Text(
-                    if (rear) "Вид сзади. Коснитесь патч-панели, чтобы подписать порты: куда идёт каждый кабель."
-                    else "Коснитесь свободного юнита, чтобы поставить устройство, или устройства, чтобы убрать его из стойки.",
+                    if (rear) "Вид сзади. Коснитесь патч-панели, чтобы подписать порты. Удерживайте устройство: убрать из стойки."
+                    else "Коснитесь устройства, чтобы открыть его карточку, или свободного юнита, чтобы поставить устройство. Удерживайте устройство: убрать из стойки.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
@@ -172,8 +173,12 @@ fun RackDialog(
                             val top = device.rackTop ?: return@forEach
                             // Rows run from the top of the box: from the highest unit, or from unit 1 when numbered downwards.
                             val row = if (style.numbering == RackNumbering.TOP) device.rackU!! - 1 else units - top
-                            DeviceBlock(device, UNIT_HEIGHT * row, style.labels, plates[device.id], rear, ports[device.id].orEmpty()) {
-                                if (rear && device.type == DeviceType.PATCH_PANEL) labelsFor = device else picked = device
+                            // A tap opens the device's card at once; a long press is for the rack's own actions.
+                            DeviceBlock(
+                                device, UNIT_HEIGHT * row, style.labels, plates[device.id], rear, ports[device.id].orEmpty(),
+                                onLongClick = { picked = device },
+                            ) {
+                                if (rear && device.type == DeviceType.PATCH_PANEL) labelsFor = device else onOpenSwitch(device.id)
                             }
                         }
                     }
@@ -252,9 +257,6 @@ fun RackDialog(
                     )
                     Text("Юниты ${device.rackU}–${device.rackTop}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     device.comment?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                    TextButton(onClick = { picked = null; onOpenSwitch(device.id) }) {
-                        Text(if (device.type == DeviceType.SWITCH) "Открыть панель портов" else "Открыть карточку")
-                    }
                     if (device.type == DeviceType.PATCH_PANEL) {
                         TextButton(onClick = { picked = null; labelsFor = device }) { Text("Подписи портов…") }
                     }
@@ -299,6 +301,7 @@ private fun DeviceBlock(
     plate: FaceplateView?,
     rear: Boolean,
     ports: List<SwitchPort>,
+    onLongClick: () -> Unit,
     onClick: () -> Unit,
 ) {
     val height = device.rackH ?: 1
@@ -312,7 +315,7 @@ private fun DeviceBlock(
             .offset(y = offset)
             .fillMaxWidth()
             .height(UNIT_HEIGHT * height - 4.dp)
-            .clickable(onClick = onClick),
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp)) {
             // The signature of the app: a status lamp and the name on a plate.
