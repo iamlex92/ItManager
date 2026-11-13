@@ -1704,3 +1704,88 @@ class ExpirationOut(BaseModel):
     ref_id: uuid.UUID | None = None
     device_id: uuid.UUID | None = None
     device_name: str | None = None
+
+
+# --- tasks and documentation -----------------------------------------------------------------------------------------
+
+TaskRepeat = Literal["none", "daily", "weekly", "monthly", "yearly"]
+DocCategory = Literal["instruction", "passport", "scheme", "note"]
+
+
+class TaskCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    notes: str | None = Field(default=None, max_length=4000)
+    due_date: date | None = None
+    repeat: TaskRepeat = "none"
+    repeat_every: int = Field(default=1, ge=1, le=60)
+    device_id: uuid.UUID | None = None
+
+
+class TaskUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    notes: str | None = Field(default=None, max_length=4000)
+    due_date: date | None = None
+    repeat: TaskRepeat | None = None
+    repeat_every: int | None = Field(default=None, ge=1, le=60)
+    device_id: uuid.UUID | None = None
+
+
+class TaskOut(BaseModel):
+    id: uuid.UUID
+    title: str
+    notes: str | None
+    due_date: date | None
+    repeat: str
+    repeat_every: int
+    device_id: uuid.UUID | None
+    device_name: str | None = None
+    is_done: bool
+    done_at: datetime | None
+    # Days to the due date (negative: overdue); None without a date.
+    days_left: int | None = None
+
+
+class TaskCompleteOut(BaseModel):
+    done: TaskOut
+    # The next occurrence of a repeating task.
+    next: TaskOut | None = None
+
+
+class DocumentCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    category: DocCategory = "note"
+    body: str = Field(default="", max_length=200_000)
+    device_id: uuid.UUID | None = None
+    pinned: bool = False
+
+
+class DocumentUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    category: DocCategory | None = None
+    body: str | None = Field(default=None, max_length=200_000)
+    device_id: uuid.UUID | None = None
+    pinned: bool | None = None
+
+
+class DocumentOut(BaseModel):
+    id: uuid.UUID
+    title: str
+    category: str
+    body: str
+    device_id: uuid.UUID | None
+    device_name: str | None = None
+    pinned: bool
+    updated_at: datetime
+
+
+class DocumentBrief(BaseModel):
+    """A line of the list: the start of the text instead of all of it."""
+
+    id: uuid.UUID
+    title: str
+    category: str
+    excerpt: str
+    device_id: uuid.UUID | None
+    device_name: str | None = None
+    pinned: bool
+    updated_at: datetime

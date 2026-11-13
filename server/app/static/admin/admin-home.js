@@ -47,7 +47,7 @@
   }
 
   async function load() {
-    const [s, soon] = await Promise.all([api("GET", "summary"), api("GET", "lifecycle/expirations?within_days=60").catch(() => [])]);
+    const [s, soon, tasks] = await Promise.all([api("GET", "summary"), api("GET", "lifecycle/expirations?within_days=60").catch(() => []), api("GET", "tasks").catch(() => [])]);
     const { devices: d, alerts: a } = s;
     const downCount = d.total - d.online;
     $("home-tiles").replaceChildren(
@@ -59,6 +59,12 @@
       "Все устройства отвечают");
     fill($("home-alerts"), a.items.map((x) => row(LED[x.severity] || "warn", x.device, x.message, ago(x.created_at), () => openCard(x.device_id))),
       "Открытых событий нет");
+    // Tasks that are late, due today or due this week; the rest wait in their own section.
+    const due = tasks.filter((t) => t.days_left != null && t.days_left <= 7).slice(0, 8);
+    fill($("home-tasks"), due.map((t) => row(t.days_left < 0 ? "down" : t.days_left === 0 ? "warn" : "up", t.title,
+      t.days_left < 0 ? `просрочено на ${-t.days_left} дн.` : t.days_left === 0 ? "сегодня" : `через ${t.days_left} дн.`,
+      new Date(`${t.due_date}T00:00:00`).toLocaleDateString("ru-RU"), () => openTab("tasks"))), "Срочных задач нет");
+    if (window.NetAdmin.refreshTasksBadge) window.NetAdmin.refreshTasksBadge();
     const LV = { expired: "down", week: "down", month: "warn", soon: "warn", ok: "up" };
     fill($("home-expiring"), soon.slice(0, 8).map((x) => row(LV[x.level] || "warn", x.title, x.days_left < 0 ? `просрочено на ${-x.days_left} дн.` : x.days_left === 0 ? "сегодня" : `через ${x.days_left} дн.`,
       new Date(`${x.due}T00:00:00`).toLocaleDateString("ru-RU"), () => (x.device_id ? openCard(x.device_id) : openTab("lifecycle")))), "В ближайшие 60 дней ничего не истекает");

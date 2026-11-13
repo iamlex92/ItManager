@@ -16,6 +16,7 @@
 <script src="/static/admin/admin-tables.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-racks.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-lifecycle.js?v={{asset}}" defer></script>
+<script src="/static/admin/admin-work.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-home.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-nav.js?v={{asset}}" defer></script>
 </head>
@@ -28,6 +29,8 @@
 <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
 <symbol id="i-server" viewBox="0 0 24 24"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></symbol>
 <symbol id="i-hourglass" viewBox="0 0 24 24"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"/><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/></symbol>
+<symbol id="i-list-checks" viewBox="0 0 24 24"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></symbol>
+<symbol id="i-book-open" viewBox="0 0 24 24"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></symbol>
 <symbol id="i-bell" viewBox="0 0 24 24"><path d="M10.268 21a2 2 0 0 0 3.464 0" /> <path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" /></symbol>
 <symbol id="i-network" viewBox="0 0 24 24"><rect x="16" y="16" width="6" height="6" rx="1" /> <rect x="2" y="16" width="6" height="6" rx="1" /> <rect x="9" y="2" width="6" height="6" rx="1" /> <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" /> <path d="M12 12V8" /></symbol>
 <symbol id="i-tag" viewBox="0 0 24 24"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" /> <circle cx="7.5" cy="7.5" r=".5" fill="currentColor" /></symbol>
@@ -105,6 +108,8 @@
     <div class="side-group">Политики</div>
     <button data-tab="gpo"><svg class="ic" aria-hidden="true"><use href="#i-scroll-text"/></svg>Групповые политики</button>
     <div class="side-group">Обслуживание</div>
+    <button data-tab="tasks"><svg class="ic" aria-hidden="true"><use href="#i-list-checks"/></svg>Задачи <span id="tasks-count" class="count" hidden></span></button>
+    <button data-tab="docs"><svg class="ic" aria-hidden="true"><use href="#i-book-open"/></svg>Документы</button>
     <button data-tab="runbooks"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg>Сценарии</button>
     <button data-tab="scripts"><svg class="ic" aria-hidden="true"><use href="#i-file-code"/></svg>Свои скрипты</button>
     <button data-tab="audit"><svg class="ic" aria-hidden="true"><use href="#i-clipboard-list"/></svg>Журнал</button>
@@ -121,6 +126,7 @@
       <div class="home-grid">
         <div class="panel"><h3>Не отвечают</h3><ul id="home-down" class="feed"></ul></div>
         <div class="panel"><h3>Открытые события</h3><ul id="home-alerts" class="feed"></ul></div>
+        <div class="panel wide"><h3>Задачи</h3><ul id="home-tasks" class="feed"></ul></div>
         <div class="panel wide"><h3>Скоро истекает</h3><ul id="home-expiring" class="feed"></ul></div>
         <div class="panel wide"><h3>Последние действия</h3><ul id="home-recent" class="feed"></ul></div>
       </div>
@@ -564,6 +570,34 @@
           <div id="racks-row" class="racks-row"></div>
         </div>
         <aside id="racks-panel" class="racks-panel"></aside>
+      </div>
+    </section>
+
+    <section id="tab-tasks" class="tab" hidden>
+      <div class="toolbar">
+        <form id="task-add" class="row grow">
+          <input id="task-title" class="grow" placeholder="Что нужно сделать, например: проверить батарею ИБП" maxlength="200" required autocomplete="off">
+          <input id="task-date" type="date" title="Срок">
+          <select id="task-repeat" title="Повторять">
+            <option value="none">не повторять</option><option value="daily">каждый день</option><option value="weekly">каждую неделю</option>
+            <option value="monthly">каждый месяц</option><option value="yearly">каждый год</option>
+          </select>
+          <button type="submit" class="primary">+ Задача</button>
+        </form>
+        <label class="check"><input id="task-show-done" type="checkbox"> Показать выполненные</label>
+      </div>
+      <div id="tasks-list"></div>
+    </section>
+
+    <section id="tab-docs" class="tab" hidden>
+      <div class="docs-layout">
+        <aside class="docs-side">
+          <input id="doc-search" type="search" placeholder="Найти в документах" autocomplete="off">
+          <select id="doc-cat"><option value="">Все виды</option><option value="instruction">Инструкции</option><option value="passport">Паспорта</option><option value="scheme">Схемы</option><option value="note">Заметки</option></select>
+          <button id="doc-new" type="button" class="primary">+ Документ</button>
+          <ul id="doc-list" class="doc-list"></ul>
+        </aside>
+        <article id="doc-view" class="doc-view"></article>
       </div>
     </section>
 

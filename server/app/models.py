@@ -392,3 +392,39 @@ class Deadline(Base):
     # Renewed or closed: it stays in the list's history but no longer counts as coming.
     is_done: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Task(Base):
+    """Something to do, once or on a schedule («проверить ИБП раз в квартал»). Done, it makes its next one."""
+
+    __tablename__ = "tasks"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    title: Mapped[str] = mapped_column(String(200))
+    notes: Mapped[str | None] = mapped_column(Text)
+    due_date: Mapped[date | None] = mapped_column(Date, index=True)
+    # none, daily, weekly, monthly, yearly; every [repeat_every] of them.
+    repeat: Mapped[str] = mapped_column(String(10), server_default=text("'none'"))
+    repeat_every: Mapped[int] = mapped_column(Integer, server_default=text("1"))
+    device_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("devices.id", ondelete="SET NULL"))
+    is_done: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Document(Base):
+    """A page of the plant's own documentation: an instruction, a passport of an object, a scheme, a note."""
+
+    __tablename__ = "documents"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    title: Mapped[str] = mapped_column(String(200))
+    # instruction, passport, scheme, note.
+    category: Mapped[str] = mapped_column(String(20), server_default=text("'note'"))
+    body: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    device_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("devices.id", ondelete="SET NULL"))
+    pinned: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
