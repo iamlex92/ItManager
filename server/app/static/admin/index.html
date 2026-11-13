@@ -18,6 +18,7 @@
 <script src="/static/admin/admin-lifecycle.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-ipam.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-poe.js?v={{asset}}" defer></script>
+<script src="/static/admin/admin-report.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-netsrv.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-work.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-home.js?v={{asset}}" defer></script>
@@ -80,6 +81,7 @@
     <div class="right">
       <span id="live" class="badge warn" hidden title="Нет живого обновления: данные обновляются при открытии разделов и кнопкой «Обновить»">без автообновления</span>
       <span id="mode" class="status-strip"></span>
+      <button id="report-open" class="ghost" type="button" title="Отчёт по всей инфраструктуре: страница для чтения и печати, таблицы в Excel"><svg class="ic" aria-hidden="true"><use href="#i-file-text"/></svg>Отчёт</button>
       <button id="theme-toggle" class="ghost" type="button" title="Сменить тему: светлая или тёмная" aria-label="Сменить тему"><svg class="ic" aria-hidden="true"><use href="#i-sun-moon"/></svg></button>
       <button id="logout" class="ghost"><svg class="ic" aria-hidden="true"><use href="#i-log-out"/></svg>Выйти</button>
     </div>
