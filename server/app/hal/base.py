@@ -1,6 +1,10 @@
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .poe import PoeReport
 
 
 @dataclass(frozen=True)
@@ -76,6 +80,10 @@ class SwitchDriver(ABC):
 
     @abstractmethod
     async def get_running_config(self, target: DeviceTarget) -> str: ...
+
+    # The PoE budget and the power of each port; None when the driver cannot tell.
+    async def get_poe(self, target: DeviceTarget) -> "PoeReport | None":
+        return None
 
     # Ping / traceroute run from the switch itself (exec mode, no config change).
     @abstractmethod

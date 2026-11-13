@@ -211,6 +211,33 @@ GROUPS: tuple[Group, ...] = (
         ),
     ),
     Group(
+        "DHCP и DNS",
+        "NetAdmin только читает эти серверы, ничего на них не меняет: сверяет аренды, резервы и записи DNS с учётом.",
+        (
+            Spec("dhcp_host", "Сервер DHCP (ISC dhcpd)", "Имя или адрес. Пусто: DHCP не читается."),
+            Spec("dhcp_conf_path", "Файл настроек dhcpd", "Обычно /etc/dhcp/dhcpd.conf."),
+            Spec("dhcp_leases_path", "Файл аренд dhcpd", "Обычно /var/lib/dhcp/dhcpd.leases."),
+            Spec("dns_host", "Сервер DNS", "Имя или адрес контроллера Samba или сервера BIND. Пусто: DNS не читается."),
+            Spec(
+                "dns_method",
+                "Как читать DNS",
+                "Samba AD: samba-tool по SSH на контроллере. BIND: перенос зоны (на сервере нужно разрешить "
+                "перенос зоны для адреса NetAdmin).",
+                "choice",
+                (Choice("samba", "Samba AD (samba-tool по SSH)"), Choice("axfr", "Перенос зоны (BIND)")),
+            ),
+            Spec("dns_zones", "Зоны", "Через запятую: factory.local."),
+            Spec(
+                "netsrv_credential",
+                "Учётная запись SSH для этих серверов",
+                "Пусто: «Учётная запись для Astra Linux», затем «Учётная запись домена». Нужен чтение файлов "
+                "через sudo.",
+                "credential",
+                credential_kind="ssh",
+            ),
+        ),
+    ),
+    Group(
         "Резервный сервер",
         "Второй сервер NetAdmin на случай, если этот недоступен. Веб-консоль предложит перейти на него, когда этот "
         "перестанет отвечать; в приложении адрес и токен резервного сервера задаются в его настройках.",

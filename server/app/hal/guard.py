@@ -20,6 +20,9 @@ class WriteGuard(SwitchDriver):
     async def get_port_statuses(self, target: DeviceTarget) -> list[PortStatus]:
         return await self._inner.get_port_statuses(target)
 
+    async def get_poe(self, target: DeviceTarget):
+        return await self._inner.get_poe(target)
+
     async def get_running_config(self, target: DeviceTarget) -> str:
         return await self._inner.get_running_config(target)
 

@@ -720,3 +720,7 @@ dialog .pool .chip { cursor: pointer; }
 dialog .pool .chip.off { cursor: not-allowed; }
 dialog .row input[type="text"] { flex: 1; min-width: 120px; }
 dialog .row select { min-width: 110px; }
+.meter i.warn { background: var(--warn, #ff9f0a); }
+.meter i.bad { background: var(--danger, #ff453a); }
+button.link { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; font-weight: 600; font-size: 15px; }
+.warn { color: var(--warn, #ff9f0a); }

@@ -15,6 +15,7 @@ from dataclasses import dataclass, replace
 from . import commands
 from .base import DeviceTarget, DiagResult, PortConfig, PortRef, PortStatus, SwitchDriver
 from .commands import full_interface_name
+from .poe import PoePort, PoeReport
 
 
 @dataclass
@@ -127,6 +128,22 @@ class EmulatorDriver(SwitchDriver):
             dev = self._device(target)
             self._maybe_flap(dev)
             return [dev.ports[n].status for n in sorted(dev.ports)]
+
+    async def get_poe(self, target: DeviceTarget) -> PoeReport | None:
+        """Sample figures from the ports that carry PoE: a camera or a phone draws a few watts, the same each time."""
+        dev = self._device(target)
+        ports = []
+        for number in sorted(dev.ports):
+            st = dev.ports[number].status
+            if not st.poe_enabled:
+                continue
+            on = st.is_oper_up and st.is_admin_up
+            watts = round(3.5 + (number * 7919 % 100) / 10, 1) if on else None
+            ports.append(PoePort(st.name, "auto", "on" if on else "off", watts, None, 30.0))
+        if not ports:
+            return None
+        used = round(sum(p.power_w or 0 for p in ports), 1)
+        return PoeReport(budget_w=max(120.0, len(ports) * 15.4), used_w=used, ports=tuple(ports))
 
     async def get_running_config(self, target: DeviceTarget) -> str:
         async with self._lock:

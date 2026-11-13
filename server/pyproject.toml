@@ -24,6 +24,8 @@ dependencies = [
     "asyncssh>=2.14",
     # Group Policy straight from the controller: Registry.pol in SYSVOL over SMB.
     "smbprotocol>=1.13",
+    # Reading the plant's DNS zone by zone transfer (BIND, Samba with the BIND9 back end).
+    "dnspython>=2.6",
 ]
 
 [project.scripts]

@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from ..cliimport.parse import PHYSICAL, if_family, normalize_if_name, parse_running_config, parse_vlan_brief
 from . import commands
 from .base import DeviceTarget, DiagResult, PortConfig, PortRef, PortStatus, SwitchDriver, SwitchError
+from .poe import PoeReport, parse_report
 from .ssh import CliSession, SshOptions, SwitchLogin, cli_error, open_cli
 
 # Credential id of the device (None: the server default) -> its login, or None when there is none.
@@ -187,6 +188,13 @@ class SshSwitchDriver(SwitchDriver):
             vlans = await cli.run("show vlan brief") if target.vendor == commands.CISCO else ""
             poe = await cli.run("show power inline")
         return build_statuses(target.vendor, target.ports, status, config, vlans, None if _refused(poe) else poe)
+
+    async def get_poe(self, target: DeviceTarget) -> PoeReport | None:
+        async with self._cli(target) as cli:
+            text = await cli.run("show power inline")
+        if _refused(text):
+            return None  # a switch without PoE
+        return parse_report(target.vendor, text)
 
     async def get_running_config(self, target: DeviceTarget) -> str:
         async with self._cli(target) as cli:

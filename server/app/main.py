@@ -31,9 +31,11 @@ from .api import (
     lifecycle,
     misc,
     netbox,
+    netsrv,
     nfc,
     pcs,
     peripherals,
+    poe,
     ports,
     printers,
     runbooks,
@@ -72,6 +74,7 @@ from .hal.base import DeviceWritesDisabled, SwitchError, UnsupportedVendor
 from .hal.emulator import EmulatorDriver
 from .hal.factory import build_driver, build_printer_driver
 from .models import Credential, Device, License, ServerSetting
+from .netsrv.source import EmulatedNetServices, RealNetServices
 from .pcs.astra import AstraPcs, EmulatedAstra
 from .pcs.backend import EmulatedPcs, RealPcs
 from .pcs.service import KeyInventory, port_open
@@ -169,6 +172,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         else:
             app.state.gpo = RealGpo(settings) if settings.gpo_host.strip() else NativeGpo(settings)
         app.state.gpo_jobs = KeyInventory()
+        # DHCP and DNS servers, read only.
+        app.state.netsrv = RealNetServices(settings) if settings.pcs_real else EmulatedNetServices()
         log.warning(
             "HAL mode: %s, device writes %s",
             settings.hal_mode.value,
@@ -310,6 +315,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         devices,
         cliimport,
         device_templates,
+        netsrv,
+        poe,
         ports,
         connections,
         alerts,
