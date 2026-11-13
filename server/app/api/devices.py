@@ -34,6 +34,7 @@ from ..schemas import (
     TracerouteRequest,
     normalize_nfc_uid,
 )
+from ..services import alerts as alerts_service
 from ..services import linkstate, switches
 from ..services import status as device_status
 from ..services.serialize import device_out, port_out
@@ -295,7 +296,7 @@ async def get_device(device_id: uuid.UUID, session: SessionDep):
 
 
 @router.patch("/{device_id}", response_model=DeviceOut)
-async def update_device(device_id: uuid.UUID, body: DeviceUpdate, session: SessionDep):
+async def update_device(device_id: uuid.UUID, body: DeviceUpdate, request: Request, session: SessionDep):
     device = await _get(session, device_id)
     await _check_host(session, body.host_id, {device_id})
     had = _addresses_of(device)
@@ -304,8 +305,14 @@ async def update_device(device_id: uuid.UUID, body: DeviceUpdate, session: Sessi
         # Only addresses this edit adds: an old duplicate must not block an unrelated change.
         await _check_ip_free(session, _addresses_of(device) - had, device_id)
     await _check_rack(session, device)
+    touched = []
+    if body.metadata is not None:
+        # «Не тревожить» or a pause changed: the alarm of a device that is down follows at once.
+        touched = await alerts_service.apply_policy(session, device, datetime.now(UTC))
     await _commit_device(session, device)
     await session.refresh(device)
+    if touched:
+        await alerts_service.publish(session, request.app.state.hub, touched)
     return device_out(device, await load_graph(session))
 
 

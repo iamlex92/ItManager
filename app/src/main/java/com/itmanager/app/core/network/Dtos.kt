@@ -107,6 +107,8 @@ data class DeviceDto(
     @SerialName("has_snmp_community") val hasSnmpCommunity: Boolean = false,
     val metadata: Map<String, JsonElement> = emptyMap(),
     @SerialName("extra_ips") val extraIps: List<String> = emptyList(),
+    val alarm: Boolean = true,
+    @SerialName("snoozed_until") val snoozedUntil: String? = null,
 ) {
     fun toDomain() = Device(
         id = id,

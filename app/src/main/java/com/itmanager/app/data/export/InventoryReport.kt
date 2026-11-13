@@ -37,7 +37,7 @@ class InventoryReport(
 
     val summary: List<Pair<String, String>> = buildList {
         add("Устройств" to devices.size.toString())
-        add("Не отвечают" to devices.count { !it.isOnline && it.type !in PASSIVE }.toString())
+        add("Не отвечают" to devices.count { !it.isOnline && it.type !in PASSIVE && it.alarm }.toString())
         DeviceType.entries.forEach { t ->
             val n = devices.count { it.type == t }
             if (n > 0) add(t.label to n.toString())

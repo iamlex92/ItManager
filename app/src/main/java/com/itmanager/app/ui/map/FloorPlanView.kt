@@ -938,7 +938,7 @@ private fun DeviceMarker(
                     Modifier
                         .align(Alignment.TopEnd)
                         .size(9.dp)
-                        .background(if (device.isOnline) StatusColors.Online else StatusColors.Offline, CircleShape)
+                        .background(if (device.isOnline) StatusColors.Online else if (device.alarm) StatusColors.Offline else StatusColors.LedOff, CircleShape)
                         .border(1.5.dp, Ink950, CircleShape),
                 )
             }
@@ -977,7 +977,7 @@ private fun ClusterMarker(
     val interaction = remember { MutableInteractionSource() }
     // The kind most of them are, so a group of PCs still looks like PCs.
     val type = members.groupingBy { it.type }.eachCount().maxByOrNull { it.value }?.key ?: DeviceType.UNKNOWN
-    val offline = members.count { it.type !in PASSIVE && !it.isOnline }
+    val offline = members.count { it.type !in PASSIVE && !it.isOnline && it.alarm }
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier

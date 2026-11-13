@@ -684,6 +684,10 @@
         <label class="grow">Производитель<input id="device-vendor" maxlength="50"></label>
         <label class="grow">Модель<input id="device-model" maxlength="100"></label>
       </div>
+      <div class="row" id="device-watch-row">
+        <label class="grow">Если перестанет отвечать<select id="device-watch"><option value="">По типу устройства (компьютер — не авария, остальное — авария)</option><option value="always">Считать аварией</option><option value="quiet">Не тревожить: выключение — норма</option></select></label>
+        <label>Не тревожить до<input id="device-snooze" type="date" title="Отпуск, ремонт, выходной: до этой даты устройство не считается неисправным"></label>
+      </div>
       <label id="device-os-label" hidden>Операционная система <span class="muted small">(по умолчанию сервер определяет сам: по портам и ответу ping)</span><select id="device-os"><option value="">Определять автоматически</option><option value="windows">Windows</option><option value="astra">Astra Linux</option></select></label>
     </fieldset>
     <fieldset class="section" id="device-net"><legend>Сеть</legend>

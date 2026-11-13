@@ -51,7 +51,7 @@
     const { devices: d, alerts: a } = s;
     const downCount = d.total - d.online;
     $("home-tiles").replaceChildren(
-      tile(`${d.online} из ${d.total}`, "устройств в сети", downCount ? "" : "ok", "devices"),
+      tile(`${d.online} из ${d.total}`, d.quiet_offline ? `устройств в сети · ещё ${d.quiet_offline} выключено (не авария)` : "устройств в сети", downCount ? "" : "ok", "devices"),
       tile(downCount, "не отвечают", downCount ? "bad" : "ok", "devices"),
       tile(a.open, a.critical ? `открытых событий, из них ${a.critical} критичных` : "открытых событий", a.critical ? "bad" : a.open ? "warn" : "ok", "alerts"),
     );

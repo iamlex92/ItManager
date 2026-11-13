@@ -596,7 +596,8 @@ private fun DeviceRow(
     val lamp = when {
         passive -> StatusColors.LedOff
         device.isOnline -> StatusColors.Online
-        else -> StatusColors.Offline
+        device.alarm -> StatusColors.Offline
+        else -> StatusColors.LedOff
     }
     val fill = when {
         checked -> Modifier.background(scheme.primaryContainer)
@@ -639,7 +640,7 @@ private fun DeviceRow(
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Led(lamp, lit = !passive)
+                Led(lamp, lit = !passive && (device.isOnline || device.alarm))
                 Spacer(Modifier.width(8.dp))
                 NamePlate(device.name, modifier = Modifier.weight(1f, fill = false))
                 if (device.isDown) {

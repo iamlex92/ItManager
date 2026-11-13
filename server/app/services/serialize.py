@@ -1,6 +1,7 @@
 from ..models import Connection, Device, DeviceAlert, Port
 from ..schemas import AlertOut, ConnectionOut, DeviceOut, PortOut
 from .topology import Graph
+from .watch import is_watched, snoozed_until
 
 
 def device_out(d: Device, graph: Graph | None = None) -> DeviceOut:
@@ -34,6 +35,8 @@ def device_out(d: Device, graph: Graph | None = None) -> DeviceOut:
         switch_id=sp.device_id if sp else None,
         switch_port_id=sp.id if sp else None,
         switch_port_name=sp.port_name if sp else None,
+        alarm=is_watched(d.device_type, d.metadata_),
+        snoozed_until=snoozed_until(d.metadata_),
     )
 
 

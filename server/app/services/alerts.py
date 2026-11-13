@@ -10,10 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..models import Device, DeviceAlert, Port
 from .realtime import Hub
 from .serialize import alert_out
-
-# Device types whose unreachability is worth an alert. Workstations are
-# switched off every evening, so they only change status.
-HOST_DOWN_TYPES = {"SWITCH", "SERVER", "PRINTER", "CAMERA", "ACCESS_POINT", "ROUTER", "FIREWALL", "UPS", "VIRTUAL"}
+from .watch import HOST_DOWN_TYPES, is_watched  # noqa: F401
 
 
 async def _open(session: AsyncSession, device_id, alert_type: str, port_id=None, prefix: str | None = None):
@@ -87,12 +84,19 @@ async def link_changed(
 
 
 async def reachability_changed(session: AsyncSession, device: Device, online: bool, now: datetime) -> list[DeviceAlert]:
-    if device.device_type not in HOST_DOWN_TYPES:
-        return []
-    if online:
+    if online or not is_watched(device.device_type, device.metadata_, now.date()):
+        # Back up, or not expected to answer (a switched-off computer, a paused device): nothing is wrong.
         return await resolve(session, device, "HOST_DOWN", now)
     a = await raise_once(session, device, "HOST_DOWN", "CRITICAL", f"{device.name} is not responding")
     return [a] if a else []
+
+
+async def apply_policy(session: AsyncSession, device: Device, now: datetime) -> list[DeviceAlert]:
+    """After the watch settings changed or a pause ran out: a device that is down and now watched gets its alarm,
+    one that is not watched any more loses it."""
+    if device.is_online or device.device_type in ("SOCKET", "PATCH_PANEL", "RACK"):
+        return []
+    return await reachability_changed(session, device, False, now)
 
 
 async def publish(session: AsyncSession, hub: Hub, alerts: Iterable[DeviceAlert]) -> None:

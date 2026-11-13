@@ -96,6 +96,8 @@ import com.itmanager.app.ui.components.icon
 import com.itmanager.app.ui.components.StatusDot
 import com.itmanager.app.ui.map.RackHost
 import com.itmanager.app.ui.map.RackViewModel
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import com.itmanager.app.ui.components.tint
 import com.itmanager.app.ui.map.CommentDialog
 import com.itmanager.app.ui.map.DeviceFormDialog
@@ -198,6 +200,41 @@ fun DeviceScreen(
                                     merging = true
                                 },
                             )
+                            // When its silence is an alarm: a computer off for the night is not, a pause covers a holiday or a repair.
+                            if (device.type !in setOf(DeviceType.SOCKET, DeviceType.PATCH_PANEL, DeviceType.RACK)) {
+                                val chosen = (device.metadata["watch"] as? JsonPrimitive)?.contentOrNull
+                                DropdownMenuItem(
+                                    text = { Text("Не тревожить 1 день") },
+                                    enabled = !busy,
+                                    onClick = { menu = false; viewModel.setWatch(chosen, 1) },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Не тревожить 7 дней") },
+                                    enabled = !busy,
+                                    onClick = { menu = false; viewModel.setWatch(chosen, 7) },
+                                )
+                                if (chosen != "quiet") {
+                                    DropdownMenuItem(
+                                        text = { Text("Не тревожить: выключение — норма") },
+                                        enabled = !busy,
+                                        onClick = { menu = false; viewModel.setWatch("quiet", null) },
+                                    )
+                                }
+                                if (chosen != "always") {
+                                    DropdownMenuItem(
+                                        text = { Text("Считать аварией, если не отвечает") },
+                                        enabled = !busy,
+                                        onClick = { menu = false; viewModel.setWatch("always", null) },
+                                    )
+                                }
+                                if (chosen != null || device.snoozedUntil != null) {
+                                    DropdownMenuItem(
+                                        text = { Text("Тревога по типу устройства, без паузы") },
+                                        enabled = !busy,
+                                        onClick = { menu = false; viewModel.setWatch(null, null) },
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -409,12 +446,22 @@ private fun StatusHeader(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val passive = device.type == DeviceType.SOCKET || device.type == DeviceType.PATCH_PANEL || device.type == DeviceType.RACK
                     if (!passive) {
-                        Box(Modifier.size(8.dp).background(if (device.isOnline) StatusColors.Online else StatusColors.Offline, CircleShape))
+                        val stateColor = when {
+                            device.isOnline -> StatusColors.Online
+                            device.alarm -> StatusColors.Offline
+                            else -> StatusColors.LedOff
+                        }
+                        Box(Modifier.size(8.dp).background(stateColor, CircleShape))
                         Spacer(Modifier.width(6.dp))
                         Text(
-                            if (device.isOnline) "В сети" else "Не отвечает",
+                            when {
+                                device.isOnline -> "В сети"
+                                device.alarm -> "Не отвечает"
+                                device.snoozedUntil != null -> "Не в сети · тревога на паузе до ${device.snoozedUntil}"
+                                else -> "Не в сети"
+                            },
                             style = MaterialTheme.typography.labelLarge,
-                            color = if (device.isOnline) StatusColors.Online else StatusColors.Offline,
+                            color = if (device.isOnline || device.alarm) stateColor else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     } else {
                         Text(stringResource(R.string.device_screen_03), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)

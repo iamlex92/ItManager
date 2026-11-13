@@ -1097,9 +1097,9 @@ private fun DeviceCard(
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 if (device.type != DeviceType.SOCKET && device.type != DeviceType.PATCH_PANEL) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        StatusDot(if (device.isOnline) StatusColors.Online else StatusColors.Offline)
+                        StatusDot(if (device.isOnline) StatusColors.Online else if (device.alarm) StatusColors.Offline else StatusColors.LedOff)
                         Spacer(Modifier.width(6.dp))
-                        Text(if (device.isOnline) "В сети" else "Не отвечает", style = MaterialTheme.typography.labelLarge)
+                        Text(if (device.isOnline) "В сети" else if (device.alarm) "Не отвечает" else "Не в сети", style = MaterialTheme.typography.labelLarge)
                     }
                 }
                 device.ip?.let { Text(it, style = MonoStyle) }

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Query
 from sqlalchemy import String, cast, func, or_, select
 
 from ..models import Device, DeviceAlert, Peripheral, Port, ScriptAuditLog, Vlan
+from ..services.watch import is_watched
 from .deps import SessionDep
 from .devices import _search_clause
 
@@ -27,20 +28,14 @@ def _dev(d: Device) -> dict[str, Any]:
 
 @router.get("/summary")
 async def summary(session: SessionDep):
-    """Counts and short lists for the start screen: down devices, open events, the latest actions."""
-    pinged = Device.device_type.not_in(_NOT_PINGED)
-    total = await session.scalar(select(func.count()).select_from(Device).where(pinged)) or 0
-    online = (
-        await session.scalar(select(func.count()).select_from(Device).where(pinged, Device.is_online.is_(True))) or 0
-    )
-    down = (
-        await session.scalars(
-            select(Device)
-            .where(pinged, Device.is_online.is_(False))
-            .order_by(Device.last_seen_at.desc().nulls_last(), Device.name)
-            .limit(_LIST)
-        )
-    ).all()
+    """Counts and short lists for the start screen: down devices, open events, the latest actions. «Down» means what is
+    an alarm (watched, not paused): a computer switched off for the night is counted apart as «not in the network»."""
+    pinged = (await session.scalars(select(Device).where(Device.device_type.not_in(_NOT_PINGED)))).all()
+    watched = [d for d in pinged if is_watched(d.device_type, d.metadata_)]
+    total = len(watched)
+    online = sum(1 for d in watched if d.is_online)
+    down = sorted((d for d in watched if not d.is_online), key=lambda d: (d.last_seen_at is None, d.name))[:_LIST]
+    quiet_off = sum(1 for d in pinged if not is_watched(d.device_type, d.metadata_) and not d.is_online)
     open_alerts = (
         await session.scalar(select(func.count()).select_from(DeviceAlert).where(DeviceAlert.is_resolved.is_(False)))
         or 0
@@ -69,6 +64,7 @@ async def summary(session: SessionDep):
         "devices": {
             "total": total,
             "online": online,
+            "quiet_offline": quiet_off,
             "down": [
                 {**_dev(d), "last_seen_at": d.last_seen_at.isoformat(timespec="seconds") if d.last_seen_at else None}
                 for d in down

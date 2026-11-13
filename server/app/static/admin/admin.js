@@ -15,6 +15,10 @@
   const TYPE = Object.fromEntries(TYPES.map(([id, label, color]) => [id, { label, color }]));
   const typeOf = (d) => TYPE[d.type] || TYPE.UNKNOWN;
   const PASSIVE = new Set(["SOCKET", "PATCH_PANEL"]);
+  // An alarm is a silence that matters: a switch or a server that stops answering. A computer switched off for the night,
+  // or a device on pause («не тревожить»), is only «не в сети»: the server says so in `alarm`.
+  const isAlarm = (d) => !d.is_online && !PASSIVE.has(d.type) && d.type !== "RACK" && d.alarm !== false;
+  const offLabel = (d) => (d.alarm === false ? "не в сети" : "не отвечает");
   const PENS = ["#FFD60A", "#FF453A", "#30D158", "#0A84FF", "#FFFFFF"];
   const MAX_PLAN = 15 * 1024 * 1024;
   const KEY = "netadmin.token";
@@ -600,7 +604,7 @@
     $("maplist").replaceChildren(...rows.map((d) => {
       const li = document.createElement("li");
       const b = Object.assign(document.createElement("button"), { type: "button", className: "link" });
-      b.textContent = `${d.name} · ${typeOf(d).label}${d.ip ? ` · ${d.ip}` : ""} · ${PASSIVE.has(d.type) || d.type === "RACK" ? "пассивное" : d.is_online ? "в сети" : "не отвечает"}`;
+      b.textContent = `${d.name} · ${typeOf(d).label}${d.ip ? ` · ${d.ip}` : ""} · ${PASSIVE.has(d.type) || d.type === "RACK" ? "пассивное" : d.is_online ? "в сети" : offLabel(d)}`;
       b.addEventListener("click", () => { $("maplist-dialog").close(); window.NetAdmin.openCard(d.id); });
       li.append(b);
       return li;
@@ -1316,7 +1320,7 @@
         }
       }
       out.push({
-        lead: d, ids: group.map((g) => g.id), down: group.some((g) => !g.is_online && !PASSIVE.has(g.type)),
+        lead: d, ids: group.map((g) => g.id), down: group.some(isAlarm),
         x: group.reduce((a, g) => a + g.x, 0) / group.length, y: group.reduce((a, g) => a + g.y, 0) / group.length,
       });
     }
@@ -1393,7 +1397,7 @@
     if (!passive) {
       ctx.beginPath();
       ctx.arc(sx + rad * 0.72, sy - rad * 0.72, 4, 0, Math.PI * 2);
-      ctx.fillStyle = d.is_online ? "#30d158" : "#ff6b5e";
+      ctx.fillStyle = d.is_online ? "#30d158" : isAlarm(d) ? "#ff6b5e" : "#8a95a3";
       ctx.fill();
     }
     const label = markerLabel(d);
@@ -2473,6 +2477,7 @@
     $("device-net").hidden = id === "RACK" || id === "SOCKET" || id === "PATCH_PANEL";
     $("device-ssh-label").hidden = id !== "SWITCH";
     $("device-os-label").hidden = !PC_KINDS.has(id);
+    $("device-watch-row").hidden = id === "RACK" || id === "SOCKET" || id === "PATCH_PANEL";
     // Read-only SNMP: links and traffic of switches, toner and pages of printers.
     $("device-snmp-label").hidden = !["SWITCH", "PRINTER", "ROUTER", "FIREWALL", "ACCESS_POINT", "UPS"].includes(id);
     for (const b of $("device-types").children) b.classList.toggle("active", b.dataset.type === id);
@@ -2508,6 +2513,8 @@
     $("device-model").value = (device && device.model) || "";
     // The system (shown for computers by selectType): «automatic» unless the operator set one by hand.
     $("device-os").value = device && (device.metadata || {}).os_source === "manual" ? osOf(device) || "" : "";
+    $("device-watch").value = device && ["always", "quiet"].includes((device.metadata || {}).watch) ? device.metadata.watch : "";
+    $("device-snooze").value = device && (device.metadata || {}).snooze_until ? String(device.metadata.snooze_until).slice(0, 10) : "";
     $("device-delete").hidden = !device;
     $("device-merge").hidden = !device;
     const floorSel = $("device-floor");
@@ -2621,12 +2628,15 @@
     if (dupIpAllowed) body.allow_duplicate_ip = true;
     if (dialogType === "SWITCH") body.ssh_credential_id = $("device-ssh").value || null;
     // The system chosen by hand is kept apart from what the server detects; «automatic» drops the manual mark.
+    const meta = { ...((dialogDevice && dialogDevice.metadata) || {}) };
     if (PC_KINDS.has(dialogType)) {
-      const meta = { ...((dialogDevice && dialogDevice.metadata) || {}) };
       const picked = $("device-os").value;
       if (picked) { meta.os = picked; meta.os_source = "manual"; } else if (meta.os_source === "manual") { delete meta.os; delete meta.os_source; }
-      body.metadata = meta;
     }
+    // What counts as an alarm for this device, and a pause («не тревожить до»).
+    if ($("device-watch").value) meta.watch = $("device-watch").value; else delete meta.watch;
+    if ($("device-snooze").value) meta.snooze_until = $("device-snooze").value; else delete meta.snooze_until;
+    body.metadata = meta;
     const community = $("device-snmp").value.trim();
     if (community && !$("device-snmp-label").hidden) body.snmp_community = community;
     if (dialogType === "RACK") {
@@ -3000,7 +3010,7 @@
     renderDevices();
   }
 
-  const isDown = (d) => !d.is_online && !PASSIVE.has(d.type) && d.type !== "RACK";
+  const isDown = isAlarm;
   // The system of a computer, remembered by the server (metadata.os) or set by hand.
   const OS_LABEL = { windows: "Windows", astra: "Astra Linux" };
   const osOf = (d) => ((d.metadata || {}).os in OS_LABEL ? d.metadata.os : null);
@@ -3229,8 +3239,9 @@
     // The LED says the state, the plate carries the name as printed on a label.
     name.append(
       Object.assign(document.createElement("span"), {
-        className: `led ${isDown(d) ? "down" : PASSIVE.has(d.type) || d.type === "RACK" ? "off" : "up"}`,
-        title: isDown(d) ? "Не отвечает" : PASSIVE.has(d.type) || d.type === "RACK" ? "Пассивное устройство: состояния нет" : "В сети",
+        className: `led ${isDown(d) ? "down" : PASSIVE.has(d.type) || d.type === "RACK" || !d.is_online ? "off" : "up"}`,
+        title: isDown(d) ? "Не отвечает" : PASSIVE.has(d.type) || d.type === "RACK" ? "Пассивное устройство: состояния нет"
+          : !d.is_online ? (d.snoozed_until ? `Не в сети, тревога на паузе до ${d.snoozed_until}` : "Не в сети: выключение этого устройства не считается аварией") : "В сети",
       }),
       Object.assign(document.createElement("span"), { className: "plate", textContent: d.name }),
     );
@@ -4034,8 +4045,9 @@
     $("card-name").textContent = d.name;
     $("card-sub").textContent = [typeOf(d).label, d.vendor, d.model].filter(Boolean).join(" · ");
     const passive = PASSIVE.has(d.type) || d.type === "RACK";
-    $("card-online").textContent = passive ? "пассивное оборудование" : d.is_online ? "● в сети" : "● не отвечает";
-    $("card-online").className = passive ? "muted" : d.is_online ? "online" : "offline";
+    $("card-online").textContent = passive ? "пассивное оборудование" : d.is_online ? "● в сети"
+      : `● ${offLabel(d)}${d.snoozed_until ? ` (тревога на паузе до ${d.snoozed_until})` : ""}`;
+    $("card-online").className = passive ? "muted" : d.is_online ? "online" : isAlarm(d) ? "offline" : "muted";
     $("card-addr").textContent = [d.ip, ...(d.extra_ips || []), d.mac].filter(Boolean).join("  ·  ");
     $("card-map").hidden = d.type === "VIRTUAL";
     // Ping runs on the switch the device is cabled to: the console itself is not in the plant network.
@@ -4442,7 +4454,7 @@
 
   // What admin-more.js (the other tabs) builds on.
   window.NetAdmin = {
-    $, api, toast, fail, ask, askText, emptyRow, fieldError, replaceToken, typeOf, signedIn: () => !!token, glyphCanvas, OPERATOR, tabs: {},
+    isAlarm, offLabel, $, api, toast, fail, ask, askText, emptyRow, fieldError, replaceToken, typeOf, signedIn: () => !!token, glyphCanvas, OPERATOR, tabs: {},
     picked, listedIds: () => visibleDevices().map((d) => d.id), renderPorts: () => renderPorts(), portsDevice: () => portsDevice,
     openCard: (id) => openCard(id).catch(fail),
     openTab: (name) => openTab(name),
