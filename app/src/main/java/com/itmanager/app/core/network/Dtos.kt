@@ -136,6 +136,8 @@ data class DeviceDto(
         hasSnmpCommunity = hasSnmpCommunity,
         metadata = metadata,
         extraIps = extraIps,
+        alarm = alarm,
+        snoozedUntil = snoozedUntil,
     )
 }
 
