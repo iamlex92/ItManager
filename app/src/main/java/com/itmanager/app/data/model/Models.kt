@@ -71,6 +71,13 @@ data class Device(
     val alarm: Boolean = true,
     /** Until this day (ISO date) the alarm is paused («не тревожить»); null when it is not. */
     val snoozedUntil: String? = null,
+    /** Lifecycle, as recorded on the server; edited on the web console. Dates are ISO. */
+    val serialNumber: String? = null,
+    val inventoryNumber: String? = null,
+    val purchaseDate: String? = null,
+    val warrantyUntil: String? = null,
+    val supplier: String? = null,
+    val assignedTo: String? = null,
 ) {
     /** Every address, the main one first. */
     val allIps: List<String> get() = listOfNotNull(ip) + extraIps

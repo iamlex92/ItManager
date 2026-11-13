@@ -28,6 +28,7 @@ import com.itmanager.app.data.model.DeviceTemplate
 import com.itmanager.app.data.model.DeviceTemplateDraft
 import com.itmanager.app.data.model.IpamCheck
 import com.itmanager.app.data.model.IpamOverview
+import com.itmanager.app.data.model.LifecycleOverview
 import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
@@ -112,6 +113,9 @@ interface DcimDataSource {
     suspend fun ipam(): IpamOverview
 
     suspend fun ipamCheck(ip: String): IpamCheck
+
+    /** What is about to run out and the licenses (no keys); reads only. */
+    suspend fun lifecycle(): LifecycleOverview
 
     suspend fun deviceTemplates(): List<DeviceTemplate>
 

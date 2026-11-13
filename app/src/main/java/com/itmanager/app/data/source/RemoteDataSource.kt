@@ -64,6 +64,7 @@ import com.itmanager.app.data.model.DeviceTemplate
 import com.itmanager.app.data.model.DeviceTemplateDraft
 import com.itmanager.app.data.model.IpamCheck
 import com.itmanager.app.data.model.IpamOverview
+import com.itmanager.app.data.model.LifecycleOverview
 import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
@@ -199,6 +200,12 @@ class RemoteDataSource(
     override suspend fun ipam(): IpamOverview = api.ipam(settings).toDomain()
 
     override suspend fun ipamCheck(ip: String): IpamCheck = api.ipamCheck(settings, ip).toDomain()
+
+    override suspend fun lifecycle(): LifecycleOverview = coroutineScope {
+        val expirations = async { api.expirations(settings).map { it.toDomain() } }
+        val licenses = async { api.licenses(settings).map { it.toDomain() } }
+        LifecycleOverview(expirations.await(), licenses.await())
+    }
 
     override suspend fun deviceTemplates(): List<DeviceTemplate> = api.deviceTemplates(settings).map { it.toDomain() }
 
