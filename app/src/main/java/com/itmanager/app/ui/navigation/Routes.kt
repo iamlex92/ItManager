@@ -32,6 +32,8 @@ import kotlinx.serialization.Serializable
 @Serializable data object ToolsRoute
 @Serializable data object IpamRoute
 @Serializable data object LifecycleRoute
+@Serializable data object TasksRoute
+@Serializable data object DocsRoute
 @Serializable data object TemplatesRoute
 @Serializable data class ToolRoute(val kind: String, val host: String = "")
 /** Domain computers; [host] set: that computer opened at once (from a device card), [assist]: with remote help. */

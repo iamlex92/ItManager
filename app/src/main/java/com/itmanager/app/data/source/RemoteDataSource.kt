@@ -64,7 +64,12 @@ import com.itmanager.app.data.model.DeviceTemplate
 import com.itmanager.app.data.model.DeviceTemplateDraft
 import com.itmanager.app.data.model.IpamCheck
 import com.itmanager.app.data.model.IpamOverview
+import com.itmanager.app.data.model.DocBrief
+import com.itmanager.app.data.model.DocDraft
+import com.itmanager.app.data.model.DocFull
 import com.itmanager.app.data.model.LifecycleOverview
+import com.itmanager.app.data.model.TaskDraft
+import com.itmanager.app.data.model.TaskItem
 import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
@@ -111,7 +116,9 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
 
 class RemoteDataSource(
     private val api: NetAdminApi,
@@ -461,6 +468,45 @@ class RemoteDataSource(
         api.patchPeripheral(settings, id, attachBody(deviceId)).toDomain()
 
     override suspend fun deletePeripheral(id: String) = api.deletePeripheral(settings, id)
+
+    override suspend fun tasks(includeDone: Boolean): List<TaskItem> = api.tasks(settings, includeDone).map { it.toDomain() }
+
+    override suspend fun saveTask(id: String?, draft: TaskDraft): TaskItem {
+        val body = buildJsonObject {
+            put("title", draft.title.trim())
+            put("notes", draft.notes.trim().ifBlank { null })
+            put("due_date", draft.dueDate.trim().ifBlank { null })
+            put("repeat", draft.repeat)
+            put("repeat_every", draft.repeatEvery.toIntOrNull() ?: 1)
+        }
+        return (if (id == null) api.createTask(settings, body) else api.patchTask(settings, id, body)).toDomain()
+    }
+
+    override suspend fun completeTask(id: String) {
+        api.completeTask(settings, id)
+    }
+
+    override suspend fun reopenTask(id: String) {
+        api.reopenTask(settings, id)
+    }
+
+    override suspend fun deleteTask(id: String) = api.deleteTask(settings, id)
+
+    override suspend fun documents(query: String): List<DocBrief> = api.documents(settings, query.trim()).map { it.toDomain() }
+
+    override suspend fun document(id: String): DocFull = api.document(settings, id).toDomain()
+
+    override suspend fun saveDocument(id: String?, draft: DocDraft): DocFull {
+        val body = buildJsonObject {
+            put("title", draft.title.trim())
+            put("category", draft.category)
+            put("body", draft.body)
+            put("pinned", draft.pinned)
+        }
+        return (if (id == null) api.createDocument(settings, body) else api.patchDocument(settings, id, body)).toDomain()
+    }
+
+    override suspend fun deleteDocument(id: String) = api.deleteDocument(settings, id)
 
     override suspend fun topology(): Topology = api.topology(settings).toDomain()
 

@@ -216,6 +216,52 @@ class NetAdminApi @Inject constructor(
 
     suspend fun licenses(s: ServerSettings): List<LicenseDto> = fetch(s, "licenses")
 
+    // Tasks and documentation of the service.
+
+    suspend fun tasks(s: ServerSettings, includeDone: Boolean): List<TaskDto> =
+        newerFeature("вести задачи") { guarded { fetch<List<TaskDto>>(s, "tasks?include_done=$includeDone") } }
+
+    suspend fun createTask(s: ServerSettings, body: JsonObject): TaskDto = newerFeature("вести задачи") { post(s, "tasks", body) }
+
+    suspend fun patchTask(s: ServerSettings, id: String, body: JsonObject): TaskDto =
+        newerFeature("вести задачи") { patch(s, "tasks/${id.encodeURLPathPart()}", body) }
+
+    suspend fun completeTask(s: ServerSettings, id: String): TaskCompleteDto =
+        newerFeature("вести задачи") { post(s, "tasks/${id.encodeURLPathPart()}/complete", JsonObject(emptyMap())) }
+
+    suspend fun reopenTask(s: ServerSettings, id: String): TaskDto =
+        newerFeature("вести задачи") { post(s, "tasks/${id.encodeURLPathPart()}/reopen", JsonObject(emptyMap())) }
+
+    suspend fun deleteTask(s: ServerSettings, id: String) {
+        newerFeature("вести задачи") {
+            guarded { client.delete("${requireBase(s)}/api/v1/tasks/${id.encodeURLPathPart()}") { auth(s) } }
+        }
+    }
+
+    suspend fun documents(s: ServerSettings, query: String): List<DocBriefDto> = newerFeature("вести документацию") {
+        guarded {
+            client.get("${requireBase(s)}/api/v1/documents") {
+                auth(s)
+                if (query.isNotBlank()) parameter("q", query)
+            }.body<List<DocBriefDto>>()
+        }
+    }
+
+    suspend fun document(s: ServerSettings, id: String): DocDto =
+        newerFeature("вести документацию") { guarded { fetch<DocDto>(s, "documents/${id.encodeURLPathPart()}") } }
+
+    suspend fun createDocument(s: ServerSettings, body: JsonObject): DocDto =
+        newerFeature("вести документацию") { post(s, "documents", body) }
+
+    suspend fun patchDocument(s: ServerSettings, id: String, body: JsonObject): DocDto =
+        newerFeature("вести документацию") { patch(s, "documents/${id.encodeURLPathPart()}", body) }
+
+    suspend fun deleteDocument(s: ServerSettings, id: String) {
+        newerFeature("вести документацию") {
+            guarded { client.delete("${requireBase(s)}/api/v1/documents/${id.encodeURLPathPart()}") { auth(s) } }
+        }
+    }
+
     // The VLAN list is the server's own dictionary: names, subnets, colours. Nothing reaches a switch.
 
     suspend fun createVlan(s: ServerSettings, body: JsonObject): VlanDto = vlanCall { post(s, "vlans", body) }

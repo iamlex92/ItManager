@@ -28,7 +28,12 @@ import com.itmanager.app.data.model.DeviceTemplate
 import com.itmanager.app.data.model.DeviceTemplateDraft
 import com.itmanager.app.data.model.IpamCheck
 import com.itmanager.app.data.model.IpamOverview
+import com.itmanager.app.data.model.DocBrief
+import com.itmanager.app.data.model.DocDraft
+import com.itmanager.app.data.model.DocFull
 import com.itmanager.app.data.model.LifecycleOverview
+import com.itmanager.app.data.model.TaskDraft
+import com.itmanager.app.data.model.TaskItem
 import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
@@ -116,6 +121,18 @@ interface DcimDataSource {
 
     /** What is about to run out and the licenses (no keys); reads only. */
     suspend fun lifecycle(): LifecycleOverview
+
+    // Tasks and documentation of the service.
+    suspend fun tasks(includeDone: Boolean): List<TaskItem>
+    /** Creates a task when [id] is null; otherwise changes the fields the draft holds. */
+    suspend fun saveTask(id: String?, draft: TaskDraft): TaskItem
+    suspend fun completeTask(id: String)
+    suspend fun reopenTask(id: String)
+    suspend fun deleteTask(id: String)
+    suspend fun documents(query: String): List<DocBrief>
+    suspend fun document(id: String): DocFull
+    suspend fun saveDocument(id: String?, draft: DocDraft): DocFull
+    suspend fun deleteDocument(id: String)
 
     suspend fun deviceTemplates(): List<DeviceTemplate>
 

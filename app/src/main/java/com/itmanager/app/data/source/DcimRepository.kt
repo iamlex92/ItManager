@@ -36,7 +36,12 @@ import com.itmanager.app.data.model.Connection
 import com.itmanager.app.data.model.Credential
 import com.itmanager.app.data.model.CredentialDraft
 import com.itmanager.app.data.model.Device
+import com.itmanager.app.data.model.DocBrief
+import com.itmanager.app.data.model.DocDraft
+import com.itmanager.app.data.model.DocFull
 import com.itmanager.app.data.model.LifecycleOverview
+import com.itmanager.app.data.model.TaskDraft
+import com.itmanager.app.data.model.TaskItem
 import com.itmanager.app.data.model.MergePreview
 import com.itmanager.app.data.model.PortPath
 import com.itmanager.app.data.model.ServerHealth
@@ -160,6 +165,16 @@ class DcimRepository @Inject constructor(
     suspend fun configDiff(switchId: String) = load { configDiff(switchId) }
     suspend fun ipam() = load { ipam() }
     suspend fun lifecycle(): Result<LifecycleOverview> = load { lifecycle() }
+
+    suspend fun tasks(includeDone: Boolean): Result<List<TaskItem>> = load { tasks(includeDone) }
+    suspend fun saveTask(id: String?, draft: TaskDraft): Result<TaskItem> = load { saveTask(id, draft) }
+    suspend fun completeTask(id: String): Result<Unit> = load { completeTask(id) }
+    suspend fun reopenTask(id: String): Result<Unit> = load { reopenTask(id) }
+    suspend fun deleteTask(id: String): Result<Unit> = load { deleteTask(id) }
+    suspend fun documents(query: String): Result<List<DocBrief>> = load { documents(query) }
+    suspend fun document(id: String): Result<DocFull> = load { document(id) }
+    suspend fun saveDocument(id: String?, draft: DocDraft): Result<DocFull> = load { saveDocument(id, draft) }
+    suspend fun deleteDocument(id: String): Result<Unit> = load { deleteDocument(id) }
     suspend fun ipamCheck(ip: String) = load { ipamCheck(ip) }
     suspend fun deviceTemplates() = load { deviceTemplates() }
     suspend fun saveDeviceTemplate(draft: DeviceTemplateDraft) = load { saveDeviceTemplate(draft) }
