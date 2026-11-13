@@ -81,6 +81,7 @@ async def create_port(body: PortCreate, session: SessionDep):
         poe_enabled=body.poe_enabled,
         connected_mac=body.connected_mac,
         if_index=body.if_index,
+        label=(body.label or "").strip() or None,
     )
     session.add(port)
     try:
@@ -107,6 +108,9 @@ async def update_port(port_id: uuid.UUID, body: PortUpdate, session: SessionDep)
     )
     fields = {"number": "port_number", "name": "port_name"}
     for k, v in data.items():
+        if k == "label":
+            port.label = (v or "").strip() or None
+            continue
         if k in ("number", "name", "mode", "speed_mbps", "is_uplink", "poe_enabled") and v is None:
             continue
         setattr(port, fields.get(k, k), v if v is not None or k == "access_vlan" else [])

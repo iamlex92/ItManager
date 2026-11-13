@@ -48,7 +48,20 @@ def test_console_page_needs_no_token_but_locks_itself_down(seeded):
         assert (
             "faceplate" in c.get("/static/admin/admin.css").text and "portPanel" in c.get("/static/admin/admin.js").text
         )
-        tabs = ("home", "vlans", "devices", "map", "alerts", "audit", "runbooks", "printers", "creds", "topology")
+        assert "admin-racks.js" in r.text and c.get("/static/admin/admin-racks.js").status_code == 200
+        tabs = (
+            "home",
+            "racks",
+            "vlans",
+            "devices",
+            "map",
+            "alerts",
+            "audit",
+            "runbooks",
+            "printers",
+            "creds",
+            "topology",
+        )
         tabs += ("templates",)
         tabs += ("pcs",)
         for tab in tabs:

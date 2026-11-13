@@ -234,3 +234,18 @@ def test_status_lists_background_jobs(client):
     assert set(jobs) == {"ping", "traffic", "backup", "sync", "retention"}
     assert jobs["ping"]["enabled"] is False and jobs["backup"]["enabled"] is False
     assert client.get("/api/v1/status", headers={"Authorization": ""}).status_code == 401
+
+
+def test_port_label_is_saved_cleared_and_returned(client):
+    sw = find(client, "SW-ACC-01")
+    port = ports_of(client, sw["id"])[0]
+    r = client.patch(f"/api/v1/ports/{port['id']}", json={"label": "  каб. 214, бухгалтерия "})
+    assert r.status_code == 200 and r.json()["label"] == "каб. 214, бухгалтерия"
+    again = next(p for p in ports_of(client, sw["id"]) if p["id"] == port["id"])
+    assert again["label"] == "каб. 214, бухгалтерия"
+    # Other fields keep it; an empty string clears it.
+    assert (
+        client.patch(f"/api/v1/ports/{port['id']}", json={"speed_mbps": 1000}).json()["label"]
+        == "каб. 214, бухгалтерия"
+    )
+    assert client.patch(f"/api/v1/ports/{port['id']}", json={"label": ""}).json()["label"] is None

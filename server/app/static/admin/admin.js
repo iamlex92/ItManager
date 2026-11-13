@@ -2969,7 +2969,7 @@
   $("device-rack-open").addEventListener("click", () => {
     const d = dialogDevice;
     $("device-dialog").close();
-    openRack(d).catch(fail);
+    window.NetAdmin.openRacks(d.id);
   });
 
   async function refreshTab() {
@@ -4105,7 +4105,7 @@
       ["Отвечает на адрес", (d.metadata || {}).answered_ip || null],
     ] : [];
     const where = node("div", { className: "card" }, node("h3", { textContent: "Расположение" }), kv([...system, ...place, ...seen]));
-    if (d.type === "RACK") where.append(node("div", { className: "row" }, node("button", { textContent: "Вид стойки…", onclick: () => openRack(d) })));
+    if (d.type === "RACK") where.append(node("div", { className: "row" }, node("button", { textContent: "Вид стойки…", onclick: () => { $("card-dialog").close(); window.NetAdmin.openRacks(d.id); } })));
     out.push(where);
 
     if (!["VIRTUAL", "RACK", "SWITCH"].includes(d.type)) {
