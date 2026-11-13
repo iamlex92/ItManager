@@ -14,6 +14,7 @@ Every action on a computer goes to the audit log («pc:<action>»), with who ask
 """
 
 import asyncio
+import logging
 import time
 import uuid
 from datetime import UTC, datetime
@@ -62,6 +63,7 @@ from ..services import heartbeat
 from .deps import SessionDep, not_found, who
 from .runbooks import linux_login, runbook_login
 
+log = logging.getLogger(__name__)
 router = APIRouter(prefix="/pcs", tags=["domain computers"])
 
 AUDIT_PREFIX = "pc:"
@@ -145,6 +147,11 @@ async def start_keys(body: PcKeysIn, request: Request, session: SessionDep):
                 hosts = await asyncio.to_thread(lambda: LdapDirectory(s, login).windows_computers())
             except RunbookConfigError as e:
                 raise _bad("ad_failed", str(e), 502) from e
+            except Exception as e:  # noqa: BLE001
+                # Anything else the LDAP library or the network throws (a timeout, a dropped session, a refused paged
+                # search) is an answer for the person, not a «500»: say what it was and keep the traceback in the log.
+                log.exception("AD computer search failed")
+                raise _bad("ad_failed", f"Не удалось получить компьютеры из AD: {type(e).__name__}: {e}", 502) from e
         else:
             # No AD here: the inventory's computers stand in for it.
             pcs = await inventory_pcs(session)

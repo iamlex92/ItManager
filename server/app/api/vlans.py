@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Request, status
-from sqlalchemy import func, select
+from sqlalchemy import ARRAY, Integer, bindparam, func, select, text
 from sqlalchemy.exc import IntegrityError
 
 from ..models import Port, ScriptAuditLog, Vlan
@@ -39,13 +39,24 @@ async def list_vlans(session: SessionDep):
     return (await session.scalars(select(Vlan).order_by(Vlan.vlan_id))).all()
 
 
+# A trunk that allows "all" VLANs got every known VLAN written into its list (config import does that), so "this VLAN
+# is on a port" would hold for every VLAN of the table and nothing could ever be cleaned. A port that carries at least
+# this many VLANs and nearly all of the table is such a trunk: its list says "everything", not "these are used".
+_ALLOW_ALL_MIN = 50
+_ALLOW_ALL_SHARE = 0.9
+
+
 async def unused_vlans(session) -> list[Vlan]:
-    """VLANs nothing refers to: no port has them (access or tagged), no subnet and no description is set. VLAN 1 is the
-    switches' default and stays."""
-    used = set((await session.scalars(select(Port.access_vlan).where(Port.access_vlan.is_not(None)))).all())
-    tagged = await session.scalars(select(func.unnest(Port.tagged_vlans)).distinct())
-    used |= set(tagged.all())
+    """VLANs nothing refers to: no port has them as access, no real trunk list names them (an "allow all" trunk does
+    not count), no subnet and no description is set. VLAN 1 is the switches' default and stays."""
     rows = (await session.scalars(select(Vlan).order_by(Vlan.vlan_id))).all()
+    used = set((await session.scalars(select(Port.access_vlan).where(Port.access_vlan.is_not(None)))).all())
+    allow_all = max(_ALLOW_ALL_MIN, int(len(rows) * _ALLOW_ALL_SHARE))
+    for tagged in (
+        await session.scalars(select(Port.tagged_vlans).where(func.cardinality(Port.tagged_vlans) > 0))
+    ).all():
+        if len(set(tagged)) < allow_all:
+            used.update(tagged)
     return [
         v
         for v in rows
@@ -67,6 +78,14 @@ async def cleanup_vlans(request: Request, session: SessionDep, dry_run: bool = T
         await session.flush()
     except IntegrityError:
         raise conflict("vlan_in_use", "Какой-то VLAN появился на порту во время очистки: повторите") from None
+    # The ports' lists have no foreign key: take the removed VLANs out of them too, so none names a VLAN that is gone.
+    gone = [x["vlan_id"] for x in listed]
+    await session.execute(
+        text(
+            "UPDATE ports SET tagged_vlans = ARRAY(SELECT x FROM unnest(tagged_vlans) AS x WHERE x <> ALL(:gone)) "
+            "WHERE tagged_vlans && :gone"
+        ).bindparams(bindparam("gone", value=gone, type_=ARRAY(Integer)))
+    )
     ids = ", ".join(str(x["vlan_id"]) for x in listed)
     session.add(
         ScriptAuditLog(

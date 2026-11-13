@@ -264,3 +264,28 @@ def test_cleanup_removes_only_vlans_nothing_uses(client):
     left = _vlans(client)
     assert base not in left and {base + 1, base + 2, base + 3, base + 4} <= left and 1 in left
     assert any("vlan_cleanup" in str(a) for a in audit_rows())
+
+
+def test_cleanup_ignores_an_allow_all_trunk(client):
+    """Config import writes every known VLAN into a trunk that allows all: that must not make every VLAN «used»."""
+    sw = find(client, "SW-ACC-01")
+    base = max(_vlans(client)) + 500
+    ids = list(range(base, base + 80))
+    for vid in ids:
+        assert client.post("/api/v1/vlans", json={"vlan_id": vid, "name": f"V{vid}"}).status_code == 201
+    everything = sorted(_vlans(client))
+    trunk = ports_of(client, sw["id"])[1]
+    r = client.patch(f"/api/v1/ports/{trunk['id']}", json={"mode": "TRUNK", "tagged_vlans": everything})
+    assert r.status_code == 200, r.text
+    keep = base + 5
+    access = ports_of(client, sw["id"])[0]
+    assert client.patch(f"/api/v1/ports/{access['id']}", json={"access_vlan": keep}).status_code == 200
+
+    preview = client.post("/api/v1/vlans/cleanup").json()
+    found = {v["vlan_id"] for v in preview["vlans"]} & set(ids)
+    assert found == set(ids) - {keep}
+    client.post("/api/v1/vlans/cleanup", params={"dry_run": "false"})
+    assert keep in _vlans(client) and base not in _vlans(client)
+    # The trunk's list no longer names the removed VLANs.
+    after = next(p for p in ports_of(client, sw["id"]) if p["id"] == trunk["id"])
+    assert base not in after["tagged_vlans"] and keep in after["tagged_vlans"]
