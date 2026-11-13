@@ -41,10 +41,18 @@
     timer = setInterval(() => { if ($("tab-racks").hidden) clearInterval(timer); else if (!dragging) load().catch(() => {}); }, 30_000);
   }
   tabs.racks = load;
+  // The card closed: nothing is selected in the rack any more, and the side panel comes back.
+  $("card-dialog").addEventListener("close", () => { if (selected) { selected = null; selectedPort = null; render(); } });
   window.NetAdmin.openRacks = (id) => { focusRack = id || null; openTab("racks"); };
 
   async function patchDevice(d, body) {
-    try { await api("PATCH", `devices/${d.id}`, body); await load(); return true; } catch (e) { fail(e); return false; }
+    try {
+      await api("PATCH", `devices/${d.id}`, body);
+      await load();
+      // A change made from the card of that device: the card follows.
+      if ($("card-dialog").open && $("card-name").textContent === d.name) await openCard(d.id);
+      return true;
+    } catch (e) { fail(e); return false; }
   }
 
   // ------------------------------------------------------------------ geometry
@@ -119,7 +127,13 @@
       const b = el("button", `rp${p.label ? " named" : p.connected_device_name ? " linked" : ""}${selectedPort === p.id ? " on" : ""}`, String(p.number));
       b.type = "button";
       b.title = `${p.name}: ${p.label || "не подписан"}${p.connected_device_name ? ` · ${p.connected_device_name}` : ""}`;
-      b.addEventListener("click", (ev) => { ev.stopPropagation(); selected = d.id; selectedPort = p.id; render(); focusLabel(p.id); });
+      b.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        selected = d.id; selectedPort = p.id; render();
+        openCard(d.id);
+        // The labels sit in the card, which is built a moment after it opens.
+        setTimeout(() => focusLabel(p.id), 1200);
+      });
       wrap.append(b);
     }
     return wrap;
@@ -151,8 +165,7 @@
     e.draggable = true;
     e.addEventListener("dragstart", (ev) => { dragging = d; ev.dataTransfer.effectAllowed = "move"; ev.dataTransfer.setData("text/plain", d.id); });
     e.addEventListener("dragend", () => { dragging = null; clearGhosts(); });
-    e.addEventListener("click", () => { selected = d.id; selectedPort = null; pick = null; render(); });
-    e.addEventListener("dblclick", () => openCard(d.id));
+    e.addEventListener("click", () => { selected = d.id; selectedPort = null; pick = null; render(); openCard(d.id); });
     if (hidden) {
       e.append(el("span", "meta", `${d.name} · ${s === "front" ? "установлено спереди" : "установлено сзади"}`));
     } else {
@@ -277,34 +290,35 @@
   }
 
   function focusLabel(portId) {
-    const input = document.querySelector(`#racks-panel input[data-port="${portId}"]`);
+    const input = document.querySelector(`#card-overview input[data-port="${portId}"]`);
     if (input) { input.scrollIntoView({ block: "nearest" }); input.focus(); }
   }
 
+  /** The panel on the right only explains the view: a device that is clicked opens its card, where the rack's own controls sit on top. */
   function renderPanel() {
     const box = $("racks-panel");
-    const d = devices.find((x) => x.id === selected);
-    if (!d) {
-      box.replaceChildren(el("h4", null, "Выбрано"), el("p", "note", pick
-        ? `«${pick.name}»: щёлкните по свободному месту в стойке.`
-        : "Щёлкните по устройству в стойке. Двойной щелчок открывает его карточку. Нового — перетащите из списка слева на свободное место."),
-      el("p", "note", "«Сзади» показывает заднюю сторону: у патч-панели — порт за портом, с подписью, куда идёт кабель."));
-      return;
-    }
-    const rack = devices.find((x) => x.id === d.rack_id);
-    const h = heightOf(d);
-    const card = el("div", "card");
-    const top = el("div", "sel-head");
-    top.append(led(d), plate(d), el("span", "tag", passive(d) ? "пассивное" : d.is_online ? "в сети" : offLabel(d)));
-    const kv = el("div", "kv");
-    const row = (k, v) => { kv.append(el("span", null, k), v instanceof Node ? v : el("span", null, v)); };
-    row("Тип", typeOf(d).label);
-    if (d.model || d.vendor) row("Модель", [d.vendor, d.model].filter(Boolean).join(" "));
-    row("Положение", `${rack ? rack.name : "—"} · U${d.rack_u}${h > 1 ? `–${d.rack_u + h - 1}` : ""} (${h} U)`);
-    if (d.ip) row("IP", d.ip);
-    const sw = devices.find((x) => x.id === d.switch_id);
-    if (sw) row("Подключён", `${sw.name}${d.switch_port_name ? ` · ${d.switch_port_name}` : ""}`);
+    $("racks-layout").classList.toggle("has-card", !!selected);
+    box.replaceChildren(el("h4", null, "Как пользоваться"), el("p", "note", pick
+      ? `«${pick.name}»: щёлкните по свободному месту в стойке.`
+      : "Щёлкните по устройству в стойке: справа откроется его карточка, а над ней — положение в стойке (сторона, высота, «Убрать из стойки»). Новое устройство — перетащите из списка слева на свободное место."),
+    el("p", "note", "«Сзади» показывает заднюю сторону: у патч-панели — порт за портом, с подписью, куда идёт кабель; щелчок по порту открывает карточку патч-панели с подписями."));
+  }
 
+  /** What the rack adds to a device's card: where it stands, its side and height, taking it out, neighbours and, for a patch
+   *  panel, the label of each port. Shown at the top of the card, so the rack's controls and the card are one step. */
+  async function rackBlock(d) {
+    devices = await api("GET", "devices");
+    const cur = devices.find((x) => x.id === d.id);
+    if (!cur || !cur.rack_id || cur.rack_u == null) return null;
+    d = cur;
+    const rack = devices.find((x) => x.id === d.rack_id);
+    if (!rack) return null;
+    if (d.type === "PATCH_PANEL") ports.set(d.id, (await api("GET", `devices/${d.id}/ports`).catch(() => [])).sort((a, b) => a.number - b.number));
+    const h = heightOf(d);
+    const card = el("div", "card rack-block");
+    const head = el("h3", null, `В стойке ${rack.name} · U${d.rack_u}${h > 1 ? `–${d.rack_u + h - 1}` : ""} (${h} U)`);
+    const kv = el("div", "kv");
+    const row = (k, v) => { kv.append(el("span", null, k), v); };
     const sideSel = el("select");
     sideSel.append(new Option("Обе стороны", "both"), new Option("Только спереди", "front"), new Option("Только сзади", "rear"));
     sideSel.value = sideOf(d);
@@ -315,29 +329,25 @@
     height.value = String(h);
     height.addEventListener("change", () => {
       const nh = Number(height.value);
-      if (rack && !fits(rack, d.rack_u, nh, d.id)) { toast("Выше юниты заняты: сначала освободите место", true); height.value = String(h); return; }
+      if (!fits(rack, d.rack_u, nh, d.id)) { toast("Выше юниты заняты: сначала освободите место", true); height.value = String(h); return; }
       patchDevice(d, { rack_h: nh });
     });
     row("Высота", height);
-
-    const open = el("button", null, "Открыть карточку"); open.type = "button";
-    open.addEventListener("click", () => openCard(d.id));
+    const above = devices.filter((x) => x.rack_id === rack.id && x.rack_u != null && x.rack_u >= d.rack_u + h).sort((a, b) => a.rack_u - b.rack_u)[0];
+    const below = devices.filter((x) => x.rack_id === rack.id && x.rack_u != null && x.rack_u + heightOf(x) <= d.rack_u).sort((a, b) => b.rack_u - a.rack_u)[0];
+    row("Выше", el("span", null, above ? `${above.name} (U${above.rack_u})` : "свободно до верха"));
+    row("Ниже", el("span", null, below ? `${below.name} (U${below.rack_u})` : "свободно до низа"));
+    const acts = el("div", "row wrap");
+    const show = el("button", null, "Показать стойку"); show.type = "button";
+    show.addEventListener("click", () => { $("card-dialog").close(); window.NetAdmin.openRacks(rack.id); });
     const remove = el("button", "danger", "Убрать из стойки"); remove.type = "button";
     remove.addEventListener("click", async () => { selected = null; await patchDevice(d, { rack_id: null }); });
-    const acts = el("div", "row wrap"); acts.append(open, remove);
-    card.append(top, kv, acts);
-    box.replaceChildren(el("h4", null, "Выбрано"), card);
-
-    if (d.type === "PATCH_PANEL") box.append(labelTable(d));
-    if (rack) {
-      const above = devices.filter((x) => x.rack_id === rack.id && x.rack_u != null && x.rack_u >= d.rack_u + h).sort((a, b) => a.rack_u - b.rack_u)[0];
-      const below = devices.filter((x) => x.rack_id === rack.id && x.rack_u != null && x.rack_u + heightOf(x) <= d.rack_u).sort((a, b) => b.rack_u - a.rack_u)[0];
-      const n = el("div", "card");
-      n.append(el("h4", null, "Соседи"), el("div", "note", `Выше: ${above ? `${above.name} (U${above.rack_u})` : "свободно до верха стойки"}`),
-        el("div", "note", `Ниже: ${below ? `${below.name} (U${below.rack_u})` : "свободно до низа стойки"}`));
-      box.append(n);
-    }
+    acts.append(show, remove);
+    card.append(head, kv, acts);
+    if (d.type === "PATCH_PANEL") card.append(labelTable(d));
+    return card;
   }
+  window.NetAdmin.rackBlock = rackBlock;
 
   /** Per-port labels of a patch panel: where each cable goes. Saved when the field loses focus or Enter is pressed. */
   function labelTable(d) {

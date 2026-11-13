@@ -712,3 +712,5 @@ textarea.mono { font-family: "IBM Plex Mono", monospace; font-size: 13px; }
   body.printing-doc .docs-layout { display: block; }
   body.printing-doc .doc-view { border: 0; }
 }
+.racks-layout.has-card { grid-template-columns: 210px minmax(0, 1fr); }
+.racks-layout.has-card .racks-panel { display: none; }
