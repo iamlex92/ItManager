@@ -1370,6 +1370,44 @@ class PcKeyJobOut(BaseModel):
     rows: list[PcKeyRowOut] = Field(default_factory=list)
 
 
+class ReconcileLicenseOut(BaseModel):
+    id: uuid.UUID
+    software: str
+    seats: int | None
+    # False: the register holds no key and the program is not 1С, so a scan cannot tell it from the rest.
+    checkable: bool
+    registered: int
+    found: int
+    to_link: list[str]
+    missing: list[str]
+    over: bool
+
+
+class ReconcileFoundOut(BaseModel):
+    product: Literal["windows", "office", "one_c"]
+    ref: str
+    label: str
+    hint: str
+    hosts: list[str]
+    adoptable: bool
+
+
+class ReconcileOut(BaseModel):
+    licenses: list[ReconcileLicenseOut]
+    unmatched: list[ReconcileFoundOut]
+    scanned: int
+
+
+class ReconcileApplyIn(BaseModel):
+    # Link the found computers to the licenses the scan matched (no id: all of them).
+    license_id: uuid.UUID | None = None
+
+
+class ReconcileAdoptIn(BaseModel):
+    product: Literal["windows", "office", "one_c"]
+    ref: str = Field(min_length=1, max_length=100)
+
+
 # --- server settings («Настройки сервера») ---
 
 

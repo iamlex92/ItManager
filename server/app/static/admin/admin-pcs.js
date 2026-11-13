@@ -302,10 +302,46 @@
         el("span", { className: "muted", textContent: `Опрошено ПК: ${job.rows.filter((r) => r.ok).length}` }),
         el("div", { className: "spacer" }),
         el("button", { className: "primary", textContent: "Скачать CSV для Excel", onclick: () => downloadCsv(job).catch(fail) })),
+      el("div", { id: "keys-reconcile", className: "stack" }),
       table(["Имя ПК", "Пользователь", "ОС", "Windows (BIOS)", "Windows (реестр)", "MS Office", "Лицензии 1С"],
         job.rows.map((r) => r.ok
           ? [r.computer || r.host, r.user || "нет сеанса", r.os, r.windows_bios_key || "Нет", r.windows_registry_key || "Нет", r.office, r.one_c]
           : [r.host, el("span", { className: "error", textContent: r.error }), "", "", "", "", ""])));
+    if (job.rows.some((r) => r.ok)) api("GET", `pcs/keys/${job.id}/reconcile`).then((r) => showReconcile(job, r)).catch(fail);
+  }
+
+  const PRODUCT = { windows: "Windows", office: "MS Office", one_c: "1С" };
+
+  /** The scan against the license register: what to link, what is missing, what the register does not know yet. */
+  function showReconcile(job, r) {
+    const box = $("keys-reconcile");
+    if (!box) return;
+    const base = `pcs/keys/${job.id}/reconcile`;
+    const act = async (path, body) => { showReconcile(job, await api("POST", `${base}/${path}`, body)); };
+    const names = (l) => (l.length > 4 ? `${l.slice(0, 4).join(", ")} и ещё ${l.length - 4}` : l.join(", "));
+    const link = r.licenses.filter((l) => l.to_link.length);
+    const rows = r.licenses.filter((l) => l.checkable);
+    box.replaceChildren(el("h3", { textContent: "Сверка с учётом лицензий" }),
+      !r.licenses.length && !r.unmatched.length
+        ? el("p", { className: "muted", textContent: "Ничего не найдено для сверки." }) : "",
+      rows.length ? table(["Лицензия", "В учёте", "Найдено", "Что делать"], rows.map((l) => [
+        l.software,
+        l.seats != null ? `${l.registered} из ${l.seats}` : String(l.registered),
+        String(l.found),
+        el("span", {},
+          l.over ? el("span", { className: "error", textContent: "Больше мест, чем куплено. " }) : "",
+          l.to_link.length ? el("span", {}, `Не привязаны: ${names(l.to_link)} `,
+            el("button", { type: "button", textContent: "Привязать", onclick: () => act("apply", { license_id: l.id }).catch(fail) })) : "",
+          l.missing.length ? el("span", { className: "muted", textContent: ` Отмечены в учёте, но на ПК не найдены: ${names(l.missing)}.` }) : "",
+          !l.over && !l.to_link.length && !l.missing.length ? el("span", { className: "muted", textContent: "Сходится" }) : ""),
+      ])) : "",
+      link.length > 1 ? el("button", { type: "button", className: "primary", textContent: "Привязать все найденные", onclick: () => act("apply", {}).catch(fail) }) : "",
+      r.unmatched.length ? el("div", {}, el("h4", { textContent: "Найдено на ПК, но нет в учёте" }),
+        table(["Продукт", "Ключ", "Компьютеры", ""], r.unmatched.map((u) => [
+          PRODUCT[u.product], u.hint || "—", names(u.hosts),
+          el("button", { type: "button", textContent: "Внести в учёт", onclick: () => act("adopt", { product: u.product, ref: u.ref }).catch(fail) }),
+        ]))) : "",
+      el("p", { className: "muted small", textContent: "Windows сверяется по полному ключу, Office только по последним 5 символам, 1С по названию лицензии в учёте: аппаратный ключ HASP на компьютере не виден." }));
   }
 
   async function downloadCsv(job) {

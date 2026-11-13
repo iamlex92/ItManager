@@ -9,6 +9,8 @@ POST /pcs/{host}/{action}        info, disks, folders, processes, cleanup, gpupd
 Windows computers are reached over WinRM, Astra Linux ones over SSH with sudo (pcs/astra.py): whichever port
 answers decides, so the same page serves both.
 POST /pcs/keys                   key inventory over AD or a subnet (menu item 3); GET /pcs/keys/{id}, .../csv
+GET  /pcs/keys/{id}/reconcile    the found keys against the license register; POST .../apply links the computers,
+                                 POST .../adopt enters a found key into the register
 
 Every action on a computer goes to the audit log («pc:<action>»), with who asked and whether it was emulated.
 """
@@ -20,9 +22,10 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Request, Response
+from sqlalchemy import select
 
 from ..config import DiscoveryMode
-from ..models import ScriptAuditLog
+from ..models import Device, License, LicenseDevice, ScriptAuditLog
 from ..pcs import osdetect
 from ..pcs.astra import ASTRA_ACTIONS, program
 from ..pcs.backend import (
@@ -58,9 +61,13 @@ from ..schemas import (
     PcStatusOut,
     PcSweepHitOut,
     PcSweepIn,
+    ReconcileAdoptIn,
+    ReconcileApplyIn,
+    ReconcileOut,
 )
-from ..services import heartbeat
+from ..services import heartbeat, reconcile
 from .deps import SessionDep, not_found, who
+from .lifecycle import ACTIONS as LICENSE_ACTIONS
 from .runbooks import linux_login, runbook_login
 
 log = logging.getLogger(__name__)
@@ -234,6 +241,81 @@ async def keys_csv(job_id: uuid.UUID, request: Request):
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{name}"'},
     )
+
+
+async def _reconcile_inputs(request: Request, session, job_id: uuid.UUID):
+    job = request.app.state.pc_keys.get(job_id)
+    if job is None:
+        raise not_found("key inventory")
+    lics = list((await session.scalars(select(License).order_by(License.software))).all())
+    devices = list((await session.scalars(select(Device).where(Device.is_active.is_(True)))).all())
+    linked: dict[uuid.UUID, set[uuid.UUID]] = {}
+    for lid, did in (await session.execute(select(LicenseDevice.license_id, LicenseDevice.device_id))).all():
+        linked.setdefault(lid, set()).add(did)
+    return job, lics, devices, linked
+
+
+@router.get("/keys/{job_id}/reconcile", response_model=ReconcileOut)
+async def reconcile_keys(job_id: uuid.UUID, request: Request, session: SessionDep):
+    job, lics, devices, linked = await _reconcile_inputs(request, session, job_id)
+    return reconcile.reconcile(job.rows, lics, devices, linked)
+
+
+def _journal_reconcile(request: Request, text: str) -> ScriptAuditLog:
+    return ScriptAuditLog(
+        script_name="license_reconcile", triggered_by=who(request), parameters={}, executed_at=datetime.now(UTC),
+        exit_code=0, output_log=f"{LICENSE_ACTIONS['license_reconcile']}: {text}",
+    )  # fmt: skip
+
+
+@router.post("/keys/{job_id}/reconcile/apply", response_model=ReconcileOut)
+async def reconcile_apply(job_id: uuid.UUID, body: ReconcileApplyIn, request: Request, session: SessionDep):
+    """Adds the computers where a license was found to the ones the register lists. Nothing is ever removed."""
+    job, lics, devices, linked = await _reconcile_inputs(request, session, job_id)
+    result = reconcile.reconcile(job.rows, lics, devices, linked)
+    by_name = {d.name: d for d in devices}
+    added = 0
+    for item in result["licenses"]:
+        if body.license_id not in (None, item["id"]):
+            continue
+        for name in item["to_link"]:
+            session.add(LicenseDevice(license_id=item["id"], device_id=by_name[name].id))
+            added += 1
+    if added:
+        session.add(_journal_reconcile(request, f"привязано компьютеров: {added}"))
+        await session.commit()
+    job, lics, devices, linked = await _reconcile_inputs(request, session, job_id)
+    return reconcile.reconcile(job.rows, lics, devices, linked)
+
+
+@router.post("/keys/{job_id}/reconcile/adopt", response_model=ReconcileOut)
+async def reconcile_adopt(job_id: uuid.UUID, body: ReconcileAdoptIn, request: Request, session: SessionDep):
+    """Enters a found key into the register as a new license, linked to the computers it was found on."""
+    job, lics, devices, linked = await _reconcile_inputs(request, session, job_id)
+    f = next((x for x in reconcile.findings(job.rows) if x.product == body.product and x.ref == body.ref), None)
+    if f is None:
+        raise not_found("found key")
+    if reconcile.matching_license(f, lics):
+        raise _bad("already_registered", "Этот ключ уже есть в учёте", 409)
+    if f.product == "windows":
+        lic = License(software="Windows", vendor="Microsoft", kind="per_device", key=f.ref)
+    elif f.product == "office":
+        # Only the last five characters are readable on a computer: the note says so, the key stays empty.
+        lic = License(
+            software="MS Office", vendor="Microsoft", kind="per_device",
+            notes=f"Найден по последним символам ключа: {f.ref[-reconcile.OFFICE_TAIL:]}. Полный ключ внесите вручную.",
+        )  # fmt: skip
+    else:
+        lic = License(software="1С:Предприятие", vendor="1С", kind="per_device")
+    session.add(lic)
+    await session.flush()
+    for h in f.hosts:
+        if d := reconcile.device_for(devices, h):
+            session.add(LicenseDevice(license_id=lic.id, device_id=d.id))
+    session.add(_journal_reconcile(request, f"внесено в учёт: {lic.software}"))
+    await session.commit()
+    job, lics, devices, linked = await _reconcile_inputs(request, session, job_id)
+    return reconcile.reconcile(job.rows, lics, devices, linked)
 
 
 @router.post("/{host}/{action}", response_model=PcActionOut)
