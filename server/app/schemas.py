@@ -245,6 +245,13 @@ class DeviceBase(BaseModel):
     ssh_credential_id: uuid.UUID | None = None
     # An address another device already has is a warning (409 ip_in_use); this saves it anyway.
     allow_duplicate_ip: bool = False
+    # Lifecycle.
+    serial_number: str | None = Field(default=None, max_length=100)
+    inventory_number: str | None = Field(default=None, max_length=100)
+    purchase_date: date | None = None
+    warranty_until: date | None = None
+    supplier: str | None = Field(default=None, max_length=100)
+    assigned_to: str | None = Field(default=None, max_length=100)
 
     @field_validator("mac")
     @classmethod
@@ -313,6 +320,12 @@ class DeviceUpdate(BaseModel):
     rack_h: int | None = Field(default=None, ge=1, le=60)
     rack_units: int | None = Field(default=None, ge=1, le=60)
     allow_duplicate_ip: bool = False
+    serial_number: str | None = Field(default=None, max_length=100)
+    inventory_number: str | None = Field(default=None, max_length=100)
+    purchase_date: date | None = None
+    warranty_until: date | None = None
+    supplier: str | None = Field(default=None, max_length=100)
+    assigned_to: str | None = Field(default=None, max_length=100)
 
     @field_validator("mac")
     @classmethod
@@ -359,6 +372,12 @@ class DeviceOut(BaseModel):
     # Whether its silence is an alarm now (by type or choice, and not paused): a switched-off computer is not.
     alarm: bool = True
     snoozed_until: date | None = None
+    serial_number: str | None = None
+    inventory_number: str | None = None
+    purchase_date: date | None = None
+    warranty_until: date | None = None
+    supplier: str | None = None
+    assigned_to: str | None = None
 
 
 class DeviceMerge(BaseModel):
@@ -1587,3 +1606,101 @@ class GpoApplyJobOut(BaseModel):
     simulated: bool
     started_at: datetime
     rows: list[GpoApplyRowOut]
+
+
+# --- lifecycle: licenses, other deadlines, what is expiring ---------------------------------------------------------
+
+LicenseKind = Literal["per_device", "per_user", "organization", "subscription", "other"]
+DeadlineKind = Literal["certificate", "battery", "domain", "contract", "other"]
+
+
+class LicenseBase(BaseModel):
+    software: str = Field(min_length=1, max_length=120)
+    vendor: str | None = Field(default=None, max_length=100)
+    kind: LicenseKind = "per_device"
+    seats: int | None = Field(default=None, ge=1, le=100_000)
+    # Stored encrypted; never in a list, shown only by `POST /licenses/{id}/reveal` (which is journaled).
+    key: str | None = Field(default=None, max_length=4000)
+    valid_until: date | None = None
+    purchased_on: date | None = None
+    supplier: str | None = Field(default=None, max_length=100)
+    contract: str | None = Field(default=None, max_length=100)
+    notes: str | None = Field(default=None, max_length=4000)
+
+
+class LicenseCreate(LicenseBase):
+    device_ids: list[uuid.UUID] = Field(default_factory=list, max_length=5000)
+
+
+class LicenseUpdate(BaseModel):
+    software: str | None = Field(default=None, min_length=1, max_length=120)
+    vendor: str | None = Field(default=None, max_length=100)
+    kind: LicenseKind | None = None
+    seats: int | None = Field(default=None, ge=1, le=100_000)
+    key: str | None = Field(default=None, max_length=4000)
+    valid_until: date | None = None
+    purchased_on: date | None = None
+    supplier: str | None = Field(default=None, max_length=100)
+    contract: str | None = Field(default=None, max_length=100)
+    notes: str | None = Field(default=None, max_length=4000)
+    device_ids: list[uuid.UUID] | None = Field(default=None, max_length=5000)
+
+
+class LicenseOut(BaseModel):
+    id: uuid.UUID
+    software: str
+    vendor: str | None
+    kind: str
+    seats: int | None
+    has_key: bool
+    key_hint: str | None
+    valid_until: date | None
+    purchased_on: date | None
+    supplier: str | None
+    contract: str | None
+    notes: str | None
+    device_ids: list[uuid.UUID]
+    # Seats taken (computers it stands on); more than `seats` is a licensing problem.
+    used: int
+    over: bool
+
+
+class DeadlineCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=150)
+    kind: DeadlineKind = "other"
+    due_date: date
+    device_id: uuid.UUID | None = None
+    notes: str | None = Field(default=None, max_length=4000)
+
+
+class DeadlineUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=150)
+    kind: DeadlineKind | None = None
+    due_date: date | None = None
+    device_id: uuid.UUID | None = None
+    notes: str | None = Field(default=None, max_length=4000)
+    is_done: bool | None = None
+
+
+class DeadlineOut(BaseModel):
+    id: uuid.UUID
+    title: str
+    kind: str
+    due_date: date
+    device_id: uuid.UUID | None
+    notes: str | None
+    is_done: bool
+
+
+class ExpirationOut(BaseModel):
+    """One dated thing, from wherever it came: a device's warranty, a license, a certificate, another deadline."""
+
+    source: str  # warranty | license | deadline | certificate
+    kind: str
+    title: str
+    due: date
+    days_left: int
+    level: str  # expired | week | month | soon | ok
+    ref_id: uuid.UUID | None = None
+    device_id: uuid.UUID | None = None
+    device_name: str | None = None

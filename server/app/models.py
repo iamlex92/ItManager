@@ -1,11 +1,12 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -121,6 +122,13 @@ class Device(Base):
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # "metadata" is reserved on declarative classes, hence the trailing underscore.
     metadata_: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, server_default=text("'{}'::jsonb"))
+    # Lifecycle: who made it, when it was bought, until when the warranty runs, who uses it.
+    serial_number: Mapped[str | None] = mapped_column(String(100))
+    inventory_number: Mapped[str | None] = mapped_column(String(100))
+    purchase_date: Mapped[date | None] = mapped_column(Date)
+    warranty_until: Mapped[date | None] = mapped_column(Date)
+    supplier: Mapped[str | None] = mapped_column(String(100))
+    assigned_to: Mapped[str | None] = mapped_column(String(100))
 
     ports: Mapped[list["Port"]] = relationship(
         back_populates="device",
@@ -333,4 +341,54 @@ class DeviceTemplate(Base):
     port_speed_mbps: Mapped[int] = mapped_column(Integer, server_default=text("1000"))
     rack_h: Mapped[int | None] = mapped_column(Integer)
     comment: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class License(Base):
+    """Software or a subscription the plant owns: how it is licensed, how many seats, until when, its key (stored
+    encrypted) and the computers it stands on."""
+
+    __tablename__ = "licenses"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    software: Mapped[str] = mapped_column(String(120))
+    vendor: Mapped[str | None] = mapped_column(String(100))
+    # per_device (one seat per computer), per_user, organization (one for everybody), subscription, other.
+    kind: Mapped[str] = mapped_column(String(20), server_default=text("'per_device'"))
+    seats: Mapped[int | None] = mapped_column(Integer)
+    key: Mapped[str | None] = mapped_column("license_key", EncryptedText)
+    # None: perpetual.
+    valid_until: Mapped[date | None] = mapped_column(Date)
+    purchased_on: Mapped[date | None] = mapped_column(Date)
+    supplier: Mapped[str | None] = mapped_column(String(100))
+    contract: Mapped[str | None] = mapped_column(String(100))
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class LicenseDevice(Base):
+    """A license standing on a device (a seat taken)."""
+
+    __tablename__ = "license_devices"
+
+    license_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("licenses.id", ondelete="CASCADE"), primary_key=True)
+    device_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"), primary_key=True)
+
+
+class Deadline(Base):
+    """Any other dated thing to keep an eye on: a certificate, a UPS battery, a domain, a contract."""
+
+    __tablename__ = "deadlines"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    title: Mapped[str] = mapped_column(String(150))
+    kind: Mapped[str] = mapped_column(String(20), server_default=text("'other'"))
+    due_date: Mapped[date] = mapped_column(Date, index=True)
+    device_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("devices.id", ondelete="SET NULL"))
+    notes: Mapped[str | None] = mapped_column(Text)
+    # Renewed or closed: it stays in the list's history but no longer counts as coming.
+    is_done: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

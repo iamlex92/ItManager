@@ -2529,6 +2529,12 @@
     fillHosts($("device-host"), device && device.id, (device && device.host_id) || "", "Не указан");
     fillRooms(floorSel.value, (device && roomOf(device) && roomOf(device).id) || "");
     $("device-comment").value = (device && device.comment) || "";
+    $("device-serial").value = (device && device.serial_number) || "";
+    $("device-inv").value = (device && device.inventory_number) || "";
+    $("device-bought").value = (device && device.purchase_date) || "";
+    $("device-warranty").value = (device && device.warranty_until) || "";
+    $("device-supplier").value = (device && device.supplier) || "";
+    $("device-assigned").value = (device && device.assigned_to) || "";
     fillSshLogins(device ? device.ssh_credential_id || "" : "");
     // The community is write-only: the server only says whether one is set.
     $("device-snmp").value = "";
@@ -2623,6 +2629,12 @@
       model: $("device-model").value.trim() || null,
       host_id: dialogType === "VIRTUAL" ? $("device-host").value || null : null,
       comment: $("device-comment").value.trim() || null,
+      serial_number: $("device-serial").value.trim() || null,
+      inventory_number: $("device-inv").value.trim() || null,
+      purchase_date: $("device-bought").value || null,
+      warranty_until: $("device-warranty").value || null,
+      supplier: $("device-supplier").value.trim() || null,
+      assigned_to: $("device-assigned").value.trim() || null,
     };
     // «Адрес уже занят» was confirmed: save it anyway this time.
     if (dupIpAllowed) body.allow_duplicate_ip = true;
@@ -4116,9 +4128,19 @@
       ["Последний ответ", d.last_seen_at ? new Date(d.last_seen_at).toLocaleString("ru-RU") : "ни разу"],
       ["Отвечает на адрес", (d.metadata || {}).answered_ip || null],
     ] : [];
+    const warranty = d.warranty_until ? (() => {
+      const days = Math.round((new Date(`${d.warranty_until}T00:00:00`) - new Date(new Date().toDateString())) / 86400000);
+      return `${new Date(`${d.warranty_until}T00:00:00`).toLocaleDateString("ru-RU")} · ${days < 0 ? `истекла ${-days} дн. назад` : days === 0 ? "истекает сегодня" : `ещё ${days} дн.`}`;
+    })() : null;
+    const life = [
+      ["Пользователь", d.assigned_to], ["Серийный №", d.serial_number], ["Инвентарный №", d.inventory_number],
+      ["Куплено", d.purchase_date ? new Date(`${d.purchase_date}T00:00:00`).toLocaleDateString("ru-RU") : null],
+      ["Поставщик", d.supplier], ["Гарантия до", warranty],
+    ];
     const where = node("div", { className: "card" }, node("h3", { textContent: "Расположение" }), kv([...system, ...place, ...seen]));
     if (d.type === "RACK") where.append(node("div", { className: "row" }, node("button", { textContent: "Вид стойки…", onclick: () => { $("card-dialog").close(); window.NetAdmin.openRacks(d.id); } })));
     out.push(where);
+    if (life.some(([, v]) => v)) out.push(node("div", { className: "card" }, node("h3", { textContent: "Учёт" }), kv(life)));
 
     if (!["VIRTUAL", "RACK", "SWITCH"].includes(d.type)) {
       const sw = d.switch_id && byId.get(d.switch_id);

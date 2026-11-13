@@ -28,6 +28,7 @@ from .api import (
     gpo,
     history,
     ipam,
+    lifecycle,
     misc,
     netbox,
     nfc,
@@ -69,7 +70,7 @@ from .gpo.native import NativeGpo
 from .hal.base import DeviceWritesDisabled, SwitchError, UnsupportedVendor
 from .hal.emulator import EmulatorDriver
 from .hal.factory import build_driver, build_printer_driver
-from .models import Credential, Device, ServerSetting
+from .models import Credential, Device, License, ServerSetting
 from .pcs.astra import AstraPcs, EmulatedAstra
 from .pcs.backend import EmulatedPcs, RealPcs
 from .pcs.service import KeyInventory, port_open
@@ -122,7 +123,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # Encrypts leftover plaintext, and refuses to start when stored secrets can't be read.
         async with app.state.sessionmaker() as s:
             await crypto.encrypt_existing(
-                s, [(Device, "snmp_community"), (Credential, "secret"), (ServerSetting, "value")]
+                s, [(Device, "snmp_community"), (Credential, "secret"), (ServerSetting, "value"), (License, "key")]
             )
             # Settings saved in «Настройки сервера» override netadmin.env; everything below is built from them.
             app.state.settings_file = serversettings.current(settings)
@@ -327,6 +328,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         topology,
         status_api,
         summary,
+        lifecycle,
     )
     for module in (*routers, credentials, traffic, history, serversettings_api, sync_api):
         api.include_router(module.router)

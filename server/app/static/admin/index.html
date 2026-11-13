@@ -15,6 +15,7 @@
 <script src="/static/admin/admin-gpo.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-tables.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-racks.js?v={{asset}}" defer></script>
+<script src="/static/admin/admin-lifecycle.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-home.js?v={{asset}}" defer></script>
 <script src="/static/admin/admin-nav.js?v={{asset}}" defer></script>
 </head>
@@ -26,6 +27,7 @@
 <symbol id="i-layout-dashboard" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></symbol>
 <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
 <symbol id="i-server" viewBox="0 0 24 24"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></symbol>
+<symbol id="i-hourglass" viewBox="0 0 24 24"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"/><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/></symbol>
 <symbol id="i-bell" viewBox="0 0 24 24"><path d="M10.268 21a2 2 0 0 0 3.464 0" /> <path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" /></symbol>
 <symbol id="i-network" viewBox="0 0 24 24"><rect x="16" y="16" width="6" height="6" rx="1" /> <rect x="2" y="16" width="6" height="6" rx="1" /> <rect x="9" y="2" width="6" height="6" rx="1" /> <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" /> <path d="M12 12V8" /></symbol>
 <symbol id="i-tag" viewBox="0 0 24 24"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" /> <circle cx="7.5" cy="7.5" r=".5" fill="currentColor" /></symbol>
@@ -93,6 +95,7 @@
     <button data-tab="devices"><svg class="ic" aria-hidden="true"><use href="#i-monitor"/></svg>Устройства и ПК</button>
     <button data-tab="racks"><svg class="ic" aria-hidden="true"><use href="#i-server"/></svg>Стойки</button>
     <button data-tab="peripherals"><svg class="ic" aria-hidden="true"><use href="#i-keyboard"/></svg>Периферия и склад</button>
+    <button data-tab="lifecycle"><svg class="ic" aria-hidden="true"><use href="#i-hourglass"/></svg>Сроки и лицензии <span id="lc-count" class="count" hidden></span></button>
     <button data-tab="templates"><svg class="ic" aria-hidden="true"><use href="#i-file-text"/></svg>Шаблоны устройств</button>
     <div class="side-group">Сеть</div>
     <button data-tab="topology"><svg class="ic" aria-hidden="true"><use href="#i-network"/></svg>Схема сети</button>
@@ -118,6 +121,7 @@
       <div class="home-grid">
         <div class="panel"><h3>Не отвечают</h3><ul id="home-down" class="feed"></ul></div>
         <div class="panel"><h3>Открытые события</h3><ul id="home-alerts" class="feed"></ul></div>
+        <div class="panel wide"><h3>Скоро истекает</h3><ul id="home-expiring" class="feed"></ul></div>
         <div class="panel wide"><h3>Последние действия</h3><ul id="home-recent" class="feed"></ul></div>
       </div>
       <div class="home-actions">
@@ -563,6 +567,24 @@
       </div>
     </section>
 
+    <section id="tab-lifecycle" class="tab" hidden>
+      <div class="toolbar">
+        <div class="seg" id="lc-seg">
+          <button type="button" data-part="soon" class="active">Что истекает</button>
+          <button type="button" data-part="licenses">Лицензии</button>
+          <button type="button" data-part="deadlines">Прочие сроки</button>
+        </div>
+        <div class="spacer"></div>
+        <label class="inline">Показать на <select id="lc-within"><option value="60">60 дней вперёд</option><option value="180">полгода</option><option value="365" selected>год</option><option value="3650">всё</option></select></label>
+        <button type="button" id="lc-license-new" class="primary">+ Лицензия</button>
+        <button type="button" id="lc-deadline-new">+ Срок</button>
+      </div>
+      <p class="muted small">Гарантия берётся из карточки устройства, срок лицензии — из раздела «Лицензии», сертификат контроллера домена — из настроек сервера. Просроченное идёт первым.</p>
+      <div id="lc-soon-box"><div id="lc-soon"></div></div>
+      <div id="lc-licenses" hidden><div id="lc-licenses-list"></div></div>
+      <div id="lc-deadlines" hidden><div id="lc-deadlines-list"></div></div>
+    </section>
+
     <section id="tab-templates" class="tab" hidden>
       <div class="toolbar">
         <span class="muted small">Шаблон хранит тип, модель и порты типового устройства: из него устройство создаётся в один щелчок, в том числе на карте.</span>
@@ -711,6 +733,18 @@
       </div>
     </fieldset>
     <fieldset class="section"><legend>Заметки</legend>
+      <fieldset class="section" id="device-life"><legend>Учёт и гарантия</legend>
+        <div class="row">
+          <label class="grow">Серийный номер<input id="device-serial" maxlength="100" autocomplete="off"></label>
+          <label class="grow">Инвентарный номер<input id="device-inv" maxlength="100" autocomplete="off"></label>
+        </div>
+        <div class="row">
+          <label>Куплено<input id="device-bought" type="date"></label>
+          <label>Гарантия до<input id="device-warranty" type="date"></label>
+          <label class="grow">Поставщик<input id="device-supplier" maxlength="100" autocomplete="off"></label>
+        </div>
+        <label>Кто пользуется или отвечает<input id="device-assigned" maxlength="100" autocomplete="off" placeholder="Иванова, бухгалтерия"></label>
+      </fieldset>
       <label>Комментарий<textarea id="device-comment" rows="3" maxlength="4000" placeholder="Заметка для себя: что тут стоит, кто отвечает, особенности"></textarea></label>
     </fieldset>
     <p id="device-error" class="error-box" hidden></p>

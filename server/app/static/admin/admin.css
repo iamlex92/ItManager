@@ -668,3 +668,16 @@ dialog.card-dialog { position: fixed; inset: var(--drawer-top, 0px) 0 0 auto; ma
 .rack-head b { white-space: nowrap; }
 .rack-head .stats { font-size: 12px; }
 .label-table input::placeholder { color: #55616c; }
+
+/* ---- Terms and licenses ---- */
+.lvl-expired td { color: var(--danger); }
+.lvl-week td:first-child, .lvl-week .lvl-text { color: var(--danger); }
+.lvl-month td:first-child, .lvl-month .lvl-text { color: var(--warn); }
+.lvl-soon .lvl-text { color: var(--muted); }
+.block { display: block; }
+td.bad { color: var(--danger); font-weight: 600; }
+.wide-dialog { width: min(620px, 94vw); }
+.check-list { max-height: 200px; overflow: auto; border: 1px solid var(--line); border-radius: 4px; padding: 4px 8px; margin: 4px 0; }
+.check-list .check { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+button.small { padding: 1px 8px; font-size: 12px; }
+.tile-l { white-space: normal; line-height: 1.3; }
