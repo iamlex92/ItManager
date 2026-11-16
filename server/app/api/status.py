@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import APIRouter, Request
 from sqlalchemy import func, select
 
+from .. import crypto
 from ..models import Device, PortTraffic
 from ..services import backup
 from .deps import SessionDep
@@ -37,6 +38,8 @@ async def server_status(request: Request, session: SessionDep):
     sync = request.app.state.sync_status.as_dict()
     retention = dict(getattr(request.app.state, "retention_status", {}) or {})
     return {
+        # False: SECRET_KEY is not set, so passwords, SNMP strings and license keys lie in the database as they are.
+        "secrets_encrypted": crypto.box().enabled,
         "role": "backup" if s.sync_accept else "main" if s.sync_to_backup else "",
         "jobs": [
             {"name": "ping", "enabled": watching and s.monitor_mode.value == "real",

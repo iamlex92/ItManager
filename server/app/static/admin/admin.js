@@ -442,6 +442,8 @@
     $("login").hidden = true;
     $("app").hidden = false;
     showMode();
+    // Secrets stored as they are: said in a band that stays until the key is set.
+    api("GET", "status").then((st) => { $("secrets-banner").hidden = st.secrets_encrypted !== false; }).catch(() => {});
     openTab(currentTab);
     refreshAlertCount();
     clearInterval(alertTimer);
@@ -1294,6 +1296,7 @@
     for (const c of S.clusters) {
       if (c.ids.length > 1) drawCluster(c); else drawDevice(c.lead);
     }
+    drawLabels();
   }
 
   const TYPE_RANK = ["SWITCH", "ROUTER", "FIREWALL", "SERVER", "ACCESS_POINT", "PRINTER", "WORKSTATION"];
@@ -1400,13 +1403,51 @@
       ctx.fillStyle = d.is_online ? "#30d158" : isAlarm(d) ? "#ff6b5e" : "#8a95a3";
       ctx.fill();
     }
-    const label = markerLabel(d);
+    ctx.globalAlpha = 1;
+  }
+
+  /**
+   * The names under the markers, drawn after every marker so none is covered by a neighbour's circle. Each name takes
+   * the first free place of four (under, over, right, left of its marker); with no free place it is left out: the
+   * marker still answers a click and the search. The important kinds (switches, servers) choose first.
+   */
+  function drawLabels() {
+    const marks = S.clusters.map((c) => {
+      const [x, y] = toScreen(c.x, c.y);
+      const r = c.ids.length > 1 ? 18 : PASSIVE.has(c.lead.type) ? 10 : 15;
+      return { x: x - r, y: y - r, w: r * 2, h: r * 2 };
+    });
+    const hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    const placed = [];
+    const rank = (d) => (PASSIVE.has(d.type) ? 99 : (TYPE_RANK.indexOf(d.type) + 1 || 50));
+    const singles = S.clusters.filter((c) => c.ids.length === 1).sort((a, b) => rank(a.lead) - rank(b.lead));
     ctx.font = "11px system-ui, sans-serif";
-    ctx.fillStyle = "rgba(11,14,19,.75)";
-    const tw = ctx.measureText(label).width;
-    ctx.fillRect(sx - tw / 2 - 3, sy + rad + 3, tw + 6, 15);
-    ctx.fillStyle = "#e6edf5";
-    ctx.fillText(label, sx, sy + rad + 11);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const layered = S.layer !== "L1";
+    for (const c of singles) {
+      const d = c.lead;
+      const [sx, sy] = toScreen(d.x, d.y);
+      const rad = PASSIVE.has(d.type) ? 10 : 15;
+      const label = markerLabel(d);
+      const w = ctx.measureText(label).width + 6, h = 15;
+      const spots = [
+        { x: sx - w / 2, y: sy + rad + 3 }, { x: sx - w / 2, y: sy - rad - 3 - h },
+        { x: sx + rad + 4, y: sy - h / 2 }, { x: sx - rad - 4 - w, y: sy - h / 2 },
+      ];
+      // The picked device always keeps its name, under the marker, whatever it covers.
+      const free = d.id === S.focus ? spots[0] : spots.find((b) => {
+        const box = { ...b, w, h };
+        return !placed.some((o) => hit(box, o)) && !marks.some((m) => hit(box, m));
+      });
+      if (!free) continue;
+      placed.push({ ...free, w, h });
+      ctx.globalAlpha = S.vlanFilter != null && layered && d.vlan_id !== S.vlanFilter ? 0.2 : 1;
+      ctx.fillStyle = "rgba(11,14,19,.75)";
+      ctx.fillRect(free.x, free.y, w, h);
+      ctx.fillStyle = "#e6edf5";
+      ctx.fillText(label, free.x + w / 2, free.y + h / 2 + 0.5);
+    }
     ctx.globalAlpha = 1;
   }
 

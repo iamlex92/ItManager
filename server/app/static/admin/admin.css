@@ -732,3 +732,12 @@ button.link { background: none; border: none; padding: 0; color: var(--accent); 
 .report-opt { margin: 8px 0; }
 .report-opt select { grid-column: 2; justify-self: start; }
 @media (max-width: 640px) { .report-sections { grid-template-columns: 1fr; } }
+/* A phone: the header's right side wraps under the name, buttons keep their icons only, nothing is wider than the screen. */
+@media (max-width: 760px) {
+  .top .right { margin-left: 0; flex: 1 1 100%; flex-wrap: wrap; min-width: 0; gap: 4px 8px; }
+  .top .right .status-strip { flex: 1 1 0; min-width: 0; flex-wrap: wrap; gap: 2px 12px; }
+  #report-open, #logout { font-size: 0; gap: 0; }
+  #report-open .ic, #logout .ic { margin: 0; }
+}
+@media (max-width: 760px) { #task-add { flex-wrap: wrap; min-width: 0; } #task-add input[type="text"] { flex: 1 1 100%; min-width: 0; } }
+.warn-banner { background: var(--warn-bg); color: var(--warn); border-bottom: 1px solid var(--warn); }
