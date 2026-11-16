@@ -42,7 +42,7 @@ def test_printer_refresh_raises_toner_low_once(client):
         assert events[0]["type"] == "printer_status" and events[0]["printer"]["id"] == prn["id"]
         assert events[1]["type"] == "alert" and events[1]["alert"]["alert_type"] == "TONER_LOW"
     low = [a for a in _open_alerts(client, "TONER_LOW") if a["device_id"] == prn["id"]]
-    assert len(low) == 1 and "Magenta" in low[0]["message"]
+    assert len(low) == 1 and "пурпурный тонер" in low[0]["message"]
     client.post(f"/api/v1/printers/{prn['id']}/refresh")
     assert len([a for a in _open_alerts(client, "TONER_LOW") if a["device_id"] == prn["id"]]) == 1
 

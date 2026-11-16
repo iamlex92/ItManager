@@ -87,6 +87,11 @@
     </div>
   </header>
   <div id="backup-role" class="role-banner" hidden></div>
+  <div id="emu-banner" class="role-banner warn-banner emu-banner" hidden>
+    <span>Опрос устройств выключен (эмуляция): «в сети», уровни тонера и состояние портов сейчас ненастоящие. Учёт (названия, адреса, лицензии) настоящий.</span>
+    <button type="button" id="emu-settings">Включить в настройках</button>
+    <button type="button" id="emu-hide" class="ghost" title="Не показывать до завтра">Скрыть на сегодня</button>
+  </div>
   <div id="secrets-banner" class="role-banner warn-banner" role="alert" hidden>Ключ шифрования не задан: пароли учётных записей, SNMP-строки и ключи лицензий лежат в базе открытым текстом. Задайте SECRET_KEY в файле netadmin.env (как получить ключ, написано в README, раздел про SECRET_KEY) и перезапустите сервер: всё сохранённое зашифруется само.</div>
   <div id="down-banner" class="down-banner" role="alert" hidden>
     <span id="down-text">Сервер не отвечает.</span>

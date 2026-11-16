@@ -42,7 +42,17 @@
       for (const t of items) sec.append(taskRow(t));
       box.append(sec);
     }
-    if (!tasks.length) box.append(el("p", "muted", "Задач нет. Впишите дело сверху: «проверить батарею ИБП», раз в квартал, например."));
+    if (!tasks.length) {
+      const empty = el("div", "empty-state");
+      empty.append(el("b", null, "Задач нет"),
+        el("span", "muted", "Сюда записывают то, что нужно не забыть: разовое дело или повторяющееся. Выполненная повторяющаяся задача сама появится снова к следующему сроку."));
+      const row = el("div", "row");
+      for (const [title, repeat] of [["Проверить батарею ИБП", "monthly"], ["Проверить резервную копию", "weekly"], ["Продлить сертификаты", "yearly"]]) {
+        row.append(button(`+ ${title}`, () => { $("task-title").value = title; $("task-repeat").value = repeat; $("task-title").focus(); }));
+      }
+      empty.append(el("span", "muted small", "Например:"), row);
+      box.append(empty);
+    }
     $("tasks-list").replaceChildren(box);
     refreshBadge();
   }

@@ -25,36 +25,63 @@
       $("vlan-rows").replaceChildren(emptyRow(6, "VLAN пока нет. Добавьте первый в строке ниже или импортируйте конфигурацию коммутатора (Порты… → Импорт конфига)."));
       return;
     }
-    $("vlan-rows").replaceChildren(...vlans.map((v) => {
-      const tr = document.createElement("tr");
-      const td = (el) => { const c = document.createElement("td"); c.append(el); tr.append(c); return el; };
-      const input = (type, value) => { const el = document.createElement("input"); el.type = type; el.value = value ?? ""; return td(el); };
-      td(document.createTextNode(String(v.vlan_id)));
-      const name = input("text", v.name); name.maxLength = 50;
-      const subnet = input("text", v.subnet_cidr);
-      const color = input("color", v.color_hex);
-      const desc = input("text", v.description);
-      const actions = document.createElement("td");
-      const del = document.createElement("button");
-      del.type = "button"; del.textContent = "Удалить"; del.className = "danger";
-      actions.append(del); tr.append(actions);
-      for (const el of [name, subnet, color, desc]) {
-        el.addEventListener("change", async () => {
-          try {
-            vlanError(null);
-            await api("PATCH", `vlans/${v.vlan_id}`, {
-              name: name.value.trim() || v.name, subnet_cidr: subnet.value.trim() || null, color_hex: color.value, description: desc.value.trim() || null,
-            });
-            toast(`VLAN ${v.vlan_id} сохранён`);
-          } catch (e) { vlanError(e); }
-        });
-      }
-      del.addEventListener("click", async () => {
+    $("vlan-rows").replaceChildren(...vlans.map((v) => vlanRow(v)));
+  }
+
+  const mk = (tag, cls, text) => {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  };
+  const btn = (text, cls, onClick) => { const b = mk("button", cls, text); b.type = "button"; b.addEventListener("click", onClick); return b; };
+
+  /** A VLAN as a line to read; «Изменить» turns it into a form with its own «Сохранить» and «Отмена». */
+  function vlanRow(v, editing = false) {
+    const tr = document.createElement("tr");
+    const td = (...kids) => { const c = document.createElement("td"); c.append(...kids); tr.append(c); return c; };
+    td(mk("b", "mono", String(v.vlan_id)));
+    const swap = (edit) => tr.replaceWith(vlanRow(v, edit));
+    if (!editing) {
+      td(v.name);
+      td(mk("span", "mono", v.subnet_cidr || "—"));
+      const chip = mk("span", "vlan-chip"); chip.style.background = v.color_hex; chip.title = v.color_hex;
+      td(chip);
+      td(mk("span", v.description ? "" : "muted", v.description || "—"));
+      const actions = td(btn("Изменить", null, () => swap(true)), btn("Удалить", "danger", async () => {
         if (!await ask(`Удалить VLAN ${v.vlan_id} (${v.name}) из справочника?`)) return;
         try { vlanError(null); await api("DELETE", `vlans/${v.vlan_id}`); await loadVlans(); } catch (e) { vlanError(e); }
-      });
+      }));
+      actions.className = "row-actions";
       return tr;
-    }));
+    }
+    tr.className = "editing";
+    const input = (type, value, label) => { const i = document.createElement("input"); i.type = type; i.value = value ?? ""; i.setAttribute("aria-label", label); td(i); return i; };
+    const name = input("text", v.name, "Название"); name.maxLength = 50;
+    const subnet = input("text", v.subnet_cidr, "Подсеть"); subnet.placeholder = "10.10.20.0/24";
+    const color = input("color", v.color_hex, "Цвет");
+    const desc = input("text", v.description, "Описание");
+    const save = async () => {
+      const cidr = subnet.value.trim();
+      if (cidr && !CIDR.test(cidr)) { vlanError(new Error("Подсеть пишется так: 10.10.20.0/24")); subnet.focus(); return; }
+      try {
+        vlanError(null);
+        const saved = await api("PATCH", `vlans/${v.vlan_id}`, {
+          name: name.value.trim() || v.name, subnet_cidr: cidr || null, color_hex: color.value, description: desc.value.trim() || null,
+        });
+        Object.assign(v, saved);
+        toast(`VLAN ${v.vlan_id} сохранён`);
+        swap(false);
+      } catch (e) { vlanError(e); }
+    };
+    const actions = td(btn("Сохранить", "primary", save), btn("Отмена", null, () => { vlanError(null); swap(false); }));
+    actions.className = "row-actions";
+    tr.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") { ev.preventDefault(); save(); }
+      if (ev.key === "Escape") { ev.stopPropagation(); vlanError(null); swap(false); }
+    });
+    setTimeout(() => name.focus(), 0);
+    return tr;
   }
 
   const CIDR = /^((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\/(3[0-2]|[12]?\d)$/;

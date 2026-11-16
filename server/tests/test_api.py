@@ -300,3 +300,16 @@ def test_patch_panel_is_made_in_a_free_rack_unit(client):
     assert [p["number"] for p in ports] == list(range(1, 25))
     # The unit is taken now.
     assert client.post("/api/v1/devices/patch-panel", json={**body, "name": "PP-2"}).status_code in (409, 422)
+
+
+def test_alerts_read_in_russian_while_the_stored_text_stays(client):
+    from app.services.alert_text import say
+
+    assert say("SW-1 gi1/0/3: link down") == "SW-1, порт gi1/0/3: нет линка"
+    assert say("SRV-1 is not responding") == "SRV-1 не отвечает"
+    assert say("PRN-1: Magenta 8% left") == "PRN-1: пурпурный тонер, осталось 8 %"
+    assert say("PRN-1: Waste 5% free space") == "PRN-1: ёмкость для отработки, свободно 5 %"
+    assert say("что-то своё") == "что-то своё"
+    rows = client.get("/api/v1/alerts").json()
+    assert rows and all("link down" not in r["message"] and "% left" not in r["message"] for r in rows)
+    assert any("нет линка" in r["message"] for r in rows)

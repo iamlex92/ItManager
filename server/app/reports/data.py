@@ -33,6 +33,7 @@ from ..models import (
     IpRange as IpRangeRow,
 )
 from ..services import lifecycle
+from ..services.alert_text import say
 from ..services.topology import load_graph, network_links
 from ..services.watch import is_watched
 from . import labels
@@ -402,7 +403,7 @@ async def collect(session, settings: Settings, opts: Options, now: datetime | No
     ).all()
     out["alerts"] = [
         {"at": a.created_at, "device": by_id[a.device_id].name if a.device_id in by_id else "", "severity": a.severity,
-         "message": a.message, "resolved": a.is_resolved}
+         "message": say(a.message), "resolved": a.is_resolved}
         for a in alerts
     ] if "events" in want else []  # fmt: skip
     from ..api.audit import audit_out

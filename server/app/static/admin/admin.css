@@ -741,3 +741,36 @@ button.link { background: none; border: none; padding: 0; color: var(--accent); 
 }
 @media (max-width: 760px) { #task-add { flex-wrap: wrap; min-width: 0; } #task-add input[type="text"] { flex: 1 1 100%; min-width: 0; } }
 .warn-banner { background: var(--warn-bg); color: var(--warn); border-bottom: 1px solid var(--warn); }
+/* Groups of the side list fold; on a phone the list is a strip and nothing is hidden. */
+.side-group { cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between; }
+.side-group::after { content: "▾"; font-size: 10px; opacity: .6; }
+.side-group.shut::after { content: "▸"; }
+.side-group:hover { color: var(--text); }
+.side-group:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 4px; }
+@media (min-width: 761px) { .side:not(.collapsed) button.g-hidden { display: none; } }
+.side.collapsed .side-group::after { content: none; }
+/* The kinds of devices above the list: small tiles that filter it. */
+.device-home { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 10px; }
+.device-home .attention { grid-column: 1 / -1; }
+.device-tile { min-height: 0; padding: 10px 12px; gap: 2px; display: grid; grid-template-columns: auto 1fr; column-gap: 8px; align-items: center; }
+.device-tile canvas { width: 20px; height: 20px; grid-row: 1; }
+.device-tile .tile-count { font-size: 20px; grid-row: 1; }
+.device-tile .tile-title, .device-tile .tile-sub { grid-column: 1 / -1; }
+.device-tile.on { border-color: var(--accent); background: var(--accent-container); color: var(--on-accent-container); }
+.device-tile.on .tile-sub { color: inherit; opacity: .8; }
+/* Buttons inside cards keep their own width. */
+#poe-list .card > button, #card-overview .card > button { align-self: flex-start; }
+.emu-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.emu-banner[hidden] { display: none; }
+.emu-banner span { flex: 1 1 320px; }
+.emu-banner button { padding: 3px 10px; font-size: 12px; }
+.vlan-chip { display: inline-block; width: 26px; height: 14px; border-radius: 4px; border: 1px solid var(--line-strong); vertical-align: middle; }
+.row-actions { white-space: nowrap; text-align: right; }
+.row-actions button { margin-left: 6px; }
+tr.editing td { background: var(--accent-container); }
+.empty-state .row { flex-wrap: wrap; justify-content: center; }
+.empty-state > span { max-width: 560px; }
+#task-add { flex: 1 1 420px; min-width: 0; }
+#task-title { flex: 1 1 320px; min-width: 160px; width: auto; }
+#task-date { flex: 0 0 170px; width: 170px; }
+#task-repeat { flex: 0 0 auto; width: auto; }

@@ -12,6 +12,8 @@ from pydantic import (
     model_validator,
 )
 
+from .services.alert_text import say
+
 DeviceType = Literal[
     "SWITCH",
     "WORKSTATION",
@@ -656,6 +658,12 @@ class AlertOut(ORM):
     is_resolved: bool
     created_at: datetime
     resolved_at: datetime | None
+
+    @field_validator("message")
+    @classmethod
+    def _readable(cls, v: str) -> str:
+        # The stored text stays as written; what goes out is what a person reads.
+        return say(v)
 
 
 # --- configs --------------------------------------------------------------

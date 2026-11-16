@@ -237,6 +237,11 @@
     if (backupServer) $("down-link").href = `${backupServer}/admin`;
   }
   $("down-retry").addEventListener("click", () => { showMode(); refreshTab().catch(() => {}); });
+  $("emu-settings").addEventListener("click", () => openTab("settings"));
+  $("emu-hide").addEventListener("click", () => {
+    try { localStorage.setItem("netadmin.emuHush", new Date().toDateString()); } catch { /* private mode */ }
+    $("emu-banner").hidden = true;
+  });
 
   async function showMode() {
     try {
@@ -257,6 +262,12 @@
       const monitor = h.monitor_mode === "emulator"
         ? "Опрос устройств выключен: уровни тонера, страницы и ping ненастоящие"
         : "Опрос устройств включён: ping и SNMP настоящие";
+      // Nothing real is read: said in a band in plain words, with the way to the setting. It can be put away for the
+      // day (someone trying the program out knows it); the lamps in the header stay.
+      const emu = h.monitor_mode === "emulator";
+      let hush = "";
+      try { hush = localStorage.getItem("netadmin.emuHush") || ""; } catch { /* private mode */ }
+      $("emu-banner").hidden = !emu || hush === new Date().toDateString();
       // The strip: one LED and one word each, the sentence is in the tooltip.
       const lamp = (led, word, tip) => Object.assign(document.createElement("span"), { className: "st", title: tip, textContent: word },)
         && (() => {
@@ -3181,7 +3192,9 @@
   function renderHome() {
     const tile = (id, title, types, list, extra) => {
       const down = list.filter(isDown).length;
-      const b = el("button", { type: "button", className: "device-tile", onclick: () => openCategory(id) });
+      const on = typeFilter === id;
+      const b = el("button", { type: "button", className: `device-tile${on ? " on" : ""}`, onclick: () => openCategory(on ? "" : id) });
+      b.setAttribute("aria-pressed", String(on));
       b.append(types ? glyphCanvas(types[0], 28) : document.createTextNode(""),
         el("span", { className: "tile-count", textContent: String(list.length) }),
         el("span", { className: "tile-title", textContent: title }),
@@ -3199,7 +3212,7 @@
     }
     const down = allDevices.filter(isDown);
     if (down.length) tiles.push(tile("OFFLINE", "Не в сети", null, down, "не отвечают сейчас"));
-    tiles.push(tile("", "Все устройства", null, allDevices, "одним списком"));
+    tiles.push(tile("", "Все устройства", null, allDevices, "без отбора"));
     $("device-home").replaceChildren(attentionCard(down), ...tiles);
     if (!allDevices.length) {
       $("device-home").replaceChildren(el("div", { className: "card" },
@@ -3230,6 +3243,9 @@
     renderDevices();
   }
 
+  // From the start screen and the search: the list of devices with a kind picked («OFFLINE»: what does not answer).
+  const openDevices = (category = "") => { typeFilter = category; deviceHome = false; openTab("devices"); };
+
   $("device-back").addEventListener("click", () => {
     deviceHome = true;
     typeFilter = "";
@@ -3239,16 +3255,14 @@
   });
 
   function renderDevices() {
-    const home = deviceHome && !$("device-filter").value.trim();
-    for (const id of ["type-filter", "group-by-label", "device-count", "device-table", "device-detect-os"]) $(id).hidden = home;
-    $("device-home").hidden = !home;
-    $("device-back").hidden = home;
-    if (home) {
-      $("printers-link").hidden = true;
-      $("bulk-bar").hidden = true;
-      renderHome();
-      return;
-    }
+    // The tiles (how many of each kind) stay above the list and filter it; the list itself is there at once.
+    $("device-home").hidden = false;
+    $("device-back").hidden = true;
+    $("type-filter").hidden = true;
+    renderHome();
+    const none = !allDevices.length;
+    for (const id of ["group-by-label", "device-count", "device-table", "device-detect-os"]) $(id).hidden = none;
+    if (none) { $("printers-link").hidden = true; $("bulk-bar").hidden = true; return; }
     renderTypeFilter();
     const rows = $("device-rows");
     rows.replaceChildren();
@@ -4537,6 +4551,7 @@
 
   // What admin-more.js (the other tabs) builds on.
   window.NetAdmin = {
+    openDevices,
     isAlarm, offLabel, $, api, toast, fail, ask, askText, emptyRow, fieldError, replaceToken, typeOf, signedIn: () => !!token, glyphCanvas, OPERATOR, tabs: {},
     picked, listedIds: () => visibleDevices().map((d) => d.id), renderPorts: () => renderPorts(), portsDevice: () => portsDevice,
     openCard: (id) => openCard(id).catch(fail),
