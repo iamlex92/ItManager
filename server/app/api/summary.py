@@ -6,6 +6,7 @@ from fastapi import APIRouter, Query
 from sqlalchemy import String, cast, func, or_, select
 
 from ..models import Device, DeviceAlert, Peripheral, Port, ScriptAuditLog, Vlan
+from ..services.alert_text import say
 from ..services.watch import is_watched
 from .audit import audit_out
 from .deps import SessionDep
@@ -80,7 +81,7 @@ async def summary(session: SessionDep):
                     "device_id": str(a.device_id),
                     "device": name,
                     "severity": a.severity,
-                    "message": a.message,
+                    "message": say(a.message),
                     "created_at": a.created_at.isoformat(timespec="seconds"),
                 }
                 for a, name in alerts

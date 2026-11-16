@@ -15,8 +15,8 @@
 
   async function loadLatestScan() {
     if (scan) { renderScan(); return; }
-    try { scan = await api("GET", "discovery/scans/latest"); renderScan(); if (scan.status === "running") pollScan(); }
-    catch (e) { if (e.status !== 404) throw e; }
+    scan = (await api("GET", "discovery/last")).scan;
+    if (scan) { renderScan(); if (scan.status === "running") pollScan(); }
   }
 
   $("scan-form").addEventListener("submit", async (ev) => {

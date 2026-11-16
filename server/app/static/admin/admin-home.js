@@ -21,11 +21,18 @@
   };
   const LED = { CRITICAL: "down", WARNING: "warn", INFO: "up" };
 
+  // «PRN-1: чёрный тонер…» next to the name «PRN-1» says the name twice: the row keeps the part after it.
+  const bare = (message, device) => {
+    if (!device || !message.startsWith(device)) return message;
+    const rest = message.slice(device.length).replace(/^[\s:,]+/, "");
+    return rest ? rest[0].toUpperCase() + rest.slice(1) : message;
+  };
+
   function tile(value, label, tone, go) {
     const b = el("button", `tile ${tone || ""}`);
     b.type = "button";
     b.append(el("span", "tile-n", String(value)), el("span", "tile-l", label));
-    b.addEventListener("click", () => openTab(go));
+    b.addEventListener("click", () => (typeof go === "function" ? go() : openTab(go)));
     return b;
   }
 
@@ -52,12 +59,12 @@
     const downCount = d.total - d.online;
     $("home-tiles").replaceChildren(
       tile(`${d.online} из ${d.total}`, d.quiet_offline ? `устройств в сети · ещё ${d.quiet_offline} выключено (не авария)` : "устройств в сети", downCount ? "" : "ok", "devices"),
-      tile(downCount, "не отвечают", downCount ? "bad" : "ok", "devices"),
+      tile(downCount, "не отвечают", downCount ? "bad" : "ok", () => window.NetAdmin.openDevices(downCount ? "OFFLINE" : "")),
       tile(a.open, a.critical ? `открытых событий, из них ${a.critical} критичных` : "открытых событий", a.critical ? "bad" : a.open ? "warn" : "ok", "alerts"),
     );
     fill($("home-down"), d.down.map((x) => row("down", x.name, [typeOf({ type: x.type }).label, x.ip].filter(Boolean).join(" · "), ago(x.last_seen_at), () => openCard(x.id))),
       "Все устройства отвечают");
-    fill($("home-alerts"), a.items.map((x) => row(LED[x.severity] || "warn", x.device, x.message, ago(x.created_at), () => openCard(x.device_id))),
+    fill($("home-alerts"), a.items.map((x) => row(LED[x.severity] || "warn", x.device, bare(x.message, x.device), ago(x.created_at), () => openCard(x.device_id))),
       "Открытых событий нет");
     // Tasks that are late, due today or due this week; the rest wait in their own section.
     const due = tasks.filter((t) => t.days_left != null && t.days_left <= 7).slice(0, 8);

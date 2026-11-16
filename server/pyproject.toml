@@ -26,6 +26,8 @@ dependencies = [
     "smbprotocol>=1.13",
     # Reading the plant's DNS zone by zone transfer (BIND, Samba with the BIND9 back end).
     "dnspython>=2.6",
+    # The infrastructure report as an Excel workbook.
+    "openpyxl>=3.1",
 ]
 
 [project.scripts]

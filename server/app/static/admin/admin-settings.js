@@ -46,6 +46,37 @@
     } catch { $("settings-jobs-card").hidden = true; }
   }
 
+  // «Проверить»: does the server reach what this group points at, with the settings it runs on now.
+  const CHECKS = {
+    "Коммутаторы": [["switch", "Проверить вход на коммутатор"]],
+    "Компьютеры домена и сценарии": [["ldap", "Проверить вход в домен"], ["winrm", "Проверить WinRM"]],
+    "DHCP и DNS": [["dhcp", "Проверить DHCP"], ["dns", "Проверить DNS"]],
+  };
+  function checksBox(title) {
+    const list = CHECKS[title];
+    if (!list) return "";
+    const out = el("div", { className: "check-out small" });
+    const buttons = list.map(([what, label]) => {
+      const b = el("button", { type: "button", textContent: label });
+      b.addEventListener("click", async () => {
+        b.disabled = true;
+        out.className = "check-out small muted";
+        out.textContent = "Проверяю…";
+        try {
+          const r = await api("POST", `server-settings/check/${what}`, {});
+          out.className = `check-out small ${r.ok ? (r.simulated ? "muted" : "ok") : "error"}`;
+          out.textContent = (r.ok ? (r.simulated ? "" : "Работает. ") : "Не работает. ") + r.text;
+        } catch (e) { out.className = "check-out small error"; out.textContent = e.message; }
+        b.disabled = false;
+      });
+      return b;
+    });
+    return el("div", { className: "check-box" },
+      el("div", { className: "row wrap" }, ...buttons),
+      out,
+      el("p", { className: "muted small", textContent: "Проверяются настройки, с которыми сервер работает сейчас: несохранённые изменения и изменения до перезапуска не учитываются." }));
+  }
+
   function render(s) {
     $("settings-pending").hidden = !s.restart_pending;
     $("settings-restart").disabled = !s.can_restart;
@@ -55,6 +86,7 @@
       el("h3", { textContent: g.title }),
       g.note ? el("p", { className: "muted small", textContent: g.note }) : "",
       ...g.fields.map(row),
+      checksBox(g.title),
       g.title === "Резервный сервер" ? syncBox() : "")));
     $("settings-toc").replaceChildren(...[...$("settings-groups").children].map((card) => {
       const a = el("button", { type: "button", className: "toc-item", textContent: card.querySelector("h3").textContent });

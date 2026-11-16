@@ -724,3 +724,63 @@ dialog .row select { min-width: 110px; }
 .meter i.bad { background: var(--danger, #ff453a); }
 button.link { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; font-weight: 600; font-size: 15px; }
 .warn { color: var(--warn, #ff9f0a); }
+.report-dialog { width: min(720px, calc(100% - 32px)); }
+.report-sections { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 18px; margin: 10px 0; }
+.report-sec, .report-opt { display: grid; grid-template-columns: 24px 1fr; column-gap: 6px; align-items: start; margin: 0; }
+.report-sec input, .report-opt input { margin-top: 3px; }
+.report-sec small, .report-opt small { grid-column: 2; line-height: 1.3; }
+.report-opt { margin: 8px 0; }
+.report-opt select { grid-column: 2; justify-self: start; }
+@media (max-width: 640px) { .report-sections { grid-template-columns: 1fr; } }
+/* A phone: the header's right side wraps under the name, buttons keep their icons only, nothing is wider than the screen. */
+@media (max-width: 760px) {
+  .top .right { margin-left: 0; flex: 1 1 100%; flex-wrap: wrap; min-width: 0; gap: 4px 8px; }
+  .top .right .status-strip { flex: 1 1 0; min-width: 0; flex-wrap: wrap; gap: 2px 12px; }
+  #report-open, #logout { font-size: 0; gap: 0; }
+  #report-open .ic, #logout .ic { margin: 0; }
+}
+@media (max-width: 760px) { #task-add { flex-wrap: wrap; min-width: 0; } #task-add input[type="text"] { flex: 1 1 100%; min-width: 0; } }
+.warn-banner { background: var(--warn-bg); color: var(--warn); border-bottom: 1px solid var(--warn); }
+/* Groups of the side list fold; on a phone the list is a strip and nothing is hidden. */
+.side-group { cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between; }
+.side-group::after { content: "▾"; font-size: 10px; opacity: .6; }
+.side-group.shut::after { content: "▸"; }
+.side-group:hover { color: var(--text); }
+.side-group:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 4px; }
+@media (min-width: 761px) { .side:not(.collapsed) button.g-hidden { display: none; } }
+.side.collapsed .side-group::after { content: none; }
+/* The kinds of devices above the list: small tiles that filter it. */
+.device-home { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-bottom: 10px; }
+.device-home .attention { grid-column: 1 / -1; }
+.device-tile { min-height: 0; padding: 10px 12px; gap: 2px; display: grid; grid-template-columns: auto 1fr; column-gap: 8px; align-items: center; }
+.device-tile canvas { width: 20px; height: 20px; grid-row: 1; }
+.device-tile .tile-count { font-size: 20px; grid-row: 1; }
+.device-tile .tile-title, .device-tile .tile-sub { grid-column: 1 / -1; }
+.device-tile.on { border-color: var(--accent); background: var(--accent-container); color: var(--on-accent-container); }
+.device-tile.on .tile-sub { color: inherit; opacity: .8; }
+/* Buttons inside cards keep their own width. */
+#poe-list .card > button, #card-overview .card > button { align-self: flex-start; }
+.emu-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.emu-banner[hidden] { display: none; }
+.emu-banner span { flex: 1 1 320px; }
+.emu-banner button { padding: 3px 10px; font-size: 12px; }
+.vlan-chip { display: inline-block; width: 26px; height: 14px; border-radius: 4px; border: 1px solid var(--line-strong); vertical-align: middle; }
+.row-actions { white-space: nowrap; text-align: right; }
+.row-actions button { margin-left: 6px; }
+tr.editing td { background: var(--accent-container); }
+.empty-state .row { flex-wrap: wrap; justify-content: center; }
+.empty-state > span { max-width: 560px; }
+#task-add { flex: 1 1 420px; min-width: 0; }
+#task-title { flex: 1 1 320px; min-width: 160px; width: auto; }
+#task-date { flex: 0 0 170px; width: 170px; }
+#task-repeat { flex: 0 0 auto; width: auto; }
+.check-box { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); display: grid; gap: 6px; }
+.check-out.ok { color: var(--ok); }
+.check-out:empty { display: none; }
+.hist { display: grid; gap: 8px; }
+.hist-row { display: grid; gap: 1px; overflow-wrap: anywhere; }
+#card-overview .card > button { align-self: flex-start; }
+.report-kept-list { display: grid; gap: 4px; margin: 6px 0 8px; }
+.report-kept-list .row { gap: 6px; }
+.report-kept-list button { padding: 2px 10px; font-size: 12px; }
+.report-kept > button { align-self: flex-start; }

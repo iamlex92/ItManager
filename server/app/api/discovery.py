@@ -101,6 +101,14 @@ async def start_scan(body: ScanIn, request: Request, session: SessionDep):
     return scan_out(scan, await load_inventory(session))
 
 
+@router.get("/last")
+async def last_scan(request: Request, session: SessionDep):
+    """The last scan, or `{"scan": null}` when there was none since the server started. The web console asks this
+    one, so an empty scanner is not an error in the browser; /scans/latest keeps its 404 for the app."""
+    scan = _manager(request).latest()
+    return {"scan": scan_out(scan, await load_inventory(session)) if scan is not None else None}
+
+
 @router.get("/scans/latest", response_model=ScanOut)
 async def latest_scan(request: Request, session: SessionDep):
     scan = _manager(request).latest()

@@ -21,6 +21,41 @@
   // A folded list still says what each icon is.
   side.querySelectorAll("button[data-tab]").forEach((b) => { b.title ||= b.textContent.trim(); });
 
+  // Groups of sections fold one by one (a click on the group's name); the choice stays. The group of the open section
+  // is always shown, so the current place never disappears from the list.
+  const closed = new Set((store.get("netadmin.sideGroups") || "").split("|").filter(Boolean));
+  const groups = [...side.querySelectorAll(".side-group")].map((head) => {
+    const items = [];
+    for (let n = head.nextElementSibling; n && !n.classList.contains("side-group"); n = n.nextElementSibling) {
+      if (n.matches("button[data-tab]")) items.push(n);
+    }
+    return { head, items, name: head.textContent.trim() };
+  });
+  const paintGroups = () => {
+    for (const g of groups) {
+      const current = g.items.some((b) => b.classList.contains("active"));
+      const shut = closed.has(g.name) && !current;
+      g.head.classList.toggle("shut", closed.has(g.name));
+      g.head.setAttribute("aria-expanded", String(!shut));
+      for (const b of g.items) b.classList.toggle("g-hidden", shut);
+    }
+  };
+  for (const g of groups) {
+    g.head.setAttribute("role", "button");
+    g.head.tabIndex = 0;
+    g.head.title = "Свернуть или развернуть группу";
+    const toggle = () => {
+      if (closed.has(g.name)) closed.delete(g.name); else closed.add(g.name);
+      store.set("netadmin.sideGroups", [...closed].join("|"));
+      paintGroups();
+    };
+    g.head.addEventListener("click", toggle);
+    g.head.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggle(); } });
+  }
+  paintGroups();
+  // The open section changes: its group opens.
+  new MutationObserver(paintGroups).observe(side, { subtree: true, attributes: true, attributeFilter: ["aria-current"] });
+
   const dlg = $("palette"), input = $("palette-input"), list = $("palette-list");
   let items = [], at = 0, timer = 0, seq = 0;
 

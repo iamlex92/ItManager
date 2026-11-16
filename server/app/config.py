@@ -170,6 +170,12 @@ class Settings(BaseSettings):
     backup_dir: str = ""
     backup_interval_hours: float = Field(default=24, gt=0)
     backup_keep_days: int = Field(default=14, ge=1)
+    # The infrastructure report saved on the server by itself: off, weekly (on Mondays) or monthly (on the 1st).
+    report_schedule: str = "off"
+    # Where the saved reports go; empty: the folder «reports» inside BACKUP_DIR.
+    report_dir: str = ""
+    # How many saved reports are kept (the oldest go first).
+    report_keep: int = Field(default=24, ge=1, le=500)
     # How long the journal («Журнал») and closed events are kept; older ones are deleted once a day.
     audit_keep_days: int = Field(default=365, ge=7, le=3650)
     alerts_keep_days: int = Field(default=180, ge=7, le=3650)

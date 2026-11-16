@@ -93,8 +93,17 @@
       body.append(tr);
     }
     if (!items.length) {
-      const r = el("tr"), c = el("td", "muted", "В ближайшее время ничего не истекает. Сроки появятся, когда вы заполните гарантию у устройств, лицензии и «Прочие сроки».");
-      c.colSpan = 4; r.append(c); body.append(r);
+      // Nothing to show yet: say where dates come from and offer the two ways to add one.
+      const empty = el("div", "empty-state");
+      empty.append(el("b", null, "Сроков пока нет"),
+        el("span", "muted", "Они появятся здесь сами: гарантия из карточки устройства («Изменить» → «Гарантия до»), срок лицензии, сертификат контроллера домена. Что истекает раньше, стоит выше."));
+      const row = el("div", "row");
+      const b1 = el("button", "primary", "Добавить лицензию"); b1.type = "button"; b1.addEventListener("click", () => $("lc-license-new").click());
+      const b2 = el("button", null, "Добавить другой срок"); b2.type = "button"; b2.addEventListener("click", () => $("lc-deadline-new").click());
+      row.append(b1, b2);
+      empty.append(row);
+      box.replaceChildren(empty);
+      return;
     }
     box.replaceChildren(el("div", "table-wrap"));
     box.firstChild.append(t);

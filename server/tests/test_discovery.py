@@ -122,6 +122,7 @@ def test_offline_devices_do_not_answer(client):
 def test_one_scan_at_a_time_and_latest(seeded):
     with TestClient(create_app(make_settings(discovery_step_delay_seconds=0.02)), headers=AUTH) as c:
         assert c.get("/api/v1/discovery/scans/latest").status_code == 404
+        assert c.get("/api/v1/discovery/last").json() == {"scan": None}  # the web console's question: no error
         first = c.post("/api/v1/discovery/scans", json={"subnets": ["10.99.0.0/24"]})
         assert first.status_code == 202 and first.json()["status"] == "running"
         again = c.post("/api/v1/discovery/scans", json={"subnets": ["10.10.10.0/24"]})
@@ -129,6 +130,7 @@ def test_one_scan_at_a_time_and_latest(seeded):
         early = c.post(f"/api/v1/discovery/scans/{first.json()['id']}/import", json={"ips": ["10.99.0.14"]})
         assert early.status_code == 409
         assert c.get("/api/v1/discovery/scans/latest").json()["id"] == first.json()["id"]
+        assert c.get("/api/v1/discovery/last").json()["scan"]["id"] == first.json()["id"]
 
 
 # --- import ------------------------------------------------------------------

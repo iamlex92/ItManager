@@ -237,6 +237,11 @@
     if (backupServer) $("down-link").href = `${backupServer}/admin`;
   }
   $("down-retry").addEventListener("click", () => { showMode(); refreshTab().catch(() => {}); });
+  $("emu-settings").addEventListener("click", () => openTab("settings"));
+  $("emu-hide").addEventListener("click", () => {
+    try { localStorage.setItem("netadmin.emuHush", new Date().toDateString()); } catch { /* private mode */ }
+    $("emu-banner").hidden = true;
+  });
 
   async function showMode() {
     try {
@@ -257,6 +262,12 @@
       const monitor = h.monitor_mode === "emulator"
         ? "Опрос устройств выключен: уровни тонера, страницы и ping ненастоящие"
         : "Опрос устройств включён: ping и SNMP настоящие";
+      // Nothing real is read: said in a band in plain words, with the way to the setting. It can be put away for the
+      // day (someone trying the program out knows it); the lamps in the header stay.
+      const emu = h.monitor_mode === "emulator";
+      let hush = "";
+      try { hush = localStorage.getItem("netadmin.emuHush") || ""; } catch { /* private mode */ }
+      $("emu-banner").hidden = !emu || hush === new Date().toDateString();
       // The strip: one LED and one word each, the sentence is in the tooltip.
       const lamp = (led, word, tip) => Object.assign(document.createElement("span"), { className: "st", title: tip, textContent: word },)
         && (() => {
@@ -442,6 +453,8 @@
     $("login").hidden = true;
     $("app").hidden = false;
     showMode();
+    // Secrets stored as they are: said in a band that stays until the key is set.
+    api("GET", "status").then((st) => { $("secrets-banner").hidden = st.secrets_encrypted !== false; }).catch(() => {});
     openTab(currentTab);
     refreshAlertCount();
     clearInterval(alertTimer);
@@ -1294,6 +1307,7 @@
     for (const c of S.clusters) {
       if (c.ids.length > 1) drawCluster(c); else drawDevice(c.lead);
     }
+    drawLabels();
   }
 
   const TYPE_RANK = ["SWITCH", "ROUTER", "FIREWALL", "SERVER", "ACCESS_POINT", "PRINTER", "WORKSTATION"];
@@ -1400,13 +1414,51 @@
       ctx.fillStyle = d.is_online ? "#30d158" : isAlarm(d) ? "#ff6b5e" : "#8a95a3";
       ctx.fill();
     }
-    const label = markerLabel(d);
+    ctx.globalAlpha = 1;
+  }
+
+  /**
+   * The names under the markers, drawn after every marker so none is covered by a neighbour's circle. Each name takes
+   * the first free place of four (under, over, right, left of its marker); with no free place it is left out: the
+   * marker still answers a click and the search. The important kinds (switches, servers) choose first.
+   */
+  function drawLabels() {
+    const marks = S.clusters.map((c) => {
+      const [x, y] = toScreen(c.x, c.y);
+      const r = c.ids.length > 1 ? 18 : PASSIVE.has(c.lead.type) ? 10 : 15;
+      return { x: x - r, y: y - r, w: r * 2, h: r * 2 };
+    });
+    const hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    const placed = [];
+    const rank = (d) => (PASSIVE.has(d.type) ? 99 : (TYPE_RANK.indexOf(d.type) + 1 || 50));
+    const singles = S.clusters.filter((c) => c.ids.length === 1).sort((a, b) => rank(a.lead) - rank(b.lead));
     ctx.font = "11px system-ui, sans-serif";
-    ctx.fillStyle = "rgba(11,14,19,.75)";
-    const tw = ctx.measureText(label).width;
-    ctx.fillRect(sx - tw / 2 - 3, sy + rad + 3, tw + 6, 15);
-    ctx.fillStyle = "#e6edf5";
-    ctx.fillText(label, sx, sy + rad + 11);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const layered = S.layer !== "L1";
+    for (const c of singles) {
+      const d = c.lead;
+      const [sx, sy] = toScreen(d.x, d.y);
+      const rad = PASSIVE.has(d.type) ? 10 : 15;
+      const label = markerLabel(d);
+      const w = ctx.measureText(label).width + 6, h = 15;
+      const spots = [
+        { x: sx - w / 2, y: sy + rad + 3 }, { x: sx - w / 2, y: sy - rad - 3 - h },
+        { x: sx + rad + 4, y: sy - h / 2 }, { x: sx - rad - 4 - w, y: sy - h / 2 },
+      ];
+      // The picked device always keeps its name, under the marker, whatever it covers.
+      const free = d.id === S.focus ? spots[0] : spots.find((b) => {
+        const box = { ...b, w, h };
+        return !placed.some((o) => hit(box, o)) && !marks.some((m) => hit(box, m));
+      });
+      if (!free) continue;
+      placed.push({ ...free, w, h });
+      ctx.globalAlpha = S.vlanFilter != null && layered && d.vlan_id !== S.vlanFilter ? 0.2 : 1;
+      ctx.fillStyle = "rgba(11,14,19,.75)";
+      ctx.fillRect(free.x, free.y, w, h);
+      ctx.fillStyle = "#e6edf5";
+      ctx.fillText(label, free.x + w / 2, free.y + h / 2 + 0.5);
+    }
     ctx.globalAlpha = 1;
   }
 
@@ -3140,7 +3192,9 @@
   function renderHome() {
     const tile = (id, title, types, list, extra) => {
       const down = list.filter(isDown).length;
-      const b = el("button", { type: "button", className: "device-tile", onclick: () => openCategory(id) });
+      const on = typeFilter === id;
+      const b = el("button", { type: "button", className: `device-tile${on ? " on" : ""}`, onclick: () => openCategory(on ? "" : id) });
+      b.setAttribute("aria-pressed", String(on));
       b.append(types ? glyphCanvas(types[0], 28) : document.createTextNode(""),
         el("span", { className: "tile-count", textContent: String(list.length) }),
         el("span", { className: "tile-title", textContent: title }),
@@ -3158,7 +3212,7 @@
     }
     const down = allDevices.filter(isDown);
     if (down.length) tiles.push(tile("OFFLINE", "Не в сети", null, down, "не отвечают сейчас"));
-    tiles.push(tile("", "Все устройства", null, allDevices, "одним списком"));
+    tiles.push(tile("", "Все устройства", null, allDevices, "без отбора"));
     $("device-home").replaceChildren(attentionCard(down), ...tiles);
     if (!allDevices.length) {
       $("device-home").replaceChildren(el("div", { className: "card" },
@@ -3189,6 +3243,9 @@
     renderDevices();
   }
 
+  // From the start screen and the search: the list of devices with a kind picked («OFFLINE»: what does not answer).
+  const openDevices = (category = "") => { typeFilter = category; deviceHome = false; openTab("devices"); };
+
   $("device-back").addEventListener("click", () => {
     deviceHome = true;
     typeFilter = "";
@@ -3198,16 +3255,14 @@
   });
 
   function renderDevices() {
-    const home = deviceHome && !$("device-filter").value.trim();
-    for (const id of ["type-filter", "group-by-label", "device-count", "device-table", "device-detect-os"]) $(id).hidden = home;
-    $("device-home").hidden = !home;
-    $("device-back").hidden = home;
-    if (home) {
-      $("printers-link").hidden = true;
-      $("bulk-bar").hidden = true;
-      renderHome();
-      return;
-    }
+    // The tiles (how many of each kind) stay above the list and filter it; the list itself is there at once.
+    $("device-home").hidden = false;
+    $("device-back").hidden = true;
+    $("type-filter").hidden = true;
+    renderHome();
+    const none = !allDevices.length;
+    for (const id of ["group-by-label", "device-count", "device-table", "device-detect-os"]) $(id).hidden = none;
+    if (none) { $("printers-link").hidden = true; $("bulk-bar").hidden = true; return; }
     renderTypeFilter();
     const rows = $("device-rows");
     rows.replaceChildren();
@@ -4203,6 +4258,23 @@
         if (card && info && $("card-name").textContent === d.name) info.append(card);
       }).catch(() => {});
     }
+    // Who changed the record and when: the last few edits, the rest under «Показать все».
+    api("GET", `devices/${d.id}/history?limit=30`).then((rows) => {
+      const edits = rows.filter((r) => r.action === "device_update" || r.action === "device_create");
+      const info = $("card-overview").firstChild;
+      if (!edits.length || !info || $("card-name").textContent !== d.name) return;
+      const line = (r) => node("div", { className: "hist-row" },
+        node("span", { className: "muted small", textContent: `${new Date(r.at).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" })} · ${r.actor}` }),
+        node("span", { textContent: r.summary }));
+      const list = node("div", { className: "hist" }, ...edits.slice(0, 4).map(line));
+      const card = node("div", { className: "card" }, node("h3", { textContent: "История изменений" }), list);
+      if (edits.length > 4) {
+        const more = node("button", { type: "button", textContent: `Показать все: ${edits.length}` });
+        more.addEventListener("click", () => { list.replaceChildren(...edits.map(line)); more.remove(); });
+        card.append(more);
+      }
+      info.append(card);
+    }).catch(() => {});
     if (window.NetAdmin.linkedWork) {
       window.NetAdmin.linkedWork(d.id).then((card) => {
         const info = $("card-overview").firstChild;
@@ -4496,6 +4568,7 @@
 
   // What admin-more.js (the other tabs) builds on.
   window.NetAdmin = {
+    openDevices,
     isAlarm, offLabel, $, api, toast, fail, ask, askText, emptyRow, fieldError, replaceToken, typeOf, signedIn: () => !!token, glyphCanvas, OPERATOR, tabs: {},
     picked, listedIds: () => visibleDevices().map((d) => d.id), renderPorts: () => renderPorts(), portsDevice: () => portsDevice,
     openCard: (id) => openCard(id).catch(fail),

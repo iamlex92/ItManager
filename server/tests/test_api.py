@@ -300,3 +300,40 @@ def test_patch_panel_is_made_in_a_free_rack_unit(client):
     assert [p["number"] for p in ports] == list(range(1, 25))
     # The unit is taken now.
     assert client.post("/api/v1/devices/patch-panel", json={**body, "name": "PP-2"}).status_code in (409, 422)
+
+
+def test_alerts_read_in_russian_while_the_stored_text_stays(client):
+    from app.services.alert_text import say
+
+    assert say("SW-1 gi1/0/3: link down") == "SW-1, порт gi1/0/3: нет линка"
+    assert say("SRV-1 is not responding") == "SRV-1 не отвечает"
+    assert say("PRN-1: Magenta 8% left") == "PRN-1: пурпурный тонер, осталось 8 %"
+    assert say("PRN-1: Waste 5% free space") == "PRN-1: ёмкость для отработки, свободно 5 %"
+    assert say("что-то своё") == "что-то своё"
+    rows = client.get("/api/v1/alerts").json()
+    assert rows and all("link down" not in r["message"] and "% left" not in r["message"] for r in rows)
+    assert any("нет линка" in r["message"] for r in rows)
+
+
+def test_edits_of_a_device_are_kept_as_its_history(client):
+    d = client.post("/api/v1/devices", json={"name": "PC-HIST", "type": "WORKSTATION", "ip": "10.10.10.201"}).json()
+    base = f"/api/v1/devices/{d['id']}"
+    # Moving the icon on the map is not a change of the record.
+    client.patch(base, json={"x": 10, "y": 20})
+    assert client.get(f"{base}/history").json() == []
+    client.patch(base, headers={"X-Operator": "ivanov"}, json={"ip": "10.10.10.202", "assigned_to": "Иванова"})
+    client.patch(base, json={"snmp_community": "s3cret-community"})
+    rows = client.get(f"{base}/history").json()
+    assert [r["action"] for r in rows] == ["device_update", "device_update"]
+    edit = rows[1]
+    assert "IP: 10.10.10.201 → 10.10.10.202" in edit["summary"] and "Ответственный: — → Иванова" in edit["summary"]
+    assert "ivanov" in edit["actor"] and edit["title"] == "Учёт: изменение устройства"
+    # A secret is never written down, only that it changed.
+    assert rows[0]["summary"] == "SNMP-строка: изменена" and "s3cret" not in str(rows)
+    # The same edits are in the journal under «Сеть», a removal too.
+    client.delete(base)
+    journal = client.get("/api/v1/audit", params={"kind": "network"}).json()
+    assert [j["title"] for j in journal[:3]] == [
+        "Учёт: удаление устройства", "Учёт: изменение устройства", "Учёт: изменение устройства",
+    ]  # fmt: skip
+    assert "s3cret" not in str(journal)
