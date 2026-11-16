@@ -7,6 +7,7 @@ from ..discovery.manager import IMPORT_ACTION, SCAN_ACTION
 from ..models import ScriptAuditLog
 from ..runbooks.catalog import BY_ID
 from ..schemas import AuditOut
+from ..services.devlog import ACTIONS as INVENTORY_ACTIONS
 from .credentials import ACTIONS as SECURITY_ACTIONS
 from .deps import SessionDep
 from .lifecycle import ACTIONS as LIFECYCLE_ACTIONS
@@ -73,6 +74,8 @@ def audit_out(row: ScriptAuditLog) -> AuditOut:
     elif row.script_name.startswith(AUDIT_PREFIX):
         rb = BY_ID.get(row.script_name.removeprefix(AUDIT_PREFIX))
         kind, title = "runbook", rb.title if rb else row.script_name
+    elif row.script_name in INVENTORY_ACTIONS:
+        kind, title = "network", INVENTORY_ACTIONS[row.script_name]
     elif row.script_name in NETWORK_ACTIONS:
         kind, title = "network", NETWORK_ACTIONS[row.script_name]
     elif row.script_name in SECURITY_ACTIONS:
@@ -112,7 +115,7 @@ async def list_audit(
             | ScriptAuditLog.script_name.startswith(GPO_PREFIX)
         )
     elif kind == "network":
-        stmt = stmt.where(ScriptAuditLog.script_name.in_(NETWORK_ACTIONS))
+        stmt = stmt.where(ScriptAuditLog.script_name.in_([*NETWORK_ACTIONS, *INVENTORY_ACTIONS]))
     elif kind == "security":
         stmt = stmt.where(ScriptAuditLog.script_name.in_([*SECURITY_ACTIONS, *LIFECYCLE_ACTIONS]))
     elif kind == "switch":
@@ -120,7 +123,9 @@ async def list_audit(
             ~ScriptAuditLog.script_name.startswith(AUDIT_PREFIX),
             ~ScriptAuditLog.script_name.startswith(PC_PREFIX),
             ~ScriptAuditLog.script_name.startswith(GPO_PREFIX),
-            ScriptAuditLog.script_name.not_in([*NETWORK_ACTIONS, *SECURITY_ACTIONS, *LIFECYCLE_ACTIONS]),
+            ScriptAuditLog.script_name.not_in(
+                [*NETWORK_ACTIONS, *INVENTORY_ACTIONS, *SECURITY_ACTIONS, *LIFECYCLE_ACTIONS]
+            ),
         )
     rows = (await session.scalars(stmt.limit(limit).offset(offset))).all()
     return [audit_out(r) for r in rows]

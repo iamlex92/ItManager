@@ -109,3 +109,58 @@ def test_report_is_journaled_without_content(client):
     client.post(f"{R}/download", json={"sections": ["summary"]})
     rows = client.get("/api/v1/audit", params={"kind": "security"}).json()
     assert any(row["title"] == "Отчёт: сформирован" for row in rows)
+
+
+def test_reports_kept_on_the_server_and_what_changed_since(seeded, tmp_path):
+    from datetime import date
+
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+    from app.reports import schedule
+
+    from .conftest import AUTH, make_settings
+
+    # When a saved report is due.
+    assert schedule.due("weekly", date(2026, 11, 16), None)
+    assert not schedule.due("weekly", date(2026, 11, 18), date(2026, 11, 16))  # the same week
+    assert schedule.due("weekly", date(2026, 11, 23), date(2026, 11, 16))
+    assert schedule.due("monthly", date(2026, 12, 1), date(2026, 11, 30)) and not schedule.due(
+        "monthly", date(2026, 11, 30), date(2026, 11, 1)
+    )
+    assert not schedule.due("off", date(2026, 11, 16), None)
+
+    with TestClient(create_app(make_settings()), headers=AUTH) as c:
+        none = c.get(f"{R}/saved").json()
+        assert none["folder"] is None and none["items"] == []
+        assert c.post(f"{R}/saved", json={}).status_code == 409  # no folder: said so, nothing written
+
+    settings = make_settings(report_dir=str(tmp_path / "reports"), report_keep=2)
+    with TestClient(create_app(settings), headers=AUTH) as c:
+        first = c.post(f"{R}/saved", json={}).json()
+        items = c.get(f"{R}/saved").json()["items"]
+        assert len(items) == 1 and {f["kind"] for f in items[0]["files"]} == {"html", "xlsx"}
+        page = c.get(f"{R}/saved/Report_{first['stamp']}.html")
+        assert (
+            page.status_code == 200 and "Что изменилось с прошлого отчёта" not in page.text
+        )  # nothing to compare with
+        # Only our own files can be asked for.
+        for bad in ("..%2Fnetadmin.env", "Report_x.html", f"Report_{first['stamp']}.json"):
+            assert c.get(f"{R}/saved/{bad}").status_code == 404
+        folder = tmp_path / "reports"
+        assert oct(next(folder.glob("*.html")).stat().st_mode & 0o777) == "0o600"
+
+        # A device appears; the next saved report names it. Stamps are to the minute: move the first one back.
+        for f in list(folder.iterdir()):
+            f.rename(folder / f.name.replace(first["stamp"], "2026-01-01_00-00"))
+        c.post("/api/v1/devices", json={"name": "SRV-NEW-01", "type": "SERVER"})
+        second = c.post(f"{R}/saved", json={}).json()
+        page = c.get(f"{R}/saved/Report_{second['stamp']}.html").text
+        assert "Что изменилось с прошлого отчёта" in page and "Добавлены устройства" in page and "SRV-NEW-01" in page
+        # Only the newest [report_keep] stay.
+        for f in list(folder.iterdir()):
+            if second["stamp"] in f.name:
+                f.rename(folder / f.name.replace(second["stamp"], "2026-02-01_00-00"))
+        c.post(f"{R}/saved", json={})
+        stamps = [i["stamp"] for i in c.get(f"{R}/saved").json()["items"]]
+        assert len(stamps) == 2 and "2026-01-01_00-00" not in stamps

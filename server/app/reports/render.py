@@ -140,7 +140,9 @@ class Builder:
         ]  # fmt: skip
         out = [self.h2("summary", "Резюме"), '<div class="tiles">']
         out += [f'<div class="tile"><b>{n}</b><span>{escape(t)}</span></div>' for n, t in tiles]
-        out.append("</div><h3>Что требует внимания</h3>")
+        out.append("</div>")
+        out.append(self.since())
+        out.append("<h3>Что требует внимания</h3>")
         attn = self.d["summary"]["attention"]
         if not attn:
             out.append('<div class="ok-box">Замечаний нет: всё, что программа может проверить, в порядке.</div>')
@@ -153,6 +155,25 @@ class Builder:
                 )
             out.append(f'<ul class="attn">{"".join(lis)}</ul>')
         return "".join(out)
+
+    def since(self) -> str:
+        """What changed since the report saved before this one (only in reports kept on the server)."""
+        sn = self.d.get("since")
+        if not sn:
+            return ""
+        when = fdt(datetime.fromisoformat(sn["at"])) if sn.get("at") else "прошлого отчёта"
+        rows = [
+            ("Добавлены устройства", sn["added"]), ("Убраны устройства", sn["removed"]),
+            ("Переименованы", sn["renamed"]), ("Новые лицензии", sn["licenses_added"]),
+            ("Убраны лицензии", sn["licenses_removed"]), ("Новые VLAN", [str(v) for v in sn["vlans_added"]]),
+            ("Убраны VLAN", [str(v) for v in sn["vlans_removed"]]),
+        ]  # fmt: skip
+        rows = [(k, v) for k, v in rows if v]
+        head = f"<h3>Что изменилось с прошлого отчёта ({escape(when)})</h3>"
+        if not rows:
+            return head + '<p class="muted">Состав устройств, лицензий и VLAN не менялся.</p>'
+        cut = lambda v: ", ".join(v[:30]) + (f" и ещё {len(v) - 30}" if len(v) > 30 else "")  # noqa: E731
+        return head + table(["Что", "Сколько", "Какие"], [[k, len(v), cut(v)] for k, v in rows], num={1})
 
     # ------------------------------------------------------------------ equipment
     def equipment(self) -> str:

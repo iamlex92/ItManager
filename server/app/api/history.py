@@ -8,6 +8,7 @@ from sqlalchemy import and_, or_, select
 
 from ..models import Device, DeviceConfig, ScriptAuditLog
 from ..schemas import HistoryEntry
+from ..services import devlog
 from .audit import SWITCH_ACTIONS
 from .deps import SessionDep, not_found
 
@@ -15,6 +16,8 @@ router = APIRouter(prefix="/devices", tags=["history"])
 
 # Writes only: pings and traceroutes change nothing and stay in the audit log.
 CHANGE_ACTIONS = ("port_config", "port_bounce", "write_memory")
+# Edits of the record itself (name, address, place, who it is assigned to): kept for every device, not only switches.
+INVENTORY = (devlog.UPDATE, devlog.CREATE)
 
 
 def _vlans(v: list[int] | None) -> str:
@@ -62,7 +65,7 @@ async def device_history(device_id: uuid.UUID, session: SessionDep, limit: int =
         await session.scalars(
             select(ScriptAuditLog)
             .where(
-                ScriptAuditLog.script_name.in_(CHANGE_ACTIONS),
+                ScriptAuditLog.script_name.in_((*CHANGE_ACTIONS, *INVENTORY)),
                 or_(
                     params["device_id"].astext == str(device_id),
                     # Older rows carry only the name.
@@ -78,8 +81,12 @@ async def device_history(device_id: uuid.UUID, session: SessionDep, limit: int =
             at=r.executed_at,
             kind=_kind(r.exit_code),
             action=r.script_name,
-            title=SWITCH_ACTIONS.get(r.script_name, r.script_name),
-            summary=describe(r.script_name, r.parameters or {}),
+            title=devlog.ACTIONS.get(r.script_name) or SWITCH_ACTIONS.get(r.script_name, r.script_name),
+            summary=(
+                (devlog.summary((r.parameters or {}).get("changes") or []) or "запись создана или удалена")
+                if r.script_name in INVENTORY
+                else describe(r.script_name, r.parameters or {})
+            ),
             actor=r.triggered_by,
             commands=[c for c in (r.output_log or "").splitlines() if c.strip()][:50],
         )

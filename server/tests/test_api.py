@@ -313,3 +313,27 @@ def test_alerts_read_in_russian_while_the_stored_text_stays(client):
     rows = client.get("/api/v1/alerts").json()
     assert rows and all("link down" not in r["message"] and "% left" not in r["message"] for r in rows)
     assert any("нет линка" in r["message"] for r in rows)
+
+
+def test_edits_of_a_device_are_kept_as_its_history(client):
+    d = client.post("/api/v1/devices", json={"name": "PC-HIST", "type": "WORKSTATION", "ip": "10.10.10.201"}).json()
+    base = f"/api/v1/devices/{d['id']}"
+    # Moving the icon on the map is not a change of the record.
+    client.patch(base, json={"x": 10, "y": 20})
+    assert client.get(f"{base}/history").json() == []
+    client.patch(base, headers={"X-Operator": "ivanov"}, json={"ip": "10.10.10.202", "assigned_to": "Иванова"})
+    client.patch(base, json={"snmp_community": "s3cret-community"})
+    rows = client.get(f"{base}/history").json()
+    assert [r["action"] for r in rows] == ["device_update", "device_update"]
+    edit = rows[1]
+    assert "IP: 10.10.10.201 → 10.10.10.202" in edit["summary"] and "Ответственный: — → Иванова" in edit["summary"]
+    assert "ivanov" in edit["actor"] and edit["title"] == "Учёт: изменение устройства"
+    # A secret is never written down, only that it changed.
+    assert rows[0]["summary"] == "SNMP-строка: изменена" and "s3cret" not in str(rows)
+    # The same edits are in the journal under «Сеть», a removal too.
+    client.delete(base)
+    journal = client.get("/api/v1/audit", params={"kind": "network"}).json()
+    assert [j["title"] for j in journal[:3]] == [
+        "Учёт: удаление устройства", "Учёт: изменение устройства", "Учёт: изменение устройства",
+    ]  # fmt: skip
+    assert "s3cret" not in str(journal)

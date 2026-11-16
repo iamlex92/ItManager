@@ -16,7 +16,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from ..models import ScriptAuditLog
-from ..reports import labels
+from ..reports import labels, schedule
 from ..reports.data import Options, collect
 from ..reports.render import render
 from ..reports.xlsx import build
@@ -145,4 +145,51 @@ async def download(body: ReportIn, request: Request, session: SessionDep):
         content,
         media_type=media,
         headers={"Content-Disposition": f'attachment; filename="Infrastructure_Report_{stamp}.{ext}"'},
+    )
+
+
+# --- reports kept on the server ---------------------------------------------------------------------------------------
+
+
+@router.get("/saved")
+async def saved_reports(request: Request):
+    s = request.app.state.settings
+    folder = schedule.folder_of(s)
+    return {
+        "folder": str(folder) if folder else None,
+        "schedule": s.report_schedule,
+        "items": schedule.saved(folder) if folder else [],
+    }
+
+
+@router.post("/saved")
+async def save_report_now(request: Request, session: SessionDep):
+    """One more saved report right now, with «what changed since the last one» in it."""
+    try:
+        made = await schedule.save_once(request.app.state.sessionmaker, request.app.state.settings, who(request))
+    except RuntimeError as e:
+        raise HTTPException(409, detail={"code": "report_dir_missing", "message": str(e)}) from e
+    session.add(
+        ScriptAuditLog(
+            script_name="report_create", triggered_by=who(request), parameters={"saved": made["stamp"]},
+            executed_at=datetime.now(UTC), exit_code=0, output_log=f"{ACTIONS['report_create']}: сохранён на сервере",
+        )
+    )  # fmt: skip
+    await session.commit()
+    return made
+
+
+@router.get("/saved/{name}")
+async def saved_report_file(name: str, request: Request):
+    folder = schedule.folder_of(request.app.state.settings)
+    # The name is checked against the pattern of our own files: nothing else in the folder can be asked for.
+    if folder is None or not schedule.NAME.match(name) or not (folder / name).is_file():
+        raise HTTPException(404, detail={"code": "not_found", "message": "Такого сохранённого отчёта нет"})
+    xlsx = name.endswith(".xlsx")
+    return Response(
+        (folder / name).read_bytes(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        if xlsx
+        else "text/html; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{name}"', "Content-Security-Policy": PAGE_CSP},
     )

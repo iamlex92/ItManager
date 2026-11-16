@@ -36,11 +36,11 @@ from ..schemas import (
     normalize_nfc_uid,
 )
 from ..services import alerts as alerts_service
-from ..services import linkstate, switches
+from ..services import devlog, linkstate, switches
 from ..services import status as device_status
 from ..services.serialize import device_out, port_out
 from ..services.topology import load_graph
-from .deps import DriverDep, HubDep, SessionDep, SettingsDep, conflict, not_found
+from .deps import DriverDep, HubDep, SessionDep, SettingsDep, conflict, not_found, who
 from .guarded import AuditRecord, audit, require_confirmation, require_managed_switch
 
 router = APIRouter(prefix="/devices", tags=["devices"])
@@ -254,7 +254,7 @@ async def create_device(body: DeviceCreate, session: SessionDep):
 
 
 @router.post("/bulk", response_model=BulkOut)
-async def bulk_update(body: DeviceBulkUpdate, session: SessionDep):
+async def bulk_update(body: DeviceBulkUpdate, request: Request, session: SessionDep):
     """One change on many devices at once: type, floor, vendor, model or active flag. Inventory only."""
     data = body.set.model_dump(exclude_unset=True)
     if not data:
@@ -265,15 +265,20 @@ async def bulk_update(body: DeviceBulkUpdate, session: SessionDep):
     await _check_host(session, data.get("host_id"), ids)
     devices = (await session.scalars(select(Device).where(Device.id.in_(ids)))).all()
     for device in devices:
+        before = devlog.snapshot(device)
         _apply(device, data)
+        if changes := devlog.diff(before, devlog.snapshot(device)):
+            session.add(devlog.entry(devlog.UPDATE, device, who(request), changes))
     await session.commit()
     return BulkOut(changed=len(devices), missing=len(ids) - len(devices))
 
 
 @router.post("/bulk-delete", response_model=BulkOut)
-async def bulk_delete(body: DeviceBulkDelete, session: SessionDep):
+async def bulk_delete(body: DeviceBulkDelete, request: Request, session: SessionDep):
     """Removes many devices from the inventory, with their ports and cables. Inventory only."""
     ids = set(body.ids)
+    for device in (await session.scalars(select(Device).where(Device.id.in_(ids)))).all():
+        session.add(devlog.entry(devlog.DELETE, device, who(request)))
     result = await session.execute(delete(Device).where(Device.id.in_(ids)))
     await session.commit()
     return BulkOut(changed=result.rowcount, missing=len(ids) - result.rowcount)
@@ -318,6 +323,7 @@ async def update_device(device_id: uuid.UUID, body: DeviceUpdate, request: Reque
     device = await _get(session, device_id)
     await _check_host(session, body.host_id, {device_id})
     had = _addresses_of(device)
+    before = devlog.snapshot(device)
     _apply(device, body.model_dump(exclude_unset=True, exclude={"allow_duplicate_ip"}))
     if not body.allow_duplicate_ip:
         # Only addresses this edit adds: an old duplicate must not block an unrelated change.
@@ -327,6 +333,9 @@ async def update_device(device_id: uuid.UUID, body: DeviceUpdate, request: Reque
     if body.metadata is not None:
         # «Не тревожить» or a pause changed: the alarm of a device that is down follows at once.
         touched = await alerts_service.apply_policy(session, device, datetime.now(UTC))
+    changes = devlog.diff(before, devlog.snapshot(device))
+    if changes:
+        session.add(devlog.entry(devlog.UPDATE, device, who(request), changes))
     await _commit_device(session, device)
     await session.refresh(device)
     if touched:
@@ -335,8 +344,9 @@ async def update_device(device_id: uuid.UUID, body: DeviceUpdate, request: Reque
 
 
 @router.delete("/{device_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_device(device_id: uuid.UUID, session: SessionDep):
+async def delete_device(device_id: uuid.UUID, request: Request, session: SessionDep):
     device = await _get(session, device_id)
+    session.add(devlog.entry(devlog.DELETE, device, who(request)))
     await session.delete(device)
     await session.commit()
 

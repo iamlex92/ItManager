@@ -17,6 +17,7 @@ from . import FULL_VERSION, MIN_APP_VERSION, crypto, serversettings
 from .api import (
     alerts,
     audit,
+    checks,
     cliimport,
     connections,
     credentials,
@@ -79,6 +80,7 @@ from .netsrv.source import EmulatedNetServices, RealNetServices
 from .pcs.astra import AstraPcs, EmulatedAstra
 from .pcs.backend import EmulatedPcs, RealPcs
 from .pcs.service import KeyInventory, port_open
+from .reports import schedule as report_schedule
 from .runbooks.emulator import RunbookEnvironment
 from .runbooks.real import RealRunbooks
 from .schemas import HealthOut
@@ -235,6 +237,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "database sync: this is the backup server (%s): polling, ping and traffic are off",
                 "read-only" if settings.sync_read_only else "writes allowed",
             )
+        if settings.report_schedule in ("weekly", "monthly") and not settings.sync_accept:
+            tasks.append(asyncio.create_task(report_schedule.report_loop(sm, settings)))
+            log.warning("scheduled report: %s to %s", settings.report_schedule, report_schedule.folder_of(settings))
         if settings.backup_dir:
             tasks.append(asyncio.create_task(backup.backup_loop(settings)))
             log.warning("database backups: every %g h to %s", settings.backup_interval_hours, settings.backup_dir)
@@ -314,6 +319,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         floors,
         vlans,
         devices,
+        checks,
         cliimport,
         device_templates,
         netsrv,

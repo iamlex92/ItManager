@@ -4258,6 +4258,23 @@
         if (card && info && $("card-name").textContent === d.name) info.append(card);
       }).catch(() => {});
     }
+    // Who changed the record and when: the last few edits, the rest under «Показать все».
+    api("GET", `devices/${d.id}/history?limit=30`).then((rows) => {
+      const edits = rows.filter((r) => r.action === "device_update" || r.action === "device_create");
+      const info = $("card-overview").firstChild;
+      if (!edits.length || !info || $("card-name").textContent !== d.name) return;
+      const line = (r) => node("div", { className: "hist-row" },
+        node("span", { className: "muted small", textContent: `${new Date(r.at).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" })} · ${r.actor}` }),
+        node("span", { textContent: r.summary }));
+      const list = node("div", { className: "hist" }, ...edits.slice(0, 4).map(line));
+      const card = node("div", { className: "card" }, node("h3", { textContent: "История изменений" }), list);
+      if (edits.length > 4) {
+        const more = node("button", { type: "button", textContent: `Показать все: ${edits.length}` });
+        more.addEventListener("click", () => { list.replaceChildren(...edits.map(line)); more.remove(); });
+        card.append(more);
+      }
+      info.append(card);
+    }).catch(() => {});
     if (window.NetAdmin.linkedWork) {
       window.NetAdmin.linkedWork(d.id).then((card) => {
         const info = $("card-overview").firstChild;

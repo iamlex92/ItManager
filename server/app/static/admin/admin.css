@@ -774,3 +774,13 @@ tr.editing td { background: var(--accent-container); }
 #task-title { flex: 1 1 320px; min-width: 160px; width: auto; }
 #task-date { flex: 0 0 170px; width: 170px; }
 #task-repeat { flex: 0 0 auto; width: auto; }
+.check-box { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); display: grid; gap: 6px; }
+.check-out.ok { color: var(--ok); }
+.check-out:empty { display: none; }
+.hist { display: grid; gap: 8px; }
+.hist-row { display: grid; gap: 1px; overflow-wrap: anywhere; }
+#card-overview .card > button { align-self: flex-start; }
+.report-kept-list { display: grid; gap: 4px; margin: 6px 0 8px; }
+.report-kept-list .row { gap: 6px; }
+.report-kept-list button { padding: 2px 10px; font-size: 12px; }
+.report-kept > button { align-self: flex-start; }
